@@ -1,4 +1,4 @@
-"""acu — Acumatica configuration as code.
+"""acu - Acumatica configuration as code.
 
 acu provision --id N --login T   one command: create -> bootstrap -> apply -> diff
 acu tenant list|create|delete    tenant CRUD (ac.exe over SSH)
@@ -44,7 +44,7 @@ def main() -> None:
     """Entry point: run the CLI, mapping expected failures to one-line errors.
 
     RuntimeError (SSH/ac.exe, REST, first-login) and httpx transport errors
-    print `✗ message` and exit 1; ACU_DEBUG=1 re-raises for the traceback.
+    print `x message` and exit 1; ACU_DEBUG=1 re-raises for the traceback.
     """
     try:
         cli()
@@ -190,19 +190,19 @@ def provision_cmd(
     create over SSH (skipped when the login name already exists), bootstrap
     package publish (skipped when already published), bootstrap/ YAML through
     the custom endpoint, baseline/ through the Default endpoint, then the
-    baseline drift check — exit 1 on drift.
+    baseline drift check - exit 1 on drift.
     """
     root = data_root()
     baseline_dir = root / "baseline"
     if not baseline_dir.is_dir():
-        raise SystemExit(f"{baseline_dir}: not a directory — nothing to provision")
+        raise SystemExit(f"{baseline_dir}: not a directory - nothing to provision")
     seed_dirs = [d for d in (root / "bootstrap", baseline_dir) if d.is_dir()]
     # every session below signs in to the provisioned tenant, never a default
     inst = inst.model_copy(update={"tenant": login_name})
 
     mgr = TenantManager(inst)
     if any(t.login_name == login_name for t in mgr.list()):
-        output.info(f"tenant {login_name} exists on {inst.name} — skipping create")
+        output.info(f"tenant {login_name} exists on {inst.name} - skipping create")
     else:
         with output.step(f"creating tenant {company_id} ({login_name}) on {inst.name}"):
             raw = mgr.create(company_id, login_name, parent_id, True, company_type)
@@ -288,7 +288,7 @@ def schema_cmd(inst: Instance, out_dir: Path | None) -> None:
     """Dump the endpoint's OpenAPI schema (swagger.json) into schemas/.
 
     The schema is the authoritative field-level reference for the exact
-    build — regenerate rather than version (the file is ~3 MB).
+    build - regenerate rather than version (the file is ~3 MB).
     """
     if out_dir is None:
         out_dir = data_root() / "schemas"

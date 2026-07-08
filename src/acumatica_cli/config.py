@@ -42,7 +42,7 @@ def data_root() -> Path:
         if (d / "acu.toml").is_file():
             return d
     raise SystemExit(
-        "acu.toml not found in the current directory or any parent — "
+        "acu.toml not found in the current directory or any parent - "
         "run acu from inside a data repo (e.g. acumatica-baseline)"
     )
 

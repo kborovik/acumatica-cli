@@ -31,7 +31,7 @@ def info(msg: str) -> None:
 
 def success(msg: str) -> None:
     """Success line on stderr."""
-    err.print(f"✓ {msg}", style="green")
+    err.print(f"+ {msg}", style="green")
 
 
 def warn(msg: str) -> None:
@@ -41,15 +41,15 @@ def warn(msg: str) -> None:
 
 def error(msg: str) -> None:
     """Error line on stderr."""
-    err.print(f"✗ {msg}", style="red")
+    err.print(f"x {msg}", style="red")
 
 
 def table(title: str, columns: Iterable[str], rows: Iterable[Iterable[str]]) -> None:
-    """Table on stdout: rounded box on a TTY, plain aligned columns piped."""
+    """Table on stdout: ASCII box on a TTY, plain aligned columns piped."""
     t = Table(
         title=title,
         title_justify="left",
-        box=box.ROUNDED if out.is_terminal else None,
+        box=box.ASCII if out.is_terminal else None,
     )
     for column in columns:
         t.add_column(column)
@@ -62,7 +62,8 @@ def table(title: str, columns: Iterable[str], rows: Iterable[Iterable[str]]) -> 
 def step(msg: str) -> Generator[None]:
     """Long operation: spinner on a TTY, plain stderr line when piped."""
     if err.is_terminal:
-        with err.status(msg):
+        # "line" is the ASCII spinner (-\|/); the default "dots" is braille
+        with err.status(msg, spinner="line"):
             yield
     else:
         info(msg)

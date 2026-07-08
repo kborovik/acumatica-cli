@@ -154,7 +154,7 @@ def test_provision_chains_create_bootstrap_apply_diff(provision_env: list[str]) 
         "diff:uoms.yaml",
     ]
     # every session targets the provisioned tenant, not the config default
-    assert "✓ no drift on test/Scratch (1 file(s))" in result.stderr
+    assert "+ no drift on test/Scratch (1 file(s))" in result.stderr
 
 
 def test_provision_skips_create_when_tenant_exists(
@@ -188,7 +188,7 @@ def test_provision_drift_exits_one(
     )
 
     assert result.exit_code == 1
-    assert "✗ DRIFT on test/Scratch:" in result.stderr
+    assert "x DRIFT on test/Scratch:" in result.stderr
     assert drift in result.output
 
 
@@ -219,7 +219,7 @@ def test_bootstrap_publishes_and_reports_endpoint(
 
     assert result.exit_code == 0
     assert len(seen) == 1
-    assert "✓ acu-bootstrap published on test/T1 (endpoint Bootstrap/1.0.0)" in (
+    assert "+ acu-bootstrap published on test/T1 (endpoint Bootstrap/1.0.0)" in (
         result.stderr
     )
 
@@ -241,7 +241,7 @@ def test_diff_clean_exits_zero(
     result = CliRunner().invoke(cli.cli, ["diff", str(_baseline(tmp_path))])
 
     assert result.exit_code == 0
-    assert "✓ no drift on test/T1 (1 file(s))" in result.stderr
+    assert "+ no drift on test/T1 (1 file(s))" in result.stderr
 
 
 def test_diff_directory_expands_to_yaml_files(
@@ -254,7 +254,7 @@ def test_diff_directory_expands_to_yaml_files(
     result = CliRunner().invoke(cli.cli, ["diff", str(tmp_path)])
 
     assert result.exit_code == 0
-    assert "✓ no drift on test/T1 (2 file(s))" in result.stderr
+    assert "+ no drift on test/T1 (2 file(s))" in result.stderr
 
 
 def test_apply_empty_directory_errors(wired: Instance, tmp_path: Path) -> None:
@@ -273,7 +273,7 @@ def test_diff_drift_exits_one_with_lines_on_stdout(
 
     # the load-bearing contract: drift -> exit 1
     assert result.exit_code == 1
-    assert "✗ DRIFT on test/T1:" in result.stderr
+    assert "x DRIFT on test/T1:" in result.stderr
     assert drift in result.output
 
 
@@ -312,7 +312,7 @@ def test_main_maps_runtime_error_to_one_line_and_exit_1(
         cli.main()
 
     assert excinfo.value.code == 1
-    assert "✗ remote command failed (255)" in capsys.readouterr().err
+    assert "x remote command failed (255)" in capsys.readouterr().err
 
 
 def test_main_reraises_under_acu_debug(

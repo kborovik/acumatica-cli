@@ -54,7 +54,7 @@ T1|x|build `acu provision` — chain tenant create → bootstrap → apply `base
 T2|x|bootstrap package — publish via `/CustomizationApi`; custom endpoint exposes CS100000 features + CS101500 company/branch + CS206500 credit terms|I.api
 T3|x|verify CS100000 accepts writes via custom endpoint ? — fallback: `CustomizationPlugin` flips `FeaturesSet` on publish (ships C#)|T2
 T4|x|post-login tenant guard in seeding pipeline — defense-in-depth vs wrong-tenant writes|V5
-T5|.|ASCII sweep per V9 — swap `✓`→`+`, `✗`→`x`, `box.ROUNDED`→`box.ASCII`, spinner→ASCII, drop non-ASCII from output-reaching strings; scope: `grep -rnP '[^\x00-\x7F]' src/` (docstrings/comments exempt)|V9
+T5|x|ASCII sweep per V9 — swap `✓`→`+`, `✗`→`x`, `box.ROUNDED`→`box.ASCII`, spinner→ASCII, drop non-ASCII from output-reaching strings; scope: `grep -rnP '[^\x00-\x7F]' src/` (docstrings/comments exempt)|V9
 T6|.|drop `docs/cli.md` — contract folded into §I/§V; drop ref from CLAUDE.md|V9
 T7|.|drift exit code 1 → 2 in `diff` + `provision`; ripple: `acumatica-baseline` `make diff` + any consumer treating exit 1 as drift|V4,V9
 T8|.|drop `acu bootstrap` cmd — `bootstrap.publish()` module stays; resumable `provision` = recovery route|I.cmd

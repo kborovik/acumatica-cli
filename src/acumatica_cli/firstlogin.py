@@ -133,7 +133,7 @@ def initialize_admin_password(
         fields = _form_fields(page.text)
         if NEW_PASS_FIELD not in fields:
             state = (
-                "seed password signed straight in — no change demanded; "
+                "seed password signed straight in - no change demanded; "
                 "the admin password is still the seed"
                 if "Main" in page.url.path
                 else f"landed on {page.url}"

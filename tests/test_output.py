@@ -28,7 +28,7 @@ def test_status_helpers_go_to_stderr_with_prefixes(
     output.error("failed")
     captured = capsys.readouterr()
     assert captured.out == ""
-    assert captured.err == "working\n✓ done\n! careful\n✗ failed\n"
+    assert captured.err == "working\n+ done\n! careful\nx failed\n"
 
 
 def test_piped_output_has_no_ansi(capsys: pytest.CaptureFixture[str]) -> None:
@@ -50,15 +50,31 @@ def test_table_piped_is_plain_columns(capsys: pytest.CaptureFixture[str]) -> Non
     assert "Tenants on" in out
     assert "ID" in out
     assert "Company" in out
-    assert "╭" not in out
-    assert "│" not in out
+    assert "+" not in out
+    assert "|" not in out
 
 
-def test_table_tty_draws_box(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_table_tty_draws_ascii_box(monkeypatch: pytest.MonkeyPatch) -> None:
     buffer = io.StringIO()
     monkeypatch.setattr(output, "out", Console(file=buffer, force_terminal=True))
     output.table("Tenants on test", ("ID", "Login"), [("2", "Company")])
-    assert "╭" in buffer.getvalue()
+    assert "+" in buffer.getvalue()  # ASCII box corner, never a unicode glyph
+
+
+def test_tty_output_is_ascii_only(monkeypatch: pytest.MonkeyPatch) -> None:
+    # V9: ASCII-only on every path including TTY — box, prefixes, styles
+    out_buf, err_buf = io.StringIO(), io.StringIO()
+    monkeypatch.setattr(output, "out", Console(file=out_buf, force_terminal=True))
+    monkeypatch.setattr(
+        output, "err", Console(file=err_buf, force_terminal=True, stderr=True)
+    )
+    output.table("Tenants on test", ("ID", "Login"), [("2", "Company")])
+    output.data("PUT Currency [CAD]")
+    output.info("working")
+    output.success("done")
+    output.warn("careful")
+    output.error("failed")
+    assert (out_buf.getvalue() + err_buf.getvalue()).isascii()
 
 
 def test_step_piped_prints_plain_line(capsys: pytest.CaptureFixture[str]) -> None:
