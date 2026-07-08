@@ -1,0 +1,100 @@
+# Development journal — Acumatica config-as-code
+
+The engineering record of building `acu`: every problem, friction, dead end,
+and correction hit while trying to configure Acumatica ERP purely from source
+code. Dead ends and errors stay in — they are findings, not noise, and the
+raw material for the blog series (article drafts live in the sibling
+`acumatica-blog` repo).
+
+**Conventions:** one file per day (`YYYY-MM-DD.md`), entries within a day in
+chronological order. After any meaningful work: add or extend the day's entry
+(progress, errors, solutions), then update the entry list, friction catalog,
+and status below.
+
+## Entries
+
+Newest first.
+
+- [2026-07-08](2026-07-08.md) — recycle unblocks tenant visibility (stale-map
+  corrections); first-login password wall found and defeated (screen-flow,
+  then `-aup` preset); `acu tenant create` chains create → recycle →
+  login-ready; two more ac.exe landmines (`-h`, `Deleted` sub-key);
+  domain-style tenant names verified; CLI output standards defined
+  (`docs/cli.md`, rich, human + LLM-agent audiences via TTY detection);
+  offline test suite established (45 tests: MockTransport for REST,
+  monkeypatched subprocess for SSH; ac.exe landmines pinned as regressions);
+  pydantic adopted as the model standard (frozen, `extra="forbid"`) and
+  `instances/*.yaml` folded into a single `acu.toml` with `default_instance`;
+  repo split — data (`baseline/`, `acu.toml`, `.env.gpg`) extracted to the
+  sibling `acumatica-baseline`, `acu.toml` became the cwd-walk-up discovery
+  sentinel (`data_root()`), and the tool goes on PATH via
+  `uv tool install --editable`; `scripts/dump-swagger.sh` converted to
+  `acu schema` (kills the duplicate curl session logic and env-var config
+  channel; `output.data()` gained `soft_wrap` so piped result lines never
+  hard-wrap); repo renamed `acumatica-devops` → `acumatica-cli` (package
+  `acumatica-cli`, module `acumatica_cli`, README rewritten, baseline repo's
+  install path updated); CLAUDE.md + docs distilled into a root `SPEC.md`
+  (goal / constraints / interfaces / invariants / tasks), CLAUDE.md reduced
+  to a pointer stub.
+- [2026-07-07](2026-07-07.md) — skeleton verified end-to-end
+  (`apply`/`diff` on UOMs); snapshot plan confirmed dead; no API-only
+  bootstrap path — CustomizationApi chosen as the route; the silent
+  wrong-tenant foot-gun discovered.
+
+## Friction catalog
+
+Every Acumatica problem hit so far, one line each. Status: **resolved**
+(fixed in code/config), **workaround** (route around it), **dead end**
+(abandoned approach), **open**.
+
+| # | Friction | Status | Entry |
+|---|----------|--------|-------|
+| 1 | `ac.exe` has no snapshot save/restore in current builds; snapshots are UI-only (SM203520) and screen automation is unreliable | dead end | [2026-07-07](2026-07-07.md) |
+| 2 | `ac.exe -cm:CompanyConfig` defaults `-dbnew` to `True` (creates a new DB) — must pass `-dbnew:"False"` on existing DBs | resolved | [2026-07-07](2026-07-07.md) |
+| 3 | Official docs mislabel `CompanyType` as a boolean; working values are dataset names (`''` = clean, `SalesDemo` = demo) | resolved | [2026-07-07](2026-07-07.md) |
+| 4 | `-iname:"<instance>"` is required but omitted from the docs' CompanyConfig example (`Site with name '' doesn't exist`) | resolved | [2026-07-07](2026-07-07.md) |
+| 5 | `-h:"<instance path>"` also required beside `-iname` — without it create dies mid-run with `ArgumentNullException` and rolls back | resolved | [2026-07-08](2026-07-08.md) |
+| 6 | Delete sub-key is `Deleted`, not the documented `Delete`; `Delete=Yes` is *silently ignored* and the run overwrites the tenant as an insert target | resolved | [2026-07-08](2026-07-08.md) |
+| 7 | Delete also needs the full spec (`ParentID` + `CompanyType`) or the preflight misreads the tenant as the system company and aborts | resolved | [2026-07-08](2026-07-08.md) |
+| 8 | `LoginName` lands in `dbo.Company.CompanyKey` (the sign-in name), not `CompanyCD` — easy to misread as "didn't take" | resolved | [2026-07-08](2026-07-08.md) |
+| 9 | Tenant names: `;` and `=` are delimiters inside the `-company:"…"` string — names containing them corrupt the ac.exe invocation | open (needs input validation) | [2026-07-08](2026-07-08.md) |
+| 10 | New tenants are invisible to the running app until an `AcumaticaERP` app-pool recycle — the tenant map loads at startup | resolved | [2026-07-08](2026-07-08.md) |
+| 11 | With a stale tenant map, REST login accepts *any* tenant name and silently lands on the default tenant — config-as-code writes to the wrong tenant | resolved (recycle + always send explicit valid `tenant`) | [2026-07-07](2026-07-07.md), [2026-07-08](2026-07-08.md) |
+| 12 | Fresh tenants seed `admin`/`setup` with a must-change flag the contract REST API cannot clear; retry loops lock the account | resolved (`-aup` preset at create; `Login.aspx` screen-flow fallback) | [2026-07-08](2026-07-08.md) |
+| 13 | `Login.aspx` automation traps: four submit buttons (`mfLoginButton` matches first), `txtConfirmPassword` must be posted too, alarming hidden divs are static template noise | resolved | [2026-07-08](2026-07-08.md) |
+| 14 | Unconfigured tenants fail on most entities — 500 `PXSetupNotEnteredException` (Companies → Branches → GL Preferences → Financial Year chain) or 403 on feature-gated screens | open (bootstrap package) | [2026-07-07](2026-07-07.md) |
+| 15 | No API-only bootstrap path: `PUT CompaniesStructure` fails on every variant; features (CS100000) unreachable via built-in endpoints | workaround (CustomizationApi route) | [2026-07-07](2026-07-07.md) |
+| 16 | Payment terms have no entity in the Default 25.200.001 endpoint | workaround (custom endpoint in bootstrap package) | [2026-07-07](2026-07-07.md) |
+| 17 | REST logout returns `411 Length Required` without an explicit `Content-Length: 0` | resolved | [2026-07-07](2026-07-07.md) |
+| 18 | API sessions count against the license's concurrent-user cap — leaked sessions exhaust a trial instance | resolved (client is a context manager; logout always runs) | [2026-07-07](2026-07-07.md) |
+
+## Status
+
+Mechanisms:
+
+1. **Tenant provisioning as code** (`acu tenant list|create|delete`, ac.exe
+   over SSH) — `[DONE]` — create chains create → recycle → login-ready admin
+   in one command; delete round-trips it.
+2. **Snapshot-based baseline** — `[DEAD END]` — no CLI snapshot support;
+   baseline lives entirely in reference-data-as-code.
+3. **Reference data as code** (`acu apply` / `acu diff`, YAML → REST upserts)
+   — `[IN PROGRESS]` — proven end-to-end on `baseline/uoms.yaml`; the
+   bootstrap customization package (features + company/branch + payment
+   terms via CustomizationApi) is the gating task.
+4. **One-command provisioning** (`acu provision`: create → bootstrap →
+   apply → diff) — `[OPEN]`.
+
+Remaining milestones:
+
+- `[OPEN]` Bootstrap package authored and published via CustomizationApi.
+- `[OPEN]` Baseline expanded in dependency order: currencies → financial
+  calendar → chart of accounts/ledger → tax categories/zones →
+  customer/vendor/item classes → payment terms.
+- `[OPEN]` Drift proof: provision two tenants, diff config, zero difference.
+- `[OPEN]` Timing captured (manual baseline vs automated).
+- `[OPEN]` Repo clean and runnable; README shows `acu provision` reproducing
+  the numbers.
+
+Target config domains (what a configured tenant must carry): chart of
+accounts (GL), customer/vendor classes, payment terms, tax zones/categories,
+item classes, UOMs, currencies, branches/company structure.

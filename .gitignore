@@ -1,0 +1,13 @@
+# dev symlinks into the sibling data repo (../acumatica-baseline)
+baseline
+acu.toml
+.env
+
+# dumped API schemas — regenerate with acu schema
+schemas/
+
+# python
+.pytest_cache
+.ruff_cache/
+.venv/
+__pycache__/

@@ -1,0 +1,172 @@
+"""Baseline parsing, normalization, and the apply/diff logic.
+
+Live records are served by an AcumaticaClient over httpx.MockTransport, so
+apply/diff run through the real client (wrap, $filter, _checked) offline.
+"""
+
+from pathlib import Path
+from typing import Any
+
+import httpx
+import pytest
+
+from acumatica_cli import seed
+from acumatica_cli.client import AcumaticaClient, wrap
+from acumatica_cli.config import Instance
+
+BASELINE = """\
+entity: UnitsOfMeasure
+key: UOM
+records:
+  - UOM: KG
+    Description: Kilogram
+  - UOM: HOUR
+    Description: Hour
+"""
+
+
+def _write(tmp_path: Path, text: str) -> Path:
+    path = tmp_path / "baseline.yaml"
+    path.write_text(text)
+    return path
+
+
+def test_load_baseline_parses_string_key(tmp_path: Path) -> None:
+    baseline = seed.load_baseline(_write(tmp_path, BASELINE))
+    assert baseline.entity == "UnitsOfMeasure"
+    assert baseline.keys == ["UOM"]
+    assert [r["UOM"] for r in baseline.records] == ["KG", "HOUR"]
+
+
+def test_load_baseline_accepts_key_list(tmp_path: Path) -> None:
+    text = BASELINE.replace("key: UOM", "key: [UOM, Description]")
+    assert seed.load_baseline(_write(tmp_path, text)).keys == ["UOM", "Description"]
+
+
+def test_load_baseline_rejects_missing_field(tmp_path: Path) -> None:
+    text = BASELINE.replace("entity: UnitsOfMeasure\n", "")
+    with pytest.raises(SystemExit, match="entity: Field required"):
+        seed.load_baseline(_write(tmp_path, text))
+
+
+def test_load_baseline_rejects_unknown_field(tmp_path: Path) -> None:
+    with pytest.raises(SystemExit, match="typo"):
+        seed.load_baseline(_write(tmp_path, BASELINE + "typo: oops\n"))
+
+
+def test_load_baseline_rejects_record_without_key(tmp_path: Path) -> None:
+    text = BASELINE.replace("  - UOM: HOUR\n", "  - UOM2: HOUR\n")
+    with pytest.raises(SystemExit, match=r"records\[1\] missing key field 'UOM'"):
+        seed.load_baseline(_write(tmp_path, text))
+
+
+def test_norm_folds_booleans_and_strips() -> None:
+    norm = seed._norm  # pyright: ignore[reportPrivateUsage]
+    assert norm(True) == "true"
+    assert norm("True") == "True"  # strings are NOT case-folded
+    assert norm("  x  ") == "x"
+    assert norm(1) == "1"
+
+
+def test_filter_for_joins_keys() -> None:
+    record = {"UOM": "KG", "ToUOM": "G"}
+    filter_for = seed._filter_for  # pyright: ignore[reportPrivateUsage]
+    assert filter_for(record, ["UOM", "ToUOM"]) == "UOM eq 'KG' and ToUOM eq 'G'"
+
+
+class Recorder:
+    """Canned per-entity responses; records every request."""
+
+    def __init__(self, respond: dict[str, httpx.Response] | None = None):
+        self.requests: list[httpx.Request] = []
+        self.respond = respond or {}
+
+    def __call__(self, request: httpx.Request) -> httpx.Response:
+        self.requests.append(request)
+        for suffix, response in self.respond.items():
+            if request.url.path.endswith(suffix):
+                return response
+        return httpx.Response(200, json={})
+
+
+def _client(instance: Instance, recorder: Recorder) -> AcumaticaClient:
+    return AcumaticaClient(instance, transport=httpx.MockTransport(recorder))
+
+
+def _live(*records: dict[str, Any]) -> httpx.Response:
+    return httpx.Response(200, json=[wrap(r) for r in records])
+
+
+def test_apply_puts_every_record(
+    tmp_path: Path, instance: Instance, capsys: pytest.CaptureFixture[str]
+) -> None:
+    baseline = seed.load_baseline(_write(tmp_path, BASELINE))
+    recorder = Recorder()
+
+    n = seed.apply(_client(instance, recorder), baseline)
+
+    assert n == 2
+    assert [r.method for r in recorder.requests] == ["PUT", "PUT"]
+    assert "PUT UnitsOfMeasure [KG]" in capsys.readouterr().out
+
+
+def test_apply_dry_run_makes_no_calls(
+    tmp_path: Path, instance: Instance, capsys: pytest.CaptureFixture[str]
+) -> None:
+    baseline = seed.load_baseline(_write(tmp_path, BASELINE))
+    recorder = Recorder()
+
+    n = seed.apply(_client(instance, recorder), baseline, dry_run=True)
+
+    assert n == 2
+    assert recorder.requests == []
+    assert "would PUT UnitsOfMeasure [KG]" in capsys.readouterr().out
+
+
+def test_diff_clean_when_live_matches(tmp_path: Path, instance: Instance) -> None:
+    baseline = seed.load_baseline(_write(tmp_path, BASELINE))
+    recorder = Recorder()
+    # every filter gets the KG record back: KG is clean, HOUR drifts per field
+    recorder.respond["/UnitsOfMeasure"] = _live(
+        {"UOM": "KG", "Description": "Kilogram"}
+    )
+
+    drifts = seed.diff(_client(instance, recorder), baseline)
+
+    assert drifts == [
+        "UnitsOfMeasure [HOUR].UOM: source='HOUR' live='KG'",
+        "UnitsOfMeasure [HOUR].Description: source='Hour' live='Kilogram'",
+    ]
+    filters = [r.url.params["$filter"] for r in recorder.requests]
+    assert filters == ["UOM eq 'KG'", "UOM eq 'HOUR'"]
+
+
+def test_diff_flags_missing_record(tmp_path: Path, instance: Instance) -> None:
+    baseline = seed.load_baseline(_write(tmp_path, BASELINE))
+    recorder = Recorder({"/UnitsOfMeasure": httpx.Response(200, json=[])})
+
+    drifts = seed.diff(_client(instance, recorder), baseline)
+
+    assert drifts == [
+        "UnitsOfMeasure [KG]: missing on tenant",
+        "UnitsOfMeasure [HOUR]: missing on tenant",
+    ]
+
+
+def test_diff_flags_field_not_returned(tmp_path: Path, instance: Instance) -> None:
+    text = BASELINE.replace("  - UOM: HOUR\n    Description: Hour\n", "")
+    baseline = seed.load_baseline(_write(tmp_path, text))
+    recorder = Recorder({"/UnitsOfMeasure": _live({"UOM": "KG"})})
+
+    drifts = seed.diff(_client(instance, recorder), baseline)
+
+    assert drifts == ["UnitsOfMeasure [KG].Description: not returned by endpoint"]
+
+
+def test_diff_normalizes_booleans(tmp_path: Path, instance: Instance) -> None:
+    text = "entity: E\nkey: K\nrecords:\n  - K: A\n    Active: true\n"
+    baseline = seed.load_baseline(_write(tmp_path, text))
+    # live returns the Python bool True; source YAML parses to bool too
+    recorder = Recorder({"/E": _live({"K": "A", "Active": True})})
+
+    assert seed.diff(_client(instance, recorder), baseline) == []
