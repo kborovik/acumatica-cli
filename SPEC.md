@@ -2,7 +2,7 @@
 
 ## §G GOAL
 
-Configure Acumatica ERP purely from source — no UI, no Configuration Wizard. Idempotent ops: `apply` (keyed upserts), `diff` (drift detect, exit 1 on drift), ultimately `acu provision` — one command chains tenant create → bootstrap → apply `baseline/` → diff. Done = clone data repo, decrypt, run one command → byte-identical configured tenant every time.
+Configure Acumatica ERP purely from source — no UI, no Configuration Wizard. Idempotent ops: `apply` (keyed upserts), `diff` (drift detect, exit 2 on drift), ultimately `acu provision` — one command chains tenant create → bootstrap → apply `baseline/` → diff. Done = clone data repo, decrypt, run one command → byte-identical configured tenant every time.
 
 ## §C CONSTRAINTS
 
@@ -15,11 +15,12 @@ Configure Acumatica ERP purely from source — no UI, no Configuration Wizard. I
 
 ## §I INTERFACES
 
-- cmd: `acu [-i <instance>] [-t <tenant>] <subcommand>` → global instance/tenant selection; `--version`
-- cmd: `acu tenant list|create|delete` → tenant CRUD over SSH; create: `--id` ! + `--login` ! + `--type`/`--parent`/`--hidden` ?; delete: `--id` + confirm prompt
+- cmd: `acu [-i <instance>] [-t <tenant>] [--version] <subcommand>` → globals valid only before subcommand
+- cmd: `acu tenant list|create|delete` → tenant CRUD over SSH; create: `--id` ! + `--login` ! + `--type`/`--parent`/`--hidden`/`--no-init` ?; delete: `--id` + confirm prompt, `--yes` skips
 - cmd: `acu apply [--dry-run] <files|dirs>` → PUT each record; dir arg expands `*.yaml`; dry-run lines `would PUT …`, summary suffixed `(dry run)`
-- cmd: `acu diff <files|dirs>` → GET by `$filter` on key fields, compare normalized; drift → exit 1
-- cmd: `acu schema` → OpenAPI dump → `schemas/` (gitignored ~3 MB; regenerate, never version)
+- cmd: `acu diff <files|dirs>` → GET by `$filter` on key fields, compare normalized; drift → exit 2
+- cmd: `acu provision --id <n> --login <name> [--type] [--parent]` → chains tenant create → bootstrap publish → apply `baseline/` → diff; resumable — skips done steps
+- cmd: `acu schema [--out <dir>]` → OpenAPI dump → `schemas/` (gitignored ~3 MB; regenerate, never version)
 - cfg: `acu.toml` → `[instances.<name>]` tables (URLs, SSH target, DB name) + `default_instance`; discovery sentinel
 - env: `ACU_PASSWORD` ! set; `ACU_USER` ? default `admin`; loaded from dir of found `acu.toml`; encrypted at rest as `.env.gpg`
 - data: `baseline/*.yaml` → `entity` / `key` (string or list) / `records`; parsed by `seed.py`
@@ -31,17 +32,19 @@ Configure Acumatica ERP purely from source — no UI, no Configuration Wizard. I
 V1: two-plane split — control plane = SSH (`tenant.py`, tenant CRUD only); data plane = REST (`client.py`); never mixed
 V2: three source kinds never mixed — `baseline/*.yaml` = what, `acu.toml` = where (never what, never secrets), `.env` = secrets; all three live in data repos, not here
 V3: discovery — walk up from cwd to first dir containing `acu.toml`; `.env` loaded from same dir; none found → hard error
-V4: idempotence — `PUT` keyed upsert is the primitive; `diff` treats source as authoritative, extra live records not flagged; drift → exit 1
+V4: idempotence — `PUT` keyed upsert is the primitive; `diff` treats source as authoritative, extra live records not flagged; drift → exit 2
 V5: tenant-map — tenant create ! `AcumaticaERP` app-pool recycle after `ac.exe` (stale map → tenant missing from sign-in + REST silently routes to default tenant); always send explicit valid `tenant`
 V6: `AcumaticaClient` ! context manager — logout even on failure (sessions count vs license API-user cap); logout ! `Content-Length: 0` (else IIS 411)
 V7: `CompanyConfig` ! `-h` beside `-iname` + `-dbnew:"False"`; delete uses `Deleted` sub-key + full spec (`ParentID` + `CompanyType`)
 V8: tenant create presets admin via `-aun`/`-aup`/`-auc` — contract API can't clear `PasswordChangeOnNextLogin`; `Login.aspx` screen flow = fallback only
-V9: output — everything through `output.py`, no bare `print()` (ruff T20); stdout = data, stderr = process; ASCII-only every path incl. TTY — prefixes `+` ok, `!` warn, `x` error; table box ASCII; spinner ASCII; exit 0 ok, 1 error or drift; expected failure = one `x` line, no traceback (`ACU_DEBUG=1` re-raises)
+V9: output — everything through `output.py`, no bare `print()` (ruff T20); stdout = data (one record per line, greppable), stderr = process (steps, warnings, errors); ASCII-only every path incl. TTY — prefixes `+` ok, `!` warn, `x` error, deterministic, survive piping; rich auto-degrades non-TTY, no manual TTY branching outside `output.py`; `NO_COLOR`/`FORCE_COLOR` respected; markup/emoji/highlighting off; table box ASCII; spinner ASCII; exit 0 ok, 1 error, 2 drift; expected failure = one `x` line, no traceback (`ACU_DEBUG=1` re-raises); validation error → `SystemExit("msg")`; no `--json` — plain text = machine interface
 V10: every model inherits `models.Model` (pydantic frozen, `extra="forbid"`) — validate at boundary, unknown fields error
 V11: REST targets versioned path only (`Default/25.200.001`), never unversioned alias
 V12: `docs/ac-exe.md` + `docs/rest-api.md` verified vs live 26.101.0225 — trust over training data, re-verify on upgrade; dumped schema (`acu schema`) = authoritative field reference
 V13: `make check` (ruff + basedpyright strict + offline pytest) before every commit
 V14: journal — after meaningful work append/extend `journal/YYYY-MM-DD.md` + sync `journal/index.md`; dead ends stay in (findings, not noise)
+V15: cmd grammar — exactly two forms: `acu [globals] tenant <verb> [options]` = control plane; `acu [globals] <verb> [options] [args]` = data plane + pipeline; noun-verb reserved for control-plane resource ops; no third form; surface encodes V1 split
+V16: option conventions — globals (`-i/--instance`, `-t/--tenant`, `--version`) valid only before subcommand; resource identity = explicit `--id`, never positional; file/dir inputs positional variadic, dirs expand `*.yaml`; `--dry-run` wherever mutation — lines `would <VERB> …`, summary suffixed `(dry run)`; destructive ops confirm prompt default, `--yes` skips; long flags kebab-case; short flags reserved for globals
 
 ## §T TASKS
 
@@ -51,6 +54,10 @@ T2|x|bootstrap package — publish via `/CustomizationApi`; custom endpoint expo
 T3|x|verify CS100000 accepts writes via custom endpoint ? — fallback: `CustomizationPlugin` flips `FeaturesSet` on publish (ships C#)|T2
 T4|x|post-login tenant guard in seeding pipeline — defense-in-depth vs wrong-tenant writes|V5
 T5|.|ASCII sweep per V9 — swap `✓`→`+`, `✗`→`x`, `box.ROUNDED`→`box.ASCII`, spinner→ASCII, drop non-ASCII from output-reaching strings; scope: `grep -rnP '[^\x00-\x7F]' src/` (docstrings/comments exempt)|V9
+T6|.|drop `docs/cli.md` — contract folded into §I/§V; drop ref from CLAUDE.md|V9
+T7|.|drift exit code 1 → 2 in `diff` + `provision`; ripple: `acumatica-baseline` `make diff` + any consumer treating exit 1 as drift|V4,V9
+T8|.|drop `acu bootstrap` cmd — `bootstrap.publish()` module stays; resumable `provision` = recovery route|I.cmd
+T9|.|drop `schema -o` short flag — `--out` only|V16
 
 ## §B BUGS
 
