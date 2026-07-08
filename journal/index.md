@@ -36,7 +36,15 @@ Newest first.
   install path updated); CLAUDE.md + docs distilled into a root `SPEC.md`
   (goal / constraints / interfaces / invariants / tasks), CLAUDE.md reduced
   to a pointer stub; initial commit pushed to a new public GitHub repo
-  (<https://github.com/kborovik/acumatica-cli>).
+  (<https://github.com/kborovik/acumatica-cli>); `/sdd:build --all` landed
+  `acu provision` (create → bootstrap → apply → diff, idempotent), the
+  bootstrap-package machinery (`acu bootstrap`, CustomizationApi client),
+  and the explicit-tenant session guard; the CS100000 verification came
+  back **negative** after a live custom-endpoint archaeology session
+  (endpoints = tenant-scoped DB rows in five tables, metadata cached per
+  app domain, CustomizationApi errors are in-band 200s, project.xml root
+  is `<Customization>`) — PUT Features persists nothing, so the C#
+  CustomizationPlugin fallback is the route.
 - [2026-07-07](2026-07-07.md) — skeleton verified end-to-end
   (`apply`/`diff` on UOMs); snapshot plan confirmed dead; no API-only
   bootstrap path — CustomizationApi chosen as the route; the silent
@@ -68,6 +76,10 @@ Every Acumatica problem hit so far, one line each. Status: **resolved**
 | 16 | Payment terms have no entity in the Default 25.200.001 endpoint | workaround (custom endpoint in bootstrap package) | [2026-07-07](2026-07-07.md) |
 | 17 | REST logout returns `411 Length Required` without an explicit `Content-Length: 0` | resolved | [2026-07-07](2026-07-07.md) |
 | 18 | API sessions count against the license's concurrent-user cap — leaked sessions exhaust a trial instance | resolved (client is a context manager; logout always runs) | [2026-07-07](2026-07-07.md) |
+| 19 | CustomizationApi failures are in-band: every call answers 200, errors live only in `log[].logType == "error"` — status-code checking is blind | resolved (`_checked_log`) | [2026-07-08](2026-07-08.md) |
+| 20 | project.xml root is `<Customization level description product-version>`, not `<Project>`; no shipped package samples an `EntityEndpoint` item (`.endpoint` file globs in Common.dll are the lead) | open (item format unverified) | [2026-07-08](2026-07-08.md) |
+| 21 | CS100000 rejects the whole contract-API surface: PUT 200-but-no-persist (keyless BqlDelegate view), GET `CannotOptimizeException`, `Insert` action invoke `PXInvalidOperationException` | dead end (C# CustomizationPlugin fallback) | [2026-07-08](2026-07-08.md) |
+| 22 | Custom-endpoint DB rows: EntityIds are global — a colliding id kills the tenant's whole contract API; endpoint metadata is cached per app domain (recycle to refresh); one malformed row 302s every `/entity` request on the tenant | resolved (documented row formats) | [2026-07-08](2026-07-08.md) |
 
 ## Status
 
@@ -83,11 +95,15 @@ Mechanisms:
    bootstrap customization package (features + company/branch + payment
    terms via CustomizationApi) is the gating task.
 4. **One-command provisioning** (`acu provision`: create → bootstrap →
-   apply → diff) — `[OPEN]`.
+   apply → diff) — `[DONE (code)]` — command lands with offline tests; the
+   bootstrap step is gated on the package publish working end to end.
 
 Remaining milestones:
 
-- `[OPEN]` Bootstrap package authored and published via CustomizationApi.
+- `[IN PROGRESS]` Bootstrap package published via CustomizationApi —
+  machinery + `acu bootstrap` done; blocked on the `EntityEndpoint` item
+  serialization (open) and the C# `CustomizationPlugin` fallback for
+  features (CS100000 verified un-writable via the contract API).
 - `[OPEN]` Baseline expanded in dependency order: currencies → financial
   calendar → chart of accounts/ledger → tax categories/zones →
   customer/vendor/item classes → payment terms.

@@ -24,8 +24,10 @@ def test_package_zip_holds_the_project_xml() -> None:
     with zipfile.ZipFile(io.BytesIO(bootstrap.package_zip())) as zf:
         assert zf.namelist() == ["project.xml"]
         root = ET.fromstring(zf.read("project.xml"))
-    assert root.tag == "Project"
-    assert root.get("Name") == bootstrap.PACKAGE_NAME
+    # root shape verified vs the training package on the live box: the
+    # project name comes from the import call, not the XML
+    assert root.tag == "Customization"
+    assert root.get("product-version") == "26.101"
     # the endpoint item must carry the name/version acu seeds through
     (endpoint,) = root.findall("EntityEndpoint")
     assert endpoint.get("name") == bootstrap.ENDPOINT
@@ -43,8 +45,22 @@ class Api:
         self.requests.append(request)
         path = request.url.path
         if path.endswith("/CustomizationApi/getPublished"):
-            projects = [{"name": bootstrap.PACKAGE_NAME}] if self.published else []
-            return httpx.Response(200, json={"projects": projects})
+            if self.published:
+                return httpx.Response(
+                    200, json={"projects": [{"name": bootstrap.PACKAGE_NAME}]}
+                )
+            # live shape (26.101.0225): no projects key at all, only a log
+            return httpx.Response(
+                200,
+                json={
+                    "log": [
+                        {
+                            "logType": "information",
+                            "message": "The system does not contain published projects",
+                        }
+                    ]
+                },
+            )
         if path.endswith("/CustomizationApi/publishEnd"):
             return self.publish_end.pop(0)
         return httpx.Response(204)
@@ -102,6 +118,41 @@ def test_publish_polls_until_completed(
     assert _publish(instance, api) == "published"
     assert _paths(api).count("publishEnd") == 2
     assert naps == [0.0]
+
+
+def test_import_error_in_200_log_raises(instance: Instance) -> None:
+    """The CustomizationApi reports failures in-band: 200 + logType error.
+
+    Payload shape sampled live (26.101.0225): an import that rejects the
+    package still answers 200, with the failure only in the log entries.
+    """
+
+    class ImportFails(Api):
+        def __call__(self, request: httpx.Request) -> httpx.Response:
+            if request.url.path.endswith("/CustomizationApi/import"):
+                self.requests.append(request)
+                return httpx.Response(
+                    200,
+                    json={
+                        "log": [
+                            {
+                                "logType": "information",
+                                "message": "Delete project: acu-bootstrap",
+                            },
+                            {
+                                "logType": "error",
+                                "message": "The project is not found: acu-bootstrap",
+                            },
+                        ]
+                    },
+                )
+            return super().__call__(request)
+
+    api = ImportFails(publish_end=[])
+    with pytest.raises(RuntimeError, match="The project is not found"):
+        _publish(instance, api)
+    # failed import must stop the flow before publishBegin
+    assert "publishBegin" not in _paths(api)
 
 
 def test_publish_failure_surfaces_log_tail(instance: Instance) -> None:

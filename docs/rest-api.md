@@ -168,10 +168,96 @@ Consequence — the ordered bootstrap pipeline:
 3. enable features + create company/branch (custom endpoint)
 4. seed `baseline/` (Default endpoint)
 
-Open risk: whether CS100000 accepts writes through a custom endpoint
-(community prior art suggests feature flags are settable per-tenant via
-customization; a `CustomizationPlugin` flipping `FeaturesSet` on publish is
-the fallback, at the cost of shipping C# in the package).
+~~Open risk: whether CS100000 accepts writes through a custom endpoint~~
+**Resolved 2026-07-08 — CS100000 does NOT accept writes through a custom
+endpoint.** See the custom-endpoint section below. The fallback is now the
+route: a `CustomizationPlugin` flipping `FeaturesSet` on publish (ships C#
+in the package).
+
+## Custom endpoints under the hood — verified 2026-07-08
+
+Everything below was verified live on a scratch tenant (BootTest, CompanyID
+4, deleted after) by installing a custom endpoint as raw DB rows and probing
+the API; constants were pulled from the server's own DLLs via PowerShell
+reflection (`PX.Api.ContractBased[.Common].dll`).
+
+**A custom endpoint is nothing but tenant-scoped rows in five tables** —
+no code, no files:
+
+| Table | Row shape (key columns) |
+|---|---|
+| `EntityEndpoint` | `GateVersion` ('1.0.0'), `InterfaceName` ('Bootstrap'), `ExtendsVersion/Name` (null unless extending), `SystemContractVersion` = **4** on this build (`SystemContracts.V4` is the only implementation, attribute `IsCurrent`; the DAC default 1 is legacy) |
+| `EntityDescription` | `EntityId` (globally unique int), `GateVersion`+`InterfaceName`, `ObjectName` ('Features'), `Active`, `ObjectType` — `T`opLevel / `L`inked / `D`etail / `R`eport, `ScreenID` ('CS100000') |
+| `EntityFieldDescription` | `EntityId`, `EntityFieldId`, `FieldName`, `FieldType` — the wrapper names: `StringValue`, `BooleanValue`, `IntValue`, `DecimalValue`, `GuidValue`, `DateTimeValue`, `ShortValue`, `LongValue`, `DoubleValue`, `ByteValue`, `DateOnlyValue`; `PopulateByDefault` = 0 |
+| `EntityMapping` | `MappingKey` `E/<entityId>/<fieldId>` → `MappedObject` (graph **view** name) + `MappedField` (DAC field). No entity-level `E/<id>` rows exist — the primary view resolves from the screen. |
+| `EntityActionDescription` | `EntityId`, `ActionId`, `ActionName` (contract name), `MappedAction` (graph action member), `Active`; action-parameter mappings key as `E/<eid>/A<aid>/<pid>` |
+
+Facts that matter for tooling:
+
+- **Built-in endpoints materialize into the same tables under CompanyID 1**
+  (~2.7k `EntityDescription`, ~34k field rows appeared after an app-pool
+  recycle). `EntityId`/`ActionId` are allocated globally
+  (`SELECT MAX(...)+1`) — a custom entity reusing a taken id kills the
+  whole contract API for that tenant with "An item with the same key has
+  already been added". The earlier "EntityEndpoint is empty" observation
+  was a pre-materialization artifact.
+- **Endpoint metadata is cached per app domain** (`MetadataProvider.*`
+  slots). A new `EntityEndpoint` row shows in `GET /entity` immediately,
+  but entities/fields/actions need an app-pool recycle to appear.
+- Tenant scoping is real: rows with CompanyID 4 are invisible to sessions
+  on other tenants (404), exactly as the publish-per-tenant model implies.
+- Broken metadata rows don't 404 — they 500/302 **every** `/entity/…`
+  request on that tenant, including the built-in Default endpoint. A
+  malformed row poisons the tenant's whole contract API.
+
+**The CS100000 verdict (T3).** With a correct custom endpoint mapping
+`Features` → FeaturesMaint view `Features`:
+
+- `PUT …/Features {"MultiCompany": {"value": true}}` → **200, but nothing
+  persists** — `FeaturesSet` stays empty, and the echoed record omits all
+  value fields. The primary view is a keyless BqlDelegate view; the
+  contract-API update targets the delegate's transient row and the graph
+  save is a silent no-op.
+- `GET …/Features` → 500 `CannotOptimizeException` ("There is a BqlDelegate
+  in view Features") — same disease as `PUT CompaniesStructure`.
+- Exposing the graph's custom `Insert` action (`EntityActionDescription` →
+  `MappedAction: Insert`) and invoking it → 500 `PXInvalidOperationException`
+  "Operation failed".
+
+So features cannot be enabled through the contract API surface at all, no
+matter what endpoint fronts CS100000 — the fallback (C# CustomizationPlugin
+writing `FeaturesSet` on publish) ships in the bootstrap package.
+
+**Where to read server errors when the API only 302s to `/ui/error`:**
+flip `EnableFirstChanceExceptionsLogging` to `True` in web.config (default
+False; restarts the app) and read
+`App_Data\firstchanceexceptions.log`. The `/ui/error` SPA itself reads
+`apiweb/error-page`, which only carries the generic message.
+
+## CustomizationApi — verified quirks (2026-07-08)
+
+- **Failures are in-band.** Every `/CustomizationApi/*` call answers 200;
+  errors appear only as `log` entries with `"logType": "error"` (a rejected
+  import still returns 200 + "The project is not found: …" in the log).
+  `getPublished` with nothing published returns only a `log` — no
+  `projects` key.
+- `publishBegin` accepts `projectNames`, `isMergeWithExistingPackages`,
+  `isOnlyValidation`, `isOnlyDbUpdates`,
+  `isReplayPreviouslyExecutedScripts`, `tenantMode: "Current"`; poll
+  `publishEnd` for `{isCompleted, isFailed, log}`.
+- **Package format (partially verified).** The importable zip carries
+  `project.xml` whose root is
+  `<Customization level="" description="…" product-version="26.101">` —
+  verified against the training package shipped on the box
+  (`HelpAndTraining/T270/PhoneRepairShop.zip`, same build). The project
+  *name* comes from the import call, not the XML. Items observed in real
+  packages: `Page`, `File`, `Sql`, `Table`, `SiteMap`,
+  `GenericInquiryScreen` (data-set row serialization), … — none of the
+  shipped training packages contains an `EntityEndpoint` item, so that
+  item's serialization is still unverified. `PX.Api.ContractBased.Common.dll`
+  contains `*.endpoint` / `*.endpoint.remove` glob literals — packages
+  likely carry endpoints as `.endpoint` files; discovering that format is
+  an open task.
 
 ## Conventions for the seeding layer
 

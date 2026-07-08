@@ -112,11 +112,36 @@ class AcumaticaClient:
 
     # -- CustomizationApi (same cookie session; works on a virgin tenant) --
 
+    @staticmethod
+    def _checked_log(r: httpx.Response) -> dict[str, Any]:
+        """Raise on in-band CustomizationApi errors (verified vs 26.101.0225).
+
+        The CustomizationApi answers 200 even when an operation fails — the
+        failure only shows as ``log`` entries with ``logType: "error"``
+        (e.g. an import that rejects the package still returns 200).
+        """
+        AcumaticaClient._checked(r)
+        try:
+            body: dict[str, Any] = r.json()
+        except ValueError:
+            return {}
+        log = body.get("log")
+        errors = [
+            str(entry.get("message", ""))
+            for entry in (log if isinstance(log, list) else [])
+            if isinstance(entry, dict) and entry.get("logType") == "error"
+        ]
+        if errors:
+            raise RuntimeError(
+                f"POST {r.request.url.path} reported: " + "; ".join(errors)
+            )
+        return body
+
     def customization_published(self) -> list[str]:
         """Names of the customization projects published in the session tenant."""
-        body = self._checked(
+        body = self._checked_log(
             self._http.post("/CustomizationApi/getPublished", json={})
-        ).json()
+        )
         projects = body.get("projects") or []
         return [p["name"] for p in projects if isinstance(p, dict) and "name" in p]
 
@@ -124,7 +149,7 @@ class AcumaticaClient:
         self, name: str, zip_bytes: bytes, description: str = ""
     ) -> None:
         """Upload a customization package zip (replacing any same-name project)."""
-        self._checked(
+        self._checked_log(
             self._http.post(
                 "/CustomizationApi/import",
                 json={
@@ -139,7 +164,7 @@ class AcumaticaClient:
 
     def customization_publish_begin(self, names: list[str]) -> None:
         """Start publishing the named projects into the current tenant."""
-        self._checked(
+        self._checked_log(
             self._http.post(
                 "/CustomizationApi/publishBegin",
                 json={
