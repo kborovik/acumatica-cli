@@ -190,7 +190,7 @@ def provision_cmd(
     create over SSH (skipped when the login name already exists), bootstrap
     package publish (skipped when already published), bootstrap/ YAML through
     the custom endpoint, baseline/ through the Default endpoint, then the
-    baseline drift check - exit 1 on drift.
+    baseline drift check - exit 2 on drift.
     """
     root = data_root()
     baseline_dir = root / "baseline"
@@ -309,7 +309,7 @@ def schema_cmd(inst: Instance, out_dir: Path | None) -> None:
 )
 @click.pass_obj
 def diff_cmd(inst: Instance, files: tuple[Path, ...]) -> None:
-    """Compare baseline YAML against the live tenant; exit 1 on drift.
+    """Compare baseline YAML against the live tenant; exit 2 on drift.
 
     FILES are baseline YAML files or directories containing them.
     """
@@ -323,10 +323,10 @@ def diff_cmd(inst: Instance, files: tuple[Path, ...]) -> None:
 
 
 def _exit_on_drift(inst: Instance, drifts: list[str], files: int) -> None:
-    """Report drift lines and exit 1 (the load-bearing diff contract)."""
+    """Report drift lines and exit 2 (the load-bearing diff contract, V9)."""
     if drifts:
         output.error(f"DRIFT on {inst.name}/{inst.tenant}:")
         for line in drifts:
             output.data(f"  {line}")
-        raise SystemExit(1)
+        raise SystemExit(2)
     output.success(f"no drift on {inst.name}/{inst.tenant} ({files} file(s))")

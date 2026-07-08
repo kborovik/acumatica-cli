@@ -56,7 +56,7 @@ T3|x|verify CS100000 accepts writes via custom endpoint ? — fallback: `Customi
 T4|x|post-login tenant guard in seeding pipeline — defense-in-depth vs wrong-tenant writes|V5
 T5|x|ASCII sweep per V9 — swap `✓`→`+`, `✗`→`x`, `box.ROUNDED`→`box.ASCII`, spinner→ASCII, drop non-ASCII from output-reaching strings; scope: `grep -rnP '[^\x00-\x7F]' src/` (docstrings/comments exempt)|V9
 T6|x|drop `docs/cli.md` — contract folded into §I/§V; drop ref from CLAUDE.md|V9
-T7|.|drift exit code 1 → 2 in `diff` + `provision`; ripple: `acumatica-baseline` `make diff` + any consumer treating exit 1 as drift|V4,V9
+T7|x|drift exit code 1 → 2 in `diff` + `provision`; ripple: `acumatica-baseline` `make diff` + any consumer treating exit 1 as drift|V4,V9
 T8|.|drop `acu bootstrap` cmd — `bootstrap.publish()` module stays; resumable `provision` = recovery route|I.cmd
 T9|.|drop `schema -o` short flag — `--out` only|V16
 T10|.|layered `Instance` defaults per `designs/config-layered-defaults.md` — `host` only required toml key, rest code defaults (transcribe literals from `docs/ac-exe.md`, not training data); add `acu config show`; migrate `acumatica-baseline/acu.toml`; verify live: minimal config (`default_instance` + `host`) passes provision|V11,V12,I.cfg

@@ -1,6 +1,6 @@
 """CLI wiring: exit codes, stream routing, and the top-level error handler.
 
-Pins diff's exit-1-on-drift contract — no live instance, no SSH.
+Pins diff's exit-2-on-drift contract (V9) — no live instance, no SSH.
 """
 
 import sys
@@ -178,7 +178,7 @@ def test_provision_skips_create_when_tenant_exists(
     assert "skipping create" in result.stderr
 
 
-def test_provision_drift_exits_one(
+def test_provision_drift_exits_two(
     provision_env: list[str], monkeypatch: pytest.MonkeyPatch
 ) -> None:
     drift = "UnitsOfMeasure [KG].Description: source='Kilogram' live='kg'"
@@ -187,7 +187,7 @@ def test_provision_drift_exits_one(
         cli.cli, ["provision", "--id", "3", "--login", "Scratch"]
     )
 
-    assert result.exit_code == 1
+    assert result.exit_code == 2
     assert "x DRIFT on test/Scratch:" in result.stderr
     assert drift in result.output
 
@@ -264,15 +264,15 @@ def test_apply_empty_directory_errors(wired: Instance, tmp_path: Path) -> None:
     assert "no *.yaml files in directory" in result.output
 
 
-def test_diff_drift_exits_one_with_lines_on_stdout(
+def test_diff_drift_exits_two_with_lines_on_stdout(
     wired: Instance, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     drift = "UnitsOfMeasure [KG].Description: source='Kilogram' live='kg'"
     monkeypatch.setattr(cli.seed, "diff", lambda client, baseline: [drift])
     result = CliRunner().invoke(cli.cli, ["diff", str(_baseline(tmp_path))])
 
-    # the load-bearing contract: drift -> exit 1
-    assert result.exit_code == 1
+    # the load-bearing contract (V9): exit 0 ok, 1 error, 2 drift
+    assert result.exit_code == 2
     assert "x DRIFT on test/T1:" in result.stderr
     assert drift in result.output
 
