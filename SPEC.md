@@ -46,6 +46,7 @@ V13: `make check` (ruff + basedpyright strict + offline pytest) before every com
 V14: journal — after meaningful work append/extend `journal/YYYY-MM-DD.md` + sync `journal/index.md`; dead ends stay in (findings, not noise)
 V15: cmd grammar — exactly two forms: `acu [globals] <noun> <verb> [options]` = resource ops (`tenant` = control plane; `config` = local read-only, no live instance); `acu [globals] <verb> [options] [args]` = data plane + pipeline; no third form; surface encodes V1 split
 V16: option conventions — globals (`-i/--instance`, `-t/--tenant`, `--version`) valid only before subcommand; resource identity = explicit `--id`, never positional; file/dir inputs positional variadic, dirs expand `*.yaml`; `--dry-run` wherever mutation — lines `would <VERB> …`, summary suffixed `(dry run)`; destructive ops confirm prompt default, `--yes` skips; long flags kebab-case; short flags reserved for globals
+V17: §T verify gate ! satisfiable vs current spec state — criterion never depends on capability another § records dead/pending unless citing the unblocking §T row
 
 ## §T TASKS
 
@@ -59,8 +60,10 @@ T6|x|drop `docs/cli.md` — contract folded into §I/§V; drop ref from CLAUDE.m
 T7|x|drift exit code 1 → 2 in `diff` + `provision`; ripple: `acumatica-baseline` `make diff` + any consumer treating exit 1 as drift|V4,V9
 T8|x|drop `acu bootstrap` cmd — `bootstrap.publish()` module stays; resumable `provision` = recovery route|I.cmd
 T9|x|drop `schema -o` short flag — `--out` only|V16
-T10|.|layered `Instance` defaults per `designs/config-layered-defaults.md` — `host` only required toml key, rest code defaults (transcribe literals from `docs/ac-exe.md`, not training data); add `acu config show`; migrate `acumatica-baseline/acu.toml`; verify live: minimal config (`default_instance` + `host`) passes provision|V11,V12,I.cfg
+T10|.|layered `Instance` defaults per `designs/config-layered-defaults.md` — `host` only required toml key, rest code defaults (transcribe literals from `docs/ac-exe.md`, not training data); add `acu config show`; migrate `acumatica-baseline/acu.toml`; verify live w/ minimal config (`default_instance` + `host`): `config show` + `tenant list` + `diff` green; provision E2E deferred → T11|V11,V12,I.cfg
+T11|.|C# CustomizationPlugin flips FeaturesSet on publish (§T.3 verdict route) — ships in bootstrap package; unblocks provision E2E; then re-verify provision live w/ minimal config|T2,T3
 
 ## §B BUGS
 
 id|date|cause|fix
+B1|2026-07-08|§T.10 live gate cited provision E2E; §T.3 verdict already records bootstrap publish dead, C# plugin fallback never queued|V17
