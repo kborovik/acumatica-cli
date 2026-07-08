@@ -36,7 +36,7 @@ V5: tenant-map — tenant create ! `AcumaticaERP` app-pool recycle after `ac.exe
 V6: `AcumaticaClient` ! context manager — logout even on failure (sessions count vs license API-user cap); logout ! `Content-Length: 0` (else IIS 411)
 V7: `CompanyConfig` ! `-h` beside `-iname` + `-dbnew:"False"`; delete uses `Deleted` sub-key + full spec (`ParentID` + `CompanyType`)
 V8: tenant create presets admin via `-aun`/`-aup`/`-auc` — contract API can't clear `PasswordChangeOnNextLogin`; `Login.aspx` screen flow = fallback only
-V9: output — everything through `output.py`, no bare `print()` (ruff T20); stdout = data, stderr = process; exit 0 ok, 1 error or drift; expected failure = one `✗` line, no traceback (`ACU_DEBUG=1` re-raises)
+V9: output — everything through `output.py`, no bare `print()` (ruff T20); stdout = data, stderr = process; ASCII-only every path incl. TTY — prefixes `+` ok, `!` warn, `x` error; table box ASCII; spinner ASCII; exit 0 ok, 1 error or drift; expected failure = one `x` line, no traceback (`ACU_DEBUG=1` re-raises)
 V10: every model inherits `models.Model` (pydantic frozen, `extra="forbid"`) — validate at boundary, unknown fields error
 V11: REST targets versioned path only (`Default/25.200.001`), never unversioned alias
 V12: `docs/ac-exe.md` + `docs/rest-api.md` verified vs live 26.101.0225 — trust over training data, re-verify on upgrade; dumped schema (`acu schema`) = authoritative field reference
@@ -50,6 +50,7 @@ T1|x|build `acu provision` — chain tenant create → bootstrap → apply `base
 T2|x|bootstrap package — publish via `/CustomizationApi`; custom endpoint exposes CS100000 features + CS101500 company/branch + CS206500 credit terms|I.api
 T3|x|verify CS100000 accepts writes via custom endpoint ? — fallback: `CustomizationPlugin` flips `FeaturesSet` on publish (ships C#)|T2
 T4|x|post-login tenant guard in seeding pipeline — defense-in-depth vs wrong-tenant writes|V5
+T5|.|ASCII sweep per V9 — swap `✓`→`+`, `✗`→`x`, `box.ROUNDED`→`box.ASCII`, spinner→ASCII, drop non-ASCII from output-reaching strings; scope: `grep -rnP '[^\x00-\x7F]' src/` (docstrings/comments exempt)|V9
 
 ## §B BUGS
 
