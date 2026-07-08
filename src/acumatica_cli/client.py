@@ -1,5 +1,6 @@
 """Contract-based REST API session (see docs/rest-api.md for verified quirks)."""
 
+import base64
 from typing import Any
 
 import httpx
@@ -87,4 +88,53 @@ class AcumaticaClient:
         """Upsert by the entity's key fields — the idempotence primitive."""
         return self._checked(
             self._http.put(self._url(entity), json=wrap(record))
+        ).json()
+
+    # -- CustomizationApi (same cookie session; works on a virgin tenant) --
+
+    def customization_published(self) -> list[str]:
+        """Names of the customization projects published in the session tenant."""
+        body = self._checked(
+            self._http.post("/CustomizationApi/getPublished", json={})
+        ).json()
+        projects = body.get("projects") or []
+        return [p["name"] for p in projects if isinstance(p, dict) and "name" in p]
+
+    def customization_import(
+        self, name: str, zip_bytes: bytes, description: str = ""
+    ) -> None:
+        """Upload a customization package zip (replacing any same-name project)."""
+        self._checked(
+            self._http.post(
+                "/CustomizationApi/import",
+                json={
+                    "projectLevel": 0,
+                    "isReplaceIfExists": True,
+                    "projectName": name,
+                    "projectDescription": description,
+                    "projectContents": base64.b64encode(zip_bytes).decode("ascii"),
+                },
+            )
+        )
+
+    def customization_publish_begin(self, names: list[str]) -> None:
+        """Start publishing the named projects into the current tenant."""
+        self._checked(
+            self._http.post(
+                "/CustomizationApi/publishBegin",
+                json={
+                    "isMergeWithExistingPackages": False,
+                    "isOnlyValidation": False,
+                    "isOnlyDbUpdates": False,
+                    "isReplayPreviouslyExecutedScripts": False,
+                    "projectNames": names,
+                    "tenantMode": "Current",
+                },
+            )
+        )
+
+    def customization_publish_end(self) -> dict[str, Any]:
+        """Poll the running publish: {isCompleted, isFailed, log: [...]}."""
+        return self._checked(
+            self._http.post("/CustomizationApi/publishEnd", json={})
         ).json()

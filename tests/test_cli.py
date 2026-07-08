@@ -83,6 +83,25 @@ def test_tenant_list_renders_table(
     assert "Company" in result.output
 
 
+def test_bootstrap_publishes_and_reports_endpoint(
+    wired: Instance, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    seen: list[Any] = []
+
+    def fake_publish(client: Any, **kwargs: Any) -> str:
+        seen.append(client)
+        return "published"
+
+    monkeypatch.setattr(cli.bootstrap, "publish", fake_publish)
+    result = CliRunner().invoke(cli.cli, ["bootstrap"])
+
+    assert result.exit_code == 0
+    assert len(seen) == 1
+    assert "✓ acu-bootstrap published on test/T1 (endpoint Bootstrap/1.0.0)" in (
+        result.stderr
+    )
+
+
 def test_apply_dry_run_summary(wired: Instance, tmp_path: Path) -> None:
     result = CliRunner().invoke(
         cli.cli, ["apply", "--dry-run", str(_baseline(tmp_path))]

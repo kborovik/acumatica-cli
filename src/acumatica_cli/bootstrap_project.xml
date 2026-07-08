@@ -1,0 +1,49 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  acu bootstrap customization package (SPEC §T.2).
+
+  One package closes both verified gaps (docs/rest-api.md): a custom
+  contract endpoint exposing the three screens an unconfigured tenant needs
+  before the Default endpoint is usable — CS100000 (Enable/Disable
+  Features), CS101500 (Companies), CS206500 (Credit Terms; absent from the
+  Default endpoint entirely).
+
+  UNVERIFIED against a live instance: the project/endpoint XML shape and
+  the view/field names below are best-effort pending §T.3 live
+  verification. Publish validation errors from /CustomizationApi are the
+  correction loop.
+-->
+<Project ApplicationRevision="26.101.0225" Name="acu-bootstrap" Level="0" Description="acu bootstrap: custom endpoint for features, company, and credit terms">
+  <EntityEndpoint name="Bootstrap/1.0.0">
+    <Endpoint xmlns="http://www.acumatica.com/entity/data-model" name="Bootstrap" version="1.0.0">
+      <TopLevelEntity name="Features" screen="CS100000">
+        <Fields>
+          <Field name="MultiCompany" object="Features" field="MultiCompany" />
+          <Field name="Branch" object="Features" field="Branch" />
+          <Field name="ProjectModule" object="Features" field="ProjectModule" />
+          <Field name="TimeReportingModule" object="Features" field="TimeReportingModule" />
+        </Fields>
+      </TopLevelEntity>
+      <TopLevelEntity name="Company" screen="CS101500">
+        <Fields>
+          <Field name="OrganizationCD" object="Organization" field="OrganizationCD" />
+          <Field name="OrganizationName" object="Organization" field="OrganizationName" />
+          <Field name="OrganizationType" object="Organization" field="OrganizationType" />
+          <Field name="BaseCuryID" object="Organization" field="BaseCuryID" />
+          <Field name="CountryID" object="Organization" field="CountryID" />
+        </Fields>
+      </TopLevelEntity>
+      <TopLevelEntity name="CreditTerms" screen="CS206500">
+        <Fields>
+          <Field name="TermsID" object="Terms" field="TermsID" />
+          <Field name="Description" object="Terms" field="Descr" />
+          <Field name="VisibleTo" object="Terms" field="VisibleTo" />
+          <Field name="DueType" object="Terms" field="DueType" />
+          <Field name="DueDay" object="Terms" field="DayDue00" />
+          <Field name="DiscountType" object="Terms" field="DiscType" />
+          <Field name="DiscountPercent" object="Terms" field="DiscPercent" />
+        </Fields>
+      </TopLevelEntity>
+    </Endpoint>
+  </EntityEndpoint>
+</Project>

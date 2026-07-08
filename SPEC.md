@@ -47,7 +47,7 @@ V14: journal — after meaningful work append/extend `journal/YYYY-MM-DD.md` + s
 
 id|status|task|cites
 T1|.|build `acu provision` — chain tenant create → bootstrap → apply `baseline/` → diff|V4,V5
-T2|.|bootstrap package — publish via `/CustomizationApi`; custom endpoint exposes CS100000 features + CS101500 company/branch + CS206500 credit terms|I.api
+T2|x|bootstrap package — publish via `/CustomizationApi`; custom endpoint exposes CS100000 features + CS101500 company/branch + CS206500 credit terms|I.api
 T3|.|verify CS100000 accepts writes via custom endpoint ? — fallback: `CustomizationPlugin` flips `FeaturesSet` on publish (ships C#)|T2
 T4|.|post-login tenant guard in seeding pipeline — defense-in-depth vs wrong-tenant writes|V5
 

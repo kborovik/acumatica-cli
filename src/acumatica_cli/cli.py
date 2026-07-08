@@ -1,6 +1,7 @@
 """acu — Acumatica configuration as code.
 
 acu tenant list|create|delete    tenant CRUD (ac.exe over SSH)
+acu bootstrap                    publish the bootstrap package (CustomizationApi)
 acu apply [--dry-run] FILES...   seed baseline YAML via the REST API
 acu diff FILES...                drift check: baseline vs live tenant
 acu schema [-o DIR]              dump the endpoint's OpenAPI schema
@@ -12,7 +13,7 @@ from pathlib import Path
 import click
 import httpx
 
-from . import firstlogin, output, seed
+from . import bootstrap, firstlogin, output, seed
 from .client import AcumaticaClient
 from .config import Instance, data_root, load_instance
 from .tenant import TenantManager
@@ -151,6 +152,30 @@ def expand_files(files: tuple[Path, ...]) -> list[Path]:
         else:
             paths.append(path)
     return paths
+
+
+@cli.command("bootstrap")
+@click.pass_obj
+def bootstrap_cmd(inst: Instance) -> None:
+    """Publish the bootstrap customization package into the session tenant.
+
+    The package carries a custom endpoint (Bootstrap/1.0.0) exposing the
+    screens a virgin tenant needs before the Default endpoint works:
+    features (CS100000), company (CS101500), credit terms (CS206500).
+    Custom endpoints are tenant-scoped, so run this once per tenant;
+    re-running is an idempotent skip.
+    """
+    with (
+        output.step(
+            f"publishing {bootstrap.PACKAGE_NAME} to {inst.name}/{inst.tenant}"
+        ),
+        AcumaticaClient(inst) as client,
+    ):
+        result = bootstrap.publish(client)
+    output.success(
+        f"{bootstrap.PACKAGE_NAME} {result} on {inst.name}/{inst.tenant} "
+        f"(endpoint {bootstrap.ENDPOINT})"
+    )
 
 
 @cli.command("apply")
