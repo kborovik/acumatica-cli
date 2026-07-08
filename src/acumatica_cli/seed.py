@@ -7,6 +7,7 @@ Baseline file format:
 
     entity: Currency          # entity name in the contract endpoint
     key: CurrencyID           # key field(s), string or list
+    endpoint: Bootstrap/1.0.0 # optional: override the instance endpoint
     records:
       - CurrencyID: "CAD"
         Description: Canadian Dollar
@@ -30,6 +31,7 @@ class BaselineFile(Model):
     entity: str
     keys: list[str] = Field(alias="key")
     records: list[dict[str, Any]]
+    endpoint: str | None = None  # bootstrap YAML targets the custom endpoint
 
     @field_validator("keys", mode="before")
     @classmethod
@@ -77,7 +79,7 @@ def apply(
         if dry_run:
             output.data(f"  would PUT {baseline.entity} [{label}]")
         else:
-            client.put(baseline.entity, record)
+            client.put(baseline.entity, record, endpoint=baseline.endpoint)
             output.data(f"  PUT {baseline.entity} [{label}]")
     return len(baseline.records)
 
@@ -93,7 +95,9 @@ def diff(client: AcumaticaClient, baseline: BaselineFile) -> list[str]:
             f"{baseline.entity} [{', '.join(str(record[k]) for k in baseline.keys)}]"
         )
         live = client.get_list(
-            baseline.entity, params={"$filter": _filter_for(record, baseline.keys)}
+            baseline.entity,
+            params={"$filter": _filter_for(record, baseline.keys)},
+            endpoint=baseline.endpoint,
         )
         if not live:
             drifts.append(f"{label}: missing on tenant")

@@ -24,6 +24,15 @@ records:
 """
 
 
+BOOTSTRAP_YAML = """\
+entity: Features
+endpoint: Bootstrap/1.0.0
+key: MultiCompany
+records:
+  - MultiCompany: true
+"""
+
+
 SWAGGER = b'{"openapi": "3.0.1"}'
 
 
@@ -81,6 +90,119 @@ def test_tenant_list_renders_table(
     assert result.exit_code == 0
     assert "Tenants on test" in result.output
     assert "Company" in result.output
+
+
+@pytest.fixture
+def provision_env(
+    wired: Instance, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> list[str]:
+    """A data repo + monkeypatched chain that records every provisioning step."""
+    calls: list[str] = []
+    (tmp_path / "bootstrap").mkdir()
+    (tmp_path / "bootstrap" / "features.yaml").write_text(BOOTSTRAP_YAML)
+    (tmp_path / "baseline").mkdir()
+    (tmp_path / "baseline" / "uoms.yaml").write_text(BASELINE)
+    monkeypatch.setattr(cli, "data_root", lambda: tmp_path)
+    monkeypatch.setattr(TenantManager, "list", lambda self: [])
+    monkeypatch.setattr(
+        TenantManager,
+        "create",
+        lambda self, *a, **k: calls.append("create") or "Company created",
+    )
+    monkeypatch.setattr(
+        TenantManager, "recycle_app_pool", lambda self: calls.append("recycle")
+    )
+    monkeypatch.setattr(
+        cli.firstlogin,
+        "initialize_admin_password",
+        lambda inst, tenant: calls.append(f"init:{tenant}") or "already initialized",
+    )
+    monkeypatch.setattr(
+        cli.bootstrap,
+        "publish",
+        lambda client, **k: calls.append("publish") or "published",
+    )
+    monkeypatch.setattr(
+        cli.seed,
+        "apply",
+        lambda client, baseline, dry_run=False: (
+            calls.append(f"apply:{baseline.path.name}") or len(baseline.records)
+        ),
+    )
+    monkeypatch.setattr(
+        cli.seed,
+        "diff",
+        lambda client, baseline: calls.append(f"diff:{baseline.path.name}") or [],
+    )
+    return calls
+
+
+def test_provision_chains_create_bootstrap_apply_diff(provision_env: list[str]) -> None:
+    result = CliRunner().invoke(
+        cli.cli, ["provision", "--id", "3", "--login", "Scratch"]
+    )
+
+    assert result.exit_code == 0
+    # the ordered pipeline from docs/rest-api.md, bootstrap YAML before baseline
+    assert provision_env == [
+        "create",
+        "recycle",
+        "init:Scratch",
+        "publish",
+        "apply:features.yaml",
+        "apply:uoms.yaml",
+        "diff:uoms.yaml",
+    ]
+    # every session targets the provisioned tenant, not the config default
+    assert "✓ no drift on test/Scratch (1 file(s))" in result.stderr
+
+
+def test_provision_skips_create_when_tenant_exists(
+    provision_env: list[str], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    tenant = Tenant(
+        company_id=3, company_cd="Company3", login_name="Scratch", company_type="Custom"
+    )
+    monkeypatch.setattr(TenantManager, "list", lambda self: [tenant])
+    result = CliRunner().invoke(
+        cli.cli, ["provision", "--id", "3", "--login", "Scratch"]
+    )
+
+    assert result.exit_code == 0
+    assert provision_env == [
+        "publish",
+        "apply:features.yaml",
+        "apply:uoms.yaml",
+        "diff:uoms.yaml",
+    ]
+    assert "skipping create" in result.stderr
+
+
+def test_provision_drift_exits_one(
+    provision_env: list[str], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    drift = "UnitsOfMeasure [KG].Description: source='Kilogram' live='kg'"
+    monkeypatch.setattr(cli.seed, "diff", lambda client, baseline: [drift])
+    result = CliRunner().invoke(
+        cli.cli, ["provision", "--id", "3", "--login", "Scratch"]
+    )
+
+    assert result.exit_code == 1
+    assert "✗ DRIFT on test/Scratch:" in result.stderr
+    assert drift in result.output
+
+
+def test_provision_requires_a_baseline_dir(
+    provision_env: list[str], tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(cli, "data_root", lambda: tmp_path / "empty")
+    result = CliRunner().invoke(
+        cli.cli, ["provision", "--id", "3", "--login", "Scratch"]
+    )
+
+    assert result.exit_code == 1
+    assert "nothing to provision" in result.output
+    assert provision_env == []
 
 
 def test_bootstrap_publishes_and_reports_endpoint(

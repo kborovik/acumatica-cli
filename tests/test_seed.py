@@ -60,6 +60,25 @@ def test_load_baseline_rejects_record_without_key(tmp_path: Path) -> None:
         seed.load_baseline(_write(tmp_path, text))
 
 
+def test_load_baseline_parses_endpoint_override(tmp_path: Path) -> None:
+    text = BASELINE + "endpoint: Bootstrap/1.0.0\n"
+    assert seed.load_baseline(_write(tmp_path, text)).endpoint == "Bootstrap/1.0.0"
+
+
+def test_apply_and_diff_target_endpoint_override(
+    tmp_path: Path, instance: Instance
+) -> None:
+    text = BASELINE + "endpoint: Bootstrap/1.0.0\n"
+    baseline = seed.load_baseline(_write(tmp_path, text))
+    recorder = Recorder({"/UnitsOfMeasure": _live({"UOM": "KG"})})
+
+    seed.apply(_client(instance, recorder), baseline)
+    seed.diff(_client(instance, recorder), baseline)
+
+    paths = {r.url.path for r in recorder.requests}
+    assert paths == {"/AcumaticaERP/entity/Bootstrap/1.0.0/UnitsOfMeasure"}
+
+
 def test_norm_folds_booleans_and_strips() -> None:
     norm = seed._norm  # pyright: ignore[reportPrivateUsage]
     assert norm(True) == "true"

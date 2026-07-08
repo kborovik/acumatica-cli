@@ -55,8 +55,8 @@ class AcumaticaClient:
         finally:
             self._http.close()
 
-    def _url(self, entity: str) -> str:
-        return f"/entity/{self.instance.endpoint}/{entity}"
+    def _url(self, entity: str, endpoint: str | None = None) -> str:
+        return f"/entity/{endpoint or self.instance.endpoint}/{entity}"
 
     @staticmethod
     def _checked(r: httpx.Response) -> httpx.Response:
@@ -75,19 +75,30 @@ class AcumaticaClient:
         return r
 
     def get_list(
-        self, entity: str, params: dict[str, str] | None = None
+        self,
+        entity: str,
+        params: dict[str, str] | None = None,
+        endpoint: str | None = None,
     ) -> list[dict[str, Any]]:
-        """GET the entity's records, optionally narrowed with OData params."""
-        return self._checked(self._http.get(self._url(entity), params=params)).json()
+        """GET the entity's records, optionally narrowed with OData params.
+
+        endpoint overrides the instance's endpoint per call (bootstrap YAML
+        targets the custom Bootstrap endpoint; everything else defaults).
+        """
+        return self._checked(
+            self._http.get(self._url(entity, endpoint), params=params)
+        ).json()
 
     def swagger(self) -> bytes:
         """GET the endpoint's OpenAPI schema (swagger.json), raw bytes."""
         return self._checked(self._http.get(self._url("swagger.json"))).content
 
-    def put(self, entity: str, record: dict[str, Any]) -> dict[str, Any]:
+    def put(
+        self, entity: str, record: dict[str, Any], endpoint: str | None = None
+    ) -> dict[str, Any]:
         """Upsert by the entity's key fields — the idempotence primitive."""
         return self._checked(
-            self._http.put(self._url(entity), json=wrap(record))
+            self._http.put(self._url(entity, endpoint), json=wrap(record))
         ).json()
 
     # -- CustomizationApi (same cookie session; works on a virgin tenant) --
