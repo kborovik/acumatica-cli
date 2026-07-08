@@ -39,12 +39,21 @@ class AcumaticaClient:
         )
 
     def __enter__(self) -> "AcumaticaClient":
+        # tenant guard (V5, docs/rest-api.md): an omitted or empty tenant is
+        # the one login the server still routes silently — to the default
+        # tenant. Defense-in-depth vs wrong-tenant writes: every data-plane
+        # session must name its tenant, so refuse before any HTTP happens.
+        if not self.instance.tenant:
+            raise RuntimeError(
+                f"no tenant set for {self.instance.name} — a session without "
+                "an explicit tenant silently lands on the default tenant; "
+                "set tenant in acu.toml or pass -t/--tenant"
+            )
         creds: dict[str, str] = {
             "name": self.instance.username,
             "password": self.instance.password,
+            "tenant": self.instance.tenant,
         }
-        if self.instance.tenant:
-            creds["tenant"] = self.instance.tenant
         self._checked(self._http.post("/entity/auth/login", json=creds))
         return self
 

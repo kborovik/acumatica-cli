@@ -90,11 +90,16 @@ def test_login_sends_tenant_and_logout_runs_on_failure(instance: Instance) -> No
     assert logout.headers["Content-Length"] == "0"
 
 
-def test_login_omits_blank_tenant(instance: Instance) -> None:
+def test_blank_tenant_refused_before_any_http(instance: Instance) -> None:
+    # V5 guard: empty tenant = the one silent default-tenant login left
     recorder = Recorder({})
-    with _client(instance.model_copy(update={"tenant": ""}), recorder):
-        pass
-    assert "tenant" not in json.loads(recorder.requests[0].content)
+    blank = instance.model_copy(update={"tenant": ""})
+    with (
+        pytest.raises(RuntimeError, match="explicit tenant"),
+        _client(blank, recorder),
+    ):
+        pytest.fail("session should not open without a tenant")
+    assert recorder.requests == []
 
 
 def test_login_failure_surfaces_acumatica_message(instance: Instance) -> None:
