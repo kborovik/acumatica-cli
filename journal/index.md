@@ -35,7 +35,8 @@ Newest first.
   `acumatica-cli`, module `acumatica_cli`, README rewritten, baseline repo's
   install path updated); CLAUDE.md + docs distilled into a root `SPEC.md`
   (goal / constraints / interfaces / invariants / tasks), CLAUDE.md reduced
-  to a pointer stub.
+  to a pointer stub; initial commit pushed to a new public GitHub repo
+  (<https://github.com/kborovik/acumatica-cli>).
 - [2026-07-07](2026-07-07.md) — skeleton verified end-to-end
   (`apply`/`diff` on UOMs); snapshot plan confirmed dead; no API-only
   bootstrap path — CustomizationApi chosen as the route; the silent
