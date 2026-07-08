@@ -2,7 +2,6 @@
 
 acu provision --id N --login T   one command: create -> bootstrap -> apply -> diff
 acu tenant list|create|delete    tenant CRUD (ac.exe over SSH)
-acu bootstrap                    publish the bootstrap package (CustomizationApi)
 acu apply [--dry-run] FILES...   seed baseline YAML via the REST API
 acu diff FILES...                drift check: baseline vs live tenant
 acu schema [-o DIR]              dump the endpoint's OpenAPI schema
@@ -229,30 +228,6 @@ def provision_cmd(
         for path in baseline_paths:
             drifts += seed.diff(client, seed.load_baseline(path))
     _exit_on_drift(inst, drifts, len(baseline_paths))
-
-
-@cli.command("bootstrap")
-@click.pass_obj
-def bootstrap_cmd(inst: Instance) -> None:
-    """Publish the bootstrap customization package into the session tenant.
-
-    The package carries a custom endpoint (Bootstrap/1.0.0) exposing the
-    screens a virgin tenant needs before the Default endpoint works:
-    features (CS100000), company (CS101500), credit terms (CS206500).
-    Custom endpoints are tenant-scoped, so run this once per tenant;
-    re-running is an idempotent skip.
-    """
-    with (
-        output.step(
-            f"publishing {bootstrap.PACKAGE_NAME} to {inst.name}/{inst.tenant}"
-        ),
-        AcumaticaClient(inst) as client,
-    ):
-        result = bootstrap.publish(client)
-    output.success(
-        f"{bootstrap.PACKAGE_NAME} {result} on {inst.name}/{inst.tenant} "
-        f"(endpoint {bootstrap.ENDPOINT})"
-    )
 
 
 @cli.command("apply")

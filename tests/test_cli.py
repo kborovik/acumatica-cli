@@ -205,23 +205,13 @@ def test_provision_requires_a_baseline_dir(
     assert provision_env == []
 
 
-def test_bootstrap_publishes_and_reports_endpoint(
-    wired: Instance, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    seen: list[Any] = []
-
-    def fake_publish(client: Any, **kwargs: Any) -> str:
-        seen.append(client)
-        return "published"
-
-    monkeypatch.setattr(cli.bootstrap, "publish", fake_publish)
+def test_bootstrap_cmd_is_gone(wired: Instance) -> None:
+    # T8: bootstrap.publish() stays a module; resumable provision is the
+    # recovery route — the standalone command must not exist
     result = CliRunner().invoke(cli.cli, ["bootstrap"])
 
-    assert result.exit_code == 0
-    assert len(seen) == 1
-    assert "+ acu-bootstrap published on test/T1 (endpoint Bootstrap/1.0.0)" in (
-        result.stderr
-    )
+    assert result.exit_code != 0
+    assert "No such command" in result.output
 
 
 def test_apply_dry_run_summary(wired: Instance, tmp_path: Path) -> None:
