@@ -44,7 +44,15 @@ Newest first.
   (endpoints = tenant-scoped DB rows in five tables, metadata cached per
   app domain, CustomizationApi errors are in-band 200s, project.xml root
   is `<Customization>`) — PUT Features persists nothing, so the C#
-  CustomizationPlugin fallback is the route.
+  CustomizationPlugin fallback is the route; evening `/sdd:build --all`
+  landed the CLI-standard + config backlog (ASCII-only output incl. TTY,
+  `docs/cli.md` deleted into SPEC, drift = exit 2, `acu bootstrap` and
+  `schema -o` dropped, layered `Instance` defaults — `host` is the only
+  required `acu.toml` key, `acu config show` prints the resolved target),
+  the data repo's config shrank to two lines and both planes verified live;
+  T10's "passes provision" gate backpropped into the spec (B1/V17/T11:
+  verify gates must be satisfiable against current spec state — provision
+  E2E waits on the C# plugin task).
 - [2026-07-07](2026-07-07.md) — skeleton verified end-to-end
   (`apply`/`diff` on UOMs); snapshot plan confirmed dead; no API-only
   bootstrap path — CustomizationApi chosen as the route; the silent
@@ -101,9 +109,11 @@ Mechanisms:
 Remaining milestones:
 
 - `[IN PROGRESS]` Bootstrap package published via CustomizationApi —
-  machinery + `acu bootstrap` done; blocked on the `EntityEndpoint` item
-  serialization (open) and the C# `CustomizationPlugin` fallback for
-  features (CS100000 verified un-writable via the contract API).
+  machinery done (`bootstrap.publish()`, driven by `provision`; the
+  standalone `acu bootstrap` cmd was dropped); blocked on the
+  `EntityEndpoint` item serialization (open) and the C#
+  `CustomizationPlugin` fallback for features (SPEC T11; CS100000 verified
+  un-writable via the contract API).
 - `[OPEN]` Baseline expanded in dependency order: currencies → financial
   calendar → chart of accounts/ledger → tax categories/zones →
   customer/vendor/item classes → payment terms.
