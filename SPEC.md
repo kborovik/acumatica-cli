@@ -21,7 +21,8 @@ Configure Acumatica ERP purely from source — no UI, no Configuration Wizard. I
 - cmd: `acu diff <files|dirs>` → GET by `$filter` on key fields, compare normalized; drift → exit 2
 - cmd: `acu provision --id <n> --login <name> [--type] [--parent]` → chains tenant create → bootstrap publish → apply `baseline/` → diff; resumable — skips done steps
 - cmd: `acu schema [--out <dir>]` → OpenAPI dump → `schemas/` (gitignored ~3 MB; regenerate, never version)
-- cfg: `acu.toml` → `[instances.<name>]` tables (URLs, SSH target, DB name) + `default_instance`; discovery sentinel
+- cmd: `acu config show` → emit fully resolved `Instance` (defaults merged, URLs constructed, password masked); ! same `load_instance` path as live cmds — no parallel resolution
+- cfg: `acu.toml` → `[instances.<name>]` tables: `host` ! only required key, rest ? overrides of code defaults (pydantic field defaults on `Instance`; `base_url`/`ssh` computed from `host`, explicit override wins) + `default_instance`; discovery sentinel
 - env: `ACU_PASSWORD` ! set; `ACU_USER` ? default `admin`; loaded from dir of found `acu.toml`; encrypted at rest as `.env.gpg`
 - data: `baseline/*.yaml` → `entity` / `key` (string or list) / `records`; parsed by `seed.py`
 - api: `/entity/Default/25.200.001/` → cookie-session httpx; values wrapped `{"Field": {"value": ...}}`; PUT = keyed upsert
@@ -43,7 +44,7 @@ V11: REST targets versioned path only (`Default/25.200.001`), never unversioned 
 V12: `docs/ac-exe.md` + `docs/rest-api.md` verified vs live 26.101.0225 — trust over training data, re-verify on upgrade; dumped schema (`acu schema`) = authoritative field reference
 V13: `make check` (ruff + basedpyright strict + offline pytest) before every commit
 V14: journal — after meaningful work append/extend `journal/YYYY-MM-DD.md` + sync `journal/index.md`; dead ends stay in (findings, not noise)
-V15: cmd grammar — exactly two forms: `acu [globals] tenant <verb> [options]` = control plane; `acu [globals] <verb> [options] [args]` = data plane + pipeline; noun-verb reserved for control-plane resource ops; no third form; surface encodes V1 split
+V15: cmd grammar — exactly two forms: `acu [globals] <noun> <verb> [options]` = resource ops (`tenant` = control plane; `config` = local read-only, no live instance); `acu [globals] <verb> [options] [args]` = data plane + pipeline; no third form; surface encodes V1 split
 V16: option conventions — globals (`-i/--instance`, `-t/--tenant`, `--version`) valid only before subcommand; resource identity = explicit `--id`, never positional; file/dir inputs positional variadic, dirs expand `*.yaml`; `--dry-run` wherever mutation — lines `would <VERB> …`, summary suffixed `(dry run)`; destructive ops confirm prompt default, `--yes` skips; long flags kebab-case; short flags reserved for globals
 
 ## §T TASKS
@@ -58,6 +59,7 @@ T6|.|drop `docs/cli.md` — contract folded into §I/§V; drop ref from CLAUDE.m
 T7|.|drift exit code 1 → 2 in `diff` + `provision`; ripple: `acumatica-baseline` `make diff` + any consumer treating exit 1 as drift|V4,V9
 T8|.|drop `acu bootstrap` cmd — `bootstrap.publish()` module stays; resumable `provision` = recovery route|I.cmd
 T9|.|drop `schema -o` short flag — `--out` only|V16
+T10|.|layered `Instance` defaults per `designs/config-layered-defaults.md` — `host` only required toml key, rest code defaults (transcribe literals from `docs/ac-exe.md`, not training data); add `acu config show`; migrate `acumatica-baseline/acu.toml`; verify live: minimal config (`default_instance` + `host`) passes provision|V11,V12,I.cfg
 
 ## §B BUGS
 
