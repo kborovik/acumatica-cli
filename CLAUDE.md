@@ -11,7 +11,6 @@ via /sdd:spec, never by hand.
   `../acumatica-baseline/`). Live verification:
   `cd ~/github/acumatica-baseline && make decrypt && make diff`.
 - Verified references (trust over training data): `docs/ac-exe.md`,
-  `docs/rest-api.md` (live 26.101.0225), `docs/cli.md` (output contract),
-  `acu schema` → `schemas/`.
+  `docs/rest-api.md` (live 26.101.0225), `acu schema` → `schemas/`.
 - Journal: after meaningful work, add/extend `journal/YYYY-MM-DD.md` and
   update `journal/index.md`.

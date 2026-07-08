@@ -38,7 +38,7 @@ def package_zip() -> bytes:
 
 
 def _log_tail(status: dict[str, object], limit: int = 5) -> str:
-    """Last few publish-log messages, for a one-line error (docs/cli.md)."""
+    """Last few publish-log messages, for a one-line error (SPEC V9)."""
     log = status.get("log")
     if not isinstance(log, list):
         return ""

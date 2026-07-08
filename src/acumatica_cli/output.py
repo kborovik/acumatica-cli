@@ -1,6 +1,6 @@
 """CLI output helpers — the only place `acu` writes to the terminal.
 
-Two audiences, one code path (docs/cli.md): rich renders color, tables,
+Two audiences, one code path (SPEC V9): rich renders color, tables,
 and spinners on a TTY and degrades to plain deterministic text when piped
 (how LLM agents and scripts see it). stdout carries data and results;
 stderr carries status, warnings, and errors.
