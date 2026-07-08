@@ -1,27 +1,41 @@
-"""Instance targets (acu.toml, found by walking up from cwd) + credentials (.env)."""
+"""Instance targets (acu.toml, found by walking up from cwd) + credentials (.env).
+
+Layered defaults: ``host`` is the only required acu.toml key. Everything else
+is a code default transcribed from the verified references (docs/ac-exe.md,
+docs/rest-api.md — V12), overridable per instance for nonstandard installs.
+"""
 
 import os
 import tomllib
 from pathlib import Path
+from typing import Any
 
 from dotenv import load_dotenv
-from pydantic import ValidationError, field_validator
+from pydantic import ValidationError, field_validator, model_validator
 
 from .models import Model, validation_summary
 
 
 class Instance(Model):
-    """A resolved target: an acu.toml [instances.<name>] table + credentials."""
+    """A resolved target: an acu.toml [instances.<name>] table + credentials.
+
+    ``host`` drives both planes (V1): REST ``base_url`` and control-plane
+    ``ssh`` derive from it unless the acu.toml table overrides them
+    explicitly (split-horizon DNS, port forwards, jump hosts, nonroot sites).
+    """
 
     name: str
-    base_url: str
-    endpoint: str
+    host: str
     tenant: str = ""
-    ssh: str
-    ac_exe: str
-    instance_name: str
-    instance_path: str
-    db_name: str
+    scheme: str = "http"  # docs/rest-api.md: http://acu-dev1.vm.internal/...
+    ssh_user: str = "Administrator"
+    instance_name: str = "AcumaticaERP"
+    instance_path: str = "C:\\Acumatica\\AcumaticaERP"
+    ac_exe: str = "C:\\Program Files\\Acumatica ERP\\Data\\ac.exe"
+    db_name: str = "AcumaticaDB"
+    endpoint: str = "Default/25.200.001"  # V11: versioned path only
+    base_url: str = ""  # default derived: <scheme>://<host>/<instance_name>
+    ssh: str = ""  # default derived: <ssh_user>@<host>
     username: str
     password: str
 
@@ -34,6 +48,26 @@ class Instance(Model):
     @classmethod
     def _no_surrounding_slashes(cls, v: str) -> str:
         return v.strip("/")
+
+    @model_validator(mode="before")
+    @classmethod
+    def _derive_urls(cls, data: Any) -> Any:
+        """Construct base_url/ssh from host; an explicit override wins."""
+        if not isinstance(data, dict) or not data.get("host"):
+            return data  # let field validation report the missing host
+
+        def resolved(key: str) -> object:
+            return data.get(key) or cls.model_fields[key].default
+
+        data = dict(data)
+        host = data["host"]
+        if not data.get("base_url"):
+            data["base_url"] = (
+                f"{resolved('scheme')}://{host}/{resolved('instance_name')}"
+            )
+        if not data.get("ssh"):
+            data["ssh"] = f"{resolved('ssh_user')}@{host}"
+        return data
 
 
 def data_root() -> Path:

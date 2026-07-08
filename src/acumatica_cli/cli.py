@@ -5,6 +5,7 @@ acu tenant list|create|delete    tenant CRUD (ac.exe over SSH)
 acu apply [--dry-run] FILES...   seed baseline YAML via the REST API
 acu diff FILES...                drift check: baseline vs live tenant
 acu schema [--out DIR]           dump the endpoint's OpenAPI schema
+acu config show                  print the resolved target instance
 """
 
 import os
@@ -143,6 +144,24 @@ def tenant_delete(inst: Instance, company_id: int) -> None:
     output.data(raw.splitlines()[-1] if raw.strip() else "done")
     with output.step("recycling app pool (drops the tenant from the running app)"):
         mgr.recycle_app_pool()
+
+
+@cli.group("config")
+def config_group() -> None:
+    """Local read-only config inspection (never talks to a live instance)."""
+
+
+@config_group.command("show")
+@click.pass_obj
+def config_show(inst: Instance) -> None:
+    """Print the fully resolved instance: defaults merged, URLs constructed.
+
+    Resolves through the same load_instance path every live command uses,
+    so the printed values are exactly what a live command would trust.
+    The password is masked.
+    """
+    for key, value in inst.model_dump().items():
+        output.data(f"{key} = {'********' if key == 'password' else value}")
 
 
 def expand_files(files: tuple[Path, ...]) -> list[Path]:

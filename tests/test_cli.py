@@ -214,6 +214,17 @@ def test_bootstrap_cmd_is_gone(wired: Instance) -> None:
     assert "No such command" in result.output
 
 
+def test_config_show_resolves_and_masks_password(wired: Instance) -> None:
+    # I.cfg: same load_instance path as live cmds, password never printed
+    result = CliRunner().invoke(cli.cli, ["config", "show"])
+
+    assert result.exit_code == 0
+    assert "base_url = http://acu.test/AcumaticaERP" in result.output
+    assert "ssh = user@acu.test" in result.output
+    assert "password = ********" in result.output
+    assert "pw" not in result.output
+
+
 def test_apply_dry_run_summary(wired: Instance, tmp_path: Path) -> None:
     result = CliRunner().invoke(
         cli.cli, ["apply", "--dry-run", str(_baseline(tmp_path))]
