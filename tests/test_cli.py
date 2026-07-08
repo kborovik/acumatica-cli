@@ -268,12 +268,20 @@ def test_diff_drift_exits_two_with_lines_on_stdout(
 
 
 def test_schema_writes_swagger_to_out_dir(wired: Instance, tmp_path: Path) -> None:
-    result = CliRunner().invoke(cli.cli, ["schema", "-o", str(tmp_path / "dump")])
+    result = CliRunner().invoke(cli.cli, ["schema", "--out", str(tmp_path / "dump")])
 
     out_file = tmp_path / "dump" / "swagger-Default-25.200.001.json"
     assert result.exit_code == 0
     assert out_file.read_bytes() == SWAGGER
     assert f"{out_file} ({len(SWAGGER)} bytes)" in result.output
+
+
+def test_schema_short_o_flag_is_gone(wired: Instance, tmp_path: Path) -> None:
+    # V16: short flags are reserved for globals
+    result = CliRunner().invoke(cli.cli, ["schema", "-o", str(tmp_path)])
+
+    assert result.exit_code != 0
+    assert "No such option" in result.output
 
 
 def test_schema_defaults_to_data_root_schemas(

@@ -4,7 +4,7 @@ acu provision --id N --login T   one command: create -> bootstrap -> apply -> di
 acu tenant list|create|delete    tenant CRUD (ac.exe over SSH)
 acu apply [--dry-run] FILES...   seed baseline YAML via the REST API
 acu diff FILES...                drift check: baseline vs live tenant
-acu schema [-o DIR]              dump the endpoint's OpenAPI schema
+acu schema [--out DIR]           dump the endpoint's OpenAPI schema
 """
 
 import os
@@ -251,7 +251,6 @@ def apply_cmd(inst: Instance, files: tuple[Path, ...], dry_run: bool) -> None:
 
 @cli.command("schema")
 @click.option(
-    "-o",
     "--out",
     "out_dir",
     type=click.Path(file_okay=False, path_type=Path),
