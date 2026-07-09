@@ -33,19 +33,19 @@ Configure Acumatica ERP purely from source — no UI, no Configuration Wizard. I
 V1: two-plane split — control plane = SSH (`tenant.py`, tenant CRUD only); data plane = REST (`client.py`); never mixed
 V2: three source kinds never mixed — `baseline/*.yaml` = what, `acu.yaml` = where (never what, never secrets), `.env` = secrets; all three live in data repos, not here
 V3: discovery — walk up from cwd to first dir containing `acu.yaml`; `.env` loaded from same dir; none found → hard error
-V4: idempotence — `PUT` keyed upsert is the primitive; `diff` treats source as authoritative, extra live records not flagged; drift → exit 2; resume/skip gate ! verify desired state, never a marker — marker outlives state loss (B3: publication row vs plugin writes)
+V4: idempotence — `PUT` keyed upsert is the primitive; `diff` treats source as authoritative, extra live records not flagged; drift → exit 2; resume/skip gate ! verify desired state, never a marker — marker outlives state loss
 V5: tenant-map — tenant create ! `AcumaticaERP` app-pool recycle after `ac.exe` (stale map → tenant missing from sign-in + REST silently routes to default tenant); always send explicit valid `tenant`
 V6: `AcumaticaClient` ! context manager — logout even on failure (sessions count vs license API-user cap); logout ! `Content-Length: 0` (else IIS 411)
 V7: `CompanyConfig` ! `-h` beside `-iname` + `-dbnew:"False"`; delete uses `Deleted` sub-key + full spec (`ParentID` + `CompanyType`)
 V8: tenant create presets admin via `-aun`/`-aup`/`-auc` — contract API can't clear `PasswordChangeOnNextLogin`; `Login.aspx` screen flow = fallback only
-V9: output — everything through `output.py`, no bare `print()` (ruff T20); stdout = data (one record per line, greppable), stderr = process (steps, warnings, errors); ASCII-only every path incl. TTY — prefixes `+` ok, `!` warn, `x` error, deterministic, survive piping; rich auto-degrades non-TTY, no manual TTY branching outside `output.py`; `NO_COLOR`/`FORCE_COLOR` respected; markup/emoji/highlighting off; table box ASCII; spinner ASCII; exit 0 ok, 1 error, 2 drift; expected failure = one `x` line, no traceback (`ACU_DEBUG=1` re-raises); validation error → `SystemExit("msg")`; no `--json` — plain text = machine interface
+V9: output — everything through `output.py`, no bare `print()`; stdout = data, stderr = process; ASCII-only every path; exit 0 ok, 1 error, 2 drift; no `--json` — plain text = machine interface; full audit recipe → `.claude/check-extras.md` §V.9
 V10: every model inherits `models.Model` (pydantic frozen, `extra="forbid"`) — validate at boundary, unknown fields error
 V11: REST targets versioned path only (`Default/25.200.001`), never unversioned alias
 V12: `docs/ac-exe.md` + `docs/rest-api.md` verified vs live 26.101.0225 — trust over training data, re-verify on upgrade; dumped schema (`acu schema`) = authoritative field reference
 V13: `make check` (ruff + basedpyright strict + offline pytest) before every commit
 V14: journal — after meaningful work append/extend `journal/YYYY-MM-DD.md` + sync `journal/index.md`; dead ends stay in (findings, not noise)
 V15: cmd grammar — exactly two forms: `acu [globals] <noun> <verb> [options]` = resource ops (`tenant` = control plane; `config` = local read-only, no live instance); `acu [globals] <verb> [options] [args]` = data plane + pipeline; no third form; surface encodes V1 split
-V16: option conventions — globals (`-t/--tenant`, `--version`) valid only before subcommand; resource identity = explicit `--id`, never positional; file/dir inputs positional variadic, dirs expand `*.yaml`; `--dry-run` wherever mutation — lines `would <VERB> …`, summary suffixed `(dry run)`; destructive ops confirm prompt default, `--yes` skips; long flags kebab-case; short flags reserved for globals
+V16: option conventions — globals valid only before subcommand; resource identity = explicit `--id`, never positional; `--dry-run` wherever mutation; destructive ops confirm prompt, `--yes` skips; full convention audit → `.claude/check-extras.md` §V.16
 V17: §T verify gate ! satisfiable vs current spec state — criterion never depends on capability another § records dead/pending unless citing the unblocking §T row
 
 ## §T TASKS
@@ -55,18 +55,18 @@ T1|x|build `acu provision` — chain tenant create → bootstrap → apply `base
 T2|x|bootstrap package — publish via `/CustomizationApi`; custom endpoint exposes CS100000 features + CS101500 company/branch + CS206500 credit terms|I.api
 T3|x|verify CS100000 accepts writes via custom endpoint ? — fallback: `CustomizationPlugin` flips `FeaturesSet` on publish (ships C#)|T2
 T4|x|post-login tenant guard in seeding pipeline — defense-in-depth vs wrong-tenant writes|V5
-T5|x|ASCII sweep per V9 — swap `✓`→`+`, `✗`→`x`, `box.ROUNDED`→`box.ASCII`, spinner→ASCII, drop non-ASCII from output-reaching strings; scope: `grep -rnP '[^\x00-\x7F]' src/` (docstrings/comments exempt)|V9
+T5|x|ASCII sweep — replace non-ASCII glyphs in all output-reaching strings|V9
 T6|x|drop `docs/cli.md` — contract folded into §I/§V; drop ref from CLAUDE.md|V9
 T7|x|drift exit code 1 → 2 in `diff` + `provision`; ripple: `acumatica-baseline` `make diff` + any consumer treating exit 1 as drift|V4,V9
 T8|x|drop `acu bootstrap` cmd — `bootstrap.publish()` module stays; resumable `provision` = recovery route|I.cmd
 T9|x|drop `schema -o` short flag — `--out` only|V16
-T10|x|layered `Instance` defaults per `designs/config-layered-defaults.md` — `host` only required toml key, rest code defaults (transcribe literals from `docs/ac-exe.md`, not training data); add `acu config show`; migrate `acumatica-baseline/acu.toml`; verify live w/ minimal config (`default_instance` + `host`): `config show` + `tenant list` + `diff` green; provision E2E deferred → T11|V11,V12,I.cfg
-T11|x|C# CustomizationPlugin flips FeaturesSet on publish (§T.3 verdict route) — ships in bootstrap package; unblocks provision E2E; then re-verify provision live w/ minimal config|T2,T3
-T12|x|discover `.endpoint` package-file serialization (`PX.Api.ContractBased.Common.dll` `*.endpoint` globs) — restore custom endpoint (CS101500 company + CS206500 credit terms) to bootstrap package; unblocks bootstrap YAML seeding|T2,T11
-T13|x|seed company + credit terms through `Bootstrap/1.0.0` — author `baseline/` YAML in data repo (Company CS101500 + CreditTerms CS206500; field names = DAC props per `bootstrap_project.xml`), verify live: provision scratch tenant → apply → diff green; write path (PUT) unverified — GET-only proven in T12|T12,I.data
-T14|x|`scripts/ps-remote <file.ps1> [host]` — mechanize the live-box PowerShell reflection probe (iconv utf-16le → base64 → `ssh powershell -EncodedCommand`), the recurring V12 discovery instrument (T3/T11/T12 all hand-rolled it)|V12
-T15|x|config TOML → YAML: sentinel `acu.toml` → `acu.yaml`; loader swap `tomllib` → `yaml.safe_load` (empty or non-map → hard error); `config show` → complete YAML doc (header comment + `default_instance` + instance map; `name`/`username`/`password` excluded) round-trips through `load_instance`; literal sweep scope `grep -rn 'acu\.toml' src/ tests/ README.md CLAUDE.md`; tests: fixtures → YAML + round-trip test (show output reloaded → identical); migrate `acumatica-baseline/acu.toml` → `acu.yaml` + symlink swap; verify live from data repo: `config show > acu.yaml` reload identical + `tenant list` green|V2,V3,I.cfg
-T16|x|flatten config to single instance: drop `instances.<name>` nesting + `default_instance` + `-i/--instance` global; drop `Instance.name` field — messages use `host` (sweep scope `grep -rn '\.name' src/`); `config show` → resolved top-level map (`username`/`password` excluded), round-trip preserved; tests: fixtures flatten + nested-legacy-file rejection pinned via `extra="forbid"`; rewrite `acumatica-baseline/acu.yaml` flat; verify live: round trip identical + `tenant list` green + `--help` shows no `-i`|V16,I.cfg,T15
+T10|x|layered `Instance` defaults per `designs/config-layered-defaults.md` — `host` sole required config key, rest code defaults; add `acu config show`|V11,V12,I.cfg
+T11|x|C# CustomizationPlugin flips FeaturesSet on publish — ships in bootstrap package; unblocks provision E2E|T2,T3
+T12|x|discover `.endpoint` package-file serialization — restore custom endpoint to bootstrap package; unblocks bootstrap YAML seeding|T2,T11
+T13|x|seed company + credit terms through `Bootstrap/1.0.0` — author `baseline/` YAML in data repo, verify live|T12,I.data
+T14|x|`scripts/ps-remote <file.ps1> [host]` — mechanize the live-box PowerShell reflection probe|V12
+T15|x|config TOML → YAML: sentinel `acu.toml` → `acu.yaml`, loader `tomllib` → `yaml.safe_load`; migrate data repo|V2,V3,I.cfg
+T16|x|flatten config to single instance — drop `instances.<name>` nesting, `default_instance`, `-i/--instance` global, `Instance.name` field|V16,I.cfg,T15
 
 ## §B BUGS
 
