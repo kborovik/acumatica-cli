@@ -76,7 +76,7 @@ T19|x|mechanize §V.1/§V.10/§V.18 drift greps into `.spec/scripts/check-extras
 T20|x|live E2E tier — `tests/e2e/test_provision_lifecycle.py` drives real `acu` binary vs live instance: provision scratch tenant `E2E` (next-free CompanyID) → independent diff clean → provision re-run hits skip paths → injected-drift diff exit 2; session fixture always deletes tenant + recycles; `make e2e` preflights data symlinks; marker `e2e` deselected by default|V4,V5,V9,V13
 T21|x|post-login tenant guard — discover verified landed-tenant probe (live archaeology: login response? entity exposing `CompanyKey`?), then `AcumaticaClient.__enter__` refuses session on mismatch; e2e regression: `diff` vs nonexistent tenant ! exit 1|V5,V12
 T22|x|global `--host` flag — swap acu.yaml `host` pre-`Instance` build (post-hoc `model_copy` leaves derived `base_url`/`ssh` stale); explicit `base_url`/`ssh` override wins; acu.yaml stays required, `-t` override idiom; tests: re-derive on override + explicit-`base_url` precedence|V16,I.cmd,I.cfg
-T23|.|PyPI auto-publish — register trusted publisher on pypi.org (repo kborovik/acumatica-cli, workflow `release.yml`); add `.github/workflows/release.yml`: trigger `release: published`, `uv build`, `pypa/gh-action-pypi-publish` OIDC; verify: next `make release patch` → `pip install acumatica-cli==<version>` from pypi.org succeeds|V19,I.pkg
+T23|x|PyPI auto-publish — register trusted publisher on pypi.org (repo kborovik/acumatica-cli, workflow `release.yml`); add `.github/workflows/release.yml`: trigger `release: published`, `uv build`, `pypa/gh-action-pypi-publish` OIDC; verify: next `make release patch` → `pip install acumatica-cli==<version>` from pypi.org succeeds|V19,I.pkg
 
 ## §B BUGS
 
