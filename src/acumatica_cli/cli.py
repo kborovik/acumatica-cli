@@ -13,6 +13,7 @@ from pathlib import Path
 
 import click
 import httpx
+import yaml
 
 from . import bootstrap, firstlogin, output, seed
 from .client import AcumaticaClient
@@ -26,7 +27,7 @@ from .tenant import TenantManager
     "-i",
     "--instance",
     default=None,
-    help="Target from acu.toml [instances.<name>] (default: its default_instance)",
+    help="Target from acu.yaml instances.<name> (default: its default_instance)",
 )
 @click.option(
     "-t", "--tenant", default=None, help="Override the tenant API sessions sign in to"
@@ -154,14 +155,25 @@ def config_group() -> None:
 @config_group.command("show")
 @click.pass_obj
 def config_show(inst: Instance) -> None:
-    """Print the fully resolved instance: defaults merged, URLs constructed.
+    """Print the fully resolved instance as a complete acu.yaml document.
 
     Resolves through the same load_instance path every live command uses,
     so the printed values are exactly what a live command would trust.
-    The password is masked.
+    Credentials never appear - redirect to a file and edit: the output
+    loads back through load_instance unchanged.
     """
-    for key, value in inst.model_dump().items():
-        output.data(f"{key} = {'********' if key == 'password' else value}")
+    doc = {
+        "default_instance": inst.name,
+        "instances": {
+            inst.name: inst.model_dump(exclude={"name", "username", "password"})
+        },
+    }
+    output.data("# resolved by `acu config show` - a complete acu.yaml")
+    output.data(
+        "# credentials come from .env (ACU_USER / ACU_PASSWORD), never from here"
+    )
+    for line in yaml.safe_dump(doc, sort_keys=False).splitlines():
+        output.data(line)
 
 
 def expand_files(files: tuple[Path, ...]) -> list[Path]:

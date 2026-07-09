@@ -1,15 +1,15 @@
-"""Instance targets (acu.toml, found by walking up from cwd) + credentials (.env).
+"""Instance targets (acu.yaml, found by walking up from cwd) + credentials (.env).
 
-Layered defaults: ``host`` is the only required acu.toml key. Everything else
+Layered defaults: ``host`` is the only required acu.yaml key. Everything else
 is a code default transcribed from the verified references (docs/ac-exe.md,
 docs/rest-api.md — V12), overridable per instance for nonstandard installs.
 """
 
 import os
-import tomllib
 from pathlib import Path
 from typing import Any
 
+import yaml
 from dotenv import load_dotenv
 from pydantic import ValidationError, field_validator, model_validator
 
@@ -17,10 +17,10 @@ from .models import Model, validation_summary
 
 
 class Instance(Model):
-    """A resolved target: an acu.toml [instances.<name>] table + credentials.
+    """A resolved target: an acu.yaml instances.<name> map + credentials.
 
     ``host`` drives both planes (V1): REST ``base_url`` and control-plane
-    ``ssh`` derive from it unless the acu.toml table overrides them
+    ``ssh`` derive from it unless the acu.yaml map overrides them
     explicitly (split-horizon DNS, port forwards, jump hosts, nonroot sites).
     """
 
@@ -71,35 +71,37 @@ class Instance(Model):
 
 
 def data_root() -> Path:
-    """Walk up from cwd to the first directory containing acu.toml."""
+    """Walk up from cwd to the first directory containing acu.yaml."""
     for d in [Path.cwd(), *Path.cwd().parents]:
-        if (d / "acu.toml").is_file():
+        if (d / "acu.yaml").is_file():
             return d
     raise SystemExit(
-        "acu.toml not found in the current directory or any parent - "
+        "acu.yaml not found in the current directory or any parent - "
         "run acu from inside a data repo (e.g. acumatica-baseline)"
     )
 
 
 def load_instance(name: str | None = None) -> Instance:
-    """Resolve a target from acu.toml and merge credentials from .env/environment.
+    """Resolve a target from acu.yaml and merge credentials from .env/environment.
 
     With name=None the config's top-level ``default_instance`` is used.
     """
     root = data_root()
     load_dotenv(root / ".env")
 
-    with open(root / "acu.toml", "rb") as f:
-        config = tomllib.load(f)
+    with open(root / "acu.yaml") as f:
+        config = yaml.safe_load(f)
+    if not isinstance(config, dict):
+        raise SystemExit("acu.yaml: expected a mapping (default_instance + instances)")
 
     instances = config.get("instances", {})
     if name is None:
         name = config.get("default_instance")
         if not name:
-            raise SystemExit("acu.toml: default_instance not set; pass -i/--instance")
+            raise SystemExit("acu.yaml: default_instance not set; pass -i/--instance")
     if name not in instances:
         known = ", ".join(sorted(instances)) or "none"
-        raise SystemExit(f"acu.toml: no [instances.{name}] (known: {known})")
+        raise SystemExit(f"acu.yaml: no instances.{name} (known: {known})")
 
     password = os.environ.get("ACU_PASSWORD")
     if not password:
@@ -114,5 +116,5 @@ def load_instance(name: str | None = None) -> Instance:
         )
     except ValidationError as exc:
         raise SystemExit(
-            f"acu.toml [instances.{name}]: {validation_summary(exc)}"
+            f"acu.yaml instances.{name}: {validation_summary(exc)}"
         ) from exc

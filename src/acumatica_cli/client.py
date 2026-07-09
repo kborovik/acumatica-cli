@@ -47,7 +47,7 @@ class AcumaticaClient:
             raise RuntimeError(
                 f"no tenant set for {self.instance.name} - a session without "
                 "an explicit tenant silently lands on the default tenant; "
-                "set tenant in acu.toml or pass -t/--tenant"
+                "set tenant in acu.yaml or pass -t/--tenant"
             )
         creds: dict[str, str] = {
             "name": self.instance.username,

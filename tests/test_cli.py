@@ -12,7 +12,7 @@ import pytest
 from click.testing import CliRunner
 
 from acumatica_cli import cli
-from acumatica_cli.config import Instance
+from acumatica_cli.config import Instance, load_instance
 from acumatica_cli.tenant import Tenant, TenantManager
 
 BASELINE = """\
@@ -254,15 +254,41 @@ def test_bootstrap_cmd_is_gone(wired: Instance) -> None:
     assert "No such command" in result.output
 
 
-def test_config_show_resolves_and_masks_password(wired: Instance) -> None:
-    # I.cfg: same load_instance path as live cmds, password never printed
+def test_config_show_emits_yaml_without_credentials(wired: Instance) -> None:
+    # I.cfg: same load_instance path as live cmds, credentials never printed
     result = CliRunner().invoke(cli.cli, ["config", "show"])
 
     assert result.exit_code == 0
-    assert "base_url = http://acu.test/AcumaticaERP" in result.output
-    assert "ssh = user@acu.test" in result.output
-    assert "password = ********" in result.output
+    assert "default_instance: test" in result.output
+    assert "base_url: http://acu.test/AcumaticaERP" in result.output
+    assert "ssh: user@acu.test" in result.output
+    assert "password" not in result.output
+    assert "username" not in result.output
     assert "pw" not in result.output
+
+
+def test_config_show_round_trips_through_load_instance(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # I.cfg: `acu config show > acu.yaml` is a valid config - reloading it
+    # resolves to the identical instance (the whole point of the YAML emit)
+    (tmp_path / "acu.yaml").write_text(
+        "default_instance: test\n\ninstances:\n  test:\n"
+        "    host: acu.test\n    tenant: T1\n"
+    )
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv("ACU_PASSWORD", "secret")
+    monkeypatch.delenv("ACU_USER", raising=False)
+    original = load_instance()
+
+    result = CliRunner().invoke(cli.cli, ["config", "show"])
+    assert result.exit_code == 0
+
+    regenerated = tmp_path / "regenerated"
+    regenerated.mkdir()
+    (regenerated / "acu.yaml").write_text(result.output)
+    monkeypatch.chdir(regenerated)
+    assert load_instance() == original
 
 
 def test_apply_dry_run_summary(wired: Instance, tmp_path: Path) -> None:

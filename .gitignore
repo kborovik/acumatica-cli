@@ -1,6 +1,6 @@
 # dev symlinks into the sibling data repo (../acumatica-baseline)
 baseline
-acu.toml
+acu.yaml
 .env
 
 # dumped API schemas — regenerate with acu schema

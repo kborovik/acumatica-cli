@@ -1,6 +1,6 @@
 """pydantic is the repo's model standard.
 
-Every structured value crossing a boundary (acu.toml tables, baseline YAML,
+Every structured value crossing a boundary (acu.yaml maps, baseline YAML,
 sqlcmd rows) is a frozen pydantic model validated at parse time — unknown
 fields are rejected, not silently carried.
 """

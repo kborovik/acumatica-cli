@@ -6,8 +6,8 @@ via /sdd:spec, never by hand.
 
 - Dev loop: `make install`; `make check` (ruff + basedpyright strict +
   offline pytest) before committing.
-- Live commands run from a data repo (`acu.toml` cwd walk-up); this repo
-  carries gitignored symlinks (`baseline`, `acu.toml`, `.env` →
+- Live commands run from a data repo (`acu.yaml` cwd walk-up); this repo
+  carries gitignored symlinks (`baseline`, `acu.yaml`, `.env` →
   `../acumatica-baseline/`). Live verification:
   `cd ~/github/acumatica-baseline && make decrypt && make diff`.
 - Verified references (trust over training data): `docs/ac-exe.md`,
