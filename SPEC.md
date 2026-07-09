@@ -15,14 +15,14 @@ Configure Acumatica ERP purely from source — no UI, no Configuration Wizard. I
 
 ## §I INTERFACES
 
-- cmd: `acu [-i <instance>] [-t <tenant>] [--version] <subcommand>` → globals valid only before subcommand
+- cmd: `acu [-t <tenant>] [--version] <subcommand>` → globals valid only before subcommand
 - cmd: `acu tenant list|create|delete` → tenant CRUD over SSH; create: `--id` ! + `--login` ! + `--type`/`--parent`/`--hidden`/`--no-init` ?; delete: `--id` + confirm prompt, `--yes` skips
 - cmd: `acu apply [--dry-run] <files|dirs>` → PUT each record; dir arg expands `*.yaml`; dry-run lines `would PUT …`, summary suffixed `(dry run)`
 - cmd: `acu diff <files|dirs>` → GET by `$filter` on key fields, compare normalized; drift → exit 2
 - cmd: `acu provision --id <n> --login <name> [--type] [--parent]` → chains tenant create → bootstrap publish → apply `baseline/` → diff; resumable — skips done steps
 - cmd: `acu schema [--out <dir>]` → OpenAPI dump → `schemas/` (gitignored ~3 MB; regenerate, never version)
-- cmd: `acu config show` → emit complete valid YAML config doc: header comment (creds live in `.env`, never config) + `default_instance` + selected instance fully resolved (defaults merged, URLs constructed); `name`/`username`/`password` excluded → output round-trips through `load_instance` (`acu config show > acu.yaml` reloads identical); ! same `load_instance` path as live cmds — no parallel resolution
-- cfg: `acu.yaml` → `instances.<name>` maps: `host` ! only required key, rest ? overrides of code defaults (pydantic field defaults on `Instance`; `base_url`/`ssh` computed from `host`, explicit override wins) + `default_instance`; discovery sentinel; empty or non-map file → hard error
+- cmd: `acu config show` → emit complete valid YAML config doc: header comment (creds live in `.env`, never config) + resolved top-level instance map (defaults merged, URLs constructed); `username`/`password` excluded → output round-trips through `load_instance` (`acu config show > acu.yaml` reloads identical); ! same `load_instance` path as live cmds — no parallel resolution
+- cfg: `acu.yaml` → flat top-level map = the single target instance: `host` ! only required key, rest ? overrides of code defaults (pydantic field defaults on `Instance`; `base_url`/`ssh` computed from `host`, explicit override wins); no `instances` nesting, no `default_instance`; discovery sentinel; empty or non-map file → hard error
 - env: `ACU_PASSWORD` ! set; `ACU_USER` ? default `admin`; loaded from dir of found `acu.yaml`; encrypted at rest as `.env.gpg`
 - data: `baseline/*.yaml` → `entity` / `key` (string or list) / `records` + `endpoint` ? (per-file contract-endpoint override, e.g. `Bootstrap/1.0.0`); parsed by `seed.py`
 - api: `/entity/Default/25.200.001/` → cookie-session httpx; values wrapped `{"Field": {"value": ...}}`; PUT = keyed upsert
@@ -45,7 +45,7 @@ V12: `docs/ac-exe.md` + `docs/rest-api.md` verified vs live 26.101.0225 — trus
 V13: `make check` (ruff + basedpyright strict + offline pytest) before every commit
 V14: journal — after meaningful work append/extend `journal/YYYY-MM-DD.md` + sync `journal/index.md`; dead ends stay in (findings, not noise)
 V15: cmd grammar — exactly two forms: `acu [globals] <noun> <verb> [options]` = resource ops (`tenant` = control plane; `config` = local read-only, no live instance); `acu [globals] <verb> [options] [args]` = data plane + pipeline; no third form; surface encodes V1 split
-V16: option conventions — globals (`-i/--instance`, `-t/--tenant`, `--version`) valid only before subcommand; resource identity = explicit `--id`, never positional; file/dir inputs positional variadic, dirs expand `*.yaml`; `--dry-run` wherever mutation — lines `would <VERB> …`, summary suffixed `(dry run)`; destructive ops confirm prompt default, `--yes` skips; long flags kebab-case; short flags reserved for globals
+V16: option conventions — globals (`-t/--tenant`, `--version`) valid only before subcommand; resource identity = explicit `--id`, never positional; file/dir inputs positional variadic, dirs expand `*.yaml`; `--dry-run` wherever mutation — lines `would <VERB> …`, summary suffixed `(dry run)`; destructive ops confirm prompt default, `--yes` skips; long flags kebab-case; short flags reserved for globals
 V17: §T verify gate ! satisfiable vs current spec state — criterion never depends on capability another § records dead/pending unless citing the unblocking §T row
 
 ## §T TASKS
@@ -66,6 +66,7 @@ T12|x|discover `.endpoint` package-file serialization (`PX.Api.ContractBased.Com
 T13|x|seed company + credit terms through `Bootstrap/1.0.0` — author `baseline/` YAML in data repo (Company CS101500 + CreditTerms CS206500; field names = DAC props per `bootstrap_project.xml`), verify live: provision scratch tenant → apply → diff green; write path (PUT) unverified — GET-only proven in T12|T12,I.data
 T14|.|`scripts/ps-remote <file.ps1> [host]` — mechanize the live-box PowerShell reflection probe (iconv utf-16le → base64 → `ssh powershell -EncodedCommand`), the recurring V12 discovery instrument (T3/T11/T12 all hand-rolled it)|V12
 T15|x|config TOML → YAML: sentinel `acu.toml` → `acu.yaml`; loader swap `tomllib` → `yaml.safe_load` (empty or non-map → hard error); `config show` → complete YAML doc (header comment + `default_instance` + instance map; `name`/`username`/`password` excluded) round-trips through `load_instance`; literal sweep scope `grep -rn 'acu\.toml' src/ tests/ README.md CLAUDE.md`; tests: fixtures → YAML + round-trip test (show output reloaded → identical); migrate `acumatica-baseline/acu.toml` → `acu.yaml` + symlink swap; verify live from data repo: `config show > acu.yaml` reload identical + `tenant list` green|V2,V3,I.cfg
+T16|.|flatten config to single instance: drop `instances.<name>` nesting + `default_instance` + `-i/--instance` global; drop `Instance.name` field — messages use `host` (sweep scope `grep -rn '\.name' src/`); `config show` → resolved top-level map (`username`/`password` excluded), round-trip preserved; tests: fixtures flatten + nested-legacy-file rejection pinned via `extra="forbid"`; rewrite `acumatica-baseline/acu.yaml` flat; verify live: round trip identical + `tenant list` green + `--help` shows no `-i`|V16,I.cfg,T15
 
 ## §B BUGS
 
