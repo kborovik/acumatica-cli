@@ -18,7 +18,11 @@ Newest first.
 - [2026-07-09](2026-07-09.md) — T17 closes the SPEC backlog: `exit
   $LASTEXITCODE` centralized in `_ssh` (single choke point per V18, the
   B4 recurrence class), call-site hand-appends stripped, suffix pinned
-  exactly-once by a new regression test.
+  exactly-once by a new regression test; T18 mechanizes the §V.9 ASCII
+  audit into `scripts/check-ascii` (tokenize/ast exemptions for `.py`
+  comments and docstrings, `//` lines in `.cs`, `<!-- -->` in `.xml`;
+  violations report as `file:line: U+XXXX` so the audit's own output
+  stays ASCII), check-extras recipe cmd flipped to the script.
 - [2026-07-08](2026-07-08.md) — recycle unblocks tenant visibility (stale-map
   corrections); first-login password wall found and defeated (screen-flow,
   then `-aup` preset); `acu tenant create` chains create → recycle →
