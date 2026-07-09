@@ -1,4 +1,4 @@
-"""scripts/check-ascii: the mechanized V9 ASCII audit, fully offline.
+""".spec/scripts/check-ascii: the mechanized V9 ASCII audit, fully offline.
 
 Fixture files pin the exemption semantics the eye used to apply: comments
 and docstrings never reach output, everything else does. The report format
@@ -9,7 +9,7 @@ import subprocess
 import sys
 from pathlib import Path
 
-SCRIPT = Path(__file__).parent.parent / "scripts" / "check-ascii"
+SCRIPT = Path(__file__).parent.parent / ".spec" / "scripts" / "check-ascii"
 SRC = Path(__file__).parent.parent / "src" / "acumatica_cli"
 
 

@@ -1,8 +1,8 @@
-""".claude/scripts/check-extras.sh: the mechanized V1/V10/V18 drift greps.
+""".spec/scripts/check-extras.sh: the mechanized V1/V10/V18 drift greps.
 
 The hook resolves the repo root from its own location, so VIOLATE branches
 are pinned via a synthetic repo tree in tmp_path (script copied under
-.claude/scripts/, minimal src/acumatica_cli/ beside it). Row shape follows
+.spec/scripts/, minimal src/acumatica_cli/ beside it). Row shape follows
 the /sdd:check extras-hook contract: bare `id|verdict|evidence`, no header,
 exit 1 on any VIOLATE.
 """
@@ -12,7 +12,7 @@ import subprocess
 from pathlib import Path
 
 REPO = Path(__file__).parent.parent
-SCRIPT = REPO / ".claude" / "scripts" / "check-extras.sh"
+SCRIPT = REPO / ".spec" / "scripts" / "check-extras.sh"
 
 CLEAN_TENANT = (
     "import subprocess\n"
@@ -27,7 +27,7 @@ CLEAN_MODELS = "from pydantic import BaseModel\n\nclass Model(BaseModel):\n    p
 
 def make_repo(tmp_path: Path, **files: str) -> Path:
     """Synthetic repo: hook in place, clean src overridden per keyword."""
-    scripts = tmp_path / ".claude" / "scripts"
+    scripts = tmp_path / ".spec" / "scripts"
     scripts.mkdir(parents=True)
     shutil.copy(SCRIPT, scripts / "check-extras.sh")
     src = tmp_path / "src" / "acumatica_cli"
