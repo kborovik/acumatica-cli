@@ -27,7 +27,13 @@ Newest first.
   emits `id|verdict|evidence` rows per the /sdd:check extras-hook contract
   (plane-split imports, direct-BaseModel subclassing outside `models.py`,
   `exit $LASTEXITCODE` sole-site-in-`_ssh`), VIOLATE branches pinned via a
-  synthetic repo tree in tests.
+  synthetic repo tree in tests; `make e2e` lands the opt-in live test tier
+  (T20) — a pytest `e2e` marker deselected by default drives the real `acu`
+  binary through the full provision lifecycle on a scratch tenant (provision
+  → clean diff → idempotent re-run → injected-drift exit 2 → teardown always
+  deletes), first run 4 passed in 269s with the tenant list clean after;
+  the work also surfaced and fixed a missing `bootstrap` symlink that made
+  provision-from-this-repo silently skip bootstrap YAML seeding.
 - [2026-07-08](2026-07-08.md) — recycle unblocks tenant visibility (stale-map
   corrections); first-login password wall found and defeated (screen-flow,
   then `-aup` preset); `acu tenant create` chains create → recycle →

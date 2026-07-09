@@ -9,7 +9,7 @@ export PATH := $(abspath .venv)/bin:$(PATH)
 
 default: .venv help
 
-.PHONY: help check lint test py-format py-lint py-types py-update py-reset \
+.PHONY: help check e2e lint test py-format py-lint py-types py-update py-reset \
 	install build release major minor patch
 
 ###############################################################################
@@ -23,6 +23,12 @@ lint: py-format py-lint py-types ## Lint Python code
 test: ## Run the test suite (pytest, offline — no live instance needed)
 	$(call header,Running pytest)
 	uv run pytest
+
+e2e: ## Live E2E vs the data-repo instance: provision scratch tenant, diff, destroy (needs tailnet + decrypted .env)
+	test -e acu.yaml || { echo "acu.yaml not found — symlink it from ../acumatica-baseline"; exit 1; }
+	test -e .env || { echo ".env missing — run 'make decrypt' in ../acumatica-baseline"; exit 1; }
+	$(call header,Running live E2E (creates and destroys tenant E2E))
+	uv run pytest -o addopts= -m e2e -v -s tests/e2e
 
 py-format:
 	$(call header,Running Ruff format)

@@ -30,7 +30,10 @@ dev = [
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
-addopts = "-q"
+addopts = '-q -m "not e2e"'
+markers = [
+    "e2e: live end-to-end tests against a real Acumatica instance (make e2e)",
+]
 
 [tool.basedpyright]
 typeCheckingMode = "strict"

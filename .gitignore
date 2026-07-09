@@ -1,5 +1,6 @@
 # dev symlinks into the sibling data repo (../acumatica-baseline)
 baseline
+bootstrap
 acu.yaml
 .env
 
