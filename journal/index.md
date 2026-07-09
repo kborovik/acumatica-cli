@@ -79,7 +79,11 @@ Newest first.
   labels, and a wrong-but-valid DAC code is silently misread), `seed._norm`
   compares numbers by value, provision's drift check now covers the
   bootstrap YAML it applies, virgin-tenant provision exit 0 with no drift
-  over 3 files.
+  over 3 files; evening: config file migrated TOML → YAML (T15) —
+  `acu.yaml` is the discovery sentinel and `acu config show` emits a
+  complete valid `acu.yaml` (credentials excluded) that round-trips through
+  `load_instance`, making `acu config show > acu.yaml` the config-editing
+  workflow; verified live (round trip identical + `tenant list` green).
 - [2026-07-07](2026-07-07.md) — skeleton verified end-to-end
   (`apply`/`diff` on UOMs); snapshot plan confirmed dead; no API-only
   bootstrap path — CustomizationApi chosen as the route; the silent
