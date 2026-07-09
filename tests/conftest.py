@@ -9,7 +9,6 @@ from acumatica_cli.config import Instance
 def instance() -> Instance:
     """A host-derived target (plus overrides) that never resolves to a real host."""
     return Instance(
-        name="test",
         host="acu.test",
         tenant="T1",
         ssh="user@acu.test",

@@ -45,7 +45,7 @@ class AcumaticaClient:
         # session must name its tenant, so refuse before any HTTP happens.
         if not self.instance.tenant:
             raise RuntimeError(
-                f"no tenant set for {self.instance.name} - a session without "
+                f"no tenant set for {self.instance.host} - a session without "
                 "an explicit tenant silently lands on the default tenant; "
                 "set tenant in acu.yaml or pass -t/--tenant"
             )

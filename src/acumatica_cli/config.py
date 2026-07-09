@@ -1,4 +1,4 @@
-"""Instance targets (acu.yaml, found by walking up from cwd) + credentials (.env).
+"""The instance target (acu.yaml, found by walking up from cwd) + credentials (.env).
 
 Layered defaults: ``host`` is the only required acu.yaml key. Everything else
 is a code default transcribed from the verified references (docs/ac-exe.md,
@@ -17,14 +17,13 @@ from .models import Model, validation_summary
 
 
 class Instance(Model):
-    """A resolved target: an acu.yaml instances.<name> map + credentials.
+    """The resolved target: the acu.yaml top-level map + credentials.
 
     ``host`` drives both planes (V1): REST ``base_url`` and control-plane
     ``ssh`` derive from it unless the acu.yaml map overrides them
     explicitly (split-horizon DNS, port forwards, jump hosts, nonroot sites).
     """
 
-    name: str
     host: str
     tenant: str = ""
     scheme: str = "http"  # docs/rest-api.md: http://acu-dev1.vm.internal/...
@@ -81,27 +80,15 @@ def data_root() -> Path:
     )
 
 
-def load_instance(name: str | None = None) -> Instance:
-    """Resolve a target from acu.yaml and merge credentials from .env/environment.
-
-    With name=None the config's top-level ``default_instance`` is used.
-    """
+def load_instance() -> Instance:
+    """Resolve the target from acu.yaml and merge credentials from .env/environment."""
     root = data_root()
     load_dotenv(root / ".env")
 
     with open(root / "acu.yaml") as f:
         config = yaml.safe_load(f)
     if not isinstance(config, dict):
-        raise SystemExit("acu.yaml: expected a mapping (default_instance + instances)")
-
-    instances = config.get("instances", {})
-    if name is None:
-        name = config.get("default_instance")
-        if not name:
-            raise SystemExit("acu.yaml: default_instance not set; pass -i/--instance")
-    if name not in instances:
-        known = ", ".join(sorted(instances)) or "none"
-        raise SystemExit(f"acu.yaml: no instances.{name} (known: {known})")
+        raise SystemExit("acu.yaml: expected a mapping (host + optional overrides)")
 
     password = os.environ.get("ACU_PASSWORD")
     if not password:
@@ -109,12 +96,9 @@ def load_instance(name: str | None = None) -> Instance:
 
     try:
         return Instance(
-            name=name,
             username=os.environ.get("ACU_USER", "admin"),
             password=password,
-            **instances[name],
+            **config,
         )
     except ValidationError as exc:
-        raise SystemExit(
-            f"acu.yaml instances.{name}: {validation_summary(exc)}"
-        ) from exc
+        raise SystemExit(f"acu.yaml: {validation_summary(exc)}") from exc

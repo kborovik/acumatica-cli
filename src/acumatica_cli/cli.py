@@ -24,18 +24,12 @@ from .tenant import TenantManager
 @click.group(help=__doc__)
 @click.version_option(package_name="acumatica-cli")
 @click.option(
-    "-i",
-    "--instance",
-    default=None,
-    help="Target from acu.yaml instances.<name> (default: its default_instance)",
-)
-@click.option(
     "-t", "--tenant", default=None, help="Override the tenant API sessions sign in to"
 )
 @click.pass_context
-def cli(ctx: click.Context, instance: str | None, tenant: str | None) -> None:
+def cli(ctx: click.Context, tenant: str | None) -> None:
     """Resolve the target instance and stash it in the Click context."""
-    inst = load_instance(instance)
+    inst = load_instance()
     if tenant is not None:
         inst = inst.model_copy(update={"tenant": tenant})
     ctx.obj = inst
@@ -67,7 +61,7 @@ def tenant_list(inst: Instance) -> None:
     """List tenants: CompanyID, sign-in name, internal CD, type."""
     tenants = TenantManager(inst).list()
     output.table(
-        f"Tenants on {inst.name}",
+        f"Tenants on {inst.host}",
         ("ID", "Login", "CD", "Type"),
         (
             (str(t.company_id), t.login_name, t.company_cd, t.company_type)
@@ -116,7 +110,7 @@ def tenant_create(
     screen's first-login password-change flow as fallback).
     """
     mgr = TenantManager(inst)
-    with output.step(f"creating tenant {company_id} ({login_name}) on {inst.name}"):
+    with output.step(f"creating tenant {company_id} ({login_name}) on {inst.host}"):
         raw = mgr.create(company_id, login_name, parent_id, not hidden, company_type)
     output.data(raw.splitlines()[-1] if raw.strip() else "created")
     if no_init:
@@ -162,12 +156,7 @@ def config_show(inst: Instance) -> None:
     Credentials never appear - redirect to a file and edit: the output
     loads back through load_instance unchanged.
     """
-    doc = {
-        "default_instance": inst.name,
-        "instances": {
-            inst.name: inst.model_dump(exclude={"name", "username", "password"})
-        },
-    }
+    doc = inst.model_dump(exclude={"username", "password"})
     output.data("# resolved by `acu config show` - a complete acu.yaml")
     output.data(
         "# credentials come from .env (ACU_USER / ACU_PASSWORD), never from here"
@@ -232,9 +221,9 @@ def provision_cmd(
 
     mgr = TenantManager(inst)
     if any(t.login_name == login_name for t in mgr.list()):
-        output.info(f"tenant {login_name} exists on {inst.name} - skipping create")
+        output.info(f"tenant {login_name} exists on {inst.host} - skipping create")
     else:
-        with output.step(f"creating tenant {company_id} ({login_name}) on {inst.name}"):
+        with output.step(f"creating tenant {company_id} ({login_name}) on {inst.host}"):
             raw = mgr.create(company_id, login_name, parent_id, True, company_type)
         output.data(raw.splitlines()[-1] if raw.strip() else "created")
         _init_tenant(inst, mgr, login_name)
@@ -261,7 +250,7 @@ def provision_cmd(
     with AcumaticaClient(inst) as client:
         for path in seed_paths:
             baseline = seed.load_baseline(path)
-            output.data(f"{path} -> {inst.name}/{inst.tenant} ({baseline.entity})")
+            output.data(f"{path} -> {inst.host}/{inst.tenant} ({baseline.entity})")
             n = seed.apply(client, baseline)
             output.data(f"  {n} record(s)")
         # diff everything applied, bootstrap YAML included - a PUT that
@@ -285,7 +274,7 @@ def apply_cmd(inst: Instance, files: tuple[Path, ...], dry_run: bool) -> None:
     with AcumaticaClient(inst) as client:
         for path in expand_files(files):
             baseline = seed.load_baseline(path)
-            output.data(f"{path} -> {inst.name}/{inst.tenant} ({baseline.entity})")
+            output.data(f"{path} -> {inst.host}/{inst.tenant} ({baseline.entity})")
             n = seed.apply(client, baseline, dry_run=dry_run)
             output.data(f"  {n} record(s){' (dry run)' if dry_run else ''}")
 
@@ -309,7 +298,7 @@ def schema_cmd(inst: Instance, out_dir: Path | None) -> None:
         out_dir = data_root() / "schemas"
     out_file = out_dir / f"swagger-{inst.endpoint.replace('/', '-')}.json"
     with (
-        output.step(f"dumping OpenAPI schema from {inst.name} ({inst.endpoint})"),
+        output.step(f"dumping OpenAPI schema from {inst.host} ({inst.endpoint})"),
         AcumaticaClient(inst) as client,
     ):
         raw = client.swagger()
@@ -340,8 +329,8 @@ def diff_cmd(inst: Instance, files: tuple[Path, ...]) -> None:
 def _exit_on_drift(inst: Instance, drifts: list[str], files: int) -> None:
     """Report drift lines and exit 2 (the load-bearing diff contract, V9)."""
     if drifts:
-        output.error(f"DRIFT on {inst.name}/{inst.tenant}:")
+        output.error(f"DRIFT on {inst.host}/{inst.tenant}:")
         for line in drifts:
             output.data(f"  {line}")
         raise SystemExit(2)
-    output.success(f"no drift on {inst.name}/{inst.tenant} ({files} file(s))")
+    output.success(f"no drift on {inst.host}/{inst.tenant} ({files} file(s))")

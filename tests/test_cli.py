@@ -60,7 +60,7 @@ class DummyClient:
 @pytest.fixture
 def wired(monkeypatch: pytest.MonkeyPatch, instance: Instance) -> Instance:
     """Point the CLI at the fake instance and a no-op REST client."""
-    monkeypatch.setattr(cli, "load_instance", lambda name: instance)
+    monkeypatch.setattr(cli, "load_instance", lambda: instance)
     monkeypatch.setattr(cli, "AcumaticaClient", DummyClient)
     return instance
 
@@ -88,7 +88,7 @@ def test_tenant_list_renders_table(
     result = CliRunner().invoke(cli.cli, ["tenant", "list"])
 
     assert result.exit_code == 0
-    assert "Tenants on test" in result.output
+    assert "Tenants on acu.test" in result.output
     assert "Company" in result.output
 
 
@@ -161,7 +161,7 @@ def test_provision_chains_create_bootstrap_apply_diff(provision_env: list[str]) 
         "diff:uoms.yaml",
     ]
     # every session targets the provisioned tenant, not the config default
-    assert "+ no drift on test/Scratch (2 file(s))" in result.stderr
+    assert "+ no drift on acu.test/Scratch (2 file(s))" in result.stderr
 
 
 def test_provision_skips_create_when_tenant_exists(
@@ -228,7 +228,7 @@ def test_provision_drift_exits_two(
     )
 
     assert result.exit_code == 2
-    assert "x DRIFT on test/Scratch:" in result.stderr
+    assert "x DRIFT on acu.test/Scratch:" in result.stderr
     assert drift in result.output
 
 
@@ -259,7 +259,7 @@ def test_config_show_emits_yaml_without_credentials(wired: Instance) -> None:
     result = CliRunner().invoke(cli.cli, ["config", "show"])
 
     assert result.exit_code == 0
-    assert "default_instance: test" in result.output
+    assert "host: acu.test" in result.output
     assert "base_url: http://acu.test/AcumaticaERP" in result.output
     assert "ssh: user@acu.test" in result.output
     assert "password" not in result.output
@@ -272,10 +272,7 @@ def test_config_show_round_trips_through_load_instance(
 ) -> None:
     # I.cfg: `acu config show > acu.yaml` is a valid config - reloading it
     # resolves to the identical instance (the whole point of the YAML emit)
-    (tmp_path / "acu.yaml").write_text(
-        "default_instance: test\n\ninstances:\n  test:\n"
-        "    host: acu.test\n    tenant: T1\n"
-    )
+    (tmp_path / "acu.yaml").write_text("host: acu.test\ntenant: T1\n")
     monkeypatch.chdir(tmp_path)
     monkeypatch.setenv("ACU_PASSWORD", "secret")
     monkeypatch.delenv("ACU_USER", raising=False)
@@ -308,7 +305,7 @@ def test_diff_clean_exits_zero(
     result = CliRunner().invoke(cli.cli, ["diff", str(_baseline(tmp_path))])
 
     assert result.exit_code == 0
-    assert "+ no drift on test/T1 (1 file(s))" in result.stderr
+    assert "+ no drift on acu.test/T1 (1 file(s))" in result.stderr
 
 
 def test_diff_directory_expands_to_yaml_files(
@@ -321,7 +318,7 @@ def test_diff_directory_expands_to_yaml_files(
     result = CliRunner().invoke(cli.cli, ["diff", str(tmp_path)])
 
     assert result.exit_code == 0
-    assert "+ no drift on test/T1 (2 file(s))" in result.stderr
+    assert "+ no drift on acu.test/T1 (2 file(s))" in result.stderr
 
 
 def test_apply_empty_directory_errors(wired: Instance, tmp_path: Path) -> None:
@@ -340,7 +337,7 @@ def test_diff_drift_exits_two_with_lines_on_stdout(
 
     # the load-bearing contract (V9): exit 0 ok, 1 error, 2 drift
     assert result.exit_code == 2
-    assert "x DRIFT on test/T1:" in result.stderr
+    assert "x DRIFT on acu.test/T1:" in result.stderr
     assert drift in result.output
 
 
