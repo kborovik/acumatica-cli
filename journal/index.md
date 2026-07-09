@@ -44,7 +44,11 @@ Newest first.
   input names the landed tenant's login name in every observed state; the
   guard refuses on mismatch (logging out first), fails closed if the page
   shape changes, and the e2e tier pins `diff` against a nonexistent tenant
-  to exit 1.
+  to exit 1; T22 adds the global `--host` flag — the override lands on the
+  raw config dict inside `load_instance` *before* the Instance is built so
+  derived `base_url`/`ssh` re-derive from the new host (a post-hoc
+  `model_copy` would leave them stale), while explicit acu.yaml
+  `base_url`/`ssh` keep their precedence.
 - [2026-07-08](2026-07-08.md) — recycle unblocks tenant visibility (stale-map
   corrections); first-login password wall found and defeated (screen-flow,
   then `-aup` preset); `acu tenant create` chains create → recycle →
