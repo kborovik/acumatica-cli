@@ -47,6 +47,7 @@ V14: journal — after meaningful work append/extend `journal/YYYY-MM-DD.md` + s
 V15: cmd grammar — exactly two forms: `acu [globals] <noun> <verb> [options]` = resource ops (`tenant` = control plane; `config` = local read-only, no live instance); `acu [globals] <verb> [options] [args]` = data plane + pipeline; no third form; surface encodes V1 split
 V16: option conventions — globals valid only before subcommand; resource identity = explicit `--id`, never positional; `--dry-run` wherever mutation; destructive ops confirm prompt, `--yes` skips; full convention audit → `.claude/check-extras.md` §V.16
 V17: §T verify gate ! satisfiable vs current spec state — criterion never depends on capability another § records dead/pending unless citing the unblocking §T row
+V18: `_ssh` appends `exit $LASTEXITCODE` to every remote command — single choke point, call sites never hand-append (PowerShell-over-ssh returns 0 on failed native cmd)
 
 ## §T TASKS
 
@@ -67,6 +68,7 @@ T13|x|seed company + credit terms through `Bootstrap/1.0.0` — author `baseline
 T14|x|`scripts/ps-remote <file.ps1> [host]` — mechanize the live-box PowerShell reflection probe|V12
 T15|x|config TOML → YAML: sentinel `acu.toml` → `acu.yaml`, loader `tomllib` → `yaml.safe_load`; migrate data repo|V2,V3,I.cfg
 T16|x|flatten config to single instance — drop `instances.<name>` nesting, `default_instance`, `-i/--instance` global, `Instance.name` field|V16,I.cfg,T15
+T17|.|centralize `exit $LASTEXITCODE` in `_ssh`; strip hand-appended suffixes at call sites — sweep grep `self\._ssh\(`|V18
 
 ## §B BUGS
 
@@ -74,3 +76,4 @@ id|date|cause|fix
 B1|2026-07-08|§T.10 live gate cited provision E2E; §T.3 verdict already records bootstrap publish dead, C# plugin fallback never queued|V17
 B2|2026-07-08|CustomizationApi import field `projectContents` + hyphenated project name from training data — live binder wants `projectContentBase64`, names alphanumeric; content bound null, import silently no-op|V12
 B3|2026-07-08|publish skip keyed on `getPublished` marker — tenant recreate same CompanyID keeps stale publication row while content + plugin writes gone; virgin tenant left unbootstrapped|V4
+B4|2026-07-09|sqlcmd list call omitted `exit $LASTEXITCODE` — PowerShell-over-ssh returns 0 on failed native cmd; failed read → empty tenant list, provision misjudges existence|V18
