@@ -5,7 +5,9 @@ An unconfigured tenant cannot be configured through the Default endpoint
 docs/rest-api.md). The CustomizationApi is the one door that works on a
 virgin tenant, so bootstrap = publish a package whose CustomizationPlugin
 (`bootstrap_plugin.cs`) enables features on publish — the contract API
-cannot write CS100000 at all (T3 verdict).
+cannot write CS100000 at all (T3 verdict) — and whose Bootstrap contract
+endpoint exposes CS101500 company + CS206500 credit terms for seeding
+(`bootstrap_project.xml`, serialization verified T12).
 
 Customization publishes are tenant-scoped, so the package must be published
 per tenant; publish() is idempotent — an already-published package is a
@@ -25,7 +27,10 @@ from .client import AcumaticaClient
 # Alphanumeric only: CstDbStorage.ValidatePackageName rejects '-' and '_'
 # (verified vs 26.101.0225 — "Invalid project name")
 PACKAGE_NAME = "AcuBootstrap"
-PACKAGE_DESCRIPTION = "acu bootstrap: CustomizationPlugin enables features on publish"
+PACKAGE_DESCRIPTION = (
+    "acu bootstrap: CustomizationPlugin enables features on publish; "
+    "Bootstrap endpoint exposes company + credit terms"
+)
 PLUGIN_CLASS = "AcuBootstrapPlugin"
 
 

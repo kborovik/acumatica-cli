@@ -40,6 +40,52 @@ def test_package_zip_holds_the_project_xml() -> None:
     assert bootstrap.PACKAGE_NAME.isalnum()
 
 
+def test_package_zip_carries_the_bootstrap_endpoint() -> None:
+    """Pin the <EntityEndpoint> serialization discovered in T12.
+
+    Verified vs 26.101.0225 by live import round-trip: the <Endpoint> child
+    is the XmlSerializer form of Model.Endpoint in the entity/maintenance/5.31
+    namespace (the entity/data-model guess was the "Unknown root node"
+    rejection); no .endpoint file is involved. View/DAC names read off the
+    live box: CS101500 -> OrganizationMaint view BAccount, CS206500 ->
+    TermsMaint view TermsDef.
+    """
+    ns = "{http://www.acumatica.com/entity/maintenance/5.31}"
+    with zipfile.ZipFile(io.BytesIO(bootstrap.package_zip())) as zf:
+        root = ET.fromstring(zf.read("project.xml"))
+    (item,) = root.findall("EntityEndpoint")
+    (endpoint,) = item.findall(f"{ns}Endpoint")
+    assert endpoint.get("name") == "Bootstrap"
+    assert endpoint.get("version") == "1.0.0"
+    # SystemContracts.V4 is the build's only IsCurrent implementation
+    assert endpoint.get("systemContractVersion") == "4"
+    entities = {e.get("name"): e for e in endpoint.findall(f"{ns}TopLevelEntity")}
+    assert set(entities) == {"Company", "CreditTerms"}
+    # features stay OUT: contract-endpoint writes to CS100000 do not
+    # persist (T3 verdict) - the CustomizationPlugin owns features
+    assert entities["Company"].get("screen") == "CS101500"
+    assert entities["CreditTerms"].get("screen") == "CS206500"
+    for entity, view in [("Company", "BAccount"), ("CreditTerms", "TermsDef")]:
+        fields = {
+            f.get("name") for f in entities[entity].findall(f"{ns}Fields/{ns}Field")
+        }
+        mappings = {
+            m.get("field"): m.find(f"{ns}To")
+            for m in entities[entity].findall(f"{ns}Mappings/{ns}Mapping")
+        }
+        # every contract field maps 1:1 onto the screen's primary view,
+        # DAC property names verbatim (no rename layer)
+        assert set(mappings) == fields
+        for name, to in mappings.items():
+            assert to is not None
+            assert to.get("object") == view
+            assert to.get("field") == name
+    assert (
+        entities["Company"].findall(f"{ns}Fields/{ns}Field")[0].get("type")
+        == "StringValue"
+    )
+
+
 class Api:
     """MockTransport handler: scripted /CustomizationApi + auth responses."""
 

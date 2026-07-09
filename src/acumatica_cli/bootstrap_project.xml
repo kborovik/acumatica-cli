@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!--
-  acu bootstrap customization package template (SPEC T2 + T11).
+  acu bootstrap customization package template (SPEC T2 + T11 + T12).
 
   package_zip() (bootstrap.py) parses this template and injects a
   <Graph ClassName="AcuBootstrapPlugin" FileType="NewFile" Source="..."/>
@@ -14,12 +14,90 @@
   project.xml's root is <Customization level description product-version>;
   the project NAME comes from the import call, not the XML.
 
-  The former <EntityEndpoint> item (CS101500 company + CS206500 credit
-  terms) is OUT until its serialization is discovered: the live importer
-  rejects an inline data-model <Endpoint> child ("Unknown root node"), and
-  PX.Api.ContractBased.Common.dll's "*.endpoint" globs say packages carry
-  endpoints as .endpoint FILES - discovering that format is an open spec
-  task.
+  The <EntityEndpoint> item (T12, verified vs 26.101.0225 by import
+  round-trip 2026-07-08): the <Endpoint> child is the XmlSerializer form of
+  PX.Api.ContractBased.Common.Model.Endpoint - namespace
+  http://www.acumatica.com/entity/maintenance/5.31 (the earlier
+  entity/data-model guess is what the importer rejected as "Unknown root
+  node"), systemContractVersion 4 (SystemContracts.V4, the build's only
+  IsCurrent implementation). No .endpoint file is involved - the
+  PX.Api.ContractBased.Common.dll "*.endpoint" globs belong to the
+  source-control folder layout, not the package zip. The server's own
+  getProject re-serialization carries no attributes on <EntityEndpoint>;
+  identity comes from the child's name/version.
+
+  Entity payload (screen->graph->view->DAC chain read off the live box):
+  - Company    CS101500 -> OrganizationMaint, PrimaryView BAccount
+                (DAC PX.Objects.CS.DAC.OrganizationBAccount); the old
+                draft's Organization view / OrganizationCD / CountryID do
+                not exist on this build - fields are AcctCD/AcctName/
+                OrganizationType/BaseCuryID.
+  - CreditTerms CS206500 -> TermsMaint, PrimaryView TermsDef
+                (DAC PX.Objects.CS.Terms); DayDue00 is Nullable<Int16>
+                -> ShortValue, DiscPercent Nullable<Decimal> -> DecimalValue.
+  Contract field names = DAC property names verbatim (no rename layer).
+  Features (CS100000) stays OUT of the endpoint - writes through any
+  contract endpoint do not persist (T3 verdict); the plugin owns features.
 -->
-<Customization level="" description="acu bootstrap: CustomizationPlugin enables features on publish" product-version="26.101">
+<Customization level="" description="acu bootstrap: CustomizationPlugin enables features on publish; Bootstrap endpoint exposes company + credit terms" product-version="26.101">
+  <EntityEndpoint>
+    <Endpoint xmlns="http://www.acumatica.com/entity/maintenance/5.31" name="Bootstrap" version="1.0.0" systemContractVersion="4">
+      <TopLevelEntity name="Company" screen="CS101500">
+        <Fields>
+          <Field name="AcctCD" type="StringValue" />
+          <Field name="AcctName" type="StringValue" />
+          <Field name="OrganizationType" type="StringValue" />
+          <Field name="BaseCuryID" type="StringValue" />
+        </Fields>
+        <Mappings>
+          <Mapping field="AcctCD">
+            <To object="BAccount" field="AcctCD" />
+          </Mapping>
+          <Mapping field="AcctName">
+            <To object="BAccount" field="AcctName" />
+          </Mapping>
+          <Mapping field="OrganizationType">
+            <To object="BAccount" field="OrganizationType" />
+          </Mapping>
+          <Mapping field="BaseCuryID">
+            <To object="BAccount" field="BaseCuryID" />
+          </Mapping>
+        </Mappings>
+      </TopLevelEntity>
+      <TopLevelEntity name="CreditTerms" screen="CS206500">
+        <Fields>
+          <Field name="TermsID" type="StringValue" />
+          <Field name="Descr" type="StringValue" />
+          <Field name="VisibleTo" type="StringValue" />
+          <Field name="DueType" type="StringValue" />
+          <Field name="DayDue00" type="ShortValue" />
+          <Field name="DiscType" type="StringValue" />
+          <Field name="DiscPercent" type="DecimalValue" />
+        </Fields>
+        <Mappings>
+          <Mapping field="TermsID">
+            <To object="TermsDef" field="TermsID" />
+          </Mapping>
+          <Mapping field="Descr">
+            <To object="TermsDef" field="Descr" />
+          </Mapping>
+          <Mapping field="VisibleTo">
+            <To object="TermsDef" field="VisibleTo" />
+          </Mapping>
+          <Mapping field="DueType">
+            <To object="TermsDef" field="DueType" />
+          </Mapping>
+          <Mapping field="DayDue00">
+            <To object="TermsDef" field="DayDue00" />
+          </Mapping>
+          <Mapping field="DiscType">
+            <To object="TermsDef" field="DiscType" />
+          </Mapping>
+          <Mapping field="DiscPercent">
+            <To object="TermsDef" field="DiscPercent" />
+          </Mapping>
+        </Mappings>
+      </TopLevelEntity>
+    </Endpoint>
+  </EntityEndpoint>
 </Customization>

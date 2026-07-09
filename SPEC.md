@@ -62,7 +62,7 @@ T8|x|drop `acu bootstrap` cmd — `bootstrap.publish()` module stays; resumable 
 T9|x|drop `schema -o` short flag — `--out` only|V16
 T10|x|layered `Instance` defaults per `designs/config-layered-defaults.md` — `host` only required toml key, rest code defaults (transcribe literals from `docs/ac-exe.md`, not training data); add `acu config show`; migrate `acumatica-baseline/acu.toml`; verify live w/ minimal config (`default_instance` + `host`): `config show` + `tenant list` + `diff` green; provision E2E deferred → T11|V11,V12,I.cfg
 T11|x|C# CustomizationPlugin flips FeaturesSet on publish (§T.3 verdict route) — ships in bootstrap package; unblocks provision E2E; then re-verify provision live w/ minimal config|T2,T3
-T12|.|discover `.endpoint` package-file serialization (`PX.Api.ContractBased.Common.dll` `*.endpoint` globs) — restore custom endpoint (CS101500 company + CS206500 credit terms) to bootstrap package; unblocks bootstrap YAML seeding|T2,T11
+T12|x|discover `.endpoint` package-file serialization (`PX.Api.ContractBased.Common.dll` `*.endpoint` globs) — restore custom endpoint (CS101500 company + CS206500 credit terms) to bootstrap package; unblocks bootstrap YAML seeding|T2,T11
 
 ## §B BUGS
 

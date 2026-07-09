@@ -60,7 +60,16 @@ Newest first.
   reflection), the plugin writes FeaturesSet via `PXDatabase` (graph save
   collides with the publish pipeline), the feature slot needs one
   post-publish recycle, and tenant recreate leaves a stale publication row
-  (B2/B3, V4 desired-state rule, T12 queued for the `.endpoint` format).
+  (B2/B3, V4 desired-state rule, T12 queued for the `.endpoint` format);
+  night: T12 dissolved the `.endpoint` premise — packages carry endpoints
+  as inline XmlSerializer XML (namespace `entity/maintenance/5.31`; the
+  old `entity/data-model` guess was the "Unknown root node" rejection, and
+  the `*.endpoint` globs are source-control folder layout), the payload's
+  view/field names were re-read off the live box (CS101500 → `BAccount`
+  view, `AcctCD`/`AcctName`; CS206500 → `TermsDef`; no `CountryID` on this
+  build), and the Company + CreditTerms endpoint shipped in the bootstrap
+  package — provision E2E green on a scratch tenant with
+  `Bootstrap/1.0.0` answering, bootstrap YAML seeding unblocked.
 - [2026-07-07](2026-07-07.md) — skeleton verified end-to-end
   (`apply`/`diff` on UOMs); snapshot plan confirmed dead; no API-only
   bootstrap path — CustomizationApi chosen as the route; the silent
@@ -93,7 +102,7 @@ Every Acumatica problem hit so far, one line each. Status: **resolved**
 | 17 | REST logout returns `411 Length Required` without an explicit `Content-Length: 0` | resolved | [2026-07-07](2026-07-07.md) |
 | 18 | API sessions count against the license's concurrent-user cap — leaked sessions exhaust a trial instance | resolved (client is a context manager; logout always runs) | [2026-07-07](2026-07-07.md) |
 | 19 | CustomizationApi failures are in-band: every call answers 200, errors live only in `log[].logType == "error"` — status-code checking is blind | resolved (`_checked_log`) | [2026-07-08](2026-07-08.md) |
-| 20 | project.xml root is `<Customization level description product-version>`, not `<Project>`; no shipped package samples an `EntityEndpoint` item (`.endpoint` file globs in Common.dll are the lead) | open (item format unverified) | [2026-07-08](2026-07-08.md) |
+| 20 | project.xml root is `<Customization level description product-version>`, not `<Project>`; `EntityEndpoint` items are inline XmlSerializer XML in namespace `entity/maintenance/5.31` — the `entity/data-model` guess drew "Unknown root node", and the `.endpoint` globs are source-control folder layout, not package format | resolved (T12; import round-trip verified) | [2026-07-08](2026-07-08.md) |
 | 21 | CS100000 rejects the whole contract-API surface: PUT 200-but-no-persist (keyless BqlDelegate view), GET `CannotOptimizeException`, `Insert` action invoke `PXInvalidOperationException` | dead end (C# CustomizationPlugin fallback) | [2026-07-08](2026-07-08.md) |
 | 22 | Custom-endpoint DB rows: EntityIds are global — a colliding id kills the tenant's whole contract API; endpoint metadata is cached per app domain (recycle to refresh); one malformed row 302s every `/entity` request on the tenant | resolved (documented row formats) | [2026-07-08](2026-07-08.md) |
 | 23 | CustomizationApi import: documented `projectContents` field binds nothing on 26.101 — server deletes the project then errors "The project is not found"; live binder wants `projectContentBase64` | resolved | [2026-07-08](2026-07-08.md) |
@@ -122,11 +131,11 @@ Mechanisms:
 
 Remaining milestones:
 
-- `[DONE (features)]` Bootstrap package published via CustomizationApi —
-  the C# `CustomizationPlugin` enables features on publish, live-verified
-  (SPEC T11; provision E2E green on a virgin tenant). Remaining: the
-  custom endpoint for company (CS101500) + credit terms (CS206500) waits
-  on the `.endpoint` package-file format (SPEC T12).
+- `[DONE]` Bootstrap package published via CustomizationApi — the C#
+  `CustomizationPlugin` enables features on publish (SPEC T11) and the
+  `Bootstrap/1.0.0` endpoint exposes company (CS101500) + credit terms
+  (CS206500) (SPEC T12); both live-verified, provision E2E green on a
+  virgin tenant. Remaining: seed company + credit terms YAML through it.
 - `[OPEN]` Baseline expanded in dependency order: currencies → financial
   calendar → chart of accounts/ledger → tax categories/zones →
   customer/vendor/item classes → payment terms.

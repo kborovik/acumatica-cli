@@ -283,12 +283,31 @@ False; restarts the app) and read
       confirmed by invoking its own `Save()` by reflection and by live
       import round-trip). Inline CDATA children and zip-file variants are
       silently dropped on import.
-    - The `EntityEndpoint` item exists (`CstEntityEndpoint`,
-      `Tag = EntityEndpoint`) but rejects an inline data-model
-      `<Endpoint>` child ("Unknown root node …data-model:Endpoint").
-      `PX.Api.ContractBased.Common.dll` carries `*.endpoint` /
-      `*.endpoint.remove` glob literals — packages likely carry endpoints
-      as `.endpoint` files; discovering that format is an open task.
+    - **Endpoint items are inline XML, no `.endpoint` file (T12,
+      verified by import round-trip 2026-07-08).** The `<EntityEndpoint>`
+      project item wraps an `<Endpoint>` child that is the XmlSerializer
+      form of `PX.Api.ContractBased.Common.Model.Endpoint` — namespace
+      **`http://www.acumatica.com/entity/maintenance/5.31`** (the
+      "Unknown root node …data-model:Endpoint" rejection was the wrong
+      namespace, not a missing file; the `*.endpoint` globs in
+      `PX.Api.ContractBased.Common.dll` belong to the source-control
+      folder layout). Shape (attributes throughout):
+      `<Endpoint name version systemContractVersion=4>` →
+      `<TopLevelEntity name screen>` (also `Detail`/`LinkedEntity`/
+      `Report`) → `<Fields><Field name type/></Fields>` +
+      `<Mappings><Mapping field><To object="<view>" field="<DAC prop>"/>
+      </Mapping></Mappings>` + `<Actions><Action name mappedTo/>`.
+      `type` = the wrapper names (`StringValue`, `ShortValue`, …);
+      `systemContractVersion` 4 = `SystemContracts.V4`, the build's only
+      `IsCurrent` implementation. The server's own getProject
+      re-serialization carries no attributes on `<EntityEndpoint>` —
+      identity comes from the child's name/version. Live screen chain for
+      the bootstrap payload: CS101500 → `OrganizationMaint`, PrimaryView
+      `BAccount` (DAC `PX.Objects.CS.DAC.OrganizationBAccount`; fields
+      `AcctCD`/`AcctName`/`OrganizationType`/`BaseCuryID` — no
+      `OrganizationCD`, no `CountryID` on this build); CS206500 →
+      `TermsMaint`, PrimaryView `TermsDef` (DAC `PX.Objects.CS.Terms`;
+      `DayDue00` is `Nullable<Int16>` → `ShortValue`).
 - **`CustomizationPlugin` is the working features route (T11, verified).**
   `UpdateDatabase` runs on publish (plus a second invocation around site
   start). Writing through `FeaturesMaint` + `Save.Press()` collides with
