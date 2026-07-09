@@ -22,7 +22,12 @@ Newest first.
   audit into `scripts/check-ascii` (tokenize/ast exemptions for `.py`
   comments and docstrings, `//` lines in `.cs`, `<!-- -->` in `.xml`;
   violations report as `file:line: U+XXXX` so the audit's own output
-  stays ASCII), check-extras recipe cmd flipped to the script.
+  stays ASCII), check-extras recipe cmd flipped to the script; T19 does
+  the same for the V1/V10/V18 drift greps — `.claude/scripts/check-extras.sh`
+  emits `id|verdict|evidence` rows per the /sdd:check extras-hook contract
+  (plane-split imports, direct-BaseModel subclassing outside `models.py`,
+  `exit $LASTEXITCODE` sole-site-in-`_ssh`), VIOLATE branches pinned via a
+  synthetic repo tree in tests.
 - [2026-07-08](2026-07-08.md) — recycle unblocks tenant visibility (stale-map
   corrections); first-login password wall found and defeated (screen-flow,
   then `-aup` preset); `acu tenant create` chains create → recycle →
