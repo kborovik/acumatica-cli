@@ -27,6 +27,7 @@ Configure Acumatica ERP purely from source — no UI, no Configuration Wizard. I
 - data: `baseline/*.yaml` → `entity` / `key` (string or list) / `records` + `endpoint` ? (per-file contract-endpoint override, e.g. `Bootstrap/1.0.0`); parsed by `seed.py`
 - api: `/entity/Default/25.200.001/` → cookie-session httpx; values wrapped `{"Field": {"value": ...}}`; PUT = keyed upsert
 - ssh: `ac.exe -cm:CompanyConfig` + `sqlcmd` over `ssh` → remote shell PowerShell; `exit $LASTEXITCODE` appended so failures propagate
+- pkg: pypi.org `acumatica-cli` → `pip install acumatica-cli`; publish = GitHub Actions `release.yml` on `release: published`, trusted publishing (OIDC), `uv build` sdist+wheel; no stored API token
 
 ## §V INVARIANTS
 
@@ -48,6 +49,7 @@ V15: cmd grammar — exactly two forms: `acu [globals] <noun> <verb> [options]` 
 V16: option conventions — globals valid only before subcommand; resource identity = explicit `--id`, never positional; `--dry-run` wherever mutation; destructive ops confirm prompt, `--yes` skips; full convention audit → `.spec/check-extras.md` §V.16
 V17: §T verify gate ! satisfiable vs current spec state — criterion never depends on capability another § records dead/pending unless citing the unblocking §T row
 V18: `_ssh` appends `exit $LASTEXITCODE` to every remote command — single choke point, call sites never hand-append (PowerShell-over-ssh returns 0 on failed native cmd)
+V19: release pipeline — `make release <part>` sole release path (bump + commit + tag + gh release); release published → `release.yml` builds (`uv build`) + publishes to pypi.org via trusted publishing (OIDC); no PyPI API token in repo or GitHub secrets; tag `v<version>` == pyproject `version`
 
 ## §T TASKS
 
@@ -74,6 +76,7 @@ T19|x|mechanize §V.1/§V.10/§V.18 drift greps into `.spec/scripts/check-extras
 T20|x|live E2E tier — `tests/e2e/test_provision_lifecycle.py` drives real `acu` binary vs live instance: provision scratch tenant `E2E` (next-free CompanyID) → independent diff clean → provision re-run hits skip paths → injected-drift diff exit 2; session fixture always deletes tenant + recycles; `make e2e` preflights data symlinks; marker `e2e` deselected by default|V4,V5,V9,V13
 T21|x|post-login tenant guard — discover verified landed-tenant probe (live archaeology: login response? entity exposing `CompanyKey`?), then `AcumaticaClient.__enter__` refuses session on mismatch; e2e regression: `diff` vs nonexistent tenant ! exit 1|V5,V12
 T22|x|global `--host` flag — swap acu.yaml `host` pre-`Instance` build (post-hoc `model_copy` leaves derived `base_url`/`ssh` stale); explicit `base_url`/`ssh` override wins; acu.yaml stays required, `-t` override idiom; tests: re-derive on override + explicit-`base_url` precedence|V16,I.cmd,I.cfg
+T23|.|PyPI auto-publish — register trusted publisher on pypi.org (repo kborovik/acumatica-cli, workflow `release.yml`); add `.github/workflows/release.yml`: trigger `release: published`, `uv build`, `pypa/gh-action-pypi-publish` OIDC; verify: next `make release patch` → `pip install acumatica-cli==<version>` from pypi.org succeeds|V19,I.pkg
 
 ## §B BUGS
 
