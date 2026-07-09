@@ -8,8 +8,8 @@ Configure Acumatica ERP purely from source — no UI, no Configuration Wizard. I
 
 - Repo = `acu` CLI only. Data (`baseline/`, `acu.yaml`, `.env.gpg`) lives in separate data repos (sibling `acumatica-baseline`); infra = sibling `acumatica-infra`; blog = sibling `acumatica-blog`. C# customization projects out of scope (exclusion: bootstrap package ships one C# CustomizationPlugin package — §T.11; endpoint item returns when §T.12 lands).
 - Python ≥ 3.12; click, httpx, pydantic, rich, pyyaml, python-dotenv; uv build; module `acumatica_cli`; entry `acu`.
-- Tests fully offline: SSH = monkeypatched `subprocess.run`, REST = `httpx.MockTransport`; no live instance needed.
-- Every cmd except `--dry-run` talks to live instance. Final verification live vs acu-dev1 (`acu-dev1.vm.internal`; needs tailnet + GPG key): `cd ~/github/acumatica-baseline && make decrypt && make diff`.
+- Default suite fully offline: SSH = monkeypatched `subprocess.run`, REST = `httpx.MockTransport`; no live instance needed; `make check` gate offline-only. Opt-in live tier: pytest marker `e2e`, deselected via addopts, runs only via `make e2e`.
+- Every cmd except `--dry-run` talks to live instance. Final verification live vs acu-dev1 (`acu-dev1.vm.internal`; needs tailnet + GPG key): `cd ~/github/acumatica-baseline && make decrypt && make diff` or `make e2e` here (data symlinks `acu.yaml`/`.env`/`baseline`/`bootstrap` → sibling data repo).
 - Unconfigured tenant fails most entities (500 `PXSetupNotEnteredException` or 403 feature-gated) until bootstrap (features + company/branch); built-in endpoints can't bootstrap; `PUT CompaniesStructure` dead; payment terms have no Default-endpoint entity.
 - `ac.exe` has no snapshot support — reference data as code is the primary route.
 
@@ -71,6 +71,7 @@ T16|x|flatten config to single instance — drop `instances.<name>` nesting, `de
 T17|x|centralize `exit $LASTEXITCODE` in `_ssh`; strip hand-appended suffixes at call sites — sweep grep `self\._ssh\(`|V18
 T18|x|mechanize §V.9 ASCII audit — `scripts/check-ascii <paths>`: `.py` via tokenize (exempt COMMENT tokens + docstrings), `.cs` exempt `//` lines, `.xml` exempt `<!-- -->`; emit surviving `file:line` violations, exit 1 on match; same commit flips check-extras §V.9 recipe cmd + drops eye-applied exemption filter|V9
 T19|x|mechanize §V.1/§V.10/§V.18 drift greps into `.claude/scripts/check-extras.sh` — emit `id|verdict|evidence` rows per /sdd:check extras-hook contract: V1 plane-split scan (imports: `tenant.py` bans `httpx`, `client.py` bans `subprocess`), V10 inheritance scan (`^class ` in `src/` ! inherit `Model` outside `models.py`), V18 choke-point scan (`exit \$LASTEXITCODE` sole site `_ssh`); same commit appends the three recipe rows to `.claude/check-extras.md`|V1,V10,V18
+T20|x|live E2E tier — `tests/e2e/test_provision_lifecycle.py` drives real `acu` binary vs live instance: provision scratch tenant `E2E` (next-free CompanyID) → independent diff clean → provision re-run hits skip paths → injected-drift diff exit 2; session fixture always deletes tenant + recycles; `make e2e` preflights data symlinks; marker `e2e` deselected by default|V4,V5,V9,V13
 
 ## §B BUGS
 
