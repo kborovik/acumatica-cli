@@ -88,7 +88,10 @@ Newest first.
   weighed and rejected (multiple admin passwords in one `.env`), so
   `instances.<name>`/`default_instance`/`-i` and `Instance.name` are gone,
   `acu.yaml` is a flat `host` + overrides map, messages label the target
-  by host, legacy nested files rejected by `extra="forbid"`.
+  by host, legacy nested files rejected by `extra="forbid"`; T14 closed
+  the backlog — the hand-rolled reflection-probe pipeline became
+  `scripts/ps-remote` (utf-16le/base64/`-EncodedCommand`; host defaults
+  via `acu config show`, pinned offline with `ssh`/`acu` PATH stubs).
 - [2026-07-07](2026-07-07.md) — skeleton verified end-to-end
   (`apply`/`diff` on UOMs); snapshot plan confirmed dead; no API-only
   bootstrap path — CustomizationApi chosen as the route; the silent
@@ -134,6 +137,7 @@ Every Acumatica problem hit so far, one line each. Status: **resolved**
 | 30 | Contract-API list fields take external labels, not DAC codes — `VisibleTo: A` is rejected with the allowed list, but `DueType: D` is *silently misread* as "Day of Next Month"; a deliberately bogus value elicits the full allowed-label list from the 422 | resolved (labels in YAML, allowed lists in file comments) | [2026-07-08](2026-07-08.md) |
 | 31 | DecimalValue fields come back as floats — YAML `0` vs live `0.0` flagged spurious drift when compared as strings | resolved (`seed._norm` compares numbers by value) | [2026-07-08](2026-07-08.md) |
 | 32 | The publish skip gate verifies the project *exists*, not that its content matches this tool version's package — a changed package silently skips on an already-provisioned tenant (B3's marker class, one notch subtler) | open (spec follow-up) | [2026-07-08](2026-07-08.md) |
+| 33 | Remote probes cross two PowerShell parsers plus the local shell — `$_` inside a double-quoted `-Command` interpolates away before the inner powershell runs; every reflection probe hand-rolled the utf-16le/base64/`-EncodedCommand` workaround | resolved (`scripts/ps-remote`, T14) | [2026-07-08](2026-07-08.md) |
 
 ## Status
 
