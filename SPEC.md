@@ -15,7 +15,7 @@ Configure Acumatica ERP purely from source — no UI, no Configuration Wizard. I
 
 ## §I INTERFACES
 
-- cmd: `acu [-t <tenant>] [--version] <subcommand>` → globals valid only before subcommand
+- cmd: `acu [-t <tenant>] [--host <host>] [--version] <subcommand>` → globals valid only before subcommand; `--host` swaps acu.yaml `host` pre-`Instance` build → `base_url`/`ssh` re-derive; explicit acu.yaml `base_url`/`ssh` still win
 - cmd: `acu tenant list|create|delete` → tenant CRUD over SSH; create: `--id` ! + `--login` ! + `--type`/`--parent`/`--hidden`/`--no-init` ?; delete: `--id` + confirm prompt, `--yes` skips
 - cmd: `acu apply [--dry-run] <files|dirs>` → PUT each record; dir arg expands `*.yaml`; dry-run lines `would PUT …`, summary suffixed `(dry run)`
 - cmd: `acu diff <files|dirs>` → GET by `$filter` on key fields, compare normalized; drift → exit 2
@@ -73,6 +73,7 @@ T18|x|mechanize §V.9 ASCII audit — `scripts/check-ascii <paths>`: `.py` via t
 T19|x|mechanize §V.1/§V.10/§V.18 drift greps into `.claude/scripts/check-extras.sh` — emit `id|verdict|evidence` rows per /sdd:check extras-hook contract: V1 plane-split scan (imports: `tenant.py` bans `httpx`, `client.py` bans `subprocess`), V10 inheritance scan (`^class ` in `src/` ! inherit `Model` outside `models.py`), V18 choke-point scan (`exit \$LASTEXITCODE` sole site `_ssh`); same commit appends the three recipe rows to `.claude/check-extras.md`|V1,V10,V18
 T20|x|live E2E tier — `tests/e2e/test_provision_lifecycle.py` drives real `acu` binary vs live instance: provision scratch tenant `E2E` (next-free CompanyID) → independent diff clean → provision re-run hits skip paths → injected-drift diff exit 2; session fixture always deletes tenant + recycles; `make e2e` preflights data symlinks; marker `e2e` deselected by default|V4,V5,V9,V13
 T21|x|post-login tenant guard — discover verified landed-tenant probe (live archaeology: login response? entity exposing `CompanyKey`?), then `AcumaticaClient.__enter__` refuses session on mismatch; e2e regression: `diff` vs nonexistent tenant ! exit 1|V5,V12
+T22|.|global `--host` flag — swap acu.yaml `host` pre-`Instance` build (post-hoc `model_copy` leaves derived `base_url`/`ssh` stale); explicit `base_url`/`ssh` override wins; acu.yaml stays required, `-t` override idiom; tests: re-derive on override + explicit-`base_url` precedence|V16,I.cmd,I.cfg
 
 ## §B BUGS
 
