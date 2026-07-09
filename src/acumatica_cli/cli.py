@@ -78,7 +78,12 @@ def tenant_list(inst: Instance) -> None:
     required=True,
     help="CompanyID (first free is usually 3)",
 )
-@click.option("--login", "login_name", required=True, help="Name on the sign-in page")
+@click.option(
+    "--login",
+    "login_name",
+    required=True,
+    help="Acumatica tenant name as shown on the sign-in page",
+)
 @click.option(
     "--type",
     "company_type",
@@ -187,7 +192,12 @@ def expand_files(files: tuple[Path, ...]) -> list[Path]:
     required=True,
     help="CompanyID (first free is usually 3)",
 )
-@click.option("--login", "login_name", required=True, help="Name on the sign-in page")
+@click.option(
+    "--login",
+    "login_name",
+    required=True,
+    help="Acumatica tenant name as shown on the sign-in page",
+)
 @click.option(
     "--type",
     "company_type",
