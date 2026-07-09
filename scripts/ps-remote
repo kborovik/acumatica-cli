@@ -1,0 +1,33 @@
+#!/bin/sh
+# ps-remote <file.ps1> [user@host] - run a PowerShell script on the live box.
+#
+# The V12 discovery instrument (SPEC ST.14): T3/T11/T12 each hand-rolled this
+# pipeline for reflection probes. Encoding sidesteps every quoting layer -
+# the remote ssh shell is itself PowerShell, so $_ inside a double-quoted
+# -Command string is interpolated away before the inner powershell sees it;
+# -EncodedCommand carries the script byte-exact (utf-16le, per PowerShell).
+#
+# Host defaults to the resolved `ssh` target of the acu.yaml found by cwd
+# walk-up (`acu config show` - the same load_instance path live cmds use);
+# pass user@host explicitly to probe another box.
+set -eu
+
+if [ "$#" -lt 1 ] || [ "$#" -gt 2 ]; then
+    echo "usage: ps-remote <file.ps1> [user@host]" >&2
+    exit 1
+fi
+file=$1
+if [ ! -f "$file" ]; then
+    echo "x $file: no such file" >&2
+    exit 1
+fi
+
+host=${2:-$(acu config show | sed -n 's/^ssh: //p')}
+if [ -z "$host" ]; then
+    echo "x no ssh target resolved - pass user@host" >&2
+    exit 1
+fi
+
+encoded=$(iconv -f utf-8 -t utf-16le "$file" | base64 | tr -d '\n')
+exec ssh -o BatchMode=yes "$host" \
+    "powershell -NoProfile -EncodedCommand $encoded; exit \$LASTEXITCODE"
