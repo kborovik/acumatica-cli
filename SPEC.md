@@ -6,7 +6,7 @@ Configure Acumatica ERP purely from source — no UI, no Configuration Wizard. I
 
 ## §C CONSTRAINTS
 
-- Repo = `acu` CLI only. Data (`baseline/`, `acu.toml`, `.env.gpg`) lives in separate data repos (sibling `acumatica-baseline`); infra = sibling `acumatica-infra`; blog = sibling `acumatica-blog`. C# customization projects out of scope (exclusion: bootstrap package ships one C# CustomizationPlugin package — §T.11; endpoint item returns when §T.12 lands).
+- Repo = `acu` CLI only. Data (`baseline/`, `acu.yaml`, `.env.gpg`) lives in separate data repos (sibling `acumatica-baseline`); infra = sibling `acumatica-infra`; blog = sibling `acumatica-blog`. C# customization projects out of scope (exclusion: bootstrap package ships one C# CustomizationPlugin package — §T.11; endpoint item returns when §T.12 lands).
 - Python ≥ 3.12; click, httpx, pydantic, rich, pyyaml, python-dotenv; uv build; module `acumatica_cli`; entry `acu`.
 - Tests fully offline: SSH = monkeypatched `subprocess.run`, REST = `httpx.MockTransport`; no live instance needed.
 - Every cmd except `--dry-run` talks to live instance. Final verification live vs acu-dev1 (`acu-dev1.vm.internal`; needs tailnet + GPG key): `cd ~/github/acumatica-baseline && make decrypt && make diff`.
@@ -21,9 +21,9 @@ Configure Acumatica ERP purely from source — no UI, no Configuration Wizard. I
 - cmd: `acu diff <files|dirs>` → GET by `$filter` on key fields, compare normalized; drift → exit 2
 - cmd: `acu provision --id <n> --login <name> [--type] [--parent]` → chains tenant create → bootstrap publish → apply `baseline/` → diff; resumable — skips done steps
 - cmd: `acu schema [--out <dir>]` → OpenAPI dump → `schemas/` (gitignored ~3 MB; regenerate, never version)
-- cmd: `acu config show` → emit fully resolved `Instance` (defaults merged, URLs constructed, password masked); ! same `load_instance` path as live cmds — no parallel resolution
-- cfg: `acu.toml` → `[instances.<name>]` tables: `host` ! only required key, rest ? overrides of code defaults (pydantic field defaults on `Instance`; `base_url`/`ssh` computed from `host`, explicit override wins) + `default_instance`; discovery sentinel
-- env: `ACU_PASSWORD` ! set; `ACU_USER` ? default `admin`; loaded from dir of found `acu.toml`; encrypted at rest as `.env.gpg`
+- cmd: `acu config show` → emit complete valid YAML config doc: header comment (creds live in `.env`, never config) + `default_instance` + selected instance fully resolved (defaults merged, URLs constructed); `name`/`username`/`password` excluded → output round-trips through `load_instance` (`acu config show > acu.yaml` reloads identical); ! same `load_instance` path as live cmds — no parallel resolution
+- cfg: `acu.yaml` → `instances.<name>` maps: `host` ! only required key, rest ? overrides of code defaults (pydantic field defaults on `Instance`; `base_url`/`ssh` computed from `host`, explicit override wins) + `default_instance`; discovery sentinel; empty or non-map file → hard error
+- env: `ACU_PASSWORD` ! set; `ACU_USER` ? default `admin`; loaded from dir of found `acu.yaml`; encrypted at rest as `.env.gpg`
 - data: `baseline/*.yaml` → `entity` / `key` (string or list) / `records` + `endpoint` ? (per-file contract-endpoint override, e.g. `Bootstrap/1.0.0`); parsed by `seed.py`
 - api: `/entity/Default/25.200.001/` → cookie-session httpx; values wrapped `{"Field": {"value": ...}}`; PUT = keyed upsert
 - ssh: `ac.exe -cm:CompanyConfig` + `sqlcmd` over `ssh` → remote shell PowerShell; `exit $LASTEXITCODE` appended so failures propagate
@@ -31,8 +31,8 @@ Configure Acumatica ERP purely from source — no UI, no Configuration Wizard. I
 ## §V INVARIANTS
 
 V1: two-plane split — control plane = SSH (`tenant.py`, tenant CRUD only); data plane = REST (`client.py`); never mixed
-V2: three source kinds never mixed — `baseline/*.yaml` = what, `acu.toml` = where (never what, never secrets), `.env` = secrets; all three live in data repos, not here
-V3: discovery — walk up from cwd to first dir containing `acu.toml`; `.env` loaded from same dir; none found → hard error
+V2: three source kinds never mixed — `baseline/*.yaml` = what, `acu.yaml` = where (never what, never secrets), `.env` = secrets; all three live in data repos, not here
+V3: discovery — walk up from cwd to first dir containing `acu.yaml`; `.env` loaded from same dir; none found → hard error; `acu.toml` present w/o `acu.yaml` → error names rename
 V4: idempotence — `PUT` keyed upsert is the primitive; `diff` treats source as authoritative, extra live records not flagged; drift → exit 2; resume/skip gate ! verify desired state, never a marker — marker outlives state loss (B3: publication row vs plugin writes)
 V5: tenant-map — tenant create ! `AcumaticaERP` app-pool recycle after `ac.exe` (stale map → tenant missing from sign-in + REST silently routes to default tenant); always send explicit valid `tenant`
 V6: `AcumaticaClient` ! context manager — logout even on failure (sessions count vs license API-user cap); logout ! `Content-Length: 0` (else IIS 411)
@@ -65,6 +65,7 @@ T11|x|C# CustomizationPlugin flips FeaturesSet on publish (§T.3 verdict route) 
 T12|x|discover `.endpoint` package-file serialization (`PX.Api.ContractBased.Common.dll` `*.endpoint` globs) — restore custom endpoint (CS101500 company + CS206500 credit terms) to bootstrap package; unblocks bootstrap YAML seeding|T2,T11
 T13|x|seed company + credit terms through `Bootstrap/1.0.0` — author `baseline/` YAML in data repo (Company CS101500 + CreditTerms CS206500; field names = DAC props per `bootstrap_project.xml`), verify live: provision scratch tenant → apply → diff green; write path (PUT) unverified — GET-only proven in T12|T12,I.data
 T14|.|`scripts/ps-remote <file.ps1> [host]` — mechanize the live-box PowerShell reflection probe (iconv utf-16le → base64 → `ssh powershell -EncodedCommand`), the recurring V12 discovery instrument (T3/T11/T12 all hand-rolled it)|V12
+T15|.|config TOML → YAML: sentinel `acu.toml` → `acu.yaml`; loader swap `tomllib` → `yaml.safe_load` (empty or non-map → hard error); `config show` → complete YAML doc (header comment + `default_instance` + instance map; `name`/`username`/`password` excluded) round-trips through `load_instance`; literal sweep scope `grep -rn 'acu\.toml' src/ tests/ README.md CLAUDE.md`; tests: fixtures → YAML + round-trip test (show output reloaded → identical); migrate `acumatica-baseline/acu.toml` → `acu.yaml` + symlink swap; verify live from data repo: `config show > acu.yaml` reload identical + `tenant list` green|V2,V3,I.cfg
 
 ## §B BUGS
 
