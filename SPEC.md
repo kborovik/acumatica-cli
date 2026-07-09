@@ -70,7 +70,7 @@ T15|x|config TOML → YAML: sentinel `acu.toml` → `acu.yaml`, loader `tomllib`
 T16|x|flatten config to single instance — drop `instances.<name>` nesting, `default_instance`, `-i/--instance` global, `Instance.name` field|V16,I.cfg,T15
 T17|x|centralize `exit $LASTEXITCODE` in `_ssh`; strip hand-appended suffixes at call sites — sweep grep `self\._ssh\(`|V18
 T18|x|mechanize §V.9 ASCII audit — `scripts/check-ascii <paths>`: `.py` via tokenize (exempt COMMENT tokens + docstrings), `.cs` exempt `//` lines, `.xml` exempt `<!-- -->`; emit surviving `file:line` violations, exit 1 on match; same commit flips check-extras §V.9 recipe cmd + drops eye-applied exemption filter|V9
-T19|.|mechanize §V.1/§V.10/§V.18 drift greps into `.claude/scripts/check-extras.sh` — emit `id|verdict|evidence` rows per /sdd:check extras-hook contract: V1 plane-split scan (imports: `tenant.py` bans `httpx`, `client.py` bans `subprocess`), V10 inheritance scan (`^class ` in `src/` ! inherit `Model` outside `models.py`), V18 choke-point scan (`exit \$LASTEXITCODE` sole site `_ssh`); same commit appends the three recipe rows to `.claude/check-extras.md`|V1,V10,V18
+T19|x|mechanize §V.1/§V.10/§V.18 drift greps into `.claude/scripts/check-extras.sh` — emit `id|verdict|evidence` rows per /sdd:check extras-hook contract: V1 plane-split scan (imports: `tenant.py` bans `httpx`, `client.py` bans `subprocess`), V10 inheritance scan (`^class ` in `src/` ! inherit `Model` outside `models.py`), V18 choke-point scan (`exit \$LASTEXITCODE` sole site `_ssh`); same commit appends the three recipe rows to `.claude/check-extras.md`|V1,V10,V18
 
 ## §B BUGS
 

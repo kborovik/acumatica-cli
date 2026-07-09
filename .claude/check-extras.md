@@ -10,6 +10,14 @@ run cmd, apply exemption filter, any surviving match = violation
 - exemptions mechanized in-script (§T.18): `.py` COMMENT tokens + docstrings, `.cs` `//` lines, `.xml` `<!-- -->`
 - surviving match (`file:line: U+XXXX` on stdout, exit 1) → bail: `non-ASCII in output-reaching string per §V.9 — swap ASCII glyph or relocate to docstring/comment`
 
+## §V.1 + §V.10 + §V.18 — drift-grep hook (mechanized §T.19)
+
+- cmd: `.claude/scripts/check-extras.sh` — emits `id|verdict|evidence` rows
+  per the /sdd:check extras-hook contract; exit 1 on any VIOLATE row
+- V1 VIOLATE → bail: `plane-split import per §V.1 — SSH stays in tenant.py, REST stays in client.py`
+- V10 VIOLATE → bail: `class subclasses BaseModel outside models.py per §V.10 — inherit models.Model`
+- V18 VIOLATE → bail: `exit $LASTEXITCODE outside the _ssh choke point per §V.18 — strip call-site suffix / restore _ssh`
+
 ## §V.9 — output-discipline recipe (extracted from SPEC.md §V.9)
 
 - no bare `print()` — ruff T20 enforces
