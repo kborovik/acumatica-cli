@@ -33,7 +33,18 @@ Newest first.
   → clean diff → idempotent re-run → injected-drift exit 2 → teardown always
   deletes), first run 4 passed in 269s with the tenant list clean after;
   the work also surfaced and fixed a missing `bootstrap` symlink that made
-  provision-from-this-repo silently skip bootstrap YAML seeding.
+  provision-from-this-repo silently skip bootstrap YAML seeding; T21 closes
+  B5's hole with a landed-tenant guard in `AcumaticaClient.__enter__` — live
+  archaeology corrected the "strict tenant routing" belief (a single-tenant
+  instance accepts ANY tenant name with 204; strictness only exists
+  multi-tenant with a fresh map), eliminated the tenant-blind surfaces
+  (title bar speaks `CompanyCD`, not login name; the `screenLink`
+  `CompanyID` param vanishes on a single-tenant box), and landed on an
+  authenticated `GET /Frames/Login.aspx` whose hidden `txtSingleCompany`
+  input names the landed tenant's login name in every observed state; the
+  guard refuses on mismatch (logging out first), fails closed if the page
+  shape changes, and the e2e tier pins `diff` against a nonexistent tenant
+  to exit 1.
 - [2026-07-08](2026-07-08.md) — recycle unblocks tenant visibility (stale-map
   corrections); first-login password wall found and defeated (screen-flow,
   then `-aup` preset); `acu tenant create` chains create → recycle →
@@ -134,7 +145,7 @@ Every Acumatica problem hit so far, one line each. Status: **resolved**
 | 8 | `LoginName` lands in `dbo.Company.CompanyKey` (the sign-in name), not `CompanyCD` — easy to misread as "didn't take" | resolved | [2026-07-08](2026-07-08.md) |
 | 9 | Tenant names: `;` and `=` are delimiters inside the `-company:"…"` string — names containing them corrupt the ac.exe invocation | open (needs input validation) | [2026-07-08](2026-07-08.md) |
 | 10 | New tenants are invisible to the running app until an `AcumaticaERP` app-pool recycle — the tenant map loads at startup | resolved | [2026-07-08](2026-07-08.md) |
-| 11 | With a stale tenant map, REST login accepts *any* tenant name and silently lands on the default tenant — config-as-code writes to the wrong tenant | resolved (recycle + always send explicit valid `tenant`) | [2026-07-07](2026-07-07.md), [2026-07-08](2026-07-08.md) |
+| 11 | REST login silently lands on the wrong tenant: a stale tenant map reroutes named logins to the default tenant, and a single-tenant instance accepts *any* tenant name outright (204, no validation — steady state, not an artifact) | resolved (landed-tenant guard in the client: `txtSingleCompany` probe, refuse on mismatch; plus recycle discipline) | [2026-07-07](2026-07-07.md), [2026-07-08](2026-07-08.md), [2026-07-09](2026-07-09.md) |
 | 12 | Fresh tenants seed `admin`/`setup` with a must-change flag the contract REST API cannot clear; retry loops lock the account | resolved (`-aup` preset at create; `Login.aspx` screen-flow fallback) | [2026-07-08](2026-07-08.md) |
 | 13 | `Login.aspx` automation traps: four submit buttons (`mfLoginButton` matches first), `txtConfirmPassword` must be posted too, alarming hidden divs are static template noise | resolved | [2026-07-08](2026-07-08.md) |
 | 14 | Unconfigured tenants fail on most entities — 500 `PXSetupNotEnteredException` (Companies → Branches → GL Preferences → Financial Year chain) or 403 on feature-gated screens | open (bootstrap package) | [2026-07-07](2026-07-07.md) |

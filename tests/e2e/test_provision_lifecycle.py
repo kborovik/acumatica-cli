@@ -189,3 +189,16 @@ def test_diff_detects_injected_drift(
     proc = acu("-t", scratch_tenant.login, "diff", str(mutated))
     assert proc.returncode == 2, _combined(proc)
     assert "DRIFT" in _combined(proc)
+
+
+def test_diff_against_nonexistent_tenant_exits_one(acu: RunAcu) -> None:
+    """B5 regression (T21): an unknown tenant name must fail loudly, exit 1.
+
+    The failure path depends on instance state, both verified live: on a
+    multi-tenant instance with a fresh tenant map the login itself 500s; on
+    a single-tenant instance (or under a stale map) the login answers 204
+    and silently lands on the default tenant, and only the landed-tenant
+    guard in AcumaticaClient stands between that and a false-green diff.
+    """
+    proc = acu("-t", "NoSuchTenantB5", "diff", "baseline")
+    assert proc.returncode == 1, _combined(proc)

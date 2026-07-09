@@ -129,22 +129,21 @@ class Api:
         self.requests.append(request)
         path = request.url.path
         if path.endswith("/CustomizationApi/getPublished"):
-            if self.published:
-                return httpx.Response(
-                    200, json={"projects": [{"name": bootstrap.PACKAGE_NAME}]}
-                )
-            # live shape (26.101.0225): no projects key at all, only a log
-            return httpx.Response(
-                200,
-                json={
+            # live shape (26.101.0225) when nothing is published: no
+            # projects key at all, only a log
+            body: dict[str, Any] = (
+                {"projects": [{"name": bootstrap.PACKAGE_NAME}]}
+                if self.published
+                else {
                     "log": [
                         {
                             "logType": "information",
                             "message": "The system does not contain published projects",
                         }
                     ]
-                },
+                }
             )
+            return httpx.Response(200, json=body)
         if path.endswith("/CustomizationApi/getProject"):
             if self.content_exists:
                 return httpx.Response(200, json={"projectContentBase64": "UEs="})
@@ -163,6 +162,12 @@ class Api:
             )
         if path.endswith("/CustomizationApi/publishEnd"):
             return self.publish_end.pop(0)
+        if path.endswith("/Frames/Login.aspx"):
+            # tenant-guard probe: report the session landed on the fixture
+            # instance's tenant so the context manager opens cleanly
+            return httpx.Response(
+                200, text='<input id="txtSingleCompany" value="T1" />'
+            )
         return httpx.Response(204)
 
 
@@ -180,6 +185,7 @@ def test_publish_runs_import_then_publish_sequence(instance: Instance) -> None:
     assert _publish(instance, api) == "published"
     assert _paths(api) == [
         "login",
+        "Login.aspx",
         "getPublished",
         "import",
         "publishBegin",
@@ -187,7 +193,7 @@ def test_publish_runs_import_then_publish_sequence(instance: Instance) -> None:
         "logout",
     ]
 
-    import_body = json.loads(api.requests[2].content)
+    import_body = json.loads(api.requests[3].content)
     assert import_body["projectName"] == bootstrap.PACKAGE_NAME
     assert import_body["isReplaceIfExists"] is True
     # projectContentBase64 = the live binder's field (26.101.0225); the
@@ -195,7 +201,7 @@ def test_publish_runs_import_then_publish_sequence(instance: Instance) -> None:
     contents = base64.b64decode(import_body["projectContentBase64"])
     assert contents == bootstrap.package_zip()
 
-    begin_body = json.loads(api.requests[3].content)
+    begin_body = json.loads(api.requests[4].content)
     assert begin_body["projectNames"] == [bootstrap.PACKAGE_NAME]
     assert begin_body["tenantMode"] == "Current"
 
@@ -203,7 +209,13 @@ def test_publish_runs_import_then_publish_sequence(instance: Instance) -> None:
 def test_publish_skips_when_already_published(instance: Instance) -> None:
     api = Api(publish_end=[], published=True)
     assert _publish(instance, api) == "already published"
-    assert _paths(api) == ["login", "getPublished", "getProject", "logout"]
+    assert _paths(api) == [
+        "login",
+        "Login.aspx",
+        "getPublished",
+        "getProject",
+        "logout",
+    ]
 
 
 def test_publish_reruns_when_publication_is_stale(instance: Instance) -> None:
@@ -221,6 +233,7 @@ def test_publish_reruns_when_publication_is_stale(instance: Instance) -> None:
     assert _publish(instance, api) == "published"
     assert _paths(api) == [
         "login",
+        "Login.aspx",
         "getPublished",
         "getProject",
         "import",

@@ -1,6 +1,8 @@
 """Contract-based REST API session (see docs/rest-api.md for verified quirks)."""
 
 import base64
+import html
+import re
 from typing import Any
 
 import httpx
@@ -55,6 +57,24 @@ class AcumaticaClient:
             "tenant": self.instance.tenant,
         }
         self._checked(self._http.post("/entity/auth/login", json=creds))
+        # tenant guard, landed side (V5, B5): login accepting the name proves
+        # nothing - a stale tenant map reroutes named logins to the default
+        # tenant, and a single-tenant instance accepts ANY name (both verified
+        # live, docs/rest-api.md). Verify where the session actually landed
+        # and refuse on mismatch; logout first, since __exit__ never runs
+        # when __enter__ raises (V6 - sessions count against the license).
+        try:
+            landed = self._landed_tenant()
+            if landed.casefold() != self.instance.tenant.casefold():
+                raise RuntimeError(
+                    f"tenant guard: asked for tenant {self.instance.tenant!r} "
+                    f"but the session landed on {landed!r} - the instance "
+                    "tenant map is stale or the tenant does not exist; check "
+                    "acu tenant list and recycle the app pool"
+                )
+        except BaseException:
+            self.__exit__()
+            raise
         return self
 
     def __exit__(self, *exc: object) -> None:
@@ -63,6 +83,27 @@ class AcumaticaClient:
             self._http.post("/entity/auth/logout", content=b"")
         finally:
             self._http.close()
+
+    def _landed_tenant(self) -> str:
+        """The tenant this session actually landed on (login name).
+
+        Verified vs 26.101.0225 (docs/rest-api.md): the contract API exposes
+        nothing tenant-identifying, but an authenticated GET of the sign-in
+        page renders a hidden ``txtSingleCompany`` input whose value is the
+        session tenant's login name in every observed state - multi-tenant,
+        single-tenant, and mid-reroute under a stale tenant map. The probe
+        does not disturb the session.
+        """
+        r = self._checked(self._http.get("/Frames/Login.aspx", follow_redirects=True))
+        m = re.search(r'id="txtSingleCompany" value="([^"]*)"', r.text)
+        if not m:
+            raise RuntimeError(
+                "tenant guard: /Frames/Login.aspx did not expose the landed "
+                "tenant (txtSingleCompany missing - page shape changed on "
+                "this build?); refusing the session rather than risking "
+                "wrong-tenant writes"
+            )
+        return html.unescape(m.group(1))
 
     def _url(self, entity: str, endpoint: str | None = None) -> str:
         return f"/entity/{endpoint or self.instance.endpoint}/{entity}"

@@ -27,24 +27,47 @@ POST /entity/auth/logout   (empty body)                                         
 
 Verified quirks:
 
-- **Tenant routing is strict — but only when the tenant map is current
-  (verified 2026-07-08).** Send an explicit, valid tenant name; do not omit it
-  or pass an empty string. Post-recycle behavior:
-    - unknown non-empty name (e.g. `DefinitelyBogus`) → **500
-      `PXUndefinedCompanyException`** ("A proper company ID cannot be
-      determined"). No silent fallback.
-    - valid name (e.g. `Company`, `Scratch`) → routes to *that* tenant and
+- **Tenant routing validates the name only on a multi-tenant instance with a
+  current tenant map (verified 2026-07-08, revised 2026-07-09).** Send an
+  explicit, valid tenant name; do not omit it or pass an empty string. The
+  full behavior matrix (all cells verified live on 26.101.0225):
+    - multi-tenant, fresh map, unknown non-empty name (e.g.
+      `DefinitelyBogus`) → **500 `PXUndefinedCompanyException`** ("A proper
+      company ID cannot be determined"). No silent fallback.
+    - multi-tenant, fresh map, valid name → routes to *that* tenant and
       enforces *that tenant's* credentials.
     - omitted / `""` → 204 on the **default tenant** (expected Acumatica
-      semantics; the one residual silent case — never rely on it).
-  History worth knowing: on 2026-07-07, before the post-create app-pool
-  recycle, login accepted *any* tenant name (incl. nonsense) and silently
-  landed on the default tenant — marker UOM rows written under four names all
-  hit CompanyID 2. That was a **stale-tenant-map artifact** (tenant 3 existed
-  in the DB but wasn't loaded), not steady-state behavior. Lesson: skipping
-  the recycle turns a wrong tenant name into a silent wrong-tenant write. A
-  post-login tenant guard in the seeding pipeline is still worthwhile as
-  defense-in-depth.
+      semantics — never rely on it).
+    - **single login-able tenant in the DB → ANY tenant value returns 204**
+      and lands on that tenant. No validation at all (verified 2026-07-09:
+      after deleting the second tenant and recycling, its old name and pure
+      nonsense both logged in cleanly). The "strict" behavior above only
+      exists when there are two or more tenants to choose between.
+    - **stale map (tenant created or deleted without a recycle) → named
+      logins silently land on the default tenant** — the B5 false-green
+      `diff`. On 2026-07-07 marker UOM rows written under four names all hit
+      CompanyID 2 this way.
+  Lesson: a 204 from login proves nothing about *where* the session landed.
+  Wrong-tenant writes and false-green diffs are only prevented by verifying
+  the landed tenant after login (next bullet).
+- **Landed-tenant probe (T21, verified 2026-07-09).** The contract API
+  surface exposes nothing tenant-identifying (no cookie carries the tenant;
+  `GET /entity` and `/CustomizationApi/getPublished` are landing-invariant;
+  the `/Frames` page `<title>` is the tenant's internal `CompanyCD`, not its
+  login name; `/Main`'s company markup and the `screenLink` `CompanyID`
+  query param both disappear on a single-tenant instance). What works: an
+  **authenticated `GET /Frames/Login.aspx`** renders a hidden input
+  `id="txtSingleCompany"` whose value is the **landed tenant's login name in
+  every observed state** — multi-tenant fresh map, single-tenant, and
+  mid-reroute under a stale map — and the GET does not disturb the session.
+  `AcumaticaClient.__enter__` parses it and refuses the session (after
+  logging out) when it does not match the requested tenant. Re-verify the
+  page shape on upgrade: the guard fails closed if the input disappears.
+- **`Restart-WebAppPool` returns before the new worker serves (overlapped
+  recycle, observed 2026-07-09).** Requests fired immediately after the
+  recycle can still hit the old worker and its old tenant map for tens of
+  seconds. `acu tenant create`'s login-verification loop absorbs this;
+  hand-rolled probes right after a recycle must wait or retry.
 - **Newly created tenants are invisible until an app-pool recycle (verified
   2026-07-08).** After `ac.exe` added tenant 3 the sign-in page did not list
   it and no tenant value could select it — the app's tenant map loads at
