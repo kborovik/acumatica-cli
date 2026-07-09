@@ -69,7 +69,17 @@ Newest first.
   view, `AcctCD`/`AcctName`; CS206500 → `TermsDef`; no `CountryID` on this
   build), and the Company + CreditTerms endpoint shipped in the bootstrap
   package — provision E2E green on a scratch tenant with
-  `Bootstrap/1.0.0` answering, bootstrap YAML seeding unblocked.
+  `Bootstrap/1.0.0` answering, bootstrap YAML seeding unblocked;
+  small hours: T13 landed — `bootstrap/company.yaml` + `credit-terms.yaml`
+  seed CS101500/CS206500 from the data repo and the write path is
+  live-verified through three rounds of 422 archaeology (the graph inserts
+  an Address row needing `CountryID`; OrganizationType/BaseCuryID must map
+  to `OrganizationView` per the screen's own bindings — the primary-view
+  projection echoes the PUT and persists nothing; list fields take external
+  labels, and a wrong-but-valid DAC code is silently misread), `seed._norm`
+  compares numbers by value, provision's drift check now covers the
+  bootstrap YAML it applies, virgin-tenant provision exit 0 with no drift
+  over 3 files.
 - [2026-07-07](2026-07-07.md) — skeleton verified end-to-end
   (`apply`/`diff` on UOMs); snapshot plan confirmed dead; no API-only
   bootstrap path — CustomizationApi chosen as the route; the silent
@@ -111,6 +121,10 @@ Every Acumatica problem hit so far, one line each. Status: **resolved**
 | 26 | `FeaturesMaint` + `Save.Press()` inside a CustomizationPlugin persists nothing — concurrent plugin invocations collide ("Another process has added the 'FeaturesSet' record", logged as a warning) | resolved (`PXDatabase` writes, all 205 NOT NULL bits assigned) | [2026-07-08](2026-07-08.md) |
 | 27 | The publish restarts the site before its DB transaction commits — the new domain caches the pre-plugin feature set and gated screens stay 403 until one more recycle | resolved (provision recycles after publish) | [2026-07-08](2026-07-08.md) |
 | 28 | Tenant delete + recreate under the same CompanyID keeps the stale publication row: `getPublished` lists the package while its content and effects are gone; `isOnlyDbUpdates` replay fails "previously published project cannot be found" | resolved (skip gate = getPublished AND getProject) | [2026-07-08](2026-07-08.md) |
+| 29 | Custom-endpoint mappings must follow the screen's own bindings, not the primary view's DAC props — the BAccount projections of OrganizationType/BaseCuryID echo the PUT back and persist nothing while the graph inserts an empty GL `Company` row (422); the auto-inserted Address row demands `CountryID` | resolved (map to `OrganizationView`/`AddressDummy` per CS101500.aspx) | [2026-07-08](2026-07-08.md) |
+| 30 | Contract-API list fields take external labels, not DAC codes — `VisibleTo: A` is rejected with the allowed list, but `DueType: D` is *silently misread* as "Day of Next Month"; a deliberately bogus value elicits the full allowed-label list from the 422 | resolved (labels in YAML, allowed lists in file comments) | [2026-07-08](2026-07-08.md) |
+| 31 | DecimalValue fields come back as floats — YAML `0` vs live `0.0` flagged spurious drift when compared as strings | resolved (`seed._norm` compares numbers by value) | [2026-07-08](2026-07-08.md) |
+| 32 | The publish skip gate verifies the project *exists*, not that its content matches this tool version's package — a changed package silently skips on an already-provisioned tenant (B3's marker class, one notch subtler) | open (spec follow-up) | [2026-07-08](2026-07-08.md) |
 
 ## Status
 
@@ -122,20 +136,22 @@ Mechanisms:
 2. **Snapshot-based baseline** — `[DEAD END]` — no CLI snapshot support;
    baseline lives entirely in reference-data-as-code.
 3. **Reference data as code** (`acu apply` / `acu diff`, YAML → REST upserts)
-   — `[IN PROGRESS]` — proven end-to-end on `baseline/uoms.yaml`; the
-   bootstrap customization package (features + company/branch + payment
-   terms via CustomizationApi) is the gating task.
+   — `[DONE]` — proven end-to-end on both planes: `baseline/*.yaml` through
+   the Default endpoint and `bootstrap/*.yaml` (company + credit terms)
+   through the custom `Bootstrap/1.0.0` endpoint, write path live-verified.
 4. **One-command provisioning** (`acu provision`: create → bootstrap →
-   apply → diff) — `[DONE (code)]` — command lands with offline tests; the
-   bootstrap step is gated on the package publish working end to end.
+   apply → diff) — `[DONE]` — virgin-tenant E2E green live: create →
+   publish (features via plugin) → apply (company + credit terms + UOMs) →
+   drift check over everything applied, exit 0.
 
 Remaining milestones:
 
 - `[DONE]` Bootstrap package published via CustomizationApi — the C#
   `CustomizationPlugin` enables features on publish (SPEC T11) and the
   `Bootstrap/1.0.0` endpoint exposes company (CS101500) + credit terms
-  (CS206500) (SPEC T12); both live-verified, provision E2E green on a
-  virgin tenant. Remaining: seed company + credit terms YAML through it.
+  (CS206500) (SPEC T12); company + credit terms now seed from
+  `bootstrap/*.yaml` in the data repo with the write path live-verified
+  (SPEC T13).
 - `[OPEN]` Baseline expanded in dependency order: currencies → financial
   calendar → chart of accounts/ledger → tax categories/zones →
   customer/vendor/item classes → payment terms.
