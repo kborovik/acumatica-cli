@@ -52,7 +52,15 @@ Newest first.
   the data repo's config shrank to two lines and both planes verified live;
   T10's "passes provision" gate backpropped into the spec (B1/V17/T11:
   verify gates must be satisfiable against current spec state — provision
-  E2E waits on the C# plugin task).
+  E2E waits on the C# plugin task); late evening: T11 landed and provision
+  went E2E-green on a virgin tenant — the import mystery dissolved into
+  `projectContentBase64` (the documented `projectContents` binds nothing)
+  plus alphanumeric-only project names, code items serialize as
+  `<Graph Source="…">` (discovered by invoking `CstCodeFile.Save()` by
+  reflection), the plugin writes FeaturesSet via `PXDatabase` (graph save
+  collides with the publish pipeline), the feature slot needs one
+  post-publish recycle, and tenant recreate leaves a stale publication row
+  (B2/B3, V4 desired-state rule, T12 queued for the `.endpoint` format).
 - [2026-07-07](2026-07-07.md) — skeleton verified end-to-end
   (`apply`/`diff` on UOMs); snapshot plan confirmed dead; no API-only
   bootstrap path — CustomizationApi chosen as the route; the silent
@@ -88,6 +96,12 @@ Every Acumatica problem hit so far, one line each. Status: **resolved**
 | 20 | project.xml root is `<Customization level description product-version>`, not `<Project>`; no shipped package samples an `EntityEndpoint` item (`.endpoint` file globs in Common.dll are the lead) | open (item format unverified) | [2026-07-08](2026-07-08.md) |
 | 21 | CS100000 rejects the whole contract-API surface: PUT 200-but-no-persist (keyless BqlDelegate view), GET `CannotOptimizeException`, `Insert` action invoke `PXInvalidOperationException` | dead end (C# CustomizationPlugin fallback) | [2026-07-08](2026-07-08.md) |
 | 22 | Custom-endpoint DB rows: EntityIds are global — a colliding id kills the tenant's whole contract API; endpoint metadata is cached per app domain (recycle to refresh); one malformed row 302s every `/entity` request on the tenant | resolved (documented row formats) | [2026-07-08](2026-07-08.md) |
+| 23 | CustomizationApi import: documented `projectContents` field binds nothing on 26.101 — server deletes the project then errors "The project is not found"; live binder wants `projectContentBase64` | resolved | [2026-07-08](2026-07-08.md) |
+| 24 | Customization project names are alphanumeric-only (`ValidatePackageName` rejects `-`/`_` with a bare "Invalid project name" 500) | resolved (`AcuBootstrap`) | [2026-07-08](2026-07-08.md) |
+| 25 | Code items serialize as `<Graph ClassName FileType Source="…">` with source in the ATTRIBUTE; CDATA children and zip-file variants import clean and are silently dropped | resolved | [2026-07-08](2026-07-08.md) |
+| 26 | `FeaturesMaint` + `Save.Press()` inside a CustomizationPlugin persists nothing — concurrent plugin invocations collide ("Another process has added the 'FeaturesSet' record", logged as a warning) | resolved (`PXDatabase` writes, all 205 NOT NULL bits assigned) | [2026-07-08](2026-07-08.md) |
+| 27 | The publish restarts the site before its DB transaction commits — the new domain caches the pre-plugin feature set and gated screens stay 403 until one more recycle | resolved (provision recycles after publish) | [2026-07-08](2026-07-08.md) |
+| 28 | Tenant delete + recreate under the same CompanyID keeps the stale publication row: `getPublished` lists the package while its content and effects are gone; `isOnlyDbUpdates` replay fails "previously published project cannot be found" | resolved (skip gate = getPublished AND getProject) | [2026-07-08](2026-07-08.md) |
 
 ## Status
 
@@ -108,12 +122,11 @@ Mechanisms:
 
 Remaining milestones:
 
-- `[IN PROGRESS]` Bootstrap package published via CustomizationApi —
-  machinery done (`bootstrap.publish()`, driven by `provision`; the
-  standalone `acu bootstrap` cmd was dropped); blocked on the
-  `EntityEndpoint` item serialization (open) and the C#
-  `CustomizationPlugin` fallback for features (SPEC T11; CS100000 verified
-  un-writable via the contract API).
+- `[DONE (features)]` Bootstrap package published via CustomizationApi —
+  the C# `CustomizationPlugin` enables features on publish, live-verified
+  (SPEC T11; provision E2E green on a virgin tenant). Remaining: the
+  custom endpoint for company (CS101500) + credit terms (CS206500) waits
+  on the `.endpoint` package-file format (SPEC T12).
 - `[OPEN]` Baseline expanded in dependency order: currencies → financial
   calendar → chart of accounts/ledger → tax categories/zones →
   customer/vendor/item classes → payment terms.
