@@ -48,7 +48,14 @@ Newest first.
   raw config dict inside `load_instance` *before* the Instance is built so
   derived `base_url`/`ssh` re-derive from the new host (a post-hoc
   `model_copy` would leave them stale), while explicit acu.yaml
-  `base_url`/`ssh` keep their precedence.
+  `base_url`/`ssh` keep their precedence; T23 puts the package on PyPI —
+  `release.yml` fires on `release: published`, builds with `uv build`, and
+  publishes via OIDC trusted publishing (no API token; a workflow step pins
+  tag == pyproject version per V19), with the verification release (v0.2.2)
+  first tripping over the PyPI registration form's Repository-name field
+  (bare repo name, not `owner/repo` — the form accepts the slash silently
+  and the publish fails `invalid-publisher`); `pip install
+  acumatica-cli==0.2.2` verified from pypi.org.
 - [2026-07-08](2026-07-08.md) — recycle unblocks tenant visibility (stale-map
   corrections); first-login password wall found and defeated (screen-flow,
   then `-aup` preset); `acu tenant create` chains create → recycle →
