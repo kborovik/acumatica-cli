@@ -68,7 +68,7 @@ T13|x|seed company + credit terms through `Bootstrap/1.0.0` — author `baseline
 T14|x|`scripts/ps-remote <file.ps1> [host]` — mechanize the live-box PowerShell reflection probe|V12
 T15|x|config TOML → YAML: sentinel `acu.toml` → `acu.yaml`, loader `tomllib` → `yaml.safe_load`; migrate data repo|V2,V3,I.cfg
 T16|x|flatten config to single instance — drop `instances.<name>` nesting, `default_instance`, `-i/--instance` global, `Instance.name` field|V16,I.cfg,T15
-T17|.|centralize `exit $LASTEXITCODE` in `_ssh`; strip hand-appended suffixes at call sites — sweep grep `self\._ssh\(`|V18
+T17|x|centralize `exit $LASTEXITCODE` in `_ssh`; strip hand-appended suffixes at call sites — sweep grep `self\._ssh\(`|V18
 
 ## §B BUGS
 

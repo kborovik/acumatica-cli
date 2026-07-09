@@ -81,8 +81,6 @@ def test_create_builds_full_company_spec(instance: Instance, run: FakeRun) -> No
     assert '-h:"C:\\Acumatica\\AcumaticaERP"' in command
     # admin preset makes the tenant REST-loginable without the first-login dance
     assert '-aun:"admin" -aup:"pw" -auc:"False"' in command
-    # PowerShell swallows ac.exe's exit code without this
-    assert command.endswith("\nexit $LASTEXITCODE")
 
 
 def test_delete_uses_deleted_subkey_with_full_spec(
@@ -111,3 +109,25 @@ def test_recycle_targets_the_instance_pool(instance: Instance, run: FakeRun) -> 
     run.results = [(0, "")]
     TenantManager(instance).recycle_app_pool()
     assert "Restart-WebAppPool -Name 'AcumaticaERP'" in run.commands[0]
+
+
+def test_every_ssh_command_propagates_exit_code(
+    instance: Instance, run: FakeRun
+) -> None:
+    """V18: _ssh is the single choke point appending 'exit $LASTEXITCODE'.
+
+    Every remote command — sqlcmd read (the B4 gap), app-pool recycle, and
+    ac.exe CompanyConfig — must end with the suffix exactly once: a missing
+    suffix means PowerShell-over-ssh swallows the failure; a doubled one
+    means a call site regressed to hand-appending.
+    """
+    manager = TenantManager(instance)
+    run.results = [(0, SQLCMD_ROWS), (0, ""), (0, "Company created")]
+    manager.list()
+    manager.recycle_app_pool()
+    manager.create(5, "lab5.ca-dev1")
+
+    assert len(run.commands) == 3
+    for command in run.commands:
+        assert command.endswith("\nexit $LASTEXITCODE")
+        assert command.count("exit $LASTEXITCODE") == 1

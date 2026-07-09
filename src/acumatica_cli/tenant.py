@@ -31,8 +31,17 @@ class TenantManager:
         self.instance = instance
 
     def _ssh(self, command: str) -> str:
+        # PowerShell-over-ssh returns 0 even when the native command fails;
+        # appending the exit here (single choke point, never at call sites)
+        # makes every remote failure propagate (SPEC V18, B4).
         r = subprocess.run(
-            ["ssh", "-o", "BatchMode=yes", self.instance.ssh, command],
+            [
+                "ssh",
+                "-o",
+                "BatchMode=yes",
+                self.instance.ssh,
+                command + "\nexit $LASTEXITCODE",
+            ],
             capture_output=True,
             text=True,
             check=False,
@@ -76,7 +85,6 @@ class TenantManager:
         self._ssh(
             "Import-Module WebAdministration; "
             f"Restart-WebAppPool -Name '{self.instance.instance_name}'"
-            "\nexit $LASTEXITCODE"
         )
 
     def _company_config(self, company: str, extra: str = "") -> str:
@@ -90,7 +98,7 @@ class TenantManager:
             f'-h:"{self.instance.instance_path}" '
             f'-dbsrvname:"(local)" -dbsrvwinauth:"True" '
             f'-dbname:"{self.instance.db_name}" -dbnew:"False" '
-            f'-company:"{company}"{extra}' + "\nexit $LASTEXITCODE"
+            f'-company:"{company}"{extra}'
         )
 
     def create(
