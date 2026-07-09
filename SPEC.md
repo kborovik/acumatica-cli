@@ -34,7 +34,7 @@ V1: two-plane split — control plane = SSH (`tenant.py`, tenant CRUD only); dat
 V2: three source kinds never mixed — `baseline/*.yaml` = what, `acu.yaml` = where (never what, never secrets), `.env` = secrets; all three live in data repos, not here
 V3: discovery — walk up from cwd to first dir containing `acu.yaml`; `.env` loaded from same dir; none found → hard error
 V4: idempotence — `PUT` keyed upsert is the primitive; `diff` treats source as authoritative, extra live records not flagged; drift → exit 2; resume/skip gate ! verify desired state, never a marker — marker outlives state loss
-V5: tenant-map — tenant create ! `AcumaticaERP` app-pool recycle after `ac.exe` (stale map → tenant missing from sign-in + REST silently routes to default tenant); always send explicit valid `tenant`
+V5: tenant-map — tenant create ! `AcumaticaERP` app-pool recycle after `ac.exe` (stale map → tenant missing from sign-in + REST silently routes to default tenant); always send explicit valid `tenant`; stale map reroutes named tenants too — data-plane session ! post-login landed-tenant verify, refuse on mismatch (probe discovery → §T.21)
 V6: `AcumaticaClient` ! context manager — logout even on failure (sessions count vs license API-user cap); logout ! `Content-Length: 0` (else IIS 411)
 V7: `CompanyConfig` ! `-h` beside `-iname` + `-dbnew:"False"`; delete uses `Deleted` sub-key + full spec (`ParentID` + `CompanyType`)
 V8: tenant create presets admin via `-aun`/`-aup`/`-auc` — contract API can't clear `PasswordChangeOnNextLogin`; `Login.aspx` screen flow = fallback only
@@ -72,6 +72,7 @@ T17|x|centralize `exit $LASTEXITCODE` in `_ssh`; strip hand-appended suffixes at
 T18|x|mechanize §V.9 ASCII audit — `scripts/check-ascii <paths>`: `.py` via tokenize (exempt COMMENT tokens + docstrings), `.cs` exempt `//` lines, `.xml` exempt `<!-- -->`; emit surviving `file:line` violations, exit 1 on match; same commit flips check-extras §V.9 recipe cmd + drops eye-applied exemption filter|V9
 T19|x|mechanize §V.1/§V.10/§V.18 drift greps into `.claude/scripts/check-extras.sh` — emit `id|verdict|evidence` rows per /sdd:check extras-hook contract: V1 plane-split scan (imports: `tenant.py` bans `httpx`, `client.py` bans `subprocess`), V10 inheritance scan (`^class ` in `src/` ! inherit `Model` outside `models.py`), V18 choke-point scan (`exit \$LASTEXITCODE` sole site `_ssh`); same commit appends the three recipe rows to `.claude/check-extras.md`|V1,V10,V18
 T20|x|live E2E tier — `tests/e2e/test_provision_lifecycle.py` drives real `acu` binary vs live instance: provision scratch tenant `E2E` (next-free CompanyID) → independent diff clean → provision re-run hits skip paths → injected-drift diff exit 2; session fixture always deletes tenant + recycles; `make e2e` preflights data symlinks; marker `e2e` deselected by default|V4,V5,V9,V13
+T21|.|post-login tenant guard — discover verified landed-tenant probe (live archaeology: login response? entity exposing `CompanyKey`?), then `AcumaticaClient.__enter__` refuses session on mismatch; e2e regression: `diff` vs nonexistent tenant ! exit 1|V5,V12
 
 ## §B BUGS
 
@@ -80,3 +81,4 @@ B1|2026-07-08|§T.10 live gate cited provision E2E; §T.3 verdict already record
 B2|2026-07-08|CustomizationApi import field `projectContents` + hyphenated project name from training data — live binder wants `projectContentBase64`, names alphanumeric; content bound null, import silently no-op|V12
 B3|2026-07-08|publish skip keyed on `getPublished` marker — tenant recreate same CompanyID keeps stale publication row while content + plugin writes gone; virgin tenant left unbootstrapped|V4
 B4|2026-07-09|sqlcmd list call omitted `exit $LASTEXITCODE` — PowerShell-over-ssh returns 0 on failed native cmd; failed read → empty tenant list, provision misjudges existence|V18
+B5|2026-07-09|manual tenant delete w/o recycle → stale map; named-tenant REST login silently rerouted to default — `diff` false-green; client guard refuses empty tenant only|V5
