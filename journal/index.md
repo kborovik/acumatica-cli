@@ -83,7 +83,12 @@ Newest first.
   `acu.yaml` is the discovery sentinel and `acu config show` emits a
   complete valid `acu.yaml` (credentials excluded) that round-trips through
   `load_instance`, making `acu config show > acu.yaml` the config-editing
-  workflow; verified live (round trip identical + `tenant list` green).
+  workflow; verified live (round trip identical + `tenant list` green);
+  then flattened to single-instance (T16) — dev1/tst1/prd1 multi-host was
+  weighed and rejected (multiple admin passwords in one `.env`), so
+  `instances.<name>`/`default_instance`/`-i` and `Instance.name` are gone,
+  `acu.yaml` is a flat `host` + overrides map, messages label the target
+  by host, legacy nested files rejected by `extra="forbid"`.
 - [2026-07-07](2026-07-07.md) — skeleton verified end-to-end
   (`apply`/`diff` on UOMs); snapshot plan confirmed dead; no API-only
   bootstrap path — CustomizationApi chosen as the route; the silent
