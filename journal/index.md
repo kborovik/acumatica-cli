@@ -15,6 +15,10 @@ and status below.
 
 Newest first.
 
+- [2026-07-09](2026-07-09.md) — T17 closes the SPEC backlog: `exit
+  $LASTEXITCODE` centralized in `_ssh` (single choke point per V18, the
+  B4 recurrence class), call-site hand-appends stripped, suffix pinned
+  exactly-once by a new regression test.
 - [2026-07-08](2026-07-08.md) — recycle unblocks tenant visibility (stale-map
   corrections); first-login password wall found and defeated (screen-flow,
   then `-aup` preset); `acu tenant create` chains create → recycle →
