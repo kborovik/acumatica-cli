@@ -1,6 +1,6 @@
 [project]
 name = "acumatica-cli"
-version = "0.2.0"
+version = "0.2.1"
 description = "The acu CLI - Acumatica ERP configuration as code: tenant provisioning, baseline config, and reference data"
 authors = [{ name = "Konstantin Borovik", email = "kb@lab5.ca" }]
 readme = "README.md"
