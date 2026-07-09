@@ -84,7 +84,7 @@ def test_norm_folds_booleans_and_strips() -> None:
     assert norm(True) == "true"
     assert norm("True") == "True"  # strings are NOT case-folded
     assert norm("  x  ") == "x"
-    assert norm(1) == "1"
+    assert norm(1) == norm(1.0)  # numbers compare by value (T13)
 
 
 def test_filter_for_joins_keys() -> None:
@@ -189,3 +189,18 @@ def test_diff_normalizes_booleans(tmp_path: Path, instance: Instance) -> None:
     recorder = Recorder({"/E": _live({"K": "A", "Active": True})})
 
     assert seed.diff(_client(instance, recorder), baseline) == []
+
+
+def test_diff_normalizes_numbers_by_value(tmp_path: Path, instance: Instance) -> None:
+    # DecimalValue fields come back as floats: YAML 0 vs live 0.0 is not
+    # drift (T13: CreditTerms.DiscPercent), and 0 vs 0.5 still is
+    text = "entity: E\nkey: K\nrecords:\n  - K: A\n    Pct: 0\n    Days: 30\n"
+    baseline = seed.load_baseline(_write(tmp_path, text))
+    recorder = Recorder({"/E": _live({"K": "A", "Pct": 0.0, "Days": 30})})
+
+    assert seed.diff(_client(instance, recorder), baseline) == []
+
+    recorder.respond["/E"] = _live({"K": "A", "Pct": 0.5, "Days": 30})
+    assert seed.diff(_client(instance, recorder), baseline) == [
+        "E [A].Pct: source=0 live=0.5"
+    ]

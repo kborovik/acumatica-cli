@@ -47,8 +47,10 @@ def test_package_zip_carries_the_bootstrap_endpoint() -> None:
     is the XmlSerializer form of Model.Endpoint in the entity/maintenance/5.31
     namespace (the entity/data-model guess was the "Unknown root node"
     rejection); no .endpoint file is involved. View/DAC names read off the
-    live box: CS101500 -> OrganizationMaint view BAccount, CS206500 ->
-    TermsMaint view TermsDef.
+    live box: CS101500 -> OrganizationMaint (mappings follow the screen's
+    own bindings, T13 - AcctCD/AcctName on the primary BAccount view,
+    OrganizationType/BaseCuryID on OrganizationView, CountryID on
+    AddressDummy), CS206500 -> TermsMaint view TermsDef.
     """
     ns = "{http://www.acumatica.com/entity/maintenance/5.31}"
     with zipfile.ZipFile(io.BytesIO(bootstrap.package_zip())) as zf:
@@ -65,7 +67,31 @@ def test_package_zip_carries_the_bootstrap_endpoint() -> None:
     # persist (T3 verdict) - the CustomizationPlugin owns features
     assert entities["Company"].get("screen") == "CS101500"
     assert entities["CreditTerms"].get("screen") == "CS206500"
-    for entity, view in [("Company", "BAccount"), ("CreditTerms", "TermsDef")]:
+    # mappings follow the screen's own bindings (T13): a DAC prop existing
+    # on the primary view is not enough - writes land only through the
+    # view the screen edits. Field names = DAC props verbatim.
+    views: dict[str, dict[str, str]] = {
+        "Company": {
+            "AcctCD": "BAccount",
+            "AcctName": "BAccount",
+            "OrganizationType": "OrganizationView",
+            "BaseCuryID": "OrganizationView",
+            "CountryID": "AddressDummy",
+        },
+        "CreditTerms": dict.fromkeys(
+            (
+                "TermsID",
+                "Descr",
+                "VisibleTo",
+                "DueType",
+                "DayDue00",
+                "DiscType",
+                "DiscPercent",
+            ),
+            "TermsDef",
+        ),
+    }
+    for entity, expected in views.items():
         fields = {
             f.get("name") for f in entities[entity].findall(f"{ns}Fields/{ns}Field")
         }
@@ -73,12 +99,11 @@ def test_package_zip_carries_the_bootstrap_endpoint() -> None:
             m.get("field"): m.find(f"{ns}To")
             for m in entities[entity].findall(f"{ns}Mappings/{ns}Mapping")
         }
-        # every contract field maps 1:1 onto the screen's primary view,
-        # DAC property names verbatim (no rename layer)
-        assert set(mappings) == fields
+        assert set(mappings) == fields == set(expected)
         for name, to in mappings.items():
+            assert name is not None
             assert to is not None
-            assert to.get("object") == view
+            assert to.get("object") == expected[name]
             assert to.get("field") == name
     assert (
         entities["Company"].findall(f"{ns}Fields/{ns}Field")[0].get("type")

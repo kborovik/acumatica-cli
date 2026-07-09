@@ -60,9 +60,16 @@ def load_baseline(path: Path) -> BaselineFile:
 
 
 def _norm(value: Any) -> str:
-    """Comparable form: booleans case-folded, everything else stringified."""
+    """Comparable form: bools case-folded, numbers by value, rest stringified.
+
+    Numbers compare by value, not spelling - a YAML `0` against the
+    endpoint's `0.0` (DecimalValue fields come back as floats) is not
+    drift (T13).
+    """
     if isinstance(value, bool):
         return str(value).lower()
+    if isinstance(value, int | float):
+        return repr(float(value))
     return str(value).strip()
 
 

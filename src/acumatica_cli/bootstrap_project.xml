@@ -29,9 +29,19 @@
   Entity payload (screen->graph->view->DAC chain read off the live box):
   - Company    CS101500 -> OrganizationMaint, PrimaryView BAccount
                 (DAC PX.Objects.CS.DAC.OrganizationBAccount); the old
-                draft's Organization view / OrganizationCD / CountryID do
-                not exist on this build - fields are AcctCD/AcctName/
-                OrganizationType/BaseCuryID.
+                draft's Organization view / OrganizationCD do not exist on
+                this build. Mappings follow the screen's OWN bindings
+                (CS101500.aspx read off the live box, T13) - a DAC prop
+                existing on the primary view is not enough, writes only
+                land through the view the screen edits:
+                - AcctCD/AcctName -> BAccount (primary view);
+                - OrganizationType/BaseCuryID -> OrganizationView
+                  (PX.Objects.GL.DAC.Organization; the BAccount projections
+                  of these echo the PUT but insert an empty GL row - 422
+                  "BaseCuryID cannot be empty");
+                - CountryID -> AddressDummy (PX.Objects.CR.Address, the
+                  Main Address binding; the graph inserts the Address row
+                  on first save and its CountryID is required - 422).
   - CreditTerms CS206500 -> TermsMaint, PrimaryView TermsDef
                 (DAC PX.Objects.CS.Terms); DayDue00 is Nullable<Int16>
                 -> ShortValue, DiscPercent Nullable<Decimal> -> DecimalValue.
@@ -48,6 +58,7 @@
           <Field name="AcctName" type="StringValue" />
           <Field name="OrganizationType" type="StringValue" />
           <Field name="BaseCuryID" type="StringValue" />
+          <Field name="CountryID" type="StringValue" />
         </Fields>
         <Mappings>
           <Mapping field="AcctCD">
@@ -57,10 +68,13 @@
             <To object="BAccount" field="AcctName" />
           </Mapping>
           <Mapping field="OrganizationType">
-            <To object="BAccount" field="OrganizationType" />
+            <To object="OrganizationView" field="OrganizationType" />
           </Mapping>
           <Mapping field="BaseCuryID">
-            <To object="BAccount" field="BaseCuryID" />
+            <To object="OrganizationView" field="BaseCuryID" />
+          </Mapping>
+          <Mapping field="CountryID">
+            <To object="AddressDummy" field="CountryID" />
           </Mapping>
         </Mappings>
       </TopLevelEntity>

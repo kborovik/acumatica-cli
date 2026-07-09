@@ -207,8 +207,8 @@ def provision_cmd(
     Chains the verified pipeline (docs/rest-api.md) idempotently: tenant
     create over SSH (skipped when the login name already exists), bootstrap
     package publish (skipped when already published), bootstrap/ YAML through
-    the custom endpoint, baseline/ through the Default endpoint, then the
-    baseline drift check - exit 2 on drift.
+    the custom endpoint, baseline/ through the Default endpoint, then a drift
+    check over everything applied - exit 2 on drift.
     """
     root = data_root()
     baseline_dir = root / "baseline"
@@ -245,16 +245,18 @@ def provision_cmd(
     # fresh session: publishing restarts the app domain, so don't trust the
     # cookie that watched it happen
     drifts: list[str] = []
-    baseline_paths = expand_files((baseline_dir,))
+    seed_paths = expand_files(tuple(seed_dirs))
     with AcumaticaClient(inst) as client:
-        for path in expand_files(tuple(seed_dirs)):
+        for path in seed_paths:
             baseline = seed.load_baseline(path)
             output.data(f"{path} -> {inst.name}/{inst.tenant} ({baseline.entity})")
             n = seed.apply(client, baseline)
             output.data(f"  {n} record(s)")
-        for path in baseline_paths:
+        # diff everything applied, bootstrap YAML included - a PUT that
+        # answers 200 can persist nothing (T3), the drift check is the proof
+        for path in seed_paths:
             drifts += seed.diff(client, seed.load_baseline(path))
-    _exit_on_drift(inst, drifts, len(baseline_paths))
+    _exit_on_drift(inst, drifts, len(seed_paths))
 
 
 @cli.command("apply")

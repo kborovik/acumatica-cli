@@ -145,7 +145,9 @@ def test_provision_chains_create_bootstrap_apply_diff(provision_env: list[str]) 
     assert result.exit_code == 0
     # the ordered pipeline from docs/rest-api.md, bootstrap YAML before
     # baseline; the post-publish recycle reloads the feature slot (the
-    # publish's own restart caches it before the plugin's insert commits)
+    # publish's own restart caches it before the plugin's insert commits);
+    # the drift check covers everything applied, bootstrap YAML included
+    # (a PUT that answers 200 can persist nothing - T3)
     assert provision_env == [
         "create",
         "recycle",
@@ -155,10 +157,11 @@ def test_provision_chains_create_bootstrap_apply_diff(provision_env: list[str]) 
         "init:Scratch",
         "apply:features.yaml",
         "apply:uoms.yaml",
+        "diff:features.yaml",
         "diff:uoms.yaml",
     ]
     # every session targets the provisioned tenant, not the config default
-    assert "+ no drift on test/Scratch (1 file(s))" in result.stderr
+    assert "+ no drift on test/Scratch (2 file(s))" in result.stderr
 
 
 def test_provision_skips_create_when_tenant_exists(
@@ -179,6 +182,7 @@ def test_provision_skips_create_when_tenant_exists(
         "init:Scratch",
         "apply:features.yaml",
         "apply:uoms.yaml",
+        "diff:features.yaml",
         "diff:uoms.yaml",
     ]
     assert "skipping create" in result.stderr
@@ -209,6 +213,7 @@ def test_provision_recycles_even_when_already_published(
         "init:Scratch",
         "apply:features.yaml",
         "apply:uoms.yaml",
+        "diff:features.yaml",
         "diff:uoms.yaml",
     ]
 
