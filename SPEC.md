@@ -32,7 +32,7 @@ Configure Acumatica ERP purely from source — no UI, no Configuration Wizard. I
 
 V1: two-plane split — control plane = SSH (`tenant.py`, tenant CRUD only); data plane = REST (`client.py`); never mixed
 V2: three source kinds never mixed — `baseline/*.yaml` = what, `acu.yaml` = where (never what, never secrets), `.env` = secrets; all three live in data repos, not here
-V3: discovery — walk up from cwd to first dir containing `acu.yaml`; `.env` loaded from same dir; none found → hard error; `acu.toml` present w/o `acu.yaml` → error names rename
+V3: discovery — walk up from cwd to first dir containing `acu.yaml`; `.env` loaded from same dir; none found → hard error
 V4: idempotence — `PUT` keyed upsert is the primitive; `diff` treats source as authoritative, extra live records not flagged; drift → exit 2; resume/skip gate ! verify desired state, never a marker — marker outlives state loss (B3: publication row vs plugin writes)
 V5: tenant-map — tenant create ! `AcumaticaERP` app-pool recycle after `ac.exe` (stale map → tenant missing from sign-in + REST silently routes to default tenant); always send explicit valid `tenant`
 V6: `AcumaticaClient` ! context manager — logout even on failure (sessions count vs license API-user cap); logout ! `Content-Length: 0` (else IIS 411)
