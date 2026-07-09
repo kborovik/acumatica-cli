@@ -68,7 +68,7 @@ build: ## Install acu globally as an editable uv tool
 # give the part words no-op recipes so make does not try to build them.
 part := $(word 1,$(filter major minor patch,$(MAKECMDGOALS)))
 
-release: ## Bump version, commit, and tag (make release major|minor|patch)
+release: ## Bump version, commit, tag, and publish a GitHub release (make release major|minor|patch)
 	test -n "$(part)" || { echo "usage: make release major|minor|patch"; exit 1; }
 	git diff --quiet && git diff --cached --quiet \
 		|| { echo "working tree not clean — commit or stash first"; exit 1; }
@@ -79,7 +79,10 @@ release: ## Bump version, commit, and tag (make release major|minor|patch)
 	git commit -m "Release v$$version"
 	git tag "v$$version"
 	$(MAKE) build
-	echo "$(green)Released v$$version$(reset) — push with: git push && git push --tags"
+	$(call header,Publishing v$$version to GitHub)
+	git push && git push --tags
+	gh release create "v$$version" --title "v$$version" --generate-notes
+	echo "$(green)Released v$$version$(reset)"
 
 major minor patch:
 	@:
