@@ -65,6 +65,26 @@ def test_explicit_overrides_win_over_defaults(data_root: Path) -> None:
     assert inst.tenant == "T1"
 
 
+def test_host_override_rederives_urls(data_root: Path) -> None:
+    # I.cmd: the --host swap happens before the Instance is built, so the
+    # derived base_url/ssh follow the new host (a post-hoc model_copy would
+    # leave them stale on the acu.yaml host)
+    inst = load_instance(host="edge.example")
+    assert inst.host == "edge.example"
+    assert inst.base_url == "http://edge.example/AcumaticaERP"
+    assert inst.ssh == "Administrator@edge.example"
+
+
+def test_host_override_loses_to_explicit_base_url_and_ssh(data_root: Path) -> None:
+    # I.cmd: explicit acu.yaml base_url/ssh still win over the swapped host,
+    # same precedence they hold over the file's own host
+    (data_root / "acu.yaml").write_text(OVERRIDE_YAML)
+    inst = load_instance(host="other.example")
+    assert inst.host == "other.example"
+    assert inst.base_url == "https://edge.example/AcumaticaERP"
+    assert inst.ssh == "user@jump.example"
+
+
 def test_data_root_found_in_parent_dir(
     data_root: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:

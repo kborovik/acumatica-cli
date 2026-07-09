@@ -26,10 +26,15 @@ from .tenant import TenantManager
 @click.option(
     "-t", "--tenant", default=None, help="Override the tenant API sessions sign in to"
 )
+@click.option(
+    "--host",
+    default=None,
+    help="Override the acu.yaml host (base_url/ssh re-derive from it)",
+)
 @click.pass_context
-def cli(ctx: click.Context, tenant: str | None) -> None:
+def cli(ctx: click.Context, tenant: str | None, host: str | None) -> None:
     """Resolve the target instance and stash it in the Click context."""
-    inst = load_instance()
+    inst = load_instance(host=host)
     if tenant is not None:
         inst = inst.model_copy(update={"tenant": tenant})
     ctx.obj = inst

@@ -80,8 +80,15 @@ def data_root() -> Path:
     )
 
 
-def load_instance() -> Instance:
-    """Resolve the target from acu.yaml and merge credentials from .env/environment."""
+def load_instance(host: str | None = None) -> Instance:
+    """Resolve the target from acu.yaml and merge credentials from .env/environment.
+
+    ``host`` (the global --host flag) replaces the acu.yaml host before the
+    Instance is built, so derived base_url/ssh follow it; a post-hoc
+    model_copy would leave them pointing at the old host. Explicit acu.yaml
+    base_url/ssh overrides still win, exactly as they do over the file's own
+    host.
+    """
     root = data_root()
     load_dotenv(root / ".env")
 
@@ -89,6 +96,8 @@ def load_instance() -> Instance:
         config = yaml.safe_load(f)
     if not isinstance(config, dict):
         raise SystemExit("acu.yaml: expected a mapping (host + optional overrides)")
+    if host is not None:
+        config["host"] = host
 
     password = os.environ.get("ACU_PASSWORD")
     if not password:

@@ -60,7 +60,7 @@ class DummyClient:
 @pytest.fixture
 def wired(monkeypatch: pytest.MonkeyPatch, instance: Instance) -> Instance:
     """Point the CLI at the fake instance and a no-op REST client."""
-    monkeypatch.setattr(cli, "load_instance", lambda: instance)
+    monkeypatch.setattr(cli, "load_instance", lambda host=None: instance)
     monkeypatch.setattr(cli, "AcumaticaClient", DummyClient)
     return instance
 
@@ -286,6 +286,33 @@ def test_config_show_round_trips_through_load_instance(
     (regenerated / "acu.yaml").write_text(result.output)
     monkeypatch.chdir(regenerated)
     assert load_instance() == original
+
+
+def test_global_host_flag_rederives_urls(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # I.cmd: --host swaps the acu.yaml host before the Instance is built,
+    # so base_url/ssh re-derive; resolution runs through the same
+    # load_instance path config show prints (I.cfg)
+    (tmp_path / "acu.yaml").write_text("host: acu.test\n")
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv("ACU_PASSWORD", "secret")
+    monkeypatch.delenv("ACU_USER", raising=False)
+
+    result = CliRunner().invoke(cli.cli, ["--host", "edge.example", "config", "show"])
+
+    assert result.exit_code == 0
+    assert "host: edge.example" in result.output
+    assert "base_url: http://edge.example/AcumaticaERP" in result.output
+    assert "ssh: Administrator@edge.example" in result.output
+
+
+def test_global_host_flag_rejected_after_subcommand(wired: Instance) -> None:
+    # V16: globals valid only before the subcommand
+    result = CliRunner().invoke(cli.cli, ["config", "show", "--host", "edge.example"])
+
+    assert result.exit_code != 0
+    assert "No such option" in result.output
 
 
 def test_apply_dry_run_summary(wired: Instance, tmp_path: Path) -> None:
