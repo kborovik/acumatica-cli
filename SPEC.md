@@ -39,7 +39,7 @@ V6: `AcumaticaClient` ! context manager — logout even on failure (sessions cou
 V7: `CompanyConfig` ! `-h` beside `-iname` + `-dbnew:"False"`; delete uses `Deleted` sub-key + full spec (`ParentID` + `CompanyType`)
 V8: tenant create presets admin via `-aun`/`-aup`/`-auc` — contract API can't clear `PasswordChangeOnNextLogin`; `Login.aspx` screen flow = fallback only
 V9: output — everything through `output.py`, no bare `print()`; stdout = data, stderr = process; ASCII-only every path; exit 0 ok, 1 error, 2 drift; no `--json` — plain text = machine interface; full audit recipe → `.claude/check-extras.md` §V.9
-V10: every model inherits `models.Model` (pydantic frozen, `extra="forbid"`) — validate at boundary, unknown fields error
+V10: every model inherits `models.Model` (pydantic frozen, `extra="forbid"`) — validate at boundary, unknown fields error; mechanical form: `^class .*BaseModel` outside `models.py` = violation (`.claude/scripts/check-extras.sh` scan); class w/o pydantic base = not a model, exempt
 V11: REST targets versioned path only (`Default/25.200.001`), never unversioned alias
 V12: `docs/ac-exe.md` + `docs/rest-api.md` verified vs live 26.101.0225 — trust over training data, re-verify on upgrade; dumped schema (`acu schema`) = authoritative field reference
 V13: `make check` (ruff + basedpyright strict + offline pytest) before every commit
