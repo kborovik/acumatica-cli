@@ -28,18 +28,31 @@ def test_package_zip_holds_the_project_xml() -> None:
     # project name comes from the import call, not the XML
     assert root.tag == "Customization"
     assert root.get("product-version") == "26.101"
-    # the endpoint item must carry the name/version acu seeds through
-    (endpoint,) = root.findall("EntityEndpoint")
-    assert endpoint.get("name") == bootstrap.ENDPOINT
+    # the plugin travels as a Graph item; source in the Source ATTRIBUTE
+    # (CstCodeFile shape verified vs 26.101.0225 - CDATA is silently dropped)
+    (graph,) = root.findall("Graph")
+    assert graph.get("ClassName") == bootstrap.PLUGIN_CLASS
+    assert graph.get("FileType") == "NewFile"
+    source = graph.get("Source") or ""
+    assert "class AcuBootstrapPlugin : Customization.CustomizationPlugin" in source
+    assert "UpdateDatabase" in source
+    # package name must survive ValidatePackageName: alphanumeric only
+    assert bootstrap.PACKAGE_NAME.isalnum()
 
 
 class Api:
     """MockTransport handler: scripted /CustomizationApi + auth responses."""
 
-    def __init__(self, publish_end: list[httpx.Response], published: bool = False):
+    def __init__(
+        self,
+        publish_end: list[httpx.Response],
+        published: bool = False,
+        content_exists: bool = True,
+    ):
         self.requests: list[httpx.Request] = []
         self.publish_end = publish_end
         self.published = published
+        self.content_exists = content_exists
 
     def __call__(self, request: httpx.Request) -> httpx.Response:
         self.requests.append(request)
@@ -57,6 +70,22 @@ class Api:
                         {
                             "logType": "information",
                             "message": "The system does not contain published projects",
+                        }
+                    ]
+                },
+            )
+        if path.endswith("/CustomizationApi/getProject"):
+            if self.content_exists:
+                return httpx.Response(200, json={"projectContentBase64": "UEs="})
+            # live shape: a recreated tenant lists the publication while the
+            # project content is gone - getProject reports in-band
+            return httpx.Response(
+                200,
+                json={
+                    "log": [
+                        {
+                            "logType": "error",
+                            "message": "The project is not found: AcuBootstrap",
                         }
                     ]
                 },
@@ -90,7 +119,9 @@ def test_publish_runs_import_then_publish_sequence(instance: Instance) -> None:
     import_body = json.loads(api.requests[2].content)
     assert import_body["projectName"] == bootstrap.PACKAGE_NAME
     assert import_body["isReplaceIfExists"] is True
-    contents = base64.b64decode(import_body["projectContents"])
+    # projectContentBase64 = the live binder's field (26.101.0225); the
+    # widely documented projectContents binds nothing on this build
+    contents = base64.b64decode(import_body["projectContentBase64"])
     assert contents == bootstrap.package_zip()
 
     begin_body = json.loads(api.requests[3].content)
@@ -101,7 +132,31 @@ def test_publish_runs_import_then_publish_sequence(instance: Instance) -> None:
 def test_publish_skips_when_already_published(instance: Instance) -> None:
     api = Api(publish_end=[], published=True)
     assert _publish(instance, api) == "already published"
-    assert _paths(api) == ["login", "getPublished", "logout"]
+    assert _paths(api) == ["login", "getPublished", "getProject", "logout"]
+
+
+def test_publish_reruns_when_publication_is_stale(instance: Instance) -> None:
+    """Recreated tenant: publication listed, content gone -> full re-publish.
+
+    getPublished alone is a false idempotence proxy (verified live): a tenant
+    deleted and recreated under the same CompanyID still lists the package
+    while the project content and the plugin's writes died with the tenant.
+    """
+    api = Api(
+        publish_end=[httpx.Response(200, json={"isCompleted": True})],
+        published=True,
+        content_exists=False,
+    )
+    assert _publish(instance, api) == "published"
+    assert _paths(api) == [
+        "login",
+        "getPublished",
+        "getProject",
+        "import",
+        "publishBegin",
+        "publishEnd",
+        "logout",
+    ]
 
 
 def test_publish_polls_until_completed(
@@ -137,11 +192,11 @@ def test_import_error_in_200_log_raises(instance: Instance) -> None:
                         "log": [
                             {
                                 "logType": "information",
-                                "message": "Delete project: acu-bootstrap",
+                                "message": "Delete project: AcuBootstrap",
                             },
                             {
                                 "logType": "error",
-                                "message": "The project is not found: acu-bootstrap",
+                                "message": "The project is not found: AcuBootstrap",
                             },
                         ]
                     },

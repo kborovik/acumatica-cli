@@ -1,61 +1,25 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!--
-  acu bootstrap customization package (SPEC §T.2).
+  acu bootstrap customization package template (SPEC T2 + T11).
 
-  One package closes both verified gaps (docs/rest-api.md): a custom
-  contract endpoint exposing the three screens an unconfigured tenant needs
-  before the Default endpoint is usable - CS100000 (Enable/Disable
-  Features), CS101500 (Companies), CS206500 (Credit Terms; absent from the
-  Default endpoint entirely).
+  package_zip() (bootstrap.py) parses this template and injects a
+  <Graph ClassName="AcuBootstrapPlugin" FileType="NewFile" Source="..."/>
+  item carrying bootstrap_plugin.cs - the CustomizationPlugin that enables
+  features on publish (CS100000 is un-writable through the contract API;
+  T3 verdict). Item shape verified vs 26.101.0225: Customization.CstCodeFile
+  Tag=Graph, source rides in the Source ATTRIBUTE (XML-escaped), not CDATA.
 
-  Root element shape verified vs the training package shipped on the live
-  box (HelpAndTraining/T270/PhoneRepairShop.zip, same 26.101.0225 build):
+  Root element shape verified vs the training packages shipped on the live
+  box (HelpAndTraining/T*/PhoneRepairShop.zip, same 26.101.0225 build):
   project.xml's root is <Customization level description product-version>;
   the project NAME comes from the import call, not the XML.
 
-  STILL UNVERIFIED: the <EntityEndpoint> item serialization below. The live
-  target rows are known (2026-07-08 experiment, docs/rest-api.md: tenant-
-  scoped EntityEndpoint / EntityDescription / EntityFieldDescription /
-  EntityMapping / EntityActionDescription rows), and PX.Api.ContractBased.
-  Common.dll's "*.endpoint" globs suggest packages carry endpoints as
-  .endpoint files - discovering that exact format is an open spec task.
-
-  CS100000 note: writes through a custom endpoint DO NOT persist (verified
-  2026-07-08 - PUT answers 200, FeaturesSet stays empty). Features stay in
-  the package only until the CustomizationPlugin fallback ships; company
-  and credit terms remain the endpoint's real payload.
+  The former <EntityEndpoint> item (CS101500 company + CS206500 credit
+  terms) is OUT until its serialization is discovered: the live importer
+  rejects an inline data-model <Endpoint> child ("Unknown root node"), and
+  PX.Api.ContractBased.Common.dll's "*.endpoint" globs say packages carry
+  endpoints as .endpoint FILES - discovering that format is an open spec
+  task.
 -->
-<Customization level="" description="acu bootstrap: custom endpoint for features, company, and credit terms" product-version="26.101">
-  <EntityEndpoint name="Bootstrap/1.0.0">
-    <Endpoint xmlns="http://www.acumatica.com/entity/data-model" name="Bootstrap" version="1.0.0">
-      <TopLevelEntity name="Features" screen="CS100000">
-        <Fields>
-          <Field name="MultiCompany" object="Features" field="MultiCompany" type="BooleanValue" />
-          <Field name="Branch" object="Features" field="Branch" type="BooleanValue" />
-          <Field name="ProjectModule" object="Features" field="ProjectModule" type="BooleanValue" />
-          <Field name="TimeReportingModule" object="Features" field="TimeReportingModule" type="BooleanValue" />
-        </Fields>
-      </TopLevelEntity>
-      <TopLevelEntity name="Company" screen="CS101500">
-        <Fields>
-          <Field name="OrganizationCD" object="Organization" field="OrganizationCD" type="StringValue" />
-          <Field name="OrganizationName" object="Organization" field="OrganizationName" type="StringValue" />
-          <Field name="OrganizationType" object="Organization" field="OrganizationType" type="StringValue" />
-          <Field name="BaseCuryID" object="Organization" field="BaseCuryID" type="StringValue" />
-          <Field name="CountryID" object="Organization" field="CountryID" type="StringValue" />
-        </Fields>
-      </TopLevelEntity>
-      <TopLevelEntity name="CreditTerms" screen="CS206500">
-        <Fields>
-          <Field name="TermsID" object="Terms" field="TermsID" type="StringValue" />
-          <Field name="Description" object="Terms" field="Descr" type="StringValue" />
-          <Field name="VisibleTo" object="Terms" field="VisibleTo" type="StringValue" />
-          <Field name="DueType" object="Terms" field="DueType" type="StringValue" />
-          <Field name="DueDay" object="Terms" field="DayDue00" type="IntValue" />
-          <Field name="DiscountType" object="Terms" field="DiscType" type="StringValue" />
-          <Field name="DiscountPercent" object="Terms" field="DiscPercent" type="DecimalValue" />
-        </Fields>
-      </TopLevelEntity>
-    </Endpoint>
-  </EntityEndpoint>
+<Customization level="" description="acu bootstrap: CustomizationPlugin enables features on publish" product-version="26.101">
 </Customization>

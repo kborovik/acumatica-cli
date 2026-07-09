@@ -226,7 +226,12 @@ Facts that matter for tooling:
 
 So features cannot be enabled through the contract API surface at all, no
 matter what endpoint fronts CS100000 — the fallback (C# CustomizationPlugin
-writing `FeaturesSet` on publish) ships in the bootstrap package.
+writing `FeaturesSet` on publish) ships in the bootstrap package. **The
+fallback is verified working (T11, 2026-07-08):** after publish + recycle,
+`CustomerClass`/`ItemClass` (the 403 feature-gated class) answer 200 on a
+freshly provisioned tenant; `VendorClass` moves to the setup-chain class
+(GL Preferences), which baseline seeding owns. See the CustomizationApi
+section for the plugin-side landmines.
 
 **Where to read server errors when the API only 302s to `/ui/error`:**
 flip `EnableFirstChanceExceptionsLogging` to `True` in web.config (default
@@ -234,30 +239,70 @@ False; restarts the app) and read
 `App_Data\firstchanceexceptions.log`. The `/ui/error` SPA itself reads
 `apiweb/error-page`, which only carries the generic message.
 
-## CustomizationApi — verified quirks (2026-07-08)
+## CustomizationApi — verified quirks (2026-07-08, extended same day)
 
 - **Failures are in-band.** Every `/CustomizationApi/*` call answers 200;
   errors appear only as `log` entries with `"logType": "error"` (a rejected
   import still returns 200 + "The project is not found: …" in the log).
   `getPublished` with nothing published returns only a `log` — no
   `projects` key.
+- **The import content field is `projectContentBase64`** — the live binder's
+  property (`ImportParamsData`, verified by reflection on
+  `PX.Web.Customization.dll`). The widely documented `projectContents`
+  binds NOTHING on this build: the server deletes the existing project
+  (`isReplaceIfExists`) and then errors "The project is not found" — the
+  original mystery import failure. Full binder surface: `ProjectLevel`,
+  `ProjectName`, `ProjectDescription`, `ProjectContentBase64`,
+  `IsReplaceIfExists`, `Content`.
+- **Project names are alphanumeric only.**
+  `CstDbStorage.ValidatePackageName` rejects `-` and `_` outright
+  ("Invalid project name", import 500s) — `acu-bootstrap` was invalid from
+  birth; the package is now `AcuBootstrap`.
 - `publishBegin` accepts `projectNames`, `isMergeWithExistingPackages`,
   `isOnlyValidation`, `isOnlyDbUpdates`,
   `isReplayPreviouslyExecutedScripts`, `tenantMode: "Current"`; poll
-  `publishEnd` for `{isCompleted, isFailed, log}`.
-- **Package format (partially verified).** The importable zip carries
+  `publishEnd` for `{isCompleted, isFailed, log}`. There is also
+  `getProject {projectName}` (returns `projectContentBase64`) and
+  `delete {projectName}`.
+- **`getPublished` is a false idempotence proxy after tenant recreate.**
+  Deleting a tenant and recreating it under the same CompanyID keeps the
+  stale publication row (the package stays listed) while the project
+  content and everything the publish wrote are gone; an
+  `isOnlyDbUpdates` replay then fails with "The previously published
+  project cannot be found in the database". `acu`'s publish skip therefore
+  requires getPublished AND getProject to agree.
+- **Package format (verified for code items).** The importable zip carries
   `project.xml` whose root is
   `<Customization level="" description="…" product-version="26.101">` —
-  verified against the training package shipped on the box
-  (`HelpAndTraining/T270/PhoneRepairShop.zip`, same build). The project
-  *name* comes from the import call, not the XML. Items observed in real
-  packages: `Page`, `File`, `Sql`, `Table`, `SiteMap`,
-  `GenericInquiryScreen` (data-set row serialization), … — none of the
-  shipped training packages contains an `EntityEndpoint` item, so that
-  item's serialization is still unverified. `PX.Api.ContractBased.Common.dll`
-  contains `*.endpoint` / `*.endpoint.remove` glob literals — packages
-  likely carry endpoints as `.endpoint` files; discovering that format is
-  an open task.
+  verified against the training packages shipped on the box
+  (`HelpAndTraining/T*/PhoneRepairShop.zip`, same build). The project
+  *name* comes from the import call, not the XML.
+    - **C# source items are `<Graph ClassName="X" FileType="NewFile"
+      Source="…escaped source…"/>`** — the source rides in the `Source`
+      ATTRIBUTE (`Customization.CstCodeFile`, `Tag = Graph`; shape
+      confirmed by invoking its own `Save()` by reflection and by live
+      import round-trip). Inline CDATA children and zip-file variants are
+      silently dropped on import.
+    - The `EntityEndpoint` item exists (`CstEntityEndpoint`,
+      `Tag = EntityEndpoint`) but rejects an inline data-model
+      `<Endpoint>` child ("Unknown root node …data-model:Endpoint").
+      `PX.Api.ContractBased.Common.dll` carries `*.endpoint` /
+      `*.endpoint.remove` glob literals — packages likely carry endpoints
+      as `.endpoint` files; discovering that format is an open task.
+- **`CustomizationPlugin` is the working features route (T11, verified).**
+  `UpdateDatabase` runs on publish (plus a second invocation around site
+  start). Writing through `FeaturesMaint` + `Save.Press()` collides with
+  the concurrent invocation ("Another process has added the 'FeaturesSet'
+  record. Your changes will be lost." — a warning, publish still reports
+  success, nothing persists). Writing through
+  `PXDatabase.Update/Insert<FeaturesSet>` works; all 205 NOT NULL bit
+  columns must be assigned (only ~136 have DB defaults) — fill them
+  reflectively. `Status = 0` means Validated.
+- **The feature slot outlives the publish restart.** The publish restarts
+  the site BEFORE its DB transaction commits, so the restarted domain
+  caches the pre-plugin feature set — feature-gated screens keep answering
+  403 until one more app-pool recycle. `acu provision` recycles
+  unconditionally after its publish step.
 
 ## Conventions for the seeding layer
 

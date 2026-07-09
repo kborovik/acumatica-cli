@@ -143,12 +143,16 @@ def test_provision_chains_create_bootstrap_apply_diff(provision_env: list[str]) 
     )
 
     assert result.exit_code == 0
-    # the ordered pipeline from docs/rest-api.md, bootstrap YAML before baseline
+    # the ordered pipeline from docs/rest-api.md, bootstrap YAML before
+    # baseline; the post-publish recycle reloads the feature slot (the
+    # publish's own restart caches it before the plugin's insert commits)
     assert provision_env == [
         "create",
         "recycle",
         "init:Scratch",
         "publish",
+        "recycle",
+        "init:Scratch",
         "apply:features.yaml",
         "apply:uoms.yaml",
         "diff:uoms.yaml",
@@ -171,11 +175,42 @@ def test_provision_skips_create_when_tenant_exists(
     assert result.exit_code == 0
     assert provision_env == [
         "publish",
+        "recycle",
+        "init:Scratch",
         "apply:features.yaml",
         "apply:uoms.yaml",
         "diff:uoms.yaml",
     ]
     assert "skipping create" in result.stderr
+
+
+def test_provision_recycles_even_when_already_published(
+    provision_env: list[str], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    tenant = Tenant(
+        company_id=3, company_cd="Company3", login_name="Scratch", company_type="Custom"
+    )
+    monkeypatch.setattr(TenantManager, "list", lambda self: [tenant])
+    monkeypatch.setattr(
+        cli.bootstrap,
+        "publish",
+        lambda client, **k: provision_env.append("publish") or "already published",
+    )
+    result = CliRunner().invoke(
+        cli.cli, ["provision", "--id", "3", "--login", "Scratch"]
+    )
+
+    # resume path: the recycle stays — a publish interrupted before its
+    # recycle would otherwise leave the feature slot cached pre-plugin
+    assert result.exit_code == 0
+    assert provision_env == [
+        "publish",
+        "recycle",
+        "init:Scratch",
+        "apply:features.yaml",
+        "apply:uoms.yaml",
+        "diff:uoms.yaml",
+    ]
 
 
 def test_provision_drift_exits_two(

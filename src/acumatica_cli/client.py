@@ -145,10 +145,35 @@ class AcumaticaClient:
         projects = body.get("projects") or []
         return [p["name"] for p in projects if isinstance(p, dict) and "name" in p]
 
+    def customization_project_exists(self, name: str) -> bool:
+        """True when the project's content rows exist in the session tenant.
+
+        getPublished alone is a false idempotence proxy: a tenant deleted and
+        recreated under the same CompanyID still LISTS the publication while
+        the project content (and everything the publish wrote) is gone
+        (verified live vs 26.101.0225).
+        """
+        try:
+            body = self._checked_log(
+                self._http.post(
+                    "/CustomizationApi/getProject", json={"projectName": name}
+                )
+            )
+        except RuntimeError:
+            return False
+        return bool(body.get("projectContentBase64"))
+
     def customization_import(
         self, name: str, zip_bytes: bytes, description: str = ""
     ) -> None:
-        """Upload a customization package zip (replacing any same-name project)."""
+        """Upload a customization package zip (replacing any same-name project).
+
+        The content field is ``projectContentBase64`` — the live binder's
+        property (ImportParamsData, verified vs 26.101.0225 by reflection).
+        The widely documented ``projectContents`` binds nothing on this
+        build: the server deletes the existing project (isReplaceIfExists)
+        and then reports "The project is not found".
+        """
         self._checked_log(
             self._http.post(
                 "/CustomizationApi/import",
@@ -157,7 +182,7 @@ class AcumaticaClient:
                     "isReplaceIfExists": True,
                     "projectName": name,
                     "projectDescription": description,
-                    "projectContents": base64.b64encode(zip_bytes).decode("ascii"),
+                    "projectContentBase64": base64.b64encode(zip_bytes).decode("ascii"),
                 },
             )
         )

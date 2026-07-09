@@ -3,17 +3,18 @@
 An unconfigured tenant cannot be configured through the Default endpoint
 (features are off, no company/branch exists, credit terms have no entity —
 docs/rest-api.md). The CustomizationApi is the one door that works on a
-virgin tenant, so bootstrap = publish `bootstrap_project.xml` (a custom
-endpoint exposing CS100000 + CS101500 + CS206500) into the session tenant,
-then seed through that endpoint.
+virgin tenant, so bootstrap = publish a package whose CustomizationPlugin
+(`bootstrap_plugin.cs`) enables features on publish — the contract API
+cannot write CS100000 at all (T3 verdict).
 
-Custom endpoints are tenant-scoped rows, so the package must be published
+Customization publishes are tenant-scoped, so the package must be published
 per tenant; publish() is idempotent — an already-published package is a
-no-op skip.
+no-op skip, and the plugin's UpdateDatabase is a keyed update on re-run.
 """
 
 import io
 import time
+import xml.etree.ElementTree as ET
 import zipfile
 from importlib import resources
 
@@ -21,19 +22,30 @@ import httpx
 
 from .client import AcumaticaClient
 
-PACKAGE_NAME = "acu-bootstrap"
-PACKAGE_DESCRIPTION = (
-    "acu bootstrap: custom endpoint for features, company, and credit terms"
-)
-ENDPOINT = "Bootstrap/1.0.0"
+# Alphanumeric only: CstDbStorage.ValidatePackageName rejects '-' and '_'
+# (verified vs 26.101.0225 — "Invalid project name")
+PACKAGE_NAME = "AcuBootstrap"
+PACKAGE_DESCRIPTION = "acu bootstrap: CustomizationPlugin enables features on publish"
+PLUGIN_CLASS = "AcuBootstrapPlugin"
 
 
 def package_zip() -> bytes:
-    """Build the customization package: a zip holding project.xml."""
-    xml = (resources.files("acumatica_cli") / "bootstrap_project.xml").read_bytes()
+    """Build the customization package: a zip holding project.xml.
+
+    The C# plugin travels as a <Graph> item whose Source ATTRIBUTE holds the
+    file content (Customization.CstCodeFile shape, verified vs 26.101.0225:
+    inline CDATA and zip-file variants are silently dropped on import).
+    ElementTree escapes the newlines as &#10; on serialization.
+    """
+    pkg = resources.files("acumatica_cli")
+    root = ET.fromstring((pkg / "bootstrap_project.xml").read_bytes())
+    graph = ET.SubElement(root, "Graph")
+    graph.set("ClassName", PLUGIN_CLASS)
+    graph.set("FileType", "NewFile")
+    graph.set("Source", (pkg / "bootstrap_plugin.cs").read_text(encoding="utf-8"))
     buf = io.BytesIO()
     with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as zf:
-        zf.writestr("project.xml", xml)
+        zf.writestr("project.xml", ET.tostring(root, encoding="utf-8"))
     return buf.getvalue()
 
 
@@ -52,13 +64,17 @@ def publish(client: AcumaticaClient, timeout: float = 600.0, poll: float = 5.0) 
     """Publish the bootstrap package into the client's session tenant.
 
     Idempotent: returns ``"already published"`` when getPublished lists the
-    package, else import -> publishBegin -> poll publishEnd until the server
-    reports completion. Transport errors while polling are tolerated —
-    publishing restarts the app domain, so the site may briefly drop
-    connections mid-publish. Raises RuntimeError on a failed publish or on
-    timeout.
+    package AND its content still exists (a recreated tenant with the same
+    CompanyID keeps the stale publication row while the content and the
+    plugin's writes are gone), else import -> publishBegin -> poll publishEnd
+    until the server reports completion. Transport errors while polling are
+    tolerated — publishing restarts the app domain, so the site may briefly
+    drop connections mid-publish. Raises RuntimeError on a failed publish or
+    on timeout.
     """
-    if PACKAGE_NAME in client.customization_published():
+    if PACKAGE_NAME in client.customization_published() and (
+        client.customization_project_exists(PACKAGE_NAME)
+    ):
         return "already published"
     client.customization_import(
         PACKAGE_NAME, package_zip(), description=PACKAGE_DESCRIPTION

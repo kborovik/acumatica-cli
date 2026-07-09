@@ -233,6 +233,14 @@ def provision_cmd(
     ):
         result = bootstrap.publish(client)
     output.success(f"{bootstrap.PACKAGE_NAME} {result}")
+    # unconditional: the publish restarts the site BEFORE its DB transaction
+    # commits, so the restarted domain caches the feature slot pre-plugin
+    # (verified live: gated screens stay 403 until one more recycle); on the
+    # skip path a recycle is the cheap way to make a resumed run sound too
+    with output.step("recycling app pool (feature set loads at app start)"):
+        mgr.recycle_app_pool()
+    with output.step("waiting for the site to come back"):
+        firstlogin.initialize_admin_password(inst, tenant=login_name)
 
     # fresh session: publishing restarts the app domain, so don't trust the
     # cookie that watched it happen
