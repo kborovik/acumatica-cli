@@ -1,0 +1,160 @@
+#!/usr/bin/env python3
+"""check-ascii <paths> - the V9 ASCII audit, mechanized (SPEC ST.18).
+
+Replaces the check-extras SV.9 grep + eye-applied exemption filter: the
+filter is code now. Non-ASCII is a violation only where it can reach
+output - comments and docstrings never do, so they are exempt:
+
+- .py   tokenize stream; COMMENT tokens and docstring STRINGs (spans via
+        ast: first-statement string Expr of a module/class/function body)
+        are exempt. Token-precise: a trailing comment is exempt while code
+        on the same line still flags.
+- .cs   lines whose first non-blank chars are // are exempt.
+- .xml  text inside <!-- --> regions is exempt.
+
+Directory args recurse over *.py / *.cs / *.xml; an explicit file of any
+other type is scanned plainly (no exemptions). Violations go to stdout as
+`file:line: U+XXXX` (first offending codepoint - the glyph itself never
+prints, the audit obeys the invariant it enforces); errors go to stderr
+as one `x` line. Exit 0 clean, 1 on any match or error.
+"""
+
+import ast
+import io
+import sys
+import tokenize
+from pathlib import Path
+
+SUFFIXES = (".py", ".cs", ".xml")
+
+
+def offenders(text: str) -> str | None:
+    """First non-ASCII char in text, or None."""
+    for ch in text:
+        if ord(ch) > 0x7F:
+            return ch
+    return None
+
+
+def report(violations: dict[int, str], path: Path, line: int, text: str) -> None:
+    """Record the first offending codepoint per file line."""
+    ch = offenders(text)
+    if ch is not None and line not in violations:
+        violations[line] = f"{path}:{line}: U+{ord(ch):04X}"
+
+
+def docstring_spans(source: str, path: Path) -> list[tuple[int, int]]:
+    """Line spans of every docstring: first-statement string Expr of a body."""
+    spans: list[tuple[int, int]] = []
+    tree = ast.parse(source, filename=str(path))
+    for node in ast.walk(tree):
+        if not isinstance(
+            node, (ast.Module, ast.ClassDef, ast.FunctionDef, ast.AsyncFunctionDef)
+        ):
+            continue
+        body = node.body
+        if (
+            body
+            and isinstance(body[0], ast.Expr)
+            and isinstance(body[0].value, ast.Constant)
+            and isinstance(body[0].value.value, str)
+        ):
+            doc = body[0]
+            spans.append((doc.lineno, doc.end_lineno or doc.lineno))
+    return spans
+
+
+def scan_py(path: Path) -> dict[int, str]:
+    source = path.read_text(encoding="utf-8")
+    spans = docstring_spans(source, path)
+    violations: dict[int, str] = {}
+    for tok in tokenize.generate_tokens(io.StringIO(source).readline):
+        if tok.type == tokenize.COMMENT:
+            continue
+        if tok.type == tokenize.STRING and any(
+            lo <= tok.start[0] <= hi for lo, hi in spans
+        ):
+            continue
+        for i, text in enumerate(tok.string.splitlines()):
+            report(violations, path, tok.start[0] + i, text)
+    return violations
+
+
+def scan_cs(path: Path) -> dict[int, str]:
+    violations: dict[int, str] = {}
+    for lineno, text in enumerate(path.read_text(encoding="utf-8").splitlines(), 1):
+        if text.lstrip().startswith("//"):
+            continue
+        report(violations, path, lineno, text)
+    return violations
+
+
+def scan_xml(path: Path) -> dict[int, str]:
+    violations: dict[int, str] = {}
+    in_comment = False
+    for lineno, text in enumerate(path.read_text(encoding="utf-8").splitlines(), 1):
+        visible: list[str] = []
+        rest = text
+        while rest:
+            if in_comment:
+                _, sep, rest = rest.partition("-->")
+                if not sep:
+                    break
+                in_comment = False
+            else:
+                head, sep, rest = rest.partition("<!--")
+                visible.append(head)
+                if sep:
+                    in_comment = True
+        report(violations, path, lineno, "".join(visible))
+    return violations
+
+
+def scan_plain(path: Path) -> dict[int, str]:
+    violations: dict[int, str] = {}
+    for lineno, text in enumerate(path.read_text(encoding="utf-8").splitlines(), 1):
+        report(violations, path, lineno, text)
+    return violations
+
+
+def scan_file(path: Path) -> dict[int, str]:
+    if path.suffix == ".py":
+        return scan_py(path)
+    if path.suffix == ".cs":
+        return scan_cs(path)
+    if path.suffix == ".xml":
+        return scan_xml(path)
+    return scan_plain(path)
+
+
+def main(argv: list[str]) -> int:
+    if not argv:
+        print("usage: check-ascii <paths>", file=sys.stderr)
+        return 1
+    files: list[Path] = []
+    for arg in argv:
+        path = Path(arg)
+        if path.is_dir():
+            files.extend(
+                p for p in sorted(path.rglob("*")) if p.suffix in SUFFIXES
+            )
+        elif path.is_file():
+            files.append(path)
+        else:
+            print(f"x {arg}: no such path", file=sys.stderr)
+            return 1
+    failed = False
+    for path in files:
+        try:
+            violations = scan_file(path)
+        except (SyntaxError, UnicodeDecodeError, tokenize.TokenizeError) as exc:
+            print(f"x {path}: {exc}", file=sys.stderr)
+            return 1
+        for lineno in sorted(violations):
+            print(violations[lineno])
+            failed = True
+    return 1 if failed else 0
+
+
+if __name__ == "__main__":
+    sys.exit(main(sys.argv[1:]))

@@ -6,9 +6,9 @@ run cmd, apply exemption filter, any surviving match = violation
 
 ## §V.9 — ASCII-only output audit
 
-- cmd: `grep -rnP '[^\x00-\x7F]' src/`
-- exempt: docstring bodies + `#` comment lines + XML comments (non-output-reaching)
-- surviving match → bail: `non-ASCII in output-reaching string per §V.9 — swap ASCII glyph or relocate to docstring/comment`
+- cmd: `scripts/check-ascii src/`
+- exemptions mechanized in-script (§T.18): `.py` COMMENT tokens + docstrings, `.cs` `//` lines, `.xml` `<!-- -->`
+- surviving match (`file:line: U+XXXX` on stdout, exit 1) → bail: `non-ASCII in output-reaching string per §V.9 — swap ASCII glyph or relocate to docstring/comment`
 
 ## §V.9 — output-discipline recipe (extracted from SPEC.md §V.9)
 

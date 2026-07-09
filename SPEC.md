@@ -69,7 +69,7 @@ T14|x|`scripts/ps-remote <file.ps1> [host]` — mechanize the live-box PowerShel
 T15|x|config TOML → YAML: sentinel `acu.toml` → `acu.yaml`, loader `tomllib` → `yaml.safe_load`; migrate data repo|V2,V3,I.cfg
 T16|x|flatten config to single instance — drop `instances.<name>` nesting, `default_instance`, `-i/--instance` global, `Instance.name` field|V16,I.cfg,T15
 T17|x|centralize `exit $LASTEXITCODE` in `_ssh`; strip hand-appended suffixes at call sites — sweep grep `self\._ssh\(`|V18
-T18|.|mechanize §V.9 ASCII audit — `scripts/check-ascii <paths>`: `.py` via tokenize (exempt COMMENT tokens + docstrings), `.cs` exempt `//` lines, `.xml` exempt `<!-- -->`; emit surviving `file:line` violations, exit 1 on match; same commit flips check-extras §V.9 recipe cmd + drops eye-applied exemption filter|V9
+T18|x|mechanize §V.9 ASCII audit — `scripts/check-ascii <paths>`: `.py` via tokenize (exempt COMMENT tokens + docstrings), `.cs` exempt `//` lines, `.xml` exempt `<!-- -->`; emit surviving `file:line` violations, exit 1 on match; same commit flips check-extras §V.9 recipe cmd + drops eye-applied exemption filter|V9
 
 ## §B BUGS
 
