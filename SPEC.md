@@ -6,7 +6,7 @@ Configure Acumatica ERP purely from source — no UI, no Configuration Wizard. I
 
 ## §C CONSTRAINTS
 
-- Repo = `acu` CLI only. Data (`baseline/`, `acu.toml`, `.env.gpg`) lives in separate data repos (sibling `acumatica-baseline`); infra = sibling `acumatica-infra`; blog = sibling `acumatica-blog`. C# customization projects out of scope (exclusion ?: bootstrap package §T.2 ships one custom endpoint package).
+- Repo = `acu` CLI only. Data (`baseline/`, `acu.toml`, `.env.gpg`) lives in separate data repos (sibling `acumatica-baseline`); infra = sibling `acumatica-infra`; blog = sibling `acumatica-blog`. C# customization projects out of scope (exclusion: bootstrap package ships one C# CustomizationPlugin package — §T.11; endpoint item returns when §T.12 lands).
 - Python ≥ 3.12; click, httpx, pydantic, rich, pyyaml, python-dotenv; uv build; module `acumatica_cli`; entry `acu`.
 - Tests fully offline: SSH = monkeypatched `subprocess.run`, REST = `httpx.MockTransport`; no live instance needed.
 - Every cmd except `--dry-run` talks to live instance. Final verification live vs acu-dev1 (`acu-dev1.vm.internal`; needs tailnet + GPG key): `cd ~/github/acumatica-baseline && make decrypt && make diff`.
@@ -33,7 +33,7 @@ Configure Acumatica ERP purely from source — no UI, no Configuration Wizard. I
 V1: two-plane split — control plane = SSH (`tenant.py`, tenant CRUD only); data plane = REST (`client.py`); never mixed
 V2: three source kinds never mixed — `baseline/*.yaml` = what, `acu.toml` = where (never what, never secrets), `.env` = secrets; all three live in data repos, not here
 V3: discovery — walk up from cwd to first dir containing `acu.toml`; `.env` loaded from same dir; none found → hard error
-V4: idempotence — `PUT` keyed upsert is the primitive; `diff` treats source as authoritative, extra live records not flagged; drift → exit 2
+V4: idempotence — `PUT` keyed upsert is the primitive; `diff` treats source as authoritative, extra live records not flagged; drift → exit 2; resume/skip gate ! verify desired state, never a marker — marker outlives state loss (B3: publication row vs plugin writes)
 V5: tenant-map — tenant create ! `AcumaticaERP` app-pool recycle after `ac.exe` (stale map → tenant missing from sign-in + REST silently routes to default tenant); always send explicit valid `tenant`
 V6: `AcumaticaClient` ! context manager — logout even on failure (sessions count vs license API-user cap); logout ! `Content-Length: 0` (else IIS 411)
 V7: `CompanyConfig` ! `-h` beside `-iname` + `-dbnew:"False"`; delete uses `Deleted` sub-key + full spec (`ParentID` + `CompanyType`)
@@ -62,8 +62,11 @@ T8|x|drop `acu bootstrap` cmd — `bootstrap.publish()` module stays; resumable 
 T9|x|drop `schema -o` short flag — `--out` only|V16
 T10|x|layered `Instance` defaults per `designs/config-layered-defaults.md` — `host` only required toml key, rest code defaults (transcribe literals from `docs/ac-exe.md`, not training data); add `acu config show`; migrate `acumatica-baseline/acu.toml`; verify live w/ minimal config (`default_instance` + `host`): `config show` + `tenant list` + `diff` green; provision E2E deferred → T11|V11,V12,I.cfg
 T11|.|C# CustomizationPlugin flips FeaturesSet on publish (§T.3 verdict route) — ships in bootstrap package; unblocks provision E2E; then re-verify provision live w/ minimal config|T2,T3
+T12|.|discover `.endpoint` package-file serialization (`PX.Api.ContractBased.Common.dll` `*.endpoint` globs) — restore custom endpoint (CS101500 company + CS206500 credit terms) to bootstrap package; unblocks bootstrap YAML seeding|T2,T11
 
 ## §B BUGS
 
 id|date|cause|fix
 B1|2026-07-08|§T.10 live gate cited provision E2E; §T.3 verdict already records bootstrap publish dead, C# plugin fallback never queued|V17
+B2|2026-07-08|CustomizationApi import field `projectContents` + hyphenated project name from training data — live binder wants `projectContentBase64`, names alphanumeric; content bound null, import silently no-op|V12
+B3|2026-07-08|publish skip keyed on `getPublished` marker — tenant recreate same CompanyID keeps stale publication row while content + plugin writes gone; virgin tenant left unbootstrapped|V4
