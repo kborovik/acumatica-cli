@@ -38,10 +38,12 @@ from .client import AcumaticaClient
 # Alphanumeric only: CstDbStorage.ValidatePackageName rejects '-' and '_'
 # (verified vs 26.101.0225 — "Invalid project name")
 PACKAGE_NAME = "AcuBootstrap"
-PACKAGE_DESCRIPTION = (
-    "acu bootstrap: CustomizationPlugin enables features on publish; "
-    "Bootstrap endpoint exposes company + credit terms + financial currency"
-)
+# Authored once, in the template's root description attribute — read it
+# here rather than hand-syncing a second copy: the XML is digest input,
+# so a divergent XML-only edit would fire a spurious republish (V4).
+PACKAGE_DESCRIPTION = ET.fromstring(
+    (resources.files("acumatica_cli") / "bootstrap_project.xml").read_bytes()
+).get("description", "")
 PLUGIN_CLASS = "AcuBootstrapPlugin"
 
 # Code default when the data repo carries no bootstrap/features.yaml

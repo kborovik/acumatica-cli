@@ -58,10 +58,16 @@
                 - the GL Accounts tab -> CuryRecords (DAC PX.Objects.CM.
                   Currency, Current-keyed on CurrencyList.curyID); every
                   gain/loss AcctID/SubID pair carries PXDefault(
-                  PersistingCheck.Null) with no setup default - required
-                  at persist, so the endpoint exposes all ten pairs and
-                  the seed data must supply them. Segment masks take the
-                  CD string -> StringValue (Default-endpoint idiom).
+                  PersistingCheck.Null) with no setup default, so the
+                  endpoint exposes all ten pairs - BUT the four
+                  Translation* pairs are feature-gated (live-verified
+                  T29): the API accepts them on PUT yet omits them from
+                  reads while financial-statement translation is off, so
+                  seed YAML must supply the other eight pairs and must
+                  NOT claim Translation* (claiming them = permanent
+                  phantom drift - every diff reports them missing, every
+                  seed run re-PUTs). Segment masks take the CD string
+                  -> StringValue (Default-endpoint idiom).
   Contract field names = DAC property names verbatim (no rename layer).
   Features (CS100000) stays OUT of the endpoint - writes through any
   contract endpoint do not persist (T3 verdict); the plugin owns features.
