@@ -102,7 +102,9 @@ Newest first.
   `AcumaticaClient` (login + landed-tenant verify + logout) and the ssh
   probe is a new `TenantManager.ping()` through the `_ssh` choke point;
   discovery/secrets failures stop, the two live planes report
-  independently so one run names every broken layer.
+  independently so one run names every broken layer; T28 makes
+  `--version` read its own PEP 610 `direct_url.json` so an editable
+  checkout prints `<version>+dev (<path>)` while a wheel stays plain.
 - [2026-07-08](2026-07-08.md) — recycle unblocks tenant visibility (stale-map
   corrections); first-login password wall found and defeated (screen-flow,
   then `-aup` preset); `acu tenant create` chains create → recycle →
