@@ -4,6 +4,7 @@ Live records are served by an AcumaticaClient over httpx.MockTransport, so
 apply/diff run through the real client (wrap, $filter, _checked) offline.
 """
 
+import json
 from pathlib import Path
 from typing import Any
 
@@ -31,8 +32,14 @@ def _write(tmp_path: Path, text: str) -> Path:
     return path
 
 
+def _baseline(tmp_path: Path, text: str) -> seed.BaselineFile:
+    parsed = seed.load_baseline(_write(tmp_path, text))
+    assert isinstance(parsed, seed.BaselineFile)
+    return parsed
+
+
 def test_load_baseline_parses_string_key(tmp_path: Path) -> None:
-    baseline = seed.load_baseline(_write(tmp_path, BASELINE))
+    baseline = _baseline(tmp_path, BASELINE)
     assert baseline.entity == "UnitsOfMeasure"
     assert baseline.keys == ["UOM"]
     assert [r["UOM"] for r in baseline.records] == ["KG", "HOUR"]
@@ -40,7 +47,7 @@ def test_load_baseline_parses_string_key(tmp_path: Path) -> None:
 
 def test_load_baseline_accepts_key_list(tmp_path: Path) -> None:
     text = BASELINE.replace("key: UOM", "key: [UOM, Description]")
-    assert seed.load_baseline(_write(tmp_path, text)).keys == ["UOM", "Description"]
+    assert _baseline(tmp_path, text).keys == ["UOM", "Description"]
 
 
 def test_load_baseline_rejects_missing_field(tmp_path: Path) -> None:
@@ -310,6 +317,199 @@ def test_diff_non_optimization_500_still_raises(
 
     with pytest.raises(RuntimeError, match="boom"):
         seed.diff(_client(instance, recorder), baseline)
+
+
+ACTION_YAML = """\
+action: GenerateCalendar
+entity: MasterCalendar
+endpoint: Bootstrap/1.2.0
+record:
+  FinancialYear: 2026
+parameters:
+  FromYear: 2026
+  ToYear: 2026
+done_when:
+  filter: FinancialYear eq '2026'
+"""
+
+
+def test_load_baseline_dispatches_on_action_key(tmp_path: Path) -> None:
+    parsed = seed.load_baseline(_write(tmp_path, ACTION_YAML))
+    assert isinstance(parsed, seed.ActionFile)
+    assert parsed.action == "GenerateCalendar"
+    assert parsed.entity == "MasterCalendar"
+    assert parsed.record == {"FinancialYear": 2026}
+    assert parsed.parameters == {"FromYear": 2026, "ToYear": 2026}
+    # done_when entity/endpoint omitted -> None here, action's own at probe time
+    assert parsed.done_when.entity is None
+    assert parsed.done_when.filter == "FinancialYear eq '2026'"
+
+
+def test_load_action_file_rejects_unknown_field(tmp_path: Path) -> None:
+    # V10: frozen models, extra="forbid" - typos surface at the parse boundary
+    with pytest.raises(SystemExit, match="typo"):
+        seed.load_baseline(_write(tmp_path, ACTION_YAML + "typo: oops\n"))
+
+
+def test_load_action_file_requires_done_when(tmp_path: Path) -> None:
+    # V4: no probe, no verify gate - an unprobed action can never skip or diff
+    text = ACTION_YAML.split("done_when:", maxsplit=1)[0]
+    with pytest.raises(SystemExit, match="done_when: Field required"):
+        seed.load_baseline(_write(tmp_path, text))
+
+
+def _action(tmp_path: Path, text: str = ACTION_YAML) -> "seed.ActionFile":
+    parsed = seed.load_baseline(_write(tmp_path, text))
+    assert isinstance(parsed, seed.ActionFile)
+    return parsed
+
+
+def test_apply_action_skips_when_done_when_non_empty(
+    tmp_path: Path, instance: Instance, capsys: pytest.CaptureFixture[str]
+) -> None:
+    # V4: the skip gate is the done_when live-state probe, never a marker
+    action = _action(tmp_path)
+    recorder = Recorder({"/MasterCalendar": _live({"FinancialYear": "2026"})})
+
+    seed.apply(_client(instance, recorder), action)
+
+    assert [r.method for r in recorder.requests] == ["GET"]
+    assert "skip GenerateCalendar (already done)" in capsys.readouterr().out
+
+
+def test_apply_action_invokes_on_204_never_following_location(
+    tmp_path: Path, instance: Instance, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """204 = done; its Location header is bogus and never polled (T36 live)."""
+    action = _action(tmp_path)
+    recorder = Recorder(
+        {
+            "/MasterCalendar": httpx.Response(200, json=[]),
+            "/GenerateCalendar": httpx.Response(
+                204, headers={"Location": "/AcumaticaERP/entity/bogus/status/nope"}
+            ),
+        }
+    )
+
+    seed.apply(_client(instance, recorder), action)
+
+    assert [
+        (r.method, r.url.path.split("/entity/", 1)[1]) for r in recorder.requests
+    ] == [
+        ("GET", "Bootstrap/1.2.0/MasterCalendar"),
+        ("POST", "Bootstrap/1.2.0/MasterCalendar/GenerateCalendar"),
+    ]
+    assert "invoke GenerateCalendar [MasterCalendar]" in capsys.readouterr().out
+
+
+def test_apply_action_wraps_both_payloads(tmp_path: Path, instance: Instance) -> None:
+    action = _action(tmp_path)
+    recorder = Recorder(
+        {
+            "/MasterCalendar": httpx.Response(200, json=[]),
+            "/GenerateCalendar": httpx.Response(204),
+        }
+    )
+
+    seed.apply(_client(instance, recorder), action)
+
+    body = json.loads(recorder.requests[-1].content)
+    assert body == {
+        "entity": wrap({"FinancialYear": 2026}),
+        "parameters": wrap({"FromYear": 2026, "ToYear": 2026}),
+    }
+
+
+def test_apply_action_polls_202_location_to_completion(
+    tmp_path: Path, instance: Instance, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """202 = long-running: poll the Location status URL until it answers 204."""
+    action = _action(tmp_path)
+    status_path = (
+        "/AcumaticaERP/entity/Bootstrap/1.2.0/MasterCalendar"
+        "/GenerateCalendar/status/abc"
+    )
+    polls: list[str] = []
+    requests: list[httpx.Request] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        requests.append(request)
+        path = request.url.path
+        if path.endswith("/status/abc"):
+            polls.append(request.method)
+            return httpx.Response(202 if len(polls) < 2 else 204)
+        if path.endswith("/GenerateCalendar"):
+            return httpx.Response(202, headers={"Location": status_path})
+        return httpx.Response(200, json=[])  # the done_when probe: empty
+
+    client = AcumaticaClient(instance, transport=httpx.MockTransport(handler))
+    client.poll_interval = 0  # offline: no wall-clock waits
+
+    seed.apply(client, action)
+
+    assert polls == ["GET", "GET"]
+    assert requests[-1].url.path == status_path
+    assert "invoke GenerateCalendar [MasterCalendar]" in capsys.readouterr().out
+
+
+def test_apply_action_dry_run_makes_no_calls(
+    tmp_path: Path, instance: Instance, capsys: pytest.CaptureFixture[str]
+) -> None:
+    action = _action(tmp_path)
+    recorder = Recorder()
+
+    n = seed.apply(_client(instance, recorder), action, dry_run=True)
+
+    assert n == 1
+    assert recorder.requests == []
+    assert "would invoke GenerateCalendar" in capsys.readouterr().out
+
+
+def test_diff_action_drifts_when_probe_empty(
+    tmp_path: Path, instance: Instance
+) -> None:
+    # V4: a tenant that lost the action's effect must not diff false-green
+    action = _action(tmp_path)
+    recorder = Recorder({"/MasterCalendar": httpx.Response(200, json=[])})
+
+    drifts = seed.diff(_client(instance, recorder), action)
+
+    assert drifts == ["action GenerateCalendar: not applied"]
+
+
+def test_diff_action_clean_when_probe_non_empty(
+    tmp_path: Path, instance: Instance
+) -> None:
+    action = _action(tmp_path)
+    recorder = Recorder({"/MasterCalendar": _live({"FinancialYear": "2026"})})
+
+    assert seed.diff(_client(instance, recorder), action) == []
+
+
+def test_probe_routes_filter_and_defaults(tmp_path: Path, instance: Instance) -> None:
+    """done_when entity/endpoint default to the action's; filter rides $filter."""
+    action = _action(tmp_path)
+    recorder = Recorder({"/MasterCalendar": _live({"FinancialYear": "2026"})})
+
+    seed.diff(_client(instance, recorder), action)
+
+    (request,) = recorder.requests
+    assert request.url.path.endswith("/Bootstrap/1.2.0/MasterCalendar")
+    assert request.url.params["$filter"] == "FinancialYear eq '2026'"
+
+
+def test_probe_honors_done_when_overrides(tmp_path: Path, instance: Instance) -> None:
+    text = ACTION_YAML.replace(
+        "done_when:\n  filter: FinancialYear eq '2026'\n",
+        "done_when:\n  entity: FinPeriod\n  endpoint: Default/25.200.001\n",
+    )
+    action = _action(tmp_path, text)
+    recorder = Recorder({"/FinPeriod": _live({"PeriodID": "012026"})})
+
+    assert seed.diff(_client(instance, recorder), action) == []
+    (request,) = recorder.requests
+    assert request.url.path.endswith("/Default/25.200.001/FinPeriod")
+    assert "$filter" not in request.url.params
 
 
 def test_diff_normalizes_numbers_by_value(tmp_path: Path, instance: Instance) -> None:

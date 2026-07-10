@@ -3,6 +3,7 @@
 import base64
 import html
 import re
+import time
 from collections.abc import Sequence
 from typing import Any
 from urllib.parse import quote
@@ -176,6 +177,43 @@ class AcumaticaClient:
         return self._checked(
             self._http.put(self._url(entity, endpoint), json=wrap(record))
         ).json()
+
+    # seconds between polls of a long-running action's status URL; module
+    # attribute so offline tests can zero it
+    poll_interval: float = 1.0
+
+    def invoke(
+        self,
+        entity: str,
+        action: str,
+        record: dict[str, Any],
+        parameters: dict[str, Any] | None = None,
+        endpoint: str | None = None,
+    ) -> None:
+        """Invoke a contract action: POST /entity/<endpoint>/<Entity>/<Action>.
+
+        Both payloads travel value-wrapped: ``entity`` addresses the record
+        the action runs against, ``parameters`` the action's own inputs
+        (omitted when the action takes none). The server answers 204 when
+        the action completed synchronously, or 202 with a status URL in
+        ``Location`` to poll until it answers 204.
+
+        Trap (T36 live): a 204 can carry a ``Location`` header too, and it
+        does not resolve - only a 202 means "poll"; a 204 is done, its
+        Location is never followed.
+        """
+        body: dict[str, Any] = {"entity": wrap(record)}
+        if parameters is not None:
+            body["parameters"] = wrap(parameters)
+        r = self._checked(
+            self._http.post(f"{self._url(entity, endpoint)}/{action}", json=body)
+        )
+        while r.status_code == 202:
+            # resolve Location per HTTP semantics (relative to the request
+            # URL); the absolute result bypasses base_url re-prefixing
+            status_url = r.request.url.join(r.headers.get("Location", ""))
+            time.sleep(self.poll_interval)
+            r = self._checked(self._http.get(status_url))
 
     # -- CustomizationApi (same cookie session; works on a virgin tenant) --
 

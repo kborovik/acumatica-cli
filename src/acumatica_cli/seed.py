@@ -12,6 +12,23 @@ Baseline file format:
       - CurrencyID: "CAD"
         Description: Canadian Dollar
 
+Action file format (setup/*.yaml) - desired state realized by a contract
+action plus a done_when live-state probe, for setup verbs a keyed PUT
+cannot express (calendar generation and the like):
+
+    action: GenerateCalendar          # action name on the endpoint entity
+    entity: MasterCalendar            # entity the action hangs off
+    endpoint: Bootstrap/1.2.0         # optional: override the instance endpoint
+    record:     { FinancialYear: 2026 }
+    parameters: { FromYear: 2026, ToYear: 2026 }   # optional
+    done_when:  { filter: "FinancialYear eq '2026'" }
+
+done_when's entity/endpoint default to the action's own. The probe is
+coarse present/absent (an action leaves no keyed record to field-diff)
+and gates both directions (V4): apply skips on non-empty, diff drifts on
+empty. One record per file - multiple invocations author as multiple
+numbered files.
+
 `endpoint:` stops being optional when `entity` names one the packaged
 Bootstrap endpoint serves (V20): the same name can mean different screens
 per endpoint (B8 - Bootstrap Currency = CM202000 financial currency,
@@ -83,23 +100,44 @@ class BaselineFile(Model):
         return self
 
 
-def load_baseline(path: Path) -> BaselineFile:
-    """Parse and validate one baseline YAML file."""
+class DoneProbe(Model):
+    """The done_when live-state probe: entity/endpoint default to the action's."""
+
+    entity: str | None = None
+    endpoint: str | None = None
+    filter: str | None = None
+
+
+class ActionFile(Model):
+    """A parsed action YAML: one contract action, its payloads, its probe."""
+
+    path: Path
+    action: str
+    entity: str
+    record: dict[str, Any]
+    parameters: dict[str, Any] | None = None
+    endpoint: str | None = None
+    done_when: DoneProbe
+
+
+def load_baseline(path: Path) -> BaselineFile | ActionFile:
+    """Parse and validate one seed YAML file, dispatching on the action: key."""
     with open(path) as f:
         data = yaml.safe_load(f)
     if not isinstance(data, dict):
         raise SystemExit(f"{path}: expected a mapping at the top level")
+    kind = ActionFile if "action" in data else BaselineFile
     try:
-        baseline = BaselineFile.model_validate({"path": path, **data})
+        parsed = kind.model_validate({"path": path, **data})
     except ValidationError as exc:
         raise SystemExit(f"{path}: {validation_summary(exc)}") from exc
-    if baseline.endpoint is None and baseline.entity in BOOTSTRAP_ENTITIES:
+    if parsed.endpoint is None and parsed.entity in BOOTSTRAP_ENTITIES:
         raise SystemExit(
-            f"{path}: entity '{baseline.entity}' is served by both the instance "
+            f"{path}: entity '{parsed.entity}' is served by both the instance "
             f"default endpoint ({_DEFAULT_ENDPOINT}) and the packaged "
             f"{BOOTSTRAP_ENDPOINT} - add an explicit 'endpoint:' line to pick one"
         )
-    return baseline
+    return parsed
 
 
 def _norm(value: Any) -> str:
@@ -120,10 +158,51 @@ def _filter_for(record: dict[str, Any], keys: list[str]) -> str:
     return " and ".join(f"{k} eq '{record[k]}'" for k in keys)
 
 
-def apply(
-    client: AcumaticaClient, baseline: BaselineFile, dry_run: bool = False
+def _probe(client: AcumaticaClient, action: ActionFile) -> bool:
+    """Run the done_when live-state probe; non-empty = action already realized.
+
+    A live probe, never a marker (V4) - a marker outlives state loss, the
+    probe answers whether the state the action creates exists right now.
+    """
+    probe = action.done_when
+    params = {"$filter": probe.filter} if probe.filter else None
+    live = client.get_list(
+        probe.entity or action.entity,
+        params=params,
+        endpoint=probe.endpoint or action.endpoint,
+    )
+    return bool(live)
+
+
+def _apply_action(
+    client: AcumaticaClient, action: ActionFile, dry_run: bool = False
 ) -> int:
-    """PUT every record (upsert by key). Returns the record count."""
+    """Invoke the action unless done_when already verifies the desired state."""
+    if dry_run:
+        output.data(f"  would invoke {action.action}")
+    elif _probe(client, action):
+        output.data(f"  skip {action.action} (already done)")
+    else:
+        client.invoke(
+            action.entity,
+            action.action,
+            action.record,
+            action.parameters,
+            action.endpoint,
+        )
+        output.data(f"  invoke {action.action} [{action.entity}]")
+    return 1
+
+
+def apply(
+    client: AcumaticaClient, baseline: BaselineFile | ActionFile, dry_run: bool = False
+) -> int:
+    """PUT every record (upsert by key); an action file invokes its action.
+
+    Returns the record count.
+    """
+    if isinstance(baseline, ActionFile):
+        return _apply_action(client, baseline, dry_run)
     for record in baseline.records:
         label = ", ".join(str(record[k]) for k in baseline.keys)
         if dry_run:
@@ -165,11 +244,18 @@ def _fetch(
         )
 
 
-def diff(client: AcumaticaClient, baseline: BaselineFile) -> list[str]:
+def diff(client: AcumaticaClient, baseline: BaselineFile | ActionFile) -> list[str]:
     """Compare each source record against the live tenant.
 
-    Returns human-readable drift lines (empty = no drift).
+    Returns human-readable drift lines (empty = no drift). An action file
+    diffs through its done_when probe - coarse present/absent (V4): a
+    tenant that lost the action's effect must not diff false-green, but an
+    action leaves no keyed record to compare field by field.
     """
+    if isinstance(baseline, ActionFile):
+        if _probe(client, baseline):
+            return []
+        return [f"action {baseline.action}: not applied"]
     drifts: list[str] = []
     for record in baseline.records:
         label = (

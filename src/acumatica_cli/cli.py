@@ -361,14 +361,17 @@ def provision_cmd(
     Chains the verified pipeline (docs/rest-api.md) idempotently: tenant
     create over SSH (skipped when the login name already exists), bootstrap
     package publish (skipped when already published), bootstrap/ YAML through
-    the custom endpoint, baseline/ through the Default endpoint, then a drift
-    check over everything applied - exit 2 on drift.
+    the custom endpoint, baseline/ through the Default endpoint, setup/
+    action files (skipped when their done_when probe verifies the state),
+    then a drift check over everything applied - exit 2 on drift.
     """
     root = data_root()
     baseline_dir = root / "baseline"
     if not baseline_dir.is_dir():
         raise SystemExit(f"{baseline_dir}: not a directory - nothing to provision")
-    seed_dirs = [d for d in (root / "bootstrap", baseline_dir) if d.is_dir()]
+    seed_dirs = [
+        d for d in (root / "bootstrap", baseline_dir, root / "setup") if d.is_dir()
+    ]
     # every session below signs in to the provisioned tenant, never a default
     inst = inst.model_copy(update={"tenant": login_name})
 
