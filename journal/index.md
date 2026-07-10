@@ -302,9 +302,10 @@ Every Acumatica problem hit so far, one line each. Status: **resolved**
 | 35 | SalesDemo-extract replay: `AccountGroup` is PM201000 (Projects-gated and absent from the extract) and `ChartOfAccountsOrder` + `CashAccount` are server-derived (PUT-tolerated, server keeps its own derivation) — extracted config carrying any of them fails to apply or diffs dirty forever | resolved (B11/V22: strip rule covers references outside the baseline set and server-derived fields; generator strips all four) | [2026-07-09](2026-07-09.md), [2026-07-10](2026-07-10.md) |
 | 38 | Baseline apply order is whatever alphabetical filename sort says — `30-currencies.yaml` gain/loss pairs 422 until the SUB row from the subaccounts file exists, so semantic filenames applied currencies first | resolved (B10/V22: numbered filename prefixes encode the dependency order; dir expansion stays alphabetical) | [2026-07-10](2026-07-10.md) |
 | 39 | Training-data screen IDs lie: the plan named GL preferences as GL105000, but the live site map has no such row — General Ledger Preferences is GL102000 on this build (GL105020/30 are budget restriction screens) | resolved (T34: site-map SQL probe + GL102000.aspx bindings; spec amended before any code) | [2026-07-10](2026-07-10.md) |
-| 40 | Default-endpoint `Ledger` entity's `Companies` detail is write-tolerated but silently dropped — PUT answers 200 echoing the record while the org-ledger link table stays empty, so the batch header cannot default `LedgerID` (the B3/B7 silent-no-op shape wearing a detail list) | open (B12/T36; screen surface is GL201500's `OrganizationLedgerLinkWithOrganizationSelect` view on `GeneralLedgerMaint`) | [2026-07-10](2026-07-10.md) |
-| 41 | GL posting on a fresh tenant needs a setup chain no single entity closes: `FinYearSetup` singleton → master calendar year → company periods, plus the org-ledger link; the Default `FinancialYear` entity inserts bare `{}` but pins the year start to the creation date, and an explicit start date fails the "configure all the Financial Periods" validation both ways the API offers | open (B12/T36; `wrap()` is scalar-only, so detail-carrying routes are also a seed-side mechanism decision) | [2026-07-10](2026-07-10.md) |
-| 42 | The PowerShell reflection probe that settled `GLSetupMaint` stack-overflows on the ledger graphs (`GeneralLedgerMaint`) — same script shape, different type graph | workaround (aspx grep for `TypeName`/`PrimaryView`/`DataField` is the sturdier binding instrument) | [2026-07-10](2026-07-10.md) |
+| 40 | Default-endpoint `Ledger` entity's `Companies` detail is write-tolerated but silently dropped — PUT answers 200 echoing the record while the org-ledger link table stays empty, so the batch header cannot default `LedgerID` (the B3/B7 silent-no-op shape wearing a detail list) | resolved (T36: Bootstrap `LedgerCompany` entity writes through GL201500's `OrganizationLedgerLinkWithOrganizationSelect` view — the link seeds as `baseline/60-ledger-company.yaml`) | [2026-07-10](2026-07-10.md) |
+| 41 | GL posting on a fresh tenant needs a setup chain no single entity closes: `FinYearSetup` singleton → master calendar year → company periods, plus the org-ledger link; the Default `FinancialYear` entity inserts bare `{}` but pins the year start to the creation date, and an explicit start date fails the "configure all the Financial Periods" validation both ways the API offers | resolved (T36: `setup/` action files — `GeneratePeriods` (AutoFill) realizes the FinYearSetup singleton with an explicit January 1 start, `GenerateCalendar` (GenerateYears) generates the master year, and company periods derive once the organization exists; `done_when` probes verify each) | [2026-07-10](2026-07-10.md) |
+| 42 | The PowerShell reflection probe that settled `GLSetupMaint` stack-overflows on the ledger graphs (`GeneralLedgerMaint`) — same script shape, different type graph | workaround (aspx grep for `TypeName`/`PrimaryView`/`DataField` is the sturdier binding instrument; constructor-free static reflection — `Assembly.GetType` + field enumeration — safely settles declaring types and DAC homes on the same graphs) | [2026-07-10](2026-07-10.md) |
+| 43 | Contract-API list GET goes blind on an AND `$filter` spanning fields of different views — each predicate alone matches the row, the conjunction answers 200 `[]`, and the key-URL form 500s with a non-B9 exception, so a composite-key seed file on a multi-view entity phantom-drifts "missing on tenant" behind a PUT that persisted | resolved (B14/V4 clause: multi-view entity seed files key on primary-view fields only; secondary-view fields stay record fields and diff field by field) | [2026-07-10](2026-07-10.md) |
 
 ## Status
 
@@ -335,14 +336,14 @@ Remaining milestones:
   (SPEC T13); the plugin's feature set is data-driven from
   `bootstrap/features.yaml` (SPEC T24).
 - `[OPEN]` Baseline expanded in dependency order — subaccounts, chart of
-  accounts, financial currencies (SPEC T31), and the actual ledger + GL
-  preferences (SPEC T34; Finance screens open on a fresh tenant) landed,
-  numbered prefixes encode apply order; the action-file mechanism (SPEC
-  T38: `setup/*.yaml`, `client.invoke`, `done_when` probe, provision
-  `setup/` phase) is in place offline; still open: GL posting closure —
-  org-ledger link + financial calendar on top of T38 (SPEC T36/B12) →
-  tax categories/zones → customer/vendor/item classes (payment terms
-  seed as bootstrap credit terms).
+  accounts, financial currencies (SPEC T31), the actual ledger + GL
+  preferences (SPEC T34; Finance screens open on a fresh tenant), and
+  the GL setup chain (SPEC T36 via the T38 action files: org-ledger
+  link, financial year, master + company calendar — Bootstrap 1.3.0,
+  live-verified 5/5 e2e) landed, numbered prefixes encode apply order;
+  still open: GL period activation (SPEC T37/B13, the last link before
+  a batch posts) → tax categories/zones → customer/vendor/item classes
+  (payment terms seed as bootstrap credit terms).
 - `[OPEN]` Drift proof: provision two tenants, diff config, zero difference.
 - `[OPEN]` Timing captured (manual baseline vs automated).
 - `[OPEN]` Repo clean and runnable; README shows `acu provision` reproducing
