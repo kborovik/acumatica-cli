@@ -23,7 +23,23 @@ Sources:
 - `-output:"Forced"` (`-op`) makes it log to stdout — use it in automation.
 - Exit code is meaningful; propagate `$LASTEXITCODE` in PowerShell wrappers.
 - `-file:"<path>"` (`-f`) points at an XML configuration file exported from
-  the Configuration Wizard — the alternative to spelling out flags.
+  the Configuration Wizard — the alternative to spelling out flags. Format
+  verified 2026-07-09 (decompiled `AcumaticaConfig.ConsoleOptionExtensions`
+  in the 26.101 binary, then generated a real file by calling the wizard's
+  own `SaveToFile` over PowerShell reflection): root element is literally
+  `<Root>`; one child element per option, named by the option's *long* CLI
+  name, value in a `Value` attribute (never element text), a decorative
+  `Description` attribute the loader ignores. Null-valued options are
+  omitted and fall back to built-in defaults on load; unknown elements are
+  silently ignored. Tenants ride in a `<company>` element holding one
+  `<Company CompanyID=".." Deleted=".." ParentID=".." CompanyType=".."
+  Visible=".." LoginName=".."/>` per tenant; RabbitMQ parameters in
+  `<rabbitconnparams>`. Two trailing write-only elements
+  (`ShortConsoleCommand`, `LongConsoleCommand`) carry the equivalent
+  command line as self-documentation. Passwords, if set, are written in
+  clear text. The console binary has no save flag — only the GUI wizard
+  writes this file. Note this file is **installer parameters only** (DB,
+  IIS, instance, tenant list); it contains no in-tenant ERP data.
 
 ## Tenant management — `-cm:CompanyConfig`
 
@@ -126,6 +142,45 @@ None of them is a bootstrap shortcut for a clean client baseline.
 Owned by `acumatica-infra` (see `instance.yml` for the full working command:
 DB + tenants + IIS site in one shot). Kept out of scope here; this repo
 assumes the instance exists.
+
+## Hidden data verbs: `export` / `import` — verified 2026-07-09
+
+`ac.exe -?` does not list them, but the 26.101 binary dispatches a second
+command family when the first argument is a bare verb instead of a flag
+(found by decompiling `ConfigStart.opcodeHandlers`): `database`, `export`,
+`import`, `xmlentity`, `delta`, `util`, `mobilesitemap`, and others. The
+interesting pair for config-as-code:
+
+```text
+ac.exe export <adb|csv|xml> <datasource-url> <folder>   # dump one tenant's data
+ac.exe import <adb|xml> <folder> <datasource-url>       # load it back
+```
+
+The datasource URL is `<proto>://<connection-string>?<params>` where proto
+is `mssql` (also `sql`, `mysql`, `pgsql`, `file`) and params include
+`companyid=N` (or `companycd=`, `parentid=`, `schema=`, `timeout=`).
+Live-verified export on acu-dev1:
+
+```powershell
+& 'C:\Program Files\Acumatica ERP\Data\ac.exe' export xml `
+  'mssql://Server=(local);Database=AcumaticaDB;Integrated Security=SSPI?companyid=2' `
+  "$env:TEMP\company2-export"   # exit 0
+```
+
+Output: one XML file per table that has rows for that tenant (a near-empty
+tenant produced 10 files; a `SalesDemo` tenant would produce hundreds).
+The format is exactly the shipped-dataset format under
+`C:\Program Files\Acumatica ERP\Database\Data\<DataSet>\` — a `<data>`
+document with a typed `<table><col .../></table>` schema header followed by
+`<rows><row Attr="value" .../></rows>`. In other words, `SalesDemo` *is* an
+`ac.exe export xml` dump, and `CompanyType` at tenant creation is the
+import path for it.
+
+Caveats before treating this as an editing surface: rows are raw table
+data — internal integer IDs cross-reference across files, and imports
+bypass all business logic (no defaults, validations, or side effects run,
+unlike REST). The schema header is version-coupled to the build. `import`
+is **unverified** (it mutates; test on a scratch tenant first).
 
 ## Snapshots: NOT supported by ac.exe — verified finding
 

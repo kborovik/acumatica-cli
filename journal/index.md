@@ -55,7 +55,19 @@ Newest first.
   first tripping over the PyPI registration form's Repository-name field
   (bare repo name, not `owner/repo` — the form accepts the slash silently
   and the publish fails `invalid-publisher`); `pip install
-  acumatica-cli==0.2.2` verified from pypi.org.
+  acumatica-cli==0.2.2` verified from pypi.org; ac.exe archaeology
+  (decompiled 26.101 with ilspycmd) recovers two undocumented surfaces,
+  both written up in `docs/ac-exe.md` — the `-f` configuration-file XML
+  format (`<Root>` + one element per long option name with a `Value`
+  attribute; installer parameters only, no ERP data; genuine dump produced
+  by calling the wizard's own `SaveToFile` via PowerShell reflection) and
+  a hidden bare-word verb family (`export`/`import`/`database`/…):
+  `ac.exe export xml 'mssql://…?companyid=N' <folder>` live-verified,
+  dumps one tenant as per-table XML in exactly the shipped
+  `Database\Data\` dataset format (SalesDemo *is* such a dump), making
+  dump → version → edit → import mechanically possible but raw-table
+  (ID webs, no business logic, version-coupled) — REST seeding stays
+  primary, export earns a note as a whole-tenant diff/DR candidate.
 - [2026-07-08](2026-07-08.md) — recycle unblocks tenant visibility (stale-map
   corrections); first-login password wall found and defeated (screen-flow,
   then `-aup` preset); `acu tenant create` chains create → recycle →
