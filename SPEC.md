@@ -15,7 +15,7 @@ Configure Acumatica ERP purely from source — no UI, no Configuration Wizard. I
 
 ## §I INTERFACES
 
-- cmd: `acu [-t <tenant>] [--host <host>] [--version] <subcommand>` → globals valid only before subcommand; `--host` swaps acu.yaml `host` pre-`Instance` build → `base_url`/`ssh` re-derive; explicit acu.yaml `base_url`/`ssh` still win
+- cmd: `acu [-t <tenant>] [--host <host>] [--version] <subcommand>` → globals valid only before subcommand; `--host` swaps acu.yaml `host` pre-`Instance` build → `base_url`/`ssh` re-derive; explicit acu.yaml `base_url`/`ssh` still win; `--version` → editable install (PEP 610 `direct_url.json` `dir_info.editable`) renders `<version>+dev (<checkout path>)`, release install plain `<version>`
 - cmd: `acu tenant list|create|delete` → tenant CRUD over SSH; create: `--id` ! + `--login` ! + `--type`/`--parent`/`--hidden`/`--no-init` ?; delete: `--id` + confirm prompt, `--yes` skips
 - cmd: `acu apply [--dry-run] <files|dirs>` → PUT each record; dir arg expands `*.yaml`; dry-run lines `would PUT …`, summary suffixed `(dry run)`
 - cmd: `acu diff <files|dirs>` → GET by `$filter` on key fields, compare normalized; drift → exit 2
@@ -84,6 +84,7 @@ T24|.|data-driven bootstrap features — `package_zip()` injects `Enabled` list 
 T25|.|content-aware publish gate — `publish()` embeds deterministic content digest (project.xml bytes) in package description; skip ! published + project exists + digest match; digest mismatch → reimport + republish; offline tests pin mismatch→republish path|V4,T24
 T26|.|`acu config init` — scaffold data repo per §I.cmd row: 7-file template set via `importlib.resources`, per-file skip-if-exists; build after T24 (features.yaml template copies verified format); verify: empty dir → `init --host h` → `config show` succeeds + `apply --dry-run bootstrap/ baseline/` parses all templates; re-run → all `skip`, zero mutations, exit 0|V2,V3,V9,V15,T24
 T27|.|`acu config check` — four-probe read-only preflight per §I.cmd row; verify: healthy instance → 4x `ok` exit 0; wrong `ACU_PASSWORD` → REST `fail` while ssh still reports, exit 1; live state unchanged either way|V3,V5,V6,V9,V15,V18
+T28|.|dev-version marker — `--version` reads own dist `direct_url.json` (PEP 610); `dir_info.editable` true → `<version>+dev (<checkout path>)`, else plain `<version>`; no build-backend change, `uv version --bump` release flow intact; offline tests: editable metadata → `+dev` suffix, wheel/no-`direct_url.json` → plain|V19,I.cmd
 
 ## §B BUGS
 
