@@ -95,7 +95,20 @@ Newest first.
   reference closure), after which the resumed provision republished
   through the digest gate and applied all seven seed files with a clean
   diff, re-init answered eleven skips, and the scratch tenant was torn
-  down.
+  down; T37 closes the last GL-posting link — the GL201100 "Open
+  Periods" redirect that B13 declared unfollowable is bypassed by
+  driving GL503000 itself: Bootstrap 1.4.0 adds `ManagePeriods` (the
+  `FinPeriodStatusProcess` filter plus a contract action on the
+  runtime-registered `ProcessAll`; the filter `Action` takes the stored
+  word `Open`) and `CompanyPeriod` (GL201100's per-period
+  `OrgFinPeriods` view, single-view on purpose so the done_when
+  conjunction of FinancialYear and Status dodges B14), drops the dead
+  CompanyCalendar `OpenPeriods` action, and the live verify runs the
+  whole chain on a fresh scratch tenant — provision zero manual steps,
+  `invoke ProcessAll`, diff clean over twelve files, and a GL batch PUT
+  + release answering **Posted**, the criterion B12/B13 kept pushing
+  forward; re-run skipped all three actions and the tenant tore down
+  clean.
 - [2026-07-09](2026-07-09.md) — T17 closes the SPEC backlog: `exit
   $LASTEXITCODE` centralized in `_ssh` (single choke point per V18, the
   B4 recurrence class), call-site hand-appends stripped, suffix pinned
@@ -320,6 +333,7 @@ Every Acumatica problem hit so far, one line each. Status: **resolved**
 | 42 | The PowerShell reflection probe that settled `GLSetupMaint` stack-overflows on the ledger graphs (`GeneralLedgerMaint`) — same script shape, different type graph | workaround (aspx grep for `TypeName`/`PrimaryView`/`DataField` is the sturdier binding instrument; constructor-free static reflection — `Assembly.GetType` + field enumeration — safely settles declaring types and DAC homes on the same graphs) | [2026-07-10](2026-07-10.md) |
 | 43 | Contract-API list GET goes blind on an AND `$filter` spanning fields of different views — each predicate alone matches the row, the conjunction answers 200 `[]`, and the key-URL form 500s with a non-B9 exception, so a composite-key seed file on a multi-view entity phantom-drifts "missing on tenant" behind a PUT that persisted | resolved (B14/V4 clause: multi-view entity seed files key on primary-view fields only; secondary-view fields stay record fields and diff field by field) | [2026-07-10](2026-07-10.md) |
 | 44 | A template/data-repo set can require features its own features.yaml never enables — the scaffolded subaccounts template 403s on the feature-gated GL203000 because the features template shipped the built-in six without SubAccount, while the verified data repo passed only because its list had grown separately | resolved (B15/V22 feature-closure clause: the shipped set must enable every feature its baseline files require; template features.yaml gains SubAccount, a test asserts the closure) | [2026-07-10](2026-07-10.md) |
+| 45 | Processing screens are not entity-action drivable the obvious way: the GL201100 "Open Periods" action is a `PXRedirectHelper` redirect to GL503000 the contract API cannot follow (B13), and the processing graph declares no `PXAction` to map — the process buttons are runtime-registered by `PXFilteredProcessing` | resolved (T37: a contract entity over the GL503000 *filter view* plus an action mapped to the runtime `ProcessAll` drives the processing directly; the filter `Action` field takes stored words like `Open`) | [2026-07-10](2026-07-10.md) |
 
 ## Status
 
@@ -351,13 +365,14 @@ Remaining milestones:
   `bootstrap/features.yaml` (SPEC T24).
 - `[OPEN]` Baseline expanded in dependency order — subaccounts, chart of
   accounts, financial currencies (SPEC T31), the actual ledger + GL
-  preferences (SPEC T34; Finance screens open on a fresh tenant), and
-  the GL setup chain (SPEC T36 via the T38 action files: org-ledger
-  link, financial year, master + company calendar — Bootstrap 1.3.0,
-  live-verified 5/5 e2e) landed, numbered prefixes encode apply order;
-  still open: GL period activation (SPEC T37/B13, the last link before
-  a batch posts) → tax categories/zones → customer/vendor/item classes
-  (payment terms seed as bootstrap credit terms).
+  preferences (SPEC T34; Finance screens open on a fresh tenant), the
+  GL setup chain (SPEC T36 via the T38 action files: org-ledger link,
+  financial year, master + company calendar), and GL period activation
+  (SPEC T37: `ManagePeriods` drives GL503000 directly — Bootstrap
+  1.4.0, GL batch posts on a fresh tenant end to end) landed, numbered
+  prefixes encode apply order; still open: tax categories/zones →
+  customer/vendor/item classes (payment terms seed as bootstrap credit
+  terms).
 - `[OPEN]` Drift proof: provision two tenants, diff config, zero difference.
 - `[OPEN]` Timing captured (manual baseline vs automated).
 - `[OPEN]` Repo clean and runnable; README shows `acu provision` reproducing
