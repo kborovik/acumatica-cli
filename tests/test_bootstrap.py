@@ -125,7 +125,11 @@ def test_package_zip_carries_the_bootstrap_endpoint() -> None:
     live box: CS101500 -> OrganizationMaint (mappings follow the screen's
     own bindings, T13 - AcctCD/AcctName on the primary BAccount view,
     OrganizationType/BaseCuryID on OrganizationView, CountryID on
-    AddressDummy), CS206500 -> TermsMaint view TermsDef.
+    AddressDummy), CS206500 -> TermsMaint view TermsDef, CM202000 ->
+    CurrencyMaint (T29 - general info on the primary CuryListRecords view
+    of CurrencyList, the GL Accounts tab on CuryRecords of CM.Currency;
+    every gain/loss Acct/Sub pair is required at persist, so all ten pairs
+    ship).
     """
     ns = "{http://www.acumatica.com/entity/maintenance/5.31}"
     with zipfile.ZipFile(io.BytesIO(bootstrap.package_zip())) as zf:
@@ -137,11 +141,12 @@ def test_package_zip_carries_the_bootstrap_endpoint() -> None:
     # SystemContracts.V4 is the build's only IsCurrent implementation
     assert endpoint.get("systemContractVersion") == "4"
     entities = {e.get("name"): e for e in endpoint.findall(f"{ns}TopLevelEntity")}
-    assert set(entities) == {"Company", "CreditTerms"}
+    assert set(entities) == {"Company", "CreditTerms", "Currency"}
     # features stay OUT: contract-endpoint writes to CS100000 do not
     # persist (T3 verdict) - the CustomizationPlugin owns features
     assert entities["Company"].get("screen") == "CS101500"
     assert entities["CreditTerms"].get("screen") == "CS206500"
+    assert entities["Currency"].get("screen") == "CM202000"
     # mappings follow the screen's own bindings (T13): a DAC prop existing
     # on the primary view is not enough - writes land only through the
     # view the screen edits. Field names = DAC props verbatim.
@@ -165,6 +170,40 @@ def test_package_zip_carries_the_bootstrap_endpoint() -> None:
             ),
             "TermsDef",
         ),
+        "Currency": {
+            # general info -> the primary CurrencyList view; IsFinancial is
+            # what makes the currency financial (B8: the Default endpoint
+            # cannot reach it as a CM.Currency-creating write)
+            **dict.fromkeys(
+                (
+                    "CuryID",
+                    "Description",
+                    "CurySymbol",
+                    "DecimalPlaces",
+                    "IsActive",
+                    "IsFinancial",
+                ),
+                "CuryListRecords",
+            ),
+            # GL Accounts tab -> CuryRecords (CM.Currency): all ten
+            # gain/loss Acct/Sub pairs carry PXDefault(PersistingCheck.Null)
+            # with no setup default - required at persist
+            **dict.fromkeys(
+                (
+                    f"{kind}{side}{part}ID"
+                    for kind in (
+                        "Real",
+                        "Reval",
+                        "Translation",
+                        "Unrealized",
+                        "Rounding",
+                    )
+                    for side in ("Gain", "Loss")
+                    for part in ("Acct", "Sub")
+                ),
+                "CuryRecords",
+            ),
+        },
     }
     for entity, expected in views.items():
         fields = {
@@ -184,6 +223,18 @@ def test_package_zip_carries_the_bootstrap_endpoint() -> None:
         entities["Company"].findall(f"{ns}Fields/{ns}Field")[0].get("type")
         == "StringValue"
     )
+    # Currency value types (T29): DecimalPlaces is Nullable<Int16> ->
+    # ShortValue, the two flags -> BooleanValue, everything else (keys,
+    # text, segment-mask CD strings) -> StringValue
+    currency_types = {
+        f.get("name"): f.get("type")
+        for f in entities["Currency"].findall(f"{ns}Fields/{ns}Field")
+    }
+    assert currency_types["DecimalPlaces"] == "ShortValue"
+    assert currency_types["IsActive"] == "BooleanValue"
+    assert currency_types["IsFinancial"] == "BooleanValue"
+    assert currency_types["CuryID"] == "StringValue"
+    assert currency_types["RealGainAcctID"] == "StringValue"
 
 
 def _served_package(description: str) -> str:

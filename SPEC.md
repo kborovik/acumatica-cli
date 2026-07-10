@@ -85,7 +85,7 @@ T25|x|content-aware publish gate — `publish()` embeds deterministic content di
 T26|x|`acu config init` — scaffold data repo per §I.cmd row: 7-file template set via `importlib.resources`, per-file skip-if-exists; build after T24 (features.yaml template copies verified format); verify: empty dir → `init --host h` → `config show` succeeds + `apply --dry-run bootstrap/ baseline/` parses all templates; re-run → all `skip`, zero mutations, exit 0|V2,V3,V9,V15,T24
 T27|x|`acu config check` — four-probe read-only preflight per §I.cmd row; verify: healthy instance → 4x `ok` exit 0; wrong `ACU_PASSWORD` → REST `fail` while ssh still reports, exit 1; live state unchanged either way|V3,V5,V6,V9,V15,V18
 T28|x|dev-version marker — `--version` reads own dist `direct_url.json` (PEP 610); `dir_info.editable` true → `<version>+dev (<checkout path>)`, else plain `<version>`; no build-backend change, `uv version --bump` release flow intact; offline tests: editable metadata → `+dev` suffix, wheel/no-`direct_url.json` → plain|V19,I.cmd
-T29|.|extend Bootstrap endpoint w/ financial-currency entity (CM202000) — verify: PUT EUR via `Bootstrap/1.0.0` on fresh tenant → EUR-denominated account applies|T12,V12,I.data
+T29|x|extend Bootstrap endpoint w/ financial-currency entity (CM202000) — verify: PUT EUR via `Bootstrap/1.0.0` on fresh tenant → EUR-denominated account applies|T12,V12,I.data
 T30|x|diff key-URL fallback per §I.cmd row — `seed.diff` catches optimization-500, retries record via single-record key-URL GET (B9); offline tests: fallback round-trip + non-optimization 500 still raises; live: `acu diff` clean over T29 currencies scratch YAML|V4,V12
 
 ## §B BUGS

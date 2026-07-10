@@ -45,11 +45,28 @@
   - CreditTerms CS206500 -> TermsMaint, PrimaryView TermsDef
                 (DAC PX.Objects.CS.Terms); DayDue00 is Nullable<Int16>
                 -> ShortValue, DiscPercent Nullable<Decimal> -> DecimalValue.
+  - Currency   CM202000 -> CurrencyMaint, PrimaryView CuryListRecords
+                (DAC PX.Objects.CM.CurrencyList) - the financial-currency
+                screen the Default endpoint lacks (B8: Default Currency =
+                CM201000 list only, UseForAccounting creates no CM.Currency
+                row, EUR-denominated accounts 422). Screen bindings read
+                off CM202000.aspx (T29):
+                - CuryID/Description/CurySymbol/DecimalPlaces/IsActive/
+                  IsFinancial -> CuryListRecords (IsFinancial is what makes
+                  the currency financial; DecimalPlaces Nullable<Int16> ->
+                  ShortValue, booleans -> BooleanValue);
+                - the GL Accounts tab -> CuryRecords (DAC PX.Objects.CM.
+                  Currency, Current-keyed on CurrencyList.curyID); every
+                  gain/loss AcctID/SubID pair carries PXDefault(
+                  PersistingCheck.Null) with no setup default - required
+                  at persist, so the endpoint exposes all ten pairs and
+                  the seed data must supply them. Segment masks take the
+                  CD string -> StringValue (Default-endpoint idiom).
   Contract field names = DAC property names verbatim (no rename layer).
   Features (CS100000) stays OUT of the endpoint - writes through any
   contract endpoint do not persist (T3 verdict); the plugin owns features.
 -->
-<Customization level="" description="acu bootstrap: CustomizationPlugin enables features on publish; Bootstrap endpoint exposes company + credit terms" product-version="26.101">
+<Customization level="" description="acu bootstrap: CustomizationPlugin enables features on publish; Bootstrap endpoint exposes company + credit terms + financial currency" product-version="26.101">
   <EntityEndpoint>
     <Endpoint xmlns="http://www.acumatica.com/entity/maintenance/5.31" name="Bootstrap" version="1.0.0" systemContractVersion="4">
       <TopLevelEntity name="Company" screen="CS101500">
@@ -109,6 +126,116 @@
           </Mapping>
           <Mapping field="DiscPercent">
             <To object="TermsDef" field="DiscPercent" />
+          </Mapping>
+        </Mappings>
+      </TopLevelEntity>
+      <TopLevelEntity name="Currency" screen="CM202000">
+        <Fields>
+          <Field name="CuryID" type="StringValue" />
+          <Field name="Description" type="StringValue" />
+          <Field name="CurySymbol" type="StringValue" />
+          <Field name="DecimalPlaces" type="ShortValue" />
+          <Field name="IsActive" type="BooleanValue" />
+          <Field name="IsFinancial" type="BooleanValue" />
+          <Field name="RealGainAcctID" type="StringValue" />
+          <Field name="RealGainSubID" type="StringValue" />
+          <Field name="RealLossAcctID" type="StringValue" />
+          <Field name="RealLossSubID" type="StringValue" />
+          <Field name="RevalGainAcctID" type="StringValue" />
+          <Field name="RevalGainSubID" type="StringValue" />
+          <Field name="RevalLossAcctID" type="StringValue" />
+          <Field name="RevalLossSubID" type="StringValue" />
+          <Field name="TranslationGainAcctID" type="StringValue" />
+          <Field name="TranslationGainSubID" type="StringValue" />
+          <Field name="TranslationLossAcctID" type="StringValue" />
+          <Field name="TranslationLossSubID" type="StringValue" />
+          <Field name="UnrealizedGainAcctID" type="StringValue" />
+          <Field name="UnrealizedGainSubID" type="StringValue" />
+          <Field name="UnrealizedLossAcctID" type="StringValue" />
+          <Field name="UnrealizedLossSubID" type="StringValue" />
+          <Field name="RoundingGainAcctID" type="StringValue" />
+          <Field name="RoundingGainSubID" type="StringValue" />
+          <Field name="RoundingLossAcctID" type="StringValue" />
+          <Field name="RoundingLossSubID" type="StringValue" />
+        </Fields>
+        <Mappings>
+          <Mapping field="CuryID">
+            <To object="CuryListRecords" field="CuryID" />
+          </Mapping>
+          <Mapping field="Description">
+            <To object="CuryListRecords" field="Description" />
+          </Mapping>
+          <Mapping field="CurySymbol">
+            <To object="CuryListRecords" field="CurySymbol" />
+          </Mapping>
+          <Mapping field="DecimalPlaces">
+            <To object="CuryListRecords" field="DecimalPlaces" />
+          </Mapping>
+          <Mapping field="IsActive">
+            <To object="CuryListRecords" field="IsActive" />
+          </Mapping>
+          <Mapping field="IsFinancial">
+            <To object="CuryListRecords" field="IsFinancial" />
+          </Mapping>
+          <Mapping field="RealGainAcctID">
+            <To object="CuryRecords" field="RealGainAcctID" />
+          </Mapping>
+          <Mapping field="RealGainSubID">
+            <To object="CuryRecords" field="RealGainSubID" />
+          </Mapping>
+          <Mapping field="RealLossAcctID">
+            <To object="CuryRecords" field="RealLossAcctID" />
+          </Mapping>
+          <Mapping field="RealLossSubID">
+            <To object="CuryRecords" field="RealLossSubID" />
+          </Mapping>
+          <Mapping field="RevalGainAcctID">
+            <To object="CuryRecords" field="RevalGainAcctID" />
+          </Mapping>
+          <Mapping field="RevalGainSubID">
+            <To object="CuryRecords" field="RevalGainSubID" />
+          </Mapping>
+          <Mapping field="RevalLossAcctID">
+            <To object="CuryRecords" field="RevalLossAcctID" />
+          </Mapping>
+          <Mapping field="RevalLossSubID">
+            <To object="CuryRecords" field="RevalLossSubID" />
+          </Mapping>
+          <Mapping field="TranslationGainAcctID">
+            <To object="CuryRecords" field="TranslationGainAcctID" />
+          </Mapping>
+          <Mapping field="TranslationGainSubID">
+            <To object="CuryRecords" field="TranslationGainSubID" />
+          </Mapping>
+          <Mapping field="TranslationLossAcctID">
+            <To object="CuryRecords" field="TranslationLossAcctID" />
+          </Mapping>
+          <Mapping field="TranslationLossSubID">
+            <To object="CuryRecords" field="TranslationLossSubID" />
+          </Mapping>
+          <Mapping field="UnrealizedGainAcctID">
+            <To object="CuryRecords" field="UnrealizedGainAcctID" />
+          </Mapping>
+          <Mapping field="UnrealizedGainSubID">
+            <To object="CuryRecords" field="UnrealizedGainSubID" />
+          </Mapping>
+          <Mapping field="UnrealizedLossAcctID">
+            <To object="CuryRecords" field="UnrealizedLossAcctID" />
+          </Mapping>
+          <Mapping field="UnrealizedLossSubID">
+            <To object="CuryRecords" field="UnrealizedLossSubID" />
+          </Mapping>
+          <Mapping field="RoundingGainAcctID">
+            <To object="CuryRecords" field="RoundingGainAcctID" />
+          </Mapping>
+          <Mapping field="RoundingGainSubID">
+            <To object="CuryRecords" field="RoundingGainSubID" />
+          </Mapping>
+          <Mapping field="RoundingLossAcctID">
+            <To object="CuryRecords" field="RoundingLossAcctID" />
+          </Mapping>
+          <Mapping field="RoundingLossSubID">
+            <To object="CuryRecords" field="RoundingLossSubID" />
           </Mapping>
         </Mappings>
       </TopLevelEntity>

@@ -6,8 +6,10 @@ docs/rest-api.md). The CustomizationApi is the one door that works on a
 virgin tenant, so bootstrap = publish a package whose CustomizationPlugin
 (`bootstrap_plugin.cs`) enables features on publish — the contract API
 cannot write CS100000 at all (T3 verdict) — and whose Bootstrap contract
-endpoint exposes CS101500 company + CS206500 credit terms for seeding
-(`bootstrap_project.xml`, serialization verified T12).
+endpoint exposes CS101500 company + CS206500 credit terms + CM202000
+financial currency for seeding (`bootstrap_project.xml`, serialization
+verified T12; the Default endpoint's Currency entity is the CM201000 list
+only — B8).
 
 Customization publishes are tenant-scoped, so the package must be published
 per tenant; publish() is idempotent on content — the skip gate compares the
@@ -38,7 +40,7 @@ from .client import AcumaticaClient
 PACKAGE_NAME = "AcuBootstrap"
 PACKAGE_DESCRIPTION = (
     "acu bootstrap: CustomizationPlugin enables features on publish; "
-    "Bootstrap endpoint exposes company + credit terms"
+    "Bootstrap endpoint exposes company + credit terms + financial currency"
 )
 PLUGIN_CLASS = "AcuBootstrapPlugin"
 
