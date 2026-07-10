@@ -61,8 +61,8 @@ def test_load_baseline_rejects_record_without_key(tmp_path: Path) -> None:
 
 
 def test_load_baseline_parses_endpoint_override(tmp_path: Path) -> None:
-    text = BASELINE + "endpoint: Bootstrap/1.1.0\n"
-    assert seed.load_baseline(_write(tmp_path, text)).endpoint == "Bootstrap/1.1.0"
+    text = BASELINE + "endpoint: Bootstrap/1.2.0\n"
+    assert seed.load_baseline(_write(tmp_path, text)).endpoint == "Bootstrap/1.2.0"
 
 
 AMBIGUOUS_YAML = """\
@@ -76,8 +76,13 @@ records:
 def test_bootstrap_entities_parsed_from_packaged_template() -> None:
     # V2: the ambiguous set comes from bootstrap_project.xml, never a
     # hand-list - parity pinned here so a template edit surfaces offline
-    assert seed.BOOTSTRAP_ENDPOINT == "Bootstrap/1.1.0"
-    assert {"Company", "CreditTerms", "Currency"} == seed.BOOTSTRAP_ENTITIES
+    assert seed.BOOTSTRAP_ENDPOINT == "Bootstrap/1.2.0"
+    assert {
+        "Company",
+        "CreditTerms",
+        "Currency",
+        "GLPreferences",
+    } == seed.BOOTSTRAP_ENTITIES
 
 
 def test_load_baseline_rejects_bootstrap_entity_without_endpoint(
@@ -89,7 +94,7 @@ def test_load_baseline_rejects_bootstrap_entity_without_endpoint(
     a different screen than the author meant (Bootstrap Currency = CM202000,
     Default Currency = CM201000 list).
     """
-    with pytest.raises(SystemExit, match=r"Default/25\.200\.001.*Bootstrap/1\.1\.0"):
+    with pytest.raises(SystemExit, match=r"Default/25\.200\.001.*Bootstrap/1\.2\.0"):
         seed.load_baseline(_write(tmp_path, AMBIGUOUS_YAML))
 
 
@@ -97,7 +102,7 @@ def test_load_baseline_bootstrap_entity_explicit_endpoint_passes(
     tmp_path: Path,
 ) -> None:
     # V20: explicit endpoint: disambiguates - either target is legitimate
-    for endpoint in ("Bootstrap/1.1.0", "Default/25.200.001"):
+    for endpoint in ("Bootstrap/1.2.0", "Default/25.200.001"):
         text = AMBIGUOUS_YAML + f"endpoint: {endpoint}\n"
         assert seed.load_baseline(_write(tmp_path, text)).endpoint == endpoint
 
@@ -105,7 +110,7 @@ def test_load_baseline_bootstrap_entity_explicit_endpoint_passes(
 def test_apply_and_diff_target_endpoint_override(
     tmp_path: Path, instance: Instance
 ) -> None:
-    text = BASELINE + "endpoint: Bootstrap/1.1.0\n"
+    text = BASELINE + "endpoint: Bootstrap/1.2.0\n"
     baseline = seed.load_baseline(_write(tmp_path, text))
     recorder = Recorder({"/UnitsOfMeasure": _live({"UOM": "KG"})})
 
@@ -113,7 +118,7 @@ def test_apply_and_diff_target_endpoint_override(
     seed.diff(_client(instance, recorder), baseline)
 
     paths = {r.url.path for r in recorder.requests}
-    assert paths == {"/AcumaticaERP/entity/Bootstrap/1.1.0/UnitsOfMeasure"}
+    assert paths == {"/AcumaticaERP/entity/Bootstrap/1.2.0/UnitsOfMeasure"}
 
 
 def test_norm_folds_booleans_and_strips() -> None:
@@ -251,7 +256,7 @@ NO_ENTITY_500 = httpx.Response(
 CURRENCY_YAML = """\
 entity: Currency
 key: CuryID
-endpoint: Bootstrap/1.1.0
+endpoint: Bootstrap/1.2.0
 records:
   - CuryID: EUR
     Description: Euro
@@ -279,8 +284,8 @@ def test_diff_falls_back_to_key_url_on_optimization_500(
     assert seed.diff(_client(instance, recorder), baseline) == []
     paths = [r.url.path for r in recorder.requests]
     assert [p.split("/entity/", 1)[1] for p in paths] == [
-        "Bootstrap/1.1.0/Currency",
-        "Bootstrap/1.1.0/Currency/EUR",
+        "Bootstrap/1.2.0/Currency",
+        "Bootstrap/1.2.0/Currency/EUR",
     ]
 
 

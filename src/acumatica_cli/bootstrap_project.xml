@@ -68,13 +68,28 @@
                   phantom drift - every diff reports them missing, every
                   seed run re-PUTs). Segment masks take the CD string
                   -> StringValue (Default-endpoint idiom).
+  - GLPreferences GL102000 -> GLSetupMaint, PrimaryView GLSetupRecord
+                (DAC PX.Objects.GL.GLSetup) - the GL setup singleton every
+                Finance screen requires (PXSetupNotEnteredException until a
+                row exists). Screen ID verified vs the live site map (T34):
+                General Ledger Preferences = GL102000 on this build;
+                GL105000 (the training-data ID) has no site-map row at all.
+                Bindings read off GL102000.aspx: YtdNetIncAccountID and
+                RetEarnAccountID sit directly on the primary GLSetupRecord
+                view as Account segment masks (CD string -> StringValue),
+                both PXDefault with no default value - required at persist,
+                so the seed data must supply real accounts. Every other
+                GLSetup field carries a PXDefault value (BATCH numbering
+                etc.), which settles the entity's field set: the two
+                accounts only. This build's GLSetup has no RetEarnSubID or
+                YtdNetIncSubID companions.
   Contract field names = DAC property names verbatim (no rename layer).
   Features (CS100000) stays OUT of the endpoint - writes through any
   contract endpoint do not persist (T3 verdict); the plugin owns features.
 -->
-<Customization level="" description="acu bootstrap: CustomizationPlugin enables features on publish; Bootstrap endpoint exposes company + credit terms + financial currency" product-version="26.101">
+<Customization level="" description="acu bootstrap: CustomizationPlugin enables features on publish; Bootstrap endpoint exposes company + credit terms + financial currency + GL preferences" product-version="26.101">
   <EntityEndpoint>
-    <Endpoint xmlns="http://www.acumatica.com/entity/maintenance/5.31" name="Bootstrap" version="1.1.0" systemContractVersion="4">
+    <Endpoint xmlns="http://www.acumatica.com/entity/maintenance/5.31" name="Bootstrap" version="1.2.0" systemContractVersion="4">
       <TopLevelEntity name="Company" screen="CS101500">
         <Fields>
           <Field name="AcctCD" type="StringValue" />
@@ -242,6 +257,20 @@
           </Mapping>
           <Mapping field="RoundingLossSubID">
             <To object="CuryRecords" field="RoundingLossSubID" />
+          </Mapping>
+        </Mappings>
+      </TopLevelEntity>
+      <TopLevelEntity name="GLPreferences" screen="GL102000">
+        <Fields>
+          <Field name="YtdNetIncAccountID" type="StringValue" />
+          <Field name="RetEarnAccountID" type="StringValue" />
+        </Fields>
+        <Mappings>
+          <Mapping field="YtdNetIncAccountID">
+            <To object="GLSetupRecord" field="YtdNetIncAccountID" />
+          </Mapping>
+          <Mapping field="RetEarnAccountID">
+            <To object="GLSetupRecord" field="RetEarnAccountID" />
           </Mapping>
         </Mappings>
       </TopLevelEntity>

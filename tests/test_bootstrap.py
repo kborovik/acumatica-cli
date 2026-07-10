@@ -129,7 +129,9 @@ def test_package_zip_carries_the_bootstrap_endpoint() -> None:
     CurrencyMaint (T29 - general info on the primary CuryListRecords view
     of CurrencyList, the GL Accounts tab on CuryRecords of CM.Currency;
     every gain/loss Acct/Sub pair is required at persist, so all ten pairs
-    ship).
+    ship), GL102000 -> GLSetupMaint view GLSetupRecord (T34 - the GL setup
+    singleton; the two account fields are the only ones without a PXDefault
+    value, and this build has no RetEarnSubID/YtdNetIncSubID).
     """
     ns = "{http://www.acumatica.com/entity/maintenance/5.31}"
     with zipfile.ZipFile(io.BytesIO(bootstrap.package_zip())) as zf:
@@ -137,16 +139,19 @@ def test_package_zip_carries_the_bootstrap_endpoint() -> None:
     (item,) = root.findall("EntityEndpoint")
     (endpoint,) = item.findall(f"{ns}Endpoint")
     assert endpoint.get("name") == "Bootstrap"
-    assert endpoint.get("version") == "1.1.0"
+    assert endpoint.get("version") == "1.2.0"
     # SystemContracts.V4 is the build's only IsCurrent implementation
     assert endpoint.get("systemContractVersion") == "4"
     entities = {e.get("name"): e for e in endpoint.findall(f"{ns}TopLevelEntity")}
-    assert set(entities) == {"Company", "CreditTerms", "Currency"}
+    assert set(entities) == {"Company", "CreditTerms", "Currency", "GLPreferences"}
     # features stay OUT: contract-endpoint writes to CS100000 do not
     # persist (T3 verdict) - the CustomizationPlugin owns features
     assert entities["Company"].get("screen") == "CS101500"
     assert entities["CreditTerms"].get("screen") == "CS206500"
     assert entities["Currency"].get("screen") == "CM202000"
+    # GL preferences = GL102000 on this build - GL105000 has no site-map
+    # row at all (T34, verified vs the live SiteMap table)
+    assert entities["GLPreferences"].get("screen") == "GL102000"
     # mappings follow the screen's own bindings (T13): a DAC prop existing
     # on the primary view is not enough - writes land only through the
     # view the screen edits. Field names = DAC props verbatim.
@@ -204,6 +209,13 @@ def test_package_zip_carries_the_bootstrap_endpoint() -> None:
                 "CuryRecords",
             ),
         },
+        # GL setup singleton (T34): both accounts sit directly on the
+        # primary GLSetupRecord view, PXDefault with no default value -
+        # required at persist; segment-mask CD strings -> StringValue
+        "GLPreferences": dict.fromkeys(
+            ("YtdNetIncAccountID", "RetEarnAccountID"),
+            "GLSetupRecord",
+        ),
     }
     for entity, expected in views.items():
         fields = {
@@ -235,6 +247,11 @@ def test_package_zip_carries_the_bootstrap_endpoint() -> None:
     assert currency_types["IsFinancial"] == "BooleanValue"
     assert currency_types["CuryID"] == "StringValue"
     assert currency_types["RealGainAcctID"] == "StringValue"
+    # GLPreferences value types (T34): segment-mask CD strings
+    assert {
+        f.get("type")
+        for f in entities["GLPreferences"].findall(f"{ns}Fields/{ns}Field")
+    } == {"StringValue"}
 
 
 def _served_package(description: str) -> str:
