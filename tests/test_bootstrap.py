@@ -10,6 +10,8 @@ import io
 import json
 import xml.etree.ElementTree as ET
 import zipfile
+from importlib import resources
+from pathlib import Path
 from typing import Any
 
 import httpx
@@ -18,6 +20,14 @@ import pytest
 from acumatica_cli import bootstrap
 from acumatica_cli.client import AcumaticaClient
 from acumatica_cli.config import Instance
+
+
+def _plugin_source(features: list[str] | None = None) -> str:
+    """The C# source as shipped inside package_zip's Graph item."""
+    with zipfile.ZipFile(io.BytesIO(bootstrap.package_zip(features))) as zf:
+        root = ET.fromstring(zf.read("project.xml"))
+    (graph,) = root.findall("Graph")
+    return graph.get("Source") or ""
 
 
 def test_package_zip_holds_the_project_xml() -> None:
@@ -38,6 +48,71 @@ def test_package_zip_holds_the_project_xml() -> None:
     assert "UpdateDatabase" in source
     # package name must survive ValidatePackageName: alphanumeric only
     assert bootstrap.PACKAGE_NAME.isalnum()
+
+
+def test_plugin_source_on_disk_carries_no_feature_names() -> None:
+    """V2: the feature set is config, never authored in plugin source (B6).
+
+    The shipped .cs holds only the injection sentinel; every Enabled name
+    arrives from features.yaml (or the Python code default) at build time.
+    """
+    source = (resources.files("acumatica_cli") / "bootstrap_plugin.cs").read_text(
+        encoding="utf-8"
+    )
+    assert bootstrap.FEATURES_SENTINEL in source
+    for name in bootstrap.DEFAULT_FEATURES:
+        assert name not in source
+
+
+def test_package_zip_injects_the_default_six() -> None:
+    source = _plugin_source()
+    assert bootstrap.FEATURES_SENTINEL not in source
+    for name in bootstrap.DEFAULT_FEATURES:
+        assert f'"{name}"' in source
+
+
+def test_package_zip_injects_given_features() -> None:
+    source = _plugin_source(["MultiCompany", "Multicurrency", "SubAccount"])
+    assert '"Multicurrency"' in source
+    assert '"SubAccount"' in source
+    assert "FinancialModule" not in source
+
+
+def test_plugin_logs_unknown_feature_names() -> None:
+    """The silent-typo guard travels in the built package (T24).
+
+    A misspelled features.yaml entry matches no FeaturesSet property and
+    enables nothing; the plugin must say so in the publish log.
+    """
+    assert "unknown feature name" in _plugin_source(["FinancalModule"])
+
+
+def test_load_features_defaults_when_file_absent(tmp_path: Path) -> None:
+    assert bootstrap.load_features(tmp_path) == list(bootstrap.DEFAULT_FEATURES)
+
+
+def test_load_features_reads_the_yaml_list(tmp_path: Path) -> None:
+    (tmp_path / "bootstrap").mkdir()
+    (tmp_path / "bootstrap" / "features.yaml").write_text(
+        "# enabled FeaturesSet bits\n- MultiCompany\n- Multicurrency\n"
+    )
+    assert bootstrap.load_features(tmp_path) == ["MultiCompany", "Multicurrency"]
+
+
+@pytest.mark.parametrize(
+    "body",
+    [
+        "features: [MultiCompany]",  # mapping, not a list
+        "[]",  # empty list enables nothing - authoring mistake
+        "- Multi Company",  # not a property name (space)
+        "- 42",  # not a string
+    ],
+)
+def test_load_features_rejects_bad_files(tmp_path: Path, body: str) -> None:
+    (tmp_path / "bootstrap").mkdir()
+    (tmp_path / "bootstrap" / "features.yaml").write_text(body)
+    with pytest.raises(SystemExit, match=r"features\.yaml"):
+        bootstrap.load_features(tmp_path)
 
 
 def test_package_zip_carries_the_bootstrap_endpoint() -> None:
@@ -204,6 +279,17 @@ def test_publish_runs_import_then_publish_sequence(instance: Instance) -> None:
     begin_body = json.loads(api.requests[4].content)
     assert begin_body["projectNames"] == [bootstrap.PACKAGE_NAME]
     assert begin_body["tenantMode"] == "Current"
+
+
+def test_publish_builds_the_package_with_features(instance: Instance) -> None:
+    """The features list flows publish -> package_zip -> imported bytes (V2)."""
+    api = Api(publish_end=[httpx.Response(200, json={"isCompleted": True})])
+    with AcumaticaClient(instance, transport=httpx.MockTransport(api)) as client:
+        bootstrap.publish(client, features=["MultiCompany"], timeout=60.0, poll=0.0)
+    import_body = json.loads(api.requests[3].content)
+    contents = base64.b64decode(import_body["projectContentBase64"])
+    assert contents == bootstrap.package_zip(["MultiCompany"])
+    assert contents != bootstrap.package_zip()
 
 
 def test_publish_skips_when_already_published(instance: Instance) -> None:

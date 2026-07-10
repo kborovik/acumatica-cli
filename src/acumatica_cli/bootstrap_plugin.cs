@@ -11,6 +11,11 @@
 // and idempotent: update the existing row, insert when absent. All 205
 // NOT NULL bit columns are filled reflectively (only ~136 carry DB
 // defaults); Status = 0 means Validated (PXIntList, verified vs live).
+//
+// The Enabled set is NOT authored here (SPEC V2: feature flags are config
+// "what", never tool source - B6): package_zip() substitutes the
+// ACU_FEATURES sentinel below with the data repo's bootstrap/features.yaml
+// list (built-in six when the file is absent) at package-build time.
 using System.Collections.Generic;
 using System.Reflection;
 using PX.Data;
@@ -22,23 +27,30 @@ namespace AcuBootstrap
     {
         private static readonly HashSet<string> Enabled = new HashSet<string>
         {
-            "FinancialModule",
-            "FinancialStandard",
-            "DistributionModule",
-            "Inventory",
-            "Branch",
-            "MultiCompany",
+            /*ACU_FEATURES*/
         };
 
         public override void UpdateDatabase()
         {
             var flags = new List<PXDataFieldAssign>();
+            var known = new HashSet<string>();
             foreach (PropertyInfo prop in typeof(FeaturesSet).GetProperties())
             {
                 if (prop.PropertyType == typeof(bool?))
                 {
+                    known.Add(prop.Name);
                     flags.Add(new PXDataFieldAssign(
                         prop.Name, PXDbType.Bit, Enabled.Contains(prop.Name)));
+                }
+            }
+            foreach (string name in Enabled)
+            {
+                if (!known.Contains(name))
+                {
+                    // silent-typo guard (T24): a misspelled features.yaml
+                    // entry enables nothing - say so in the publish log
+                    WriteLog("AcuBootstrap: unknown feature name '" + name
+                        + "' - no FeaturesSet property, nothing enabled");
                 }
             }
             flags.Add(new PXDataFieldAssign("Status", PXDbType.Int, 0)); // Validated

@@ -25,12 +25,14 @@ records:
 
 
 BOOTSTRAP_YAML = """\
-entity: Features
+entity: CreditTerms
 endpoint: Bootstrap/1.0.0
-key: MultiCompany
+key: TermsID
 records:
-  - MultiCompany: true
+  - TermsID: NET30
 """
+
+FEATURES_YAML = "- MultiCompany\n- Multicurrency\n"
 
 
 SWAGGER = b'{"openapi": "3.0.1"}'
@@ -99,7 +101,10 @@ def provision_env(
     """A data repo + monkeypatched chain that records every provisioning step."""
     calls: list[str] = []
     (tmp_path / "bootstrap").mkdir()
-    (tmp_path / "bootstrap" / "features.yaml").write_text(BOOTSTRAP_YAML)
+    (tmp_path / "bootstrap" / "credit-terms.yaml").write_text(BOOTSTRAP_YAML)
+    # features.yaml is package-build config: it must reach publish() as the
+    # feature list (V2) and never enter the apply/diff seed sweep
+    (tmp_path / "bootstrap" / "features.yaml").write_text(FEATURES_YAML)
     (tmp_path / "baseline").mkdir()
     (tmp_path / "baseline" / "uoms.yaml").write_text(BASELINE)
     monkeypatch.setattr(cli, "data_root", lambda: tmp_path)
@@ -120,7 +125,9 @@ def provision_env(
     monkeypatch.setattr(
         cli.bootstrap,
         "publish",
-        lambda client, **k: calls.append("publish") or "published",
+        lambda client, **k: (
+            calls.append("publish:" + ",".join(k["features"])) or "published"
+        ),
     )
     monkeypatch.setattr(
         cli.seed,
@@ -152,12 +159,12 @@ def test_provision_chains_create_bootstrap_apply_diff(provision_env: list[str]) 
         "create",
         "recycle",
         "init:Scratch",
-        "publish",
+        "publish:MultiCompany,Multicurrency",
         "recycle",
         "init:Scratch",
-        "apply:features.yaml",
+        "apply:credit-terms.yaml",
         "apply:uoms.yaml",
-        "diff:features.yaml",
+        "diff:credit-terms.yaml",
         "diff:uoms.yaml",
     ]
     # every session targets the provisioned tenant, not the config default
@@ -177,12 +184,12 @@ def test_provision_skips_create_when_tenant_exists(
 
     assert result.exit_code == 0
     assert provision_env == [
-        "publish",
+        "publish:MultiCompany,Multicurrency",
         "recycle",
         "init:Scratch",
-        "apply:features.yaml",
+        "apply:credit-terms.yaml",
         "apply:uoms.yaml",
-        "diff:features.yaml",
+        "diff:credit-terms.yaml",
         "diff:uoms.yaml",
     ]
     assert "skipping create" in result.stderr
@@ -211,9 +218,9 @@ def test_provision_recycles_even_when_already_published(
         "publish",
         "recycle",
         "init:Scratch",
-        "apply:features.yaml",
+        "apply:credit-terms.yaml",
         "apply:uoms.yaml",
-        "diff:features.yaml",
+        "diff:credit-terms.yaml",
         "diff:uoms.yaml",
     ]
 
@@ -348,11 +355,26 @@ def test_diff_directory_expands_to_yaml_files(
     assert "+ no drift on acu.test/T1 (2 file(s))" in result.stderr
 
 
+def test_directory_expansion_skips_features_yaml(
+    wired: Instance, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """features.yaml is package-build config (I.data), never a seed file."""
+    (tmp_path / "uoms.yaml").write_text(BASELINE)
+    (tmp_path / "features.yaml").write_text(FEATURES_YAML)
+    monkeypatch.setattr(cli.seed, "diff", lambda client, baseline: [])
+    result = CliRunner().invoke(cli.cli, ["diff", str(tmp_path)])
+
+    assert result.exit_code == 0
+    assert "+ no drift on acu.test/T1 (1 file(s))" in result.stderr
+
+
 def test_apply_empty_directory_errors(wired: Instance, tmp_path: Path) -> None:
+    # a lone features.yaml does not make a directory seedable either
+    (tmp_path / "features.yaml").write_text(FEATURES_YAML)
     result = CliRunner().invoke(cli.cli, ["apply", str(tmp_path)])
 
     assert result.exit_code == 1
-    assert "no *.yaml files in directory" in result.output
+    assert "no seed *.yaml files in directory" in result.output
 
 
 def test_diff_drift_exits_two_with_lines_on_stdout(

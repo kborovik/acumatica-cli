@@ -176,13 +176,17 @@ def config_show(inst: Instance) -> None:
 
 
 def expand_files(files: tuple[Path, ...]) -> list[Path]:
-    """Expand directory arguments into their *.yaml files, sorted."""
+    """Expand directory arguments into their *.yaml files, sorted.
+
+    features.yaml is skipped: it configures the bootstrap package build
+    (a feature-name list, SPEC I.data), not an entity/records seed file.
+    """
     paths: list[Path] = []
     for path in files:
         if path.is_dir():
-            found = sorted(path.glob("*.yaml"))
+            found = sorted(p for p in path.glob("*.yaml") if p.name != "features.yaml")
             if not found:
-                raise SystemExit(f"{path}: no *.yaml files in directory")
+                raise SystemExit(f"{path}: no seed *.yaml files in directory")
             paths += found
         else:
             paths.append(path)
@@ -243,11 +247,13 @@ def provision_cmd(
         output.data(raw.splitlines()[-1] if raw.strip() else "created")
         _init_tenant(inst, mgr, login_name)
 
+    # feature set = data (V2): bootstrap/features.yaml, absent -> built-in six
+    features = bootstrap.load_features(root)
     with (
         output.step(f"publishing {bootstrap.PACKAGE_NAME} to {inst.tenant}"),
         AcumaticaClient(inst) as client,
     ):
-        result = bootstrap.publish(client)
+        result = bootstrap.publish(client, features=features)
     output.success(f"{bootstrap.PACKAGE_NAME} {result}")
     # unconditional: the publish restarts the site BEFORE its DB transaction
     # commits, so the restarted domain caches the feature slot pre-plugin
