@@ -96,7 +96,13 @@ Newest first.
   the repo's unanchored `.gitignore` symlink patterns silently
   excluded five templates from the commit while the suite passed from
   the working tree (patterns now root-anchored, wheel contents
-  verified by hand).
+  verified by hand); T27 adds `acu config check` — a four-probe
+  read-only preflight (discovery → secrets → REST ∥ ssh, one ok/fail
+  line each, exit 0/1) where the REST probe is just entering
+  `AcumaticaClient` (login + landed-tenant verify + logout) and the ssh
+  probe is a new `TenantManager.ping()` through the `_ssh` choke point;
+  discovery/secrets failures stop, the two live planes report
+  independently so one run names every broken layer.
 - [2026-07-08](2026-07-08.md) — recycle unblocks tenant visibility (stale-map
   corrections); first-login password wall found and defeated (screen-flow,
   then `-aup` preset); `acu tenant create` chains create → recycle →
