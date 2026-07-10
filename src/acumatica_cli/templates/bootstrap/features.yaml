@@ -1,11 +1,16 @@
 # FeaturesSet property names (DAC bit flags) the bootstrap plugin enables
-# on publish. Deleting this file falls back to the same built-in six listed
-# below; add names (e.g. Multicurrency, SubAccount) as the baseline needs
-# them. A misspelled name enables nothing - the plugin flags it in the
-# publish log.
+# on publish. Deleting this file falls back to the built-in six (everything
+# below except SubAccount); add names (e.g. Multicurrency) as the baseline
+# needs them. A misspelled name enables nothing - the plugin flags it in
+# the publish log.
+#
+# FEATURE CLOSURE: this list must enable every feature the baseline files
+# require - baseline/10-subaccounts.yaml PUTs against the feature-gated
+# Subaccount form (GL203000), which is why SubAccount is here.
 - FinancialModule
 - FinancialStandard
 - DistributionModule
 - Inventory
 - Branch
 - MultiCompany
+- SubAccount

@@ -9,6 +9,7 @@ from types import TracebackType
 from typing import Any
 
 import pytest
+import yaml
 from click.testing import CliRunner
 
 from acumatica_cli import cli
@@ -339,7 +340,7 @@ def test_config_show_round_trips_through_load_instance(
 
 
 def test_config_init_scaffolds_data_repo(tmp_path: Path) -> None:
-    # I.cmd config init: 7-file template set into a created-if-absent dir;
+    # I.cmd config init: 11-file template set into a created-if-absent dir;
     # runs where V3 discovery finds no acu.yaml (tmp_path has none up-tree)
     repo = tmp_path / "repo"
     result = CliRunner().invoke(
@@ -351,7 +352,11 @@ def test_config_init_scaffolds_data_repo(tmp_path: Path) -> None:
         "acu.yaml",
         ".env",
         ".gitignore",
-        "baseline/uoms.yaml",
+        "baseline/10-subaccounts.yaml",
+        "baseline/20-accounts.yaml",
+        "baseline/40-ledger.yaml",
+        "baseline/50-gl-preferences.yaml",
+        "baseline/90-uoms.yaml",
         "bootstrap/company.yaml",
         "bootstrap/credit-terms.yaml",
         "bootstrap/features.yaml",
@@ -359,7 +364,7 @@ def test_config_init_scaffolds_data_repo(tmp_path: Path) -> None:
     for rel in expected:
         assert (repo / rel).is_file(), rel
     assert (
-        len([ln for ln in result.output.splitlines() if ln.startswith("write ")]) == 7
+        len([ln for ln in result.output.splitlines() if ln.startswith("write ")]) == 11
     )
     acu_yaml = (repo / "acu.yaml").read_text()
     assert "host: erp.test" in acu_yaml
@@ -387,7 +392,7 @@ def test_config_init_rerun_skips_and_never_overwrites(tmp_path: Path) -> None:
 
     assert result.exit_code == 0
     lines = result.output.splitlines()
-    assert len(lines) == 7
+    assert len(lines) == 11
     assert all(ln.startswith("skip ") and ln.endswith(" (exists)") for ln in lines)
     assert (tmp_path / "acu.yaml").read_text() == "host: hand.edited\n"
 
@@ -429,8 +434,45 @@ def test_config_init_scaffold_round_trips(
     assert applied.exit_code == 0
     assert "would PUT Company [COMPANY]" in applied.output
     assert "would PUT CreditTerms [NET30]" in applied.output
+    assert "would PUT Subaccount [000000]" in applied.output
+    assert "would PUT Account [32000]" in applied.output
+    assert "would PUT Account [33000]" in applied.output
+    assert "would PUT Ledger [ACTUAL]" in applied.output
+    assert "would PUT GLPreferences [32000]" in applied.output
     assert "would PUT UnitsOfMeasure [HOUR]" in applied.output
-    assert applied.output.count("(dry run)") == 3
+    assert applied.output.count("(dry run)") == 7
+    # V22: numbered prefixes encode apply order - subaccounts before
+    # accounts before ledger before GL preferences (which references
+    # accounts 32000/33000), uoms last
+    order = [
+        applied.output.index("would PUT Subaccount ["),
+        applied.output.index("would PUT Account ["),
+        applied.output.index("would PUT Ledger ["),
+        applied.output.index("would PUT GLPreferences ["),
+        applied.output.index("would PUT UnitsOfMeasure ["),
+    ]
+    assert order == sorted(order)
+
+
+def test_config_init_template_set_is_feature_closed(tmp_path: Path) -> None:
+    # V22 feature closure (B15): the scaffolded features.yaml must enable
+    # every feature the shipped baseline templates require - the Subaccount
+    # template PUTs against feature-gated GL203000, so SubAccount must be
+    # in the list or a scaffolded provision 403s at the first baseline file
+    CliRunner().invoke(cli.cli, ["config", "init", str(tmp_path)])
+
+    features = yaml.safe_load((tmp_path / "bootstrap" / "features.yaml").read_text())
+    assert "SubAccount" in features
+    # the built-in six stay - dropping one starves bootstrap itself
+    for name in [
+        "FinancialModule",
+        "FinancialStandard",
+        "DistributionModule",
+        "Inventory",
+        "Branch",
+        "MultiCompany",
+    ]:
+        assert name in features
 
 
 @pytest.fixture

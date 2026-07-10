@@ -1,0 +1,94 @@
+# Chart of accounts (GL202500) via the Default endpoint - a minimal
+# generic chart: one account per major role, including the retained
+# earnings (32000) and YTD net income (33000) accounts that
+# 50-gl-preferences.yaml references. Server-derived fields
+# (ChartOfAccountsOrder, CashAccount) are omitted deliberately: the
+# server keeps its own derivation, so a sourced value diffs dirty
+# forever.
+#
+# APPLY ORDER (dir expansion sorts *.yaml alphabetically; numbered
+# prefixes encode order): this file must apply before
+# 50-gl-preferences.yaml, which references accounts 32000 and 33000.
+entity: Account
+key: AccountCD
+records:
+- AccountCD: '10100'
+  Active: true
+  Description: Cash
+  PostOption: Detail
+  RequireUnits: false
+  Secured: false
+  Type: Asset
+  UseDefaultSubaccount: false
+- AccountCD: '11000'
+  Active: true
+  Description: Accounts Receivable
+  PostOption: Detail
+  RequireUnits: false
+  Secured: false
+  Type: Asset
+  UseDefaultSubaccount: false
+- AccountCD: '20000'
+  Active: true
+  Description: Accounts Payable
+  PostOption: Summary
+  RequireUnits: false
+  Secured: false
+  Type: Liability
+  UseDefaultSubaccount: false
+- AccountCD: '24100'
+  Active: true
+  Description: Tax Payable
+  PostOption: Summary
+  RequireUnits: false
+  Secured: false
+  Type: Liability
+  UseDefaultSubaccount: false
+- AccountCD: '30100'
+  Active: true
+  Description: Capital Stock
+  PostOption: Summary
+  RequireUnits: false
+  Secured: false
+  Type: Liability
+  UseDefaultSubaccount: false
+- AccountCD: '32000'
+  Active: true
+  Description: Retained Earnings
+  PostOption: Summary
+  RequireUnits: false
+  Secured: false
+  Type: Liability
+  UseDefaultSubaccount: false
+- AccountCD: '33000'
+  Active: true
+  Description: Net Income
+  PostOption: Summary
+  RequireUnits: false
+  Secured: false
+  Type: Liability
+  UseDefaultSubaccount: false
+- AccountCD: '40000'
+  Active: true
+  Description: Sales Revenue
+  PostOption: Summary
+  RequireUnits: false
+  Secured: false
+  Type: Income
+  UseDefaultSubaccount: false
+- AccountCD: '50000'
+  Active: true
+  Description: Cost of Goods Sold
+  PostOption: Summary
+  RequireUnits: false
+  Secured: false
+  Type: Expense
+  UseDefaultSubaccount: false
+- AccountCD: '60000'
+  Active: true
+  Description: Operating Expenses
+  PostOption: Summary
+  RequireUnits: false
+  Secured: false
+  Type: Expense
+  UseDefaultSubaccount: false

@@ -1,0 +1,15 @@
+# Subaccounts (GL segmented key SUB) via the Default endpoint - the single
+# zero subaccount every GL transaction can post against (needs the
+# SubAccount feature from bootstrap/features.yaml).
+#
+# APPLY ORDER: `acu apply baseline/` expands the directory alphabetically,
+# so the numbered filename prefixes encode apply order - a record that
+# references another entity must sort after the file creating it. This
+# file sorts first: accounts and GL preferences build on it.
+entity: Subaccount
+key: SubaccountCD
+records:
+- Active: true
+  Description: Default
+  Secured: false
+  SubaccountCD: '000000'

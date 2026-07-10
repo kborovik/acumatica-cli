@@ -1,0 +1,15 @@
+# Posting ledger (GL201500) via the Default endpoint. A fresh tenant has
+# no ledger at all, and GL posting needs an Actual ledger. Currency is
+# omitted deliberately: the server derives an Actual ledger's currency
+# from the company base currency, so a sourced value is either redundant
+# or a rejected write.
+#
+# APPLY ORDER (dir expansion sorts *.yaml alphabetically; numbered
+# prefixes encode order): after 20-accounts.yaml per the baseline chain;
+# 50-gl-preferences.yaml completes GL setup and sorts after this file.
+entity: Ledger
+key: LedgerID
+records:
+- LedgerID: ACTUAL
+  Description: Actual Ledger
+  Type: Actual

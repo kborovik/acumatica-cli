@@ -1,6 +1,10 @@
 # Units of measure (CS203500) via the Default endpoint - a minimal valid
 # seed file: entity + key + records. Verify against the live tenant with:
-#   acu diff baseline/uoms.yaml
+#   acu diff baseline/90-uoms.yaml
+#
+# APPLY ORDER (dir expansion sorts *.yaml alphabetically; numbered
+# prefixes encode order): units reference nothing, so this file sorts
+# last.
 entity: UnitsOfMeasure
 key: UnitID
 records:

@@ -1,0 +1,18 @@
+# General Ledger preferences (GL102000) via the custom Bootstrap/1.3.0
+# endpoint (the per-file endpoint: override) - the Default endpoint has
+# no GL-setup entity, and every Finance screen throws
+# PXSetupNotEnteredException until the GLSetup singleton row exists. The
+# two accounts are the only GLSetup fields without a server default, so
+# this record is the complete required set; everything else (BATCH
+# numbering and the rest) defaults on first save.
+#
+# APPLY ORDER (dir expansion sorts *.yaml alphabetically; numbered
+# prefixes encode order): 20-accounts.yaml must apply before this file -
+# the retained earnings (32000) and YTD net income (33000) accounts
+# referenced here must exist.
+entity: GLPreferences
+key: RetEarnAccountID
+endpoint: Bootstrap/1.3.0
+records:
+- RetEarnAccountID: '32000'
+  YtdNetIncAccountID: '33000'
