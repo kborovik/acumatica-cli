@@ -7,7 +7,7 @@ Baseline file format:
 
     entity: Currency          # entity name in the contract endpoint
     key: CurrencyID           # key field(s), string or list
-    endpoint: Bootstrap/1.0.0 # optional: override the instance endpoint
+    endpoint: Bootstrap/1.1.0 # optional: override the instance endpoint
     records:
       - CurrencyID: "CAD"
         Description: Canadian Dollar
