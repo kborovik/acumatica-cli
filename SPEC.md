@@ -86,7 +86,7 @@ T26|x|`acu config init` — scaffold data repo per §I.cmd row: 7-file template 
 T27|x|`acu config check` — four-probe read-only preflight per §I.cmd row; verify: healthy instance → 4x `ok` exit 0; wrong `ACU_PASSWORD` → REST `fail` while ssh still reports, exit 1; live state unchanged either way|V3,V5,V6,V9,V15,V18
 T28|x|dev-version marker — `--version` reads own dist `direct_url.json` (PEP 610); `dir_info.editable` true → `<version>+dev (<checkout path>)`, else plain `<version>`; no build-backend change, `uv version --bump` release flow intact; offline tests: editable metadata → `+dev` suffix, wheel/no-`direct_url.json` → plain|V19,I.cmd
 T29|.|extend Bootstrap endpoint w/ financial-currency entity (CM202000) — verify: PUT EUR via `Bootstrap/1.0.0` on fresh tenant → EUR-denominated account applies|T12,V12,I.data
-T30|.|diff key-URL fallback per §I.cmd row — `seed.diff` catches optimization-500, retries record via single-record key-URL GET (B9); offline tests: fallback round-trip + non-optimization 500 still raises; live: `acu diff` clean over T29 currencies scratch YAML|V4,V12
+T30|x|diff key-URL fallback per §I.cmd row — `seed.diff` catches optimization-500, retries record via single-record key-URL GET (B9); offline tests: fallback round-trip + non-optimization 500 still raises; live: `acu diff` clean over T29 currencies scratch YAML|V4,V12
 
 ## §B BUGS
 

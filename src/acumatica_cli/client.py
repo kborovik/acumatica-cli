@@ -3,7 +3,9 @@
 import base64
 import html
 import re
+from collections.abc import Sequence
 from typing import Any
+from urllib.parse import quote
 
 import httpx
 
@@ -138,6 +140,30 @@ class AcumaticaClient:
         return self._checked(
             self._http.get(self._url(entity, endpoint), params=params)
         ).json()
+
+    def get_record(
+        self, entity: str, keys: Sequence[Any], endpoint: str | None = None
+    ) -> dict[str, Any] | None:
+        """GET one record by key URL — the delegate-view-safe read (B9).
+
+        The list GET is an optimized export that 500s when any field in
+        scope maps to a BQL-delegate view; the key-URL form skips the
+        optimizer and returns the full record (verified vs 26.101.0225).
+        Returns None when no record matches — the server answers that with
+        a 500 NoEntitySatisfiesTheConditionException, not a 404.
+        """
+        path = "/".join(quote(str(k), safe="") for k in keys)
+        r = self._http.get(f"{self._url(entity, endpoint)}/{path}")
+        if r.status_code == 500:
+            try:
+                missing = "NoEntitySatisfiesTheCondition" in r.json().get(
+                    "exceptionType", ""
+                )
+            except Exception:
+                missing = False
+            if missing:
+                return None
+        return self._checked(r).json()
 
     def swagger(self) -> bytes:
         """GET the endpoint's OpenAPI schema (swagger.json), raw bytes."""

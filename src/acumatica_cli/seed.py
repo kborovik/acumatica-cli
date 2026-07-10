@@ -91,6 +91,37 @@ def apply(
     return len(baseline.records)
 
 
+# The list GET's optimized-export failure (B9) - the one error diff retries
+# via the key-URL single-record GET; any other error still raises
+_OPTIMIZATION_500 = "Optimization cannot be performed"
+
+
+def _fetch(
+    client: AcumaticaClient, baseline: BaselineFile, record: dict[str, Any]
+) -> dict[str, Any] | None:
+    """The live record matching the source record's keys, or None.
+
+    Primary read = list GET by $filter on the key fields. Entities mapping a
+    BQL-delegate view (Bootstrap Currency GL fields -> CuryRecords, B9) 500
+    on that optimized export; the key-URL single-record GET skips the
+    optimizer, so diff falls back to it on exactly that error (V4: read-back
+    must survive delegate-view entities).
+    """
+    try:
+        live = client.get_list(
+            baseline.entity,
+            params={"$filter": _filter_for(record, baseline.keys)},
+            endpoint=baseline.endpoint,
+        )
+        return live[0] if live else None
+    except RuntimeError as err:
+        if _OPTIMIZATION_500 not in str(err):
+            raise
+        return client.get_record(
+            baseline.entity, [record[k] for k in baseline.keys], baseline.endpoint
+        )
+
+
 def diff(client: AcumaticaClient, baseline: BaselineFile) -> list[str]:
     """Compare each source record against the live tenant.
 
@@ -101,15 +132,11 @@ def diff(client: AcumaticaClient, baseline: BaselineFile) -> list[str]:
         label = (
             f"{baseline.entity} [{', '.join(str(record[k]) for k in baseline.keys)}]"
         )
-        live = client.get_list(
-            baseline.entity,
-            params={"$filter": _filter_for(record, baseline.keys)},
-            endpoint=baseline.endpoint,
-        )
-        if not live:
+        live = _fetch(client, baseline, record)
+        if live is None:
             drifts.append(f"{label}: missing on tenant")
             continue
-        actual = unwrap(live[0])
+        actual = unwrap(live)
         for field, expected in record.items():
             if field not in actual:
                 drifts.append(f"{label}.{field}: not returned by endpoint")

@@ -191,6 +191,85 @@ def test_diff_normalizes_booleans(tmp_path: Path, instance: Instance) -> None:
     assert seed.diff(_client(instance, recorder), baseline) == []
 
 
+OPTIMIZATION_500 = httpx.Response(
+    500,
+    json={
+        "message": "An error has occurred.",
+        "exceptionMessage": (
+            "Optimization cannot be performed.The following fields cause "
+            "the error:\r\nRealGainAcctID: View CuryRecords has BQL delegate"
+        ),
+    },
+)
+NO_ENTITY_500 = httpx.Response(
+    500,
+    json={
+        "message": "An error has occurred.",
+        "exceptionMessage": "No entity satisfies the condition.",
+        "exceptionType": (
+            "PX.Api.ContractBased.NoEntitySatisfiesTheConditionException"
+        ),
+    },
+)
+CURRENCY_YAML = """\
+entity: Currency
+key: CuryID
+endpoint: Bootstrap/1.0.0
+records:
+  - CuryID: EUR
+    Description: Euro
+"""
+
+
+def test_diff_falls_back_to_key_url_on_optimization_500(
+    tmp_path: Path, instance: Instance
+) -> None:
+    """B9: the list GET's optimized export 500s on delegate-view fields.
+
+    diff retries the record via the key-URL single-record GET (verified vs
+    26.101.0225 - the key-URL form skips the optimizer).
+    """
+    baseline = seed.load_baseline(_write(tmp_path, CURRENCY_YAML))
+    recorder = Recorder(
+        {
+            "/Currency": OPTIMIZATION_500,
+            "/Currency/EUR": httpx.Response(
+                200, json=wrap({"CuryID": "EUR", "Description": "Euro"})
+            ),
+        }
+    )
+
+    assert seed.diff(_client(instance, recorder), baseline) == []
+    paths = [r.url.path for r in recorder.requests]
+    assert [p.split("/entity/", 1)[1] for p in paths] == [
+        "Bootstrap/1.0.0/Currency",
+        "Bootstrap/1.0.0/Currency/EUR",
+    ]
+
+
+def test_diff_fallback_flags_missing_record(tmp_path: Path, instance: Instance) -> None:
+    # missing on the key-URL form = 500 NoEntitySatisfiesTheCondition-
+    # Exception, not 404 or an empty list (verified vs 26.101.0225)
+    baseline = seed.load_baseline(_write(tmp_path, CURRENCY_YAML))
+    recorder = Recorder({"/Currency": OPTIMIZATION_500, "/Currency/EUR": NO_ENTITY_500})
+
+    drifts = seed.diff(_client(instance, recorder), baseline)
+
+    assert drifts == ["Currency [EUR]: missing on tenant"]
+
+
+def test_diff_non_optimization_500_still_raises(
+    tmp_path: Path, instance: Instance
+) -> None:
+    baseline = seed.load_baseline(_write(tmp_path, CURRENCY_YAML))
+    recorder = Recorder(
+        {"/Currency": httpx.Response(500, json={"exceptionMessage": "boom"})}
+    )
+
+    with pytest.raises(RuntimeError, match="boom"):
+        seed.diff(_client(instance, recorder), baseline)
+
+
 def test_diff_normalizes_numbers_by_value(tmp_path: Path, instance: Instance) -> None:
     # DecimalValue fields come back as floats: YAML 0 vs live 0.0 is not
     # drift (T13: CreditTerms.DiscPercent), and 0 vs 0.5 still is
