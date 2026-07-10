@@ -52,6 +52,14 @@ class TenantManager:
             )
         return r.stdout
 
+    def ping(self) -> None:
+        """Trivial remote command — proves ssh reachability, auth, and shell.
+
+        The read-only control-plane probe for `acu config check`: nothing on
+        the instance is touched; failure surfaces through _ssh (SPEC V18).
+        """
+        self._ssh("Write-Output pong")
+
     def list(self) -> list[Tenant]:
         """Read tenants from the Company table (sqlcmd over SSH)."""
         query = (

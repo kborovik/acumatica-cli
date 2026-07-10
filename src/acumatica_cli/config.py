@@ -120,6 +120,15 @@ def data_root() -> Path:
     )
 
 
+def read_config(root: Path) -> dict[str, Any]:
+    """Parse the acu.yaml at root; hard error unless it is a mapping."""
+    with open(root / "acu.yaml") as f:
+        config = yaml.safe_load(f)
+    if not isinstance(config, dict):
+        raise SystemExit("acu.yaml: expected a mapping (host + optional overrides)")
+    return config
+
+
 def load_instance(host: str | None = None) -> Instance:
     """Resolve the target from acu.yaml and merge credentials from .env/environment.
 
@@ -132,10 +141,7 @@ def load_instance(host: str | None = None) -> Instance:
     root = data_root()
     load_dotenv(root / ".env")
 
-    with open(root / "acu.yaml") as f:
-        config = yaml.safe_load(f)
-    if not isinstance(config, dict):
-        raise SystemExit("acu.yaml: expected a mapping (host + optional overrides)")
+    config = read_config(root)
     if host is not None:
         config["host"] = host
 

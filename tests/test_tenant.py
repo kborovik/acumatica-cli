@@ -105,6 +105,24 @@ def test_delete_unknown_id_raises_before_ssh_config_call(
     assert len(run.commands) == 1  # only the list() lookup ran
 
 
+def test_ping_sends_trivial_readonly_command(instance: Instance, run: FakeRun) -> None:
+    # the config check ssh probe: a trivial remote command through _ssh
+    # (V18 choke point) that touches nothing on the instance
+    run.results = [(0, "pong")]
+    TenantManager(instance).ping()
+
+    (command,) = run.commands
+    assert "Write-Output pong" in command
+    assert "ac.exe" not in command
+    assert "sqlcmd" not in command
+
+
+def test_ping_propagates_ssh_failure(instance: Instance, run: FakeRun) -> None:
+    run.results = [(255, "")]
+    with pytest.raises(RuntimeError, match=r"remote command failed \(255\)"):
+        TenantManager(instance).ping()
+
+
 def test_recycle_targets_the_instance_pool(instance: Instance, run: FakeRun) -> None:
     run.results = [(0, "")]
     TenantManager(instance).recycle_app_pool()
@@ -122,12 +140,13 @@ def test_every_ssh_command_propagates_exit_code(
     means a call site regressed to hand-appending.
     """
     manager = TenantManager(instance)
-    run.results = [(0, SQLCMD_ROWS), (0, ""), (0, "Company created")]
+    run.results = [(0, SQLCMD_ROWS), (0, ""), (0, "Company created"), (0, "pong")]
     manager.list()
     manager.recycle_app_pool()
     manager.create(5, "lab5.ca-dev1")
+    manager.ping()
 
-    assert len(run.commands) == 3
+    assert len(run.commands) == 4
     for command in run.commands:
         assert command.endswith("\nexit $LASTEXITCODE")
         assert command.count("exit $LASTEXITCODE") == 1

@@ -390,6 +390,135 @@ def test_config_init_scaffold_round_trips(
     assert applied.output.count("(dry run)") == 3
 
 
+@pytest.fixture
+def check_repo(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
+    """A real data repo for config check: acu.yaml + .env, password in .env only.
+
+    load_dotenv mutates os.environ in place; the setenv-then-delenv pair makes
+    monkeypatch record the pre-test state so the .env-sourced value never
+    leaks into later tests.
+    """
+    (tmp_path / "acu.yaml").write_text("host: acu.test\ntenant: T1\n")
+    (tmp_path / ".env").write_text("ACU_PASSWORD=secret\n")
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv("ACU_PASSWORD", "shadow")
+    monkeypatch.delenv("ACU_PASSWORD")
+    monkeypatch.delenv("ACU_USER", raising=False)
+    return tmp_path
+
+
+def test_config_check_all_probes_ok(
+    check_repo: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # I.cmd config check: dependency order, one ok line each on stdout (V9),
+    # exit 0; the secrets probe sources ACU_PASSWORD from .env (V3); the REST
+    # probe is the client context manager itself - login + landed-tenant
+    # verify on enter (V5), logout guaranteed on exit (V6); ssh probe = ping
+    calls: list[str] = []
+
+    class RecordingClient(DummyClient):
+        def __enter__(self) -> "RecordingClient":
+            calls.append("enter")
+            return self
+
+        def __exit__(
+            self,
+            exc_type: type[BaseException] | None = None,
+            exc: BaseException | None = None,
+            tb: TracebackType | None = None,
+        ) -> None:
+            calls.append("exit")
+
+    monkeypatch.setattr(cli, "AcumaticaClient", RecordingClient)
+    monkeypatch.setattr(TenantManager, "ping", lambda self: calls.append("ping"))
+
+    result = CliRunner().invoke(cli.cli, ["config", "check"])
+
+    assert result.exit_code == 0
+    lines = result.output.splitlines()
+    assert lines[0].startswith("ok discovery (")
+    assert lines[0].endswith("acu.yaml)")
+    assert lines[1] == "ok secrets (ACU_PASSWORD set)"
+    assert lines[2] == "ok rest (http://acu.test/AcumaticaERP, tenant T1)"
+    assert lines[3] == "ok ssh (Administrator@acu.test)"
+    assert calls == ["enter", "exit", "ping"]
+
+
+def test_config_check_discovery_fail_stops(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # V3: no acu.yaml up-tree -> fail discovery, exit 1, later probes never run
+    probes: list[str] = []
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr(cli, "AcumaticaClient", lambda *a, **k: probes.append("rest"))
+    monkeypatch.setattr(TenantManager, "ping", lambda self: probes.append("ping"))
+
+    result = CliRunner().invoke(cli.cli, ["config", "check"])
+
+    assert result.exit_code == 1
+    lines = result.output.splitlines()
+    assert len(lines) == 1
+    assert lines[0].startswith("fail discovery: acu.yaml not found")
+    assert probes == []
+
+
+def test_config_check_secrets_fail_stops(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # I.cmd config check: discovery/secrets fail stops - no live probes run
+    (tmp_path / "acu.yaml").write_text("host: acu.test\ntenant: T1\n")
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.delenv("ACU_PASSWORD", raising=False)
+    probes: list[str] = []
+    monkeypatch.setattr(cli, "AcumaticaClient", lambda *a, **k: probes.append("rest"))
+    monkeypatch.setattr(TenantManager, "ping", lambda self: probes.append("ping"))
+
+    result = CliRunner().invoke(cli.cli, ["config", "check"])
+
+    assert result.exit_code == 1
+    lines = result.output.splitlines()
+    assert lines[0].startswith("ok discovery (")
+    assert lines[1].startswith("fail secrets: ACU_PASSWORD not set")
+    assert len(lines) == 2
+    assert probes == []
+
+
+def test_config_check_rest_fail_still_probes_ssh(
+    check_repo: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # T27 verify: wrong password -> REST fail while ssh still reports, exit 1;
+    # a tenant-guard refusal (V5) surfaces the same way - __enter__ raises
+    class RefusingClient(DummyClient):
+        def __enter__(self) -> "RefusingClient":
+            raise RuntimeError("login failed (401)")
+
+    monkeypatch.setattr(cli, "AcumaticaClient", RefusingClient)
+    monkeypatch.setattr(TenantManager, "ping", lambda self: None)
+
+    result = CliRunner().invoke(cli.cli, ["config", "check"])
+
+    assert result.exit_code == 1
+    assert "fail rest: login failed (401)" in result.output
+    assert "ok ssh (Administrator@acu.test)" in result.output
+
+
+def test_config_check_ssh_fail_still_probes_rest(
+    check_repo: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # I.cmd config check: REST + ssh probe independently, either way exit 1
+    def boom(self: TenantManager) -> None:
+        raise RuntimeError("remote command failed (255)")
+
+    monkeypatch.setattr(cli, "AcumaticaClient", DummyClient)
+    monkeypatch.setattr(TenantManager, "ping", boom)
+
+    result = CliRunner().invoke(cli.cli, ["config", "check"])
+
+    assert result.exit_code == 1
+    assert "ok rest (http://acu.test/AcumaticaERP, tenant T1)" in result.output
+    assert "fail ssh: remote command failed (255)" in result.output
+
+
 def test_global_host_flag_rederives_urls(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:

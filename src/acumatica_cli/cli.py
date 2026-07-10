@@ -7,6 +7,7 @@ acu diff FILES...                drift check: baseline vs live tenant
 acu schema [--out DIR]           dump the endpoint's OpenAPI schema
 acu config init [DIR]            scaffold a data repo from templates
 acu config show                  print the resolved target instance
+acu config check                 read-only preflight: discovery, secrets, REST, ssh
 """
 
 import functools
@@ -18,10 +19,11 @@ from typing import Concatenate
 import click
 import httpx
 import yaml
+from dotenv import load_dotenv
 
 from . import bootstrap, firstlogin, output, seed
 from .client import AcumaticaClient
-from .config import Instance, data_root, load_instance, scaffold
+from .config import Instance, data_root, load_instance, read_config, scaffold
 from .tenant import TenantManager
 
 
@@ -181,7 +183,10 @@ def tenant_delete(inst: Instance, company_id: int) -> None:
 
 @cli.group("config")
 def config_group() -> None:
-    """Configuration ops: init (local write), show (local read)."""
+    """Configuration ops.
+
+    init = local write, show = local read, check = live read-only preflight.
+    """
 
 
 @config_group.command("init")
@@ -223,6 +228,64 @@ def config_show(inst: Instance) -> None:
     )
     for line in yaml.safe_dump(doc, sort_keys=False).splitlines():
         output.data(line)
+
+
+@config_group.command("check")
+@click.pass_context
+def config_check(ctx: click.Context) -> None:
+    """Read-only preflight of the resolved target, one ok/fail line per probe.
+
+    Dependency order: discovery (acu.yaml walk-up + parse + host), then
+    secrets (.env + ACU_PASSWORD), then REST (login, landed-tenant verify,
+    logout) and ssh (trivial remote command) probed independently - a
+    discovery or secrets failure stops, a REST failure still probes ssh and
+    vice versa. Writes nothing: no PUTs, no tenant CRUD. Exit 0 when every
+    probe passes, 1 on any failure.
+    """
+    _tenant, host = ctx.obj
+    # discovery (V3): walk-up + parse + host; the --host global satisfies a
+    # missing host key exactly as it would for a live command
+    try:
+        root = data_root()
+        config = read_config(root)
+        if not (host or config.get("host")):
+            raise SystemExit("acu.yaml: missing required key host")
+    except (SystemExit, yaml.YAMLError) as exc:
+        output.data(f"fail discovery: {exc}")
+        raise SystemExit(1) from exc
+    output.data(f"ok discovery ({root / 'acu.yaml'})")
+
+    # secrets: same sources as load_instance - .env beside acu.yaml, then
+    # the environment; the value itself is never printed (V2)
+    load_dotenv(root / ".env")
+    if not os.environ.get("ACU_PASSWORD"):
+        output.data(
+            "fail secrets: ACU_PASSWORD not set (put it in .env or the environment)"
+        )
+        raise SystemExit(1)
+    output.data("ok secrets (ACU_PASSWORD set)")
+
+    # both live probes run through the exact objects live commands use, so
+    # a pass here proves the real code path, not a parallel one
+    inst = _resolve_instance(ctx)
+    failed = False
+    try:
+        # entering the client is the whole probe: login + landed-tenant
+        # verify (V5), and the context manager guarantees logout (V6)
+        with AcumaticaClient(inst):
+            pass
+        output.data(f"ok rest ({inst.base_url}, tenant {inst.tenant})")
+    except (RuntimeError, httpx.HTTPError) as exc:
+        output.data(f"fail rest: {exc}")
+        failed = True
+    try:
+        TenantManager(inst).ping()
+        output.data(f"ok ssh ({inst.ssh})")
+    except RuntimeError as exc:
+        output.data(f"fail ssh: {exc}")
+        failed = True
+    if failed:
+        raise SystemExit(1)
 
 
 def expand_files(files: tuple[Path, ...]) -> list[Path]:
