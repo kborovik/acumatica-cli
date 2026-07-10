@@ -33,3 +33,10 @@ run cmd, apply exemption filter, any surviving match = violation
 - file/dir inputs positional variadic; dirs expand `*.yaml`
 - `--dry-run` lines `would <VERB> …`, summary suffixed `(dry run)`
 - long flags kebab-case; short flags reserved for globals
+
+## §V.21 — endpoint-version parity (T33 sweep mechanized)
+
+- cmd: `v=$(sed -n 's/.*name="Bootstrap" version="\([0-9.]*\)".*/\1/p' src/acumatica_cli/bootstrap_project.xml); grep -rn 'Bootstrap/[0-9][0-9.]*' src tests baseline bootstrap | tr -d '\\' | grep -vF "Bootstrap/$v"`
+- scope: `src/` + `tests/` + data symlinks (`baseline/`, `bootstrap/`) — XML version attribute = reference, not scanned; SPEC.md closed-§T rows + `journal/` quote retired versions, exempt by scope
+- `tr -d '\\'` folds regex-escaped refs (`Bootstrap/1\.1\.0` in test match patterns) into the literal filter; `grep -vF` keeps version dots literal
+- empty output = parity; surviving `file:line` → bail: `stale Bootstrap/<ver> ref vs bootstrap_project.xml Endpoint version per §V.21 — version bump sweeps every ref, stale ref = silent-downgrade class surfacing at PUT time`
