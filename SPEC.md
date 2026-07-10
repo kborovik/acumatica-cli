@@ -53,6 +53,8 @@ V16: option conventions — globals valid only before subcommand; resource ident
 V17: §T verify gate ! satisfiable vs current spec state — criterion never depends on capability another § records dead/pending unless citing the unblocking §T row
 V18: `_ssh` appends `exit $LASTEXITCODE` to every remote command — single choke point, call sites never hand-append (PowerShell-over-ssh returns 0 on failed native cmd)
 V19: release pipeline — `make release <part>` sole release path (bump + commit + tag + gh release); release published → `release.yml` builds (`uv build`) + publishes to pypi.org via trusted publishing (OIDC); no PyPI API token in repo or GitHub secrets; tag `v<version>` == pyproject `version`
+V20: seed endpoint routing ! unambiguous — baseline `entity` named in shipped Bootstrap template ! explicit per-file `endpoint:`; absent → hard error naming both endpoints, never silent Default-endpoint PUT (§B.8 class — Bootstrap `Currency` vs Default CM201000 list; symptom returns behind clean apply)
+V21: endpoint contract identity = name+version — entity or field shape change in `bootstrap_project.xml` ! version bump; version held → older build's digest gate republishes prior contract under same identity (silent downgrade, no version signal in seed failures)
 
 ## §T TASKS
 
@@ -88,6 +90,8 @@ T28|x|dev-version marker — `--version` reads own dist `direct_url.json` (PEP 6
 T29|x|extend Bootstrap endpoint w/ financial-currency entity (CM202000) — verify: PUT EUR via `Bootstrap/1.0.0` on fresh tenant → EUR-denominated account applies|T12,V12,I.data
 T30|x|diff key-URL fallback per §I.cmd row — `seed.diff` catches optimization-500, retries record via single-record key-URL GET (B9); offline tests: fallback round-trip + non-optimization 500 still raises; live: `acu diff` clean over T29 currencies scratch YAML|V4,V12
 T31|.|graduate T29 scratch into data-repo `baseline/` — author `subaccounts.yaml` + `accounts.yaml` (real chart-of-accounts values, not scratch 8710/8720) + `currencies.yaml` (`endpoint: Bootstrap/1.0.0` override; Translation* pairs omitted while translation feature off — write-tolerated, read-invisible); apply-order constraint documented in-file (accounts < currencies < currency-denominated accounts; dir expansion sorts alphabetical); verify: provision fresh scratch tenant zero manual steps → clean diff over everything applied, currencies included|V2,V4,I.data,T29,T30
+T32|.|enforce V20 — `seed.py` parses packaged `bootstrap_project.xml` entity names; baseline file w/ `entity` in that set + no `endpoint:` → hard error; offline tests: ambiguous file bails, explicit override passes|V20,V9,I.data
+T33|.|bump Bootstrap endpoint 1.0.0 → 1.1.0 (T29 changed contract shape under held version) — patch `bootstrap_project.xml` + `seed.py` docstring + `templates/bootstrap/*.yaml` + test fixtures + data-repo `endpoint:` refs + §I.data example; verify: republish, `acu diff` clean via `Bootstrap/1.1.0`|V21,T29,I.data
 
 ## §B BUGS
 
