@@ -27,7 +27,7 @@ records:
 
 BOOTSTRAP_YAML = """\
 entity: CreditTerms
-endpoint: Bootstrap/1.3.0
+endpoint: Bootstrap/1.4.0
 key: TermsID
 records:
   - TermsID: NET30

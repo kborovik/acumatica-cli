@@ -141,9 +141,13 @@ def test_package_zip_carries_the_bootstrap_endpoint() -> None:
     MasterFinPeriodMaint view FiscalYear (GenerateCalendar -> GenerateYears
     with FromYear/ToYear through the GenerateParams dialog view, both on
     GenerateCalendarExtensionBase), GL201100 -> OrganizationFinPeriodMaint
-    view OrgFinYear (the company-period read surface; OpenPeriods -> Open
-    on FinPeriodStatusActionsGraphBaseExtension ships as T37 probe material
-    only, B13).
+    view OrgFinYear (the company-period read surface), and the T37 period
+    activation: CompanyPeriod rides GL201100's OrgFinPeriods view (the
+    per-period Status words; single-view on purpose - a filter conjunction
+    spanning views answers 200 [], B14), ManagePeriods rides GL503000 ->
+    FinPeriodStatusProcess PrimaryView Filter (the processing screen the
+    GL201100 Open flow redirects to, B13 - driven directly instead, so the
+    1.3.0 CompanyCalendar OpenPeriods action is gone in 1.4.0).
     """
     ns = "{http://www.acumatica.com/entity/maintenance/5.31}"
     with zipfile.ZipFile(io.BytesIO(bootstrap.package_zip())) as zf:
@@ -151,7 +155,7 @@ def test_package_zip_carries_the_bootstrap_endpoint() -> None:
     (item,) = root.findall("EntityEndpoint")
     (endpoint,) = item.findall(f"{ns}Endpoint")
     assert endpoint.get("name") == "Bootstrap"
-    assert endpoint.get("version") == "1.3.0"
+    assert endpoint.get("version") == "1.4.0"
     # SystemContracts.V4 is the build's only IsCurrent implementation
     assert endpoint.get("systemContractVersion") == "4"
     entities = {e.get("name"): e for e in endpoint.findall(f"{ns}TopLevelEntity")}
@@ -164,6 +168,8 @@ def test_package_zip_carries_the_bootstrap_endpoint() -> None:
         "FinancialYearSettings",
         "MasterCalendar",
         "CompanyCalendar",
+        "CompanyPeriod",
+        "ManagePeriods",
     }
     # features stay OUT: contract-endpoint writes to CS100000 do not
     # persist (T3 verdict) - the CustomizationPlugin owns features
@@ -178,6 +184,11 @@ def test_package_zip_carries_the_bootstrap_endpoint() -> None:
     assert entities["FinancialYearSettings"].get("screen") == "GL101000"
     assert entities["MasterCalendar"].get("screen") == "GL201000"
     assert entities["CompanyCalendar"].get("screen") == "GL201100"
+    # the T37 period activation pair: the per-period status read surface
+    # shares GL201100; the activation itself is the GL503000 processing
+    # screen the B13 redirect points at
+    assert entities["CompanyPeriod"].get("screen") == "GL201100"
+    assert entities["ManagePeriods"].get("screen") == "GL503000"
     # mappings follow the screen's own bindings (T13): a DAC prop existing
     # on the primary view is not enough - writes land only through the
     # view the screen edits. Field names = DAC props verbatim; a tuple
@@ -265,6 +276,21 @@ def test_package_zip_carries_the_bootstrap_endpoint() -> None:
             "FinancialYear": ("OrgFinYear", "Year"),
             "OrganizationID": "OrgFinYear",
         },
+        # per-period status (T37): every field on the one OrgFinPeriods
+        # view - a filter conjunction spanning views goes blind (B14),
+        # and the done_when probe ANDs FinancialYear with Status
+        "CompanyPeriod": {
+            "FinancialYear": ("OrgFinPeriods", "FinYear"),
+            "FinPeriodID": "OrgFinPeriods",
+            "Status": "OrgFinPeriods",
+        },
+        # the GL503000 processing filter (T37): Action takes the stored
+        # words (Open|Close|...), OrganizationID the org CD through the
+        # Organization selector - the LedgerCompany idiom
+        "ManagePeriods": dict.fromkeys(
+            ("Action", "FromYear", "ToYear", "OrganizationID"),
+            "Filter",
+        ),
     }
     for entity, expected in views.items():
         fields = {
@@ -317,13 +343,17 @@ def test_package_zip_carries_the_bootstrap_endpoint() -> None:
 
 
 def test_bootstrap_endpoint_carries_the_gl_setup_actions() -> None:
-    """Pin the T36 <Action> items - the setup verbs a keyed PUT cannot express.
+    """Pin the T36/T37 <Action> items - setup verbs a keyed PUT cannot express.
 
     mappedTo = the graph-side member, verified by static reflection on the
     live box: AutoFill on FiscalYearSetupMaint itself, GenerateYears + the
-    GenerateParams dialog view on GenerateCalendarExtensionBase, Open on
-    FinPeriodStatusActionsGraphBaseExtension (T37 probe material only -
-    the Open flow redirects to the GL503000 processing screen, B13).
+    GenerateParams dialog view on GenerateCalendarExtensionBase, and
+    ProcessAll on FinPeriodStatusProcess (runtime-registered by
+    PXFilteredProcessing - no declared PXAction member; the name literal
+    confirmed in the PX.Data.dll string heap, T37). The 1.3.0
+    CompanyCalendar OpenPeriods action is gone: its Open flow redirects
+    to GL503000, unfollowable over contract (B13) - ManagePeriods drives
+    GL503000 directly instead.
     """
     ns = "{http://www.acumatica.com/entity/maintenance/5.31}"
     with zipfile.ZipFile(io.BytesIO(bootstrap.package_zip())) as zf:
@@ -337,12 +367,12 @@ def test_bootstrap_endpoint_carries_the_gl_setup_actions() -> None:
     assert {e: set(a) for e, a in actions.items() if a} == {
         "FinancialYearSettings": {"GeneratePeriods"},
         "MasterCalendar": {"GenerateCalendar"},
-        "CompanyCalendar": {"OpenPeriods"},
+        "ManagePeriods": {"ProcessAll"},
     }
     assert actions["FinancialYearSettings"]["GeneratePeriods"].get("mappedTo") == (
         "AutoFill"
     )
-    assert actions["CompanyCalendar"]["OpenPeriods"].get("mappedTo") == "Open"
+    assert actions["ManagePeriods"]["ProcessAll"].get("mappedTo") == "ProcessAll"
     generate = actions["MasterCalendar"]["GenerateCalendar"]
     assert generate.get("mappedTo") == "GenerateYears"
     # the action's own parameter block: FromYear/ToYear ride the

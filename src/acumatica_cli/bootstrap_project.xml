@@ -119,17 +119,40 @@
                 the done_when probe target for calendar generation: master
                 rows alone do not post, the per-company FinPeriod rows do
                 (B12's "07-2026 does not exist for the LAB5 company"). The
-                OpenPeriods action (mappedTo Open, on the
-                FinPeriodStatusActionsGraphBaseExtension) ships as T37 probe
-                material only - the Open flow redirects to the GL503000
-                processing screen, unfollowable over contract (B13).
+                1.3.0 OpenPeriods action (mappedTo Open) is gone in 1.4.0:
+                the Open flow redirects to the GL503000 processing screen,
+                unfollowable over contract (B13) - ManagePeriods drives
+                GL503000 directly instead (T37).
+  - CompanyPeriod GL201100 -> OrganizationFinPeriodMaint, view OrgFinPeriods
+                (DAC PX.Objects.GL.FinPeriods.OrganizationFinPeriod) - the
+                per-period status read surface (T37): FinPeriodID / FinYear
+                (exposed as FinancialYear, the period-entity idiom) / Status.
+                Status stores the words Inactive|Open|Closed|Locked (read
+                off the live PXStringList attribute). Single-view on
+                purpose: a filter conjunction spanning views answers 200 []
+                (B14), and the period-activation done_when probe filters
+                FinancialYear + Status together.
+  - ManagePeriods GL503000 -> FinPeriodStatusProcess, PrimaryView Filter
+                (PXFilter of FinPeriodStatusProcessParameters) - the
+                processing screen the GL201100 Open flow redirects to; T37
+                drives it directly as the period-activation mechanism.
+                Fields set the filter: Action stores the words
+                Open|Close|Lock|Deactivate|Reopen|Unlock (FullList
+                attribute, default Undefined); FromYear/ToYear bound the
+                year range; OrganizationID is the org CD through the
+                Organization selector (int-backed, CD-converting - the
+                LedgerCompany OrganizationID idiom). ProcessAll is
+                runtime-registered by PXFilteredProcessing (no declared
+                PXAction member on the graph; the name literal confirmed
+                in the PX.Data.dll string heap) and processes every grid
+                row matching the filter - no Selected flags involved.
   Contract field names = DAC property names verbatim (no rename layer).
   Features (CS100000) stays OUT of the endpoint - writes through any
   contract endpoint do not persist (T3 verdict); the plugin owns features.
 -->
-<Customization level="" description="acu bootstrap: CustomizationPlugin enables features on publish; Bootstrap endpoint exposes company + credit terms + financial currency + GL preferences + ledger-company link + financial year + calendars" product-version="26.101">
+<Customization level="" description="acu bootstrap: CustomizationPlugin enables features on publish; Bootstrap endpoint exposes company + credit terms + financial currency + GL preferences + ledger-company link + financial year + calendars + period activation" product-version="26.101">
   <EntityEndpoint>
-    <Endpoint xmlns="http://www.acumatica.com/entity/maintenance/5.31" name="Bootstrap" version="1.3.0" systemContractVersion="4">
+    <Endpoint xmlns="http://www.acumatica.com/entity/maintenance/5.31" name="Bootstrap" version="1.4.0" systemContractVersion="4">
       <TopLevelEntity name="Company" screen="CS101500">
         <Fields>
           <Field name="AcctCD" type="StringValue" />
@@ -374,8 +397,48 @@
             <To object="OrgFinYear" field="OrganizationID" />
           </Mapping>
         </Mappings>
+      </TopLevelEntity>
+      <TopLevelEntity name="CompanyPeriod" screen="GL201100">
+        <Fields>
+          <Field name="FinancialYear" type="StringValue" />
+          <Field name="FinPeriodID" type="StringValue" />
+          <Field name="Status" type="StringValue" />
+        </Fields>
+        <Mappings>
+          <Mapping field="FinancialYear">
+            <To object="OrgFinPeriods" field="FinYear" />
+          </Mapping>
+          <Mapping field="FinPeriodID">
+            <To object="OrgFinPeriods" field="FinPeriodID" />
+          </Mapping>
+          <Mapping field="Status">
+            <To object="OrgFinPeriods" field="Status" />
+          </Mapping>
+        </Mappings>
+      </TopLevelEntity>
+      <TopLevelEntity name="ManagePeriods" screen="GL503000">
+        <Fields>
+          <Field name="Action" type="StringValue" />
+          <Field name="FromYear" type="StringValue" />
+          <Field name="ToYear" type="StringValue" />
+          <Field name="OrganizationID" type="StringValue" />
+        </Fields>
+        <Mappings>
+          <Mapping field="Action">
+            <To object="Filter" field="Action" />
+          </Mapping>
+          <Mapping field="FromYear">
+            <To object="Filter" field="FromYear" />
+          </Mapping>
+          <Mapping field="ToYear">
+            <To object="Filter" field="ToYear" />
+          </Mapping>
+          <Mapping field="OrganizationID">
+            <To object="Filter" field="OrganizationID" />
+          </Mapping>
+        </Mappings>
         <Actions>
-          <Action name="OpenPeriods" mappedTo="Open" isDefault="false" />
+          <Action name="ProcessAll" mappedTo="ProcessAll" isDefault="false" />
         </Actions>
       </TopLevelEntity>
       <TopLevelEntity name="GLPreferences" screen="GL102000">
