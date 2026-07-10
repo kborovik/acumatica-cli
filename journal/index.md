@@ -82,7 +82,20 @@ Newest first.
   probe (V4, one probe both directions), and `provision` gains the
   `setup/` phase after `baseline/`; twelve MockTransport tests pin the
   mechanism, and T36's in-flight 1.3.0 template sat stashed across the
-  gate so the path-scoped commit stayed clean of it.
+  gate so the path-scoped commit stayed clean of it; T35 graduates the
+  verified minimal company into the `acu config init` template set —
+  eleven files scaffold (zero subaccount, ten-account generic chart with
+  retained earnings + net income, ACTUAL ledger, GL preferences through
+  `Bootstrap/1.3.0`, UOMs renamed `90-uoms.yaml`; numbered prefixes
+  teach the V22 apply order, and a dry-run test pins the order itself) —
+  and the live verify catches the template set unclosed over its own
+  feature requirements: the subaccounts template 403s on GL203000
+  because the features template shipped the built-in six without
+  SubAccount (B15; the closure folded into V22 as the feature sibling of
+  reference closure), after which the resumed provision republished
+  through the digest gate and applied all seven seed files with a clean
+  diff, re-init answered eleven skips, and the scratch tenant was torn
+  down.
 - [2026-07-09](2026-07-09.md) — T17 closes the SPEC backlog: `exit
   $LASTEXITCODE` centralized in `_ssh` (single choke point per V18, the
   B4 recurrence class), call-site hand-appends stripped, suffix pinned
@@ -306,6 +319,7 @@ Every Acumatica problem hit so far, one line each. Status: **resolved**
 | 41 | GL posting on a fresh tenant needs a setup chain no single entity closes: `FinYearSetup` singleton → master calendar year → company periods, plus the org-ledger link; the Default `FinancialYear` entity inserts bare `{}` but pins the year start to the creation date, and an explicit start date fails the "configure all the Financial Periods" validation both ways the API offers | resolved (T36: `setup/` action files — `GeneratePeriods` (AutoFill) realizes the FinYearSetup singleton with an explicit January 1 start, `GenerateCalendar` (GenerateYears) generates the master year, and company periods derive once the organization exists; `done_when` probes verify each) | [2026-07-10](2026-07-10.md) |
 | 42 | The PowerShell reflection probe that settled `GLSetupMaint` stack-overflows on the ledger graphs (`GeneralLedgerMaint`) — same script shape, different type graph | workaround (aspx grep for `TypeName`/`PrimaryView`/`DataField` is the sturdier binding instrument; constructor-free static reflection — `Assembly.GetType` + field enumeration — safely settles declaring types and DAC homes on the same graphs) | [2026-07-10](2026-07-10.md) |
 | 43 | Contract-API list GET goes blind on an AND `$filter` spanning fields of different views — each predicate alone matches the row, the conjunction answers 200 `[]`, and the key-URL form 500s with a non-B9 exception, so a composite-key seed file on a multi-view entity phantom-drifts "missing on tenant" behind a PUT that persisted | resolved (B14/V4 clause: multi-view entity seed files key on primary-view fields only; secondary-view fields stay record fields and diff field by field) | [2026-07-10](2026-07-10.md) |
+| 44 | A template/data-repo set can require features its own features.yaml never enables — the scaffolded subaccounts template 403s on the feature-gated GL203000 because the features template shipped the built-in six without SubAccount, while the verified data repo passed only because its list had grown separately | resolved (B15/V22 feature-closure clause: the shipped set must enable every feature its baseline files require; template features.yaml gains SubAccount, a test asserts the closure) | [2026-07-10](2026-07-10.md) |
 
 ## Status
 
