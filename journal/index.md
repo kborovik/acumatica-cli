@@ -51,7 +51,11 @@ Newest first.
   but the server keeps its own derivation, so extract-sourced values
   drift forever — stripped, alongside the `AccountGroup` refs the raw
   extract carried); third fresh provision exits 0 with no drift over six
-  files and an independent re-diff confirms.
+  files and an independent re-diff confirms; T32 enforces V20 —
+  `load_baseline` hard-errors on a file naming a Bootstrap-template
+  entity without an explicit `endpoint:` (the ambiguous set parsed from
+  `bootstrap_project.xml`, never hand-listed), closing the
+  silent-wrong-endpoint route back to B8.
 - [2026-07-09](2026-07-09.md) — T17 closes the SPEC backlog: `exit
   $LASTEXITCODE` centralized in `_ssh` (single choke point per V18, the
   B4 recurrence class), call-site hand-appends stripped, suffix pinned
