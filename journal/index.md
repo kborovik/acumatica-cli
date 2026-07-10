@@ -80,7 +80,15 @@ Newest first.
   because the Default endpoint's `Currency` entity is the CM201000
   currency list only — `UseForAccounting` creates no CM202000
   financial-currency row (backpropped as B8, §C gap list extended,
-  T29 queued to front CM202000 from the Bootstrap endpoint).
+  T29 queued to front CM202000 from the Bootstrap endpoint); T25 makes
+  the publish skip gate content-aware (friction #32 / B7): the package
+  digest (sha256 of project.xml bytes) rides in the import's
+  `projectDescription` and reads back from the root `description`
+  attribute of getProject's re-serialized project.xml — the API's one
+  round-trip channel, settled by live probe (getPublished rows carry
+  only names) — so a digest mismatch (changed features.yaml, older
+  tool's package) now reimports + republishes instead of silently
+  skipping.
 - [2026-07-08](2026-07-08.md) — recycle unblocks tenant visibility (stale-map
   corrections); first-login password wall found and defeated (screen-flow,
   then `-aup` preset); `acu tenant create` chains create → recycle →
@@ -202,7 +210,7 @@ Every Acumatica problem hit so far, one line each. Status: **resolved**
 | 29 | Custom-endpoint mappings must follow the screen's own bindings, not the primary view's DAC props — the BAccount projections of OrganizationType/BaseCuryID echo the PUT back and persist nothing while the graph inserts an empty GL `Company` row (422); the auto-inserted Address row demands `CountryID` | resolved (map to `OrganizationView`/`AddressDummy` per CS101500.aspx) | [2026-07-08](2026-07-08.md) |
 | 30 | Contract-API list fields take external labels, not DAC codes — `VisibleTo: A` is rejected with the allowed list, but `DueType: D` is *silently misread* as "Day of Next Month"; a deliberately bogus value elicits the full allowed-label list from the 422 | resolved (labels in YAML, allowed lists in file comments) | [2026-07-08](2026-07-08.md) |
 | 31 | DecimalValue fields come back as floats — YAML `0` vs live `0.0` flagged spurious drift when compared as strings | resolved (`seed._norm` compares numbers by value) | [2026-07-08](2026-07-08.md) |
-| 32 | The publish skip gate verifies the project *exists*, not that its content matches this tool version's package — a changed package silently skips on an already-provisioned tenant (B3's marker class, one notch subtler) | open (spec follow-up) | [2026-07-08](2026-07-08.md) |
+| 32 | The publish skip gate verifies the project *exists*, not that its content matches this tool version's package — a changed package silently skips on an already-provisioned tenant (B3's marker class, one notch subtler) | resolved (T25: content digest in the package description, mismatch republishes) | [2026-07-08](2026-07-08.md), [2026-07-09](2026-07-09.md) |
 | 33 | Remote probes cross two PowerShell parsers plus the local shell — `$_` inside a double-quoted `-Command` interpolates away before the inner powershell runs; every reflection probe hand-rolled the utf-16le/base64/`-EncodedCommand` workaround | resolved (`scripts/ps-remote`, T14) | [2026-07-08](2026-07-08.md) |
 | 34 | Default-endpoint `Currency` entity is the CM201000 currency *list* only — `UseForAccounting: true` creates no CM202000 financial-currency row, so EUR-denominated GL accounts 422 "Currency cannot be found" even with Multicurrency enabled | open (T29: Bootstrap-endpoint entity) | [2026-07-09](2026-07-09.md) |
 | 35 | SalesDemo-extract replay: `AccountGroup` is PM201000 (Projects-gated and absent from the extract) and `ChartOfAccountsOrder` is server-derived — extracted config carrying either fails to apply or diffs dirty | workaround (strip references and derived fields at extract) | [2026-07-09](2026-07-09.md) |
