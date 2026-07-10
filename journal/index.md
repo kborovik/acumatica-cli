@@ -73,7 +73,16 @@ Newest first.
   link (the Default `Ledger.Companies` detail is write-tolerated but
   silently dropped) and no financial calendar (`FinYearSetup` → master
   year → company periods, each its own gap), so T34's verify narrowed
-  per V17 and T36 owns the GL posting closure.
+  per V17 and T36 owns the GL posting closure; T38 lands the action-file
+  mechanism offline — `setup/*.yaml` declares a contract action plus a
+  `done_when` live-state probe, `load_baseline` dispatches on the
+  `action:` key, `client.invoke` handles 204-done vs 202-poll-`Location`
+  (a 204's `Location` is bogus and never followed — the T36 trap encoded
+  in code and pinned by test), apply skips and diff drifts off the same
+  probe (V4, one probe both directions), and `provision` gains the
+  `setup/` phase after `baseline/`; twelve MockTransport tests pin the
+  mechanism, and T36's in-flight 1.3.0 template sat stashed across the
+  gate so the path-scoped commit stayed clean of it.
 - [2026-07-09](2026-07-09.md) — T17 closes the SPEC backlog: `exit
   $LASTEXITCODE` centralized in `_ssh` (single choke point per V18, the
   B4 recurrence class), call-site hand-appends stripped, suffix pinned
@@ -328,10 +337,12 @@ Remaining milestones:
 - `[OPEN]` Baseline expanded in dependency order — subaccounts, chart of
   accounts, financial currencies (SPEC T31), and the actual ledger + GL
   preferences (SPEC T34; Finance screens open on a fresh tenant) landed,
-  numbered prefixes encode apply order; still open: GL posting closure —
-  org-ledger link + financial calendar (SPEC T36/B12) → tax
-  categories/zones → customer/vendor/item classes (payment terms seed as
-  bootstrap credit terms).
+  numbered prefixes encode apply order; the action-file mechanism (SPEC
+  T38: `setup/*.yaml`, `client.invoke`, `done_when` probe, provision
+  `setup/` phase) is in place offline; still open: GL posting closure —
+  org-ledger link + financial calendar on top of T38 (SPEC T36/B12) →
+  tax categories/zones → customer/vendor/item classes (payment terms
+  seed as bootstrap credit terms).
 - `[OPEN]` Drift proof: provision two tenants, diff config, zero difference.
 - `[OPEN]` Timing captured (manual baseline vs automated).
 - `[OPEN]` Repo clean and runnable; README shows `acu provision` reproducing
