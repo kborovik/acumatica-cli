@@ -16,11 +16,11 @@ default: .venv help
 # Python dev (lint / format / types)
 ###############################################################################
 
-check: lint test ## Run all checks (lint + offline tests; live verification runs from acumatica-baseline)
+check: .venv lint test ## Run all checks (lint + offline tests; live verification runs from acumatica-baseline)
 
-lint: py-format py-lint py-types ## Lint Python code
+lint: .venv py-format py-lint py-types ## Lint Python code
 
-test: ## Run the test suite (pytest, offline — no live instance needed)
+test: .venv ## Run the test suite (pytest, offline — no live instance needed)
 	$(call header,Running pytest)
 	uv run pytest
 
@@ -60,9 +60,7 @@ uv.lock: pyproject.toml
 # Install
 ###############################################################################
 
-install: .venv ## Install Python dependencies (uv sync)
-
-build: ## Install acu globally as an editable uv tool
+install: .venv ## Install acu globally as an editable uv tool
 	$(call header,Installing acu via uv tool)
 	uv tool install --editable .
 

@@ -10,6 +10,11 @@ Every operation is idempotent:
 - `acu provision` takes an empty instance to a fully configured tenant in
   one command, and skips every step that is already done
 
+> **Development environment.** All development and live verification is done
+> against Acumatica ERP **26.101.0225** running on **Windows Server 2025**,
+> using the contract-based REST API endpoint **`Default/25.200.001`**. Other
+> versions will likely work, but only this combination is tested.
+
 ## Why?
 
 Acumatica configuration normally lives in the web UI: wizards, screens, and
@@ -58,6 +63,49 @@ that API sessions sign in to. Run `acu <command> --help` for details on any
 command.
 
 ## Installation
+
+`acu` requires Python 3.12 or newer. Pick one of the options below — each
+code block is a complete, standalone command.
+
+### From PyPI (recommended)
+
+With [uv](https://docs.astral.sh/uv/), installed as an isolated tool:
+
+```sh
+uv tool install acumatica-cli
+```
+
+With pipx:
+
+```sh
+pipx install acumatica-cli
+```
+
+With plain pip:
+
+```sh
+pip install acumatica-cli
+```
+
+### From the GitHub repository
+
+Install the latest development version straight from the main branch:
+
+```sh
+uv tool install git+https://github.com/kborovik/acumatica-cli.git
+```
+
+Or with pip:
+
+```sh
+pip install git+https://github.com/kborovik/acumatica-cli.git
+```
+
+Verify the installation:
+
+```sh
+acu --help
+```
 
 ## Configuration
 
