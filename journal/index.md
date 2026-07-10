@@ -40,7 +40,18 @@ Newest first.
   `Currency` name collides with the Default endpoint's, so files naming
   a Bootstrap-template entity must carry an explicit `endpoint:`) and
   V21/T33 (T29 changed the contract shape under a held version 1.0.0;
-  bump to 1.1.0 — contract identity is name plus version).
+  bump to 1.1.0 — contract identity is name plus version); T31 graduates
+  the scratch into the data repo's `baseline/` — 15 subaccounts, the
+  161-account chart of accounts, and CAD/EUR/SGD financial currencies
+  with real gain/loss accounts — through two backpropped failures:
+  B10/V22 (apply order was an alphabetical accident — currencies applied
+  before the subaccounts they reference; numbered filename prefixes now
+  encode order, `10-`/`20-`/`30-`, `uoms` parked at `90-`) and B11/V22∆
+  (server-derived `ChartOfAccountsOrder`/`CashAccount` are PUT-tolerated
+  but the server keeps its own derivation, so extract-sourced values
+  drift forever — stripped, alongside the `AccountGroup` refs the raw
+  extract carried); third fresh provision exits 0 with no drift over six
+  files and an independent re-diff confirms.
 - [2026-07-09](2026-07-09.md) — T17 closes the SPEC backlog: `exit
   $LASTEXITCODE` centralized in `_ssh` (single choke point per V18, the
   B4 recurrence class), call-site hand-appends stripped, suffix pinned
@@ -257,7 +268,8 @@ Every Acumatica problem hit so far, one line each. Status: **resolved**
 | 34 | Default-endpoint `Currency` entity is the CM201000 currency *list* only — `UseForAccounting: true` creates no CM202000 financial-currency row, so EUR-denominated GL accounts 422 "Currency cannot be found" even with Multicurrency enabled | resolved (T29: `Currency` entity on `Bootstrap/1.0.0` fronts CM202000; EUR-denominated account applies and diffs clean) | [2026-07-09](2026-07-09.md), [2026-07-10](2026-07-10.md) |
 | 36 | Contract-API *list* GET is an optimized export that 500s ("Optimization cannot be performed") when any field in scope maps to a BQL-delegate view — the Bootstrap Currency GL-account fields all do, so a PUT that persisted could not be read back by `diff` | resolved (B9/T30: on exactly that 500, diff retries the record via key-URL single-record GET, which skips the optimizer) | [2026-07-10](2026-07-10.md) |
 | 37 | Feature-gated fields are write-tolerated but read-invisible — `Translation*` account pairs on the Bootstrap Currency entity accept a PUT while financial-statement translation is off, but never come back on GET, so YAML claiming them diffs "not returned by endpoint" forever | workaround (seed data omits feature-gated fields its tenant's feature set hides) | [2026-07-10](2026-07-10.md) |
-| 35 | SalesDemo-extract replay: `AccountGroup` is PM201000 (Projects-gated and absent from the extract) and `ChartOfAccountsOrder` is server-derived — extracted config carrying either fails to apply or diffs dirty | workaround (strip references and derived fields at extract) | [2026-07-09](2026-07-09.md) |
+| 35 | SalesDemo-extract replay: `AccountGroup` is PM201000 (Projects-gated and absent from the extract) and `ChartOfAccountsOrder` + `CashAccount` are server-derived (PUT-tolerated, server keeps its own derivation) — extracted config carrying any of them fails to apply or diffs dirty forever | resolved (B11/V22: strip rule covers references outside the baseline set and server-derived fields; generator strips all four) | [2026-07-09](2026-07-09.md), [2026-07-10](2026-07-10.md) |
+| 38 | Baseline apply order is whatever alphabetical filename sort says — `30-currencies.yaml` gain/loss pairs 422 until the SUB row from the subaccounts file exists, so semantic filenames applied currencies first | resolved (B10/V22: numbered filename prefixes encode the dependency order; dir expansion stays alphabetical) | [2026-07-10](2026-07-10.md) |
 
 ## Status
 
@@ -287,9 +299,11 @@ Remaining milestones:
   `bootstrap/*.yaml` in the data repo with the write path live-verified
   (SPEC T13); the plugin's feature set is data-driven from
   `bootstrap/features.yaml` (SPEC T24).
-- `[OPEN]` Baseline expanded in dependency order: currencies → financial
-  calendar → chart of accounts/ledger → tax categories/zones →
-  customer/vendor/item classes → payment terms.
+- `[OPEN]` Baseline expanded in dependency order — subaccounts, chart of
+  accounts, and financial currencies landed (SPEC T31; numbered prefixes
+  encode apply order); still open: financial calendar → tax
+  categories/zones → customer/vendor/item classes (payment terms seed as
+  bootstrap credit terms).
 - `[OPEN]` Drift proof: provision two tenants, diff config, zero difference.
 - `[OPEN]` Timing captured (manual baseline vs automated).
 - `[OPEN]` Repo clean and runnable; README shows `acu provision` reproducing
