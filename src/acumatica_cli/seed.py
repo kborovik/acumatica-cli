@@ -11,8 +11,16 @@ Baseline file format:
     records:
       - CurrencyID: "CAD"
         Description: Canadian Dollar
+
+`endpoint:` stops being optional when `entity` names one the packaged
+Bootstrap endpoint serves (V20): the same name can mean different screens
+per endpoint (B8 - Bootstrap Currency = CM202000 financial currency,
+Default Currency = CM201000 list), so an ambiguous file is a hard error,
+never a silent Default-endpoint PUT.
 """
 
+import xml.etree.ElementTree as ET
+from importlib import resources
 from pathlib import Path
 from typing import Any
 
@@ -21,7 +29,35 @@ from pydantic import Field, ValidationError, field_validator, model_validator
 
 from . import output
 from .client import AcumaticaClient, unwrap
+from .config import Instance
 from .models import Model, validation_summary
+
+
+def _bootstrap_endpoint() -> tuple[str, frozenset[str]]:
+    """Endpoint name/version + entity names from the packaged template.
+
+    Parsed from bootstrap_project.xml rather than hand-listed (V2): the
+    template is the single source of truth for what the Bootstrap endpoint
+    serves, and the set tracks entity additions and version bumps for free.
+    """
+    root = ET.fromstring(
+        (resources.files("acumatica_cli") / "bootstrap_project.xml").read_bytes()
+    )
+    ns = "{http://www.acumatica.com/entity/maintenance/5.31}"
+    endpoint = root.find(f"EntityEndpoint/{ns}Endpoint")
+    if endpoint is None:
+        raise RuntimeError("bootstrap_project.xml: no EntityEndpoint/Endpoint item")
+    name = f"{endpoint.get('name')}/{endpoint.get('version')}"
+    entities = frozenset(
+        e.get("name", "") for e in endpoint.findall(f"{ns}TopLevelEntity")
+    )
+    return name, entities
+
+
+BOOTSTRAP_ENDPOINT, BOOTSTRAP_ENTITIES = _bootstrap_endpoint()
+# The code-default instance endpoint, for the V20 error message - read off
+# the Instance field default rather than hand-synced (V11: one spelling).
+_DEFAULT_ENDPOINT: str = Instance.model_fields["endpoint"].default
 
 
 class BaselineFile(Model):
@@ -54,9 +90,16 @@ def load_baseline(path: Path) -> BaselineFile:
     if not isinstance(data, dict):
         raise SystemExit(f"{path}: expected a mapping at the top level")
     try:
-        return BaselineFile.model_validate({"path": path, **data})
+        baseline = BaselineFile.model_validate({"path": path, **data})
     except ValidationError as exc:
         raise SystemExit(f"{path}: {validation_summary(exc)}") from exc
+    if baseline.endpoint is None and baseline.entity in BOOTSTRAP_ENTITIES:
+        raise SystemExit(
+            f"{path}: entity '{baseline.entity}' is served by both the instance "
+            f"default endpoint ({_DEFAULT_ENDPOINT}) and the packaged "
+            f"{BOOTSTRAP_ENDPOINT} - add an explicit 'endpoint:' line to pick one"
+        )
+    return baseline
 
 
 def _norm(value: Any) -> str:

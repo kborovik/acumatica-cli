@@ -65,6 +65,43 @@ def test_load_baseline_parses_endpoint_override(tmp_path: Path) -> None:
     assert seed.load_baseline(_write(tmp_path, text)).endpoint == "Bootstrap/1.0.0"
 
 
+AMBIGUOUS_YAML = """\
+entity: Currency
+key: CuryID
+records:
+  - CuryID: EUR
+"""
+
+
+def test_bootstrap_entities_parsed_from_packaged_template() -> None:
+    # V2: the ambiguous set comes from bootstrap_project.xml, never a
+    # hand-list - parity pinned here so a template edit surfaces offline
+    assert seed.BOOTSTRAP_ENDPOINT == "Bootstrap/1.0.0"
+    assert {"Company", "CreditTerms", "Currency"} == seed.BOOTSTRAP_ENTITIES
+
+
+def test_load_baseline_rejects_bootstrap_entity_without_endpoint(
+    tmp_path: Path,
+) -> None:
+    """V20/B8: an entity both endpoints serve + no endpoint: = hard error.
+
+    The error names both endpoints; a silent Default-endpoint PUT would hit
+    a different screen than the author meant (Bootstrap Currency = CM202000,
+    Default Currency = CM201000 list).
+    """
+    with pytest.raises(SystemExit, match=r"Default/25\.200\.001.*Bootstrap/1\.0\.0"):
+        seed.load_baseline(_write(tmp_path, AMBIGUOUS_YAML))
+
+
+def test_load_baseline_bootstrap_entity_explicit_endpoint_passes(
+    tmp_path: Path,
+) -> None:
+    # V20: explicit endpoint: disambiguates - either target is legitimate
+    for endpoint in ("Bootstrap/1.0.0", "Default/25.200.001"):
+        text = AMBIGUOUS_YAML + f"endpoint: {endpoint}\n"
+        assert seed.load_baseline(_write(tmp_path, text)).endpoint == endpoint
+
+
 def test_apply_and_diff_target_endpoint_override(
     tmp_path: Path, instance: Instance
 ) -> None:
