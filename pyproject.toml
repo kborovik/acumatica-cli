@@ -1,7 +1,7 @@
 [project]
 name = "acumatica-cli"
 version = "0.2.2"
-description = "The acu CLI - Acumatica ERP configuration as code: tenant provisioning, baseline config, and reference data"
+description = "Acumatica ERP Config-as-Code: tenant provisioning, baseline config, and reference data"
 authors = [{ name = "Konstantin Borovik", email = "kb@lab5.ca" }]
 readme = "README.md"
 requires-python = ">=3.12"
@@ -13,6 +13,10 @@ dependencies = [
     "pyyaml>=6.0",
     "rich>=13",
 ]
+
+[project.urls]
+Homepage = "https://lab5.ca"
+Repository = "https://github.com/kborovik/acumatica-cli"
 
 [project.scripts]
 acu = "acumatica_cli.cli:main"
