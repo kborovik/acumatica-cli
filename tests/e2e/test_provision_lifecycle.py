@@ -156,7 +156,13 @@ def test_provision_builds_clean_tenant(
 def test_diff_is_clean_on_provisioned_tenant(
     acu: RunAcu, scratch_tenant: ScratchTenant
 ) -> None:
-    proc = acu("-t", scratch_tenant.login, "diff", "baseline")
+    """Independent read-back over baseline/ AND setup/ (T36).
+
+    A clean setup/ diff is the live proof of the whole GL setup chain: each
+    action file's done_when probe answers non-empty, so the FinYearSetup
+    row and the 2026 company periods exist on the tenant.
+    """
+    proc = acu("-t", scratch_tenant.login, "diff", "baseline", "setup")
     assert proc.returncode == 0, _combined(proc)
     assert "no drift" in _combined(proc)
 
@@ -171,6 +177,10 @@ def test_provision_is_idempotent(acu: RunAcu, scratch_tenant: ScratchTenant) -> 
     )
     assert proc.returncode == 0, _combined(proc)
     assert "skipping create" in _combined(proc)
+    # every setup/ action re-verifies through its done_when probe and
+    # skips - the T36 re-run leg: no second invoke, zero mutations
+    assert "skip GeneratePeriods (already done)" in _combined(proc)
+    assert "skip GenerateCalendar (already done)" in _combined(proc)
     assert "no drift" in _combined(proc)
 
 

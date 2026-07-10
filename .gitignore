@@ -2,6 +2,7 @@
 # root-anchored: src/acumatica_cli/templates/ ships files with these names
 /baseline
 /bootstrap
+/setup
 /acu.yaml
 /.env
 

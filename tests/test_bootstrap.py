@@ -131,7 +131,19 @@ def test_package_zip_carries_the_bootstrap_endpoint() -> None:
     every gain/loss Acct/Sub pair is required at persist, so all ten pairs
     ship), GL102000 -> GLSetupMaint view GLSetupRecord (T34 - the GL setup
     singleton; the two account fields are the only ones without a PXDefault
-    value, and this build has no RetEarnSubID/YtdNetIncSubID).
+    value, and this build has no RetEarnSubID/YtdNetIncSubID), and the T36
+    GL setup chain: GL201500 -> GeneralLedgerMaint (the org-ledger link
+    writes through the OrganizationLedgerLinkWithOrganizationSelect view of
+    the nested OrganizationLedgerLinkMaint extension - the Default
+    endpoint's Ledger.Companies detail is write-tolerated then silently
+    dropped, B12), GL101000 -> FiscalYearSetupMaint view FiscalYearSetup
+    (GeneratePeriods -> the graph's AutoFill action), GL201000 ->
+    MasterFinPeriodMaint view FiscalYear (GenerateCalendar -> GenerateYears
+    with FromYear/ToYear through the GenerateParams dialog view, both on
+    GenerateCalendarExtensionBase), GL201100 -> OrganizationFinPeriodMaint
+    view OrgFinYear (the company-period read surface; OpenPeriods -> Open
+    on FinPeriodStatusActionsGraphBaseExtension ships as T37 probe material
+    only, B13).
     """
     ns = "{http://www.acumatica.com/entity/maintenance/5.31}"
     with zipfile.ZipFile(io.BytesIO(bootstrap.package_zip())) as zf:
@@ -139,11 +151,20 @@ def test_package_zip_carries_the_bootstrap_endpoint() -> None:
     (item,) = root.findall("EntityEndpoint")
     (endpoint,) = item.findall(f"{ns}Endpoint")
     assert endpoint.get("name") == "Bootstrap"
-    assert endpoint.get("version") == "1.2.0"
+    assert endpoint.get("version") == "1.3.0"
     # SystemContracts.V4 is the build's only IsCurrent implementation
     assert endpoint.get("systemContractVersion") == "4"
     entities = {e.get("name"): e for e in endpoint.findall(f"{ns}TopLevelEntity")}
-    assert set(entities) == {"Company", "CreditTerms", "Currency", "GLPreferences"}
+    assert set(entities) == {
+        "Company",
+        "CreditTerms",
+        "Currency",
+        "GLPreferences",
+        "LedgerCompany",
+        "FinancialYearSettings",
+        "MasterCalendar",
+        "CompanyCalendar",
+    }
     # features stay OUT: contract-endpoint writes to CS100000 do not
     # persist (T3 verdict) - the CustomizationPlugin owns features
     assert entities["Company"].get("screen") == "CS101500"
@@ -152,10 +173,17 @@ def test_package_zip_carries_the_bootstrap_endpoint() -> None:
     # GL preferences = GL102000 on this build - GL105000 has no site-map
     # row at all (T34, verified vs the live SiteMap table)
     assert entities["GLPreferences"].get("screen") == "GL102000"
+    # the T36 GL setup chain, screens verified vs the live aspx files
+    assert entities["LedgerCompany"].get("screen") == "GL201500"
+    assert entities["FinancialYearSettings"].get("screen") == "GL101000"
+    assert entities["MasterCalendar"].get("screen") == "GL201000"
+    assert entities["CompanyCalendar"].get("screen") == "GL201100"
     # mappings follow the screen's own bindings (T13): a DAC prop existing
     # on the primary view is not enough - writes land only through the
-    # view the screen edits. Field names = DAC props verbatim.
-    views: dict[str, dict[str, str]] = {
+    # view the screen edits. Field names = DAC props verbatim; a tuple
+    # value pins a To-field that differs from the entity field name (the
+    # calendar entities expose the DACs' bare Year as FinancialYear).
+    views: dict[str, dict[str, str | tuple[str, str]]] = {
         "Company": {
             "AcctCD": "BAccount",
             "AcctName": "BAccount",
@@ -216,6 +244,27 @@ def test_package_zip_carries_the_bootstrap_endpoint() -> None:
             ("YtdNetIncAccountID", "RetEarnAccountID"),
             "GLSetupRecord",
         ),
+        # org-ledger link (T36/B12): LedgerCD locates the ledger on the
+        # primary view, OrganizationID inserts the link row through the
+        # Companies tab view of the nested OrganizationLedgerLinkMaint
+        # extension - the only screen-writable surface for the link
+        "LedgerCompany": {
+            "LedgerCD": "LedgerRecords",
+            "OrganizationID": "OrganizationLedgerLinkWithOrganizationSelect",
+        },
+        # the FinYearSetup singleton (T36): master-calendar generation
+        # 500s until it exists
+        "FinancialYearSettings": dict.fromkeys(
+            ("BegFinYear", "FinPeriods", "PeriodType"),
+            "FiscalYearSetup",
+        ),
+        # both calendar views key on the DAC's bare Year - exposed as
+        # FinancialYear (the Default-endpoint idiom for period entities)
+        "MasterCalendar": {"FinancialYear": ("FiscalYear", "Year")},
+        "CompanyCalendar": {
+            "FinancialYear": ("OrgFinYear", "Year"),
+            "OrganizationID": "OrgFinYear",
+        },
     }
     for entity, expected in views.items():
         fields = {
@@ -229,8 +278,10 @@ def test_package_zip_carries_the_bootstrap_endpoint() -> None:
         for name, to in mappings.items():
             assert name is not None
             assert to is not None
-            assert to.get("object") == expected[name]
-            assert to.get("field") == name
+            exp = expected[name]
+            obj, to_field = exp if isinstance(exp, tuple) else (exp, name)
+            assert to.get("object") == obj
+            assert to.get("field") == to_field
     assert (
         entities["Company"].findall(f"{ns}Fields/{ns}Field")[0].get("type")
         == "StringValue"
@@ -252,6 +303,59 @@ def test_package_zip_carries_the_bootstrap_endpoint() -> None:
         f.get("type")
         for f in entities["GLPreferences"].findall(f"{ns}Fields/{ns}Field")
     } == {"StringValue"}
+    # FinancialYearSettings value types (T36): BegFinYear DateTime ->
+    # DateTimeValue, FinPeriods Nullable<Int16> -> ShortValue
+    year_types = {
+        f.get("name"): f.get("type")
+        for f in entities["FinancialYearSettings"].findall(f"{ns}Fields/{ns}Field")
+    }
+    assert year_types == {
+        "BegFinYear": "DateTimeValue",
+        "FinPeriods": "ShortValue",
+        "PeriodType": "StringValue",
+    }
+
+
+def test_bootstrap_endpoint_carries_the_gl_setup_actions() -> None:
+    """Pin the T36 <Action> items - the setup verbs a keyed PUT cannot express.
+
+    mappedTo = the graph-side member, verified by static reflection on the
+    live box: AutoFill on FiscalYearSetupMaint itself, GenerateYears + the
+    GenerateParams dialog view on GenerateCalendarExtensionBase, Open on
+    FinPeriodStatusActionsGraphBaseExtension (T37 probe material only -
+    the Open flow redirects to the GL503000 processing screen, B13).
+    """
+    ns = "{http://www.acumatica.com/entity/maintenance/5.31}"
+    with zipfile.ZipFile(io.BytesIO(bootstrap.package_zip())) as zf:
+        root = ET.fromstring(zf.read("project.xml"))
+    (endpoint,) = root.findall(f"EntityEndpoint/{ns}Endpoint")
+    entities = {e.get("name"): e for e in endpoint.findall(f"{ns}TopLevelEntity")}
+    actions = {
+        entity: {a.get("name"): a for a in el.findall(f"{ns}Actions/{ns}Action")}
+        for entity, el in entities.items()
+    }
+    assert {e: set(a) for e, a in actions.items() if a} == {
+        "FinancialYearSettings": {"GeneratePeriods"},
+        "MasterCalendar": {"GenerateCalendar"},
+        "CompanyCalendar": {"OpenPeriods"},
+    }
+    assert actions["FinancialYearSettings"]["GeneratePeriods"].get("mappedTo") == (
+        "AutoFill"
+    )
+    assert actions["CompanyCalendar"]["OpenPeriods"].get("mappedTo") == "Open"
+    generate = actions["MasterCalendar"]["GenerateCalendar"]
+    assert generate.get("mappedTo") == "GenerateYears"
+    # the action's own parameter block: FromYear/ToYear ride the
+    # GenerateParams dialog view, StringValue like the year keys
+    params = {
+        f.get("name"): f.get("type") for f in generate.findall(f"{ns}Fields/{ns}Field")
+    }
+    assert params == {"FromYear": "StringValue", "ToYear": "StringValue"}
+    for mapping in generate.findall(f"{ns}Mappings/{ns}Mapping"):
+        to = mapping.find(f"{ns}To")
+        assert to is not None
+        assert to.get("object") == "GenerateParams"
+        assert to.get("field") == mapping.get("field")
 
 
 def _served_package(description: str) -> str:

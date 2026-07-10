@@ -7,7 +7,7 @@ Baseline file format:
 
     entity: Currency          # entity name in the contract endpoint
     key: CurrencyID           # key field(s), string or list
-    endpoint: Bootstrap/1.2.0 # optional: override the instance endpoint
+    endpoint: Bootstrap/1.3.0 # optional: override the instance endpoint
     records:
       - CurrencyID: "CAD"
         Description: Canadian Dollar
@@ -18,7 +18,7 @@ cannot express (calendar generation and the like):
 
     action: GenerateCalendar          # action name on the endpoint entity
     entity: MasterCalendar            # entity the action hangs off
-    endpoint: Bootstrap/1.2.0         # optional: override the instance endpoint
+    endpoint: Bootstrap/1.3.0         # optional: override the instance endpoint
     record:     { FinancialYear: 2026 }
     parameters: { FromYear: 2026, ToYear: 2026 }   # optional
     done_when:  { filter: "FinancialYear eq '2026'" }

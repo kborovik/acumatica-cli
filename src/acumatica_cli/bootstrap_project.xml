@@ -83,13 +83,53 @@
                 etc.), which settles the entity's field set: the two
                 accounts only. This build's GLSetup has no RetEarnSubID or
                 YtdNetIncSubID companions.
+  - LedgerCompany GL201500 -> GeneralLedgerMaint, PrimaryView LedgerRecords
+                (DAC PX.Objects.GL.Ledger) - the org-ledger link the
+                Default endpoint cannot write (B12: the Ledger.Companies
+                detail PUT answers 200 and echoes the row, but the link
+                table stays empty). The screen-writable surface is the
+                Companies tab view OrganizationLedgerLinkWithOrganizationSelect,
+                declared on the nested OrganizationLedgerLinkMaint extension
+                (DAC PX.Objects.GL.DAC.OrganizationLedgerLink; contract
+                mappings resolve view names across extensions): LedgerCD
+                locates the ledger on the primary view, OrganizationID
+                inserts the link row. T36 bindings: graph/view names read
+                off GL201500.aspx + static member reflection - the
+                constructor-running reflection probe stack-overflows on the
+                ledger graphs.
+  - FinancialYearSettings GL101000 -> FiscalYearSetupMaint, PrimaryView
+                FiscalYearSetup (DAC PX.Objects.GL.FinYearSetup) - the
+                FinYearSetup singleton master-calendar generation requires
+                (missing on a fresh tenant, so GL201000 500s before it
+                starts - T36). BegFinYear DateTime -> DateTimeValue,
+                FinPeriods Nullable<Int16> -> ShortValue. The GeneratePeriods
+                action (mappedTo AutoFill, PXAction on this graph) fills
+                the period-detail grid the screen's validation demands - a
+                bare field PUT fails "configure all the Financial Periods"
+                (T36).
+  - MasterCalendar GL201000 -> MasterFinPeriodMaint, PrimaryView FiscalYear
+                (DAC PX.Objects.GL.FinPeriods.MasterFinYear) - master
+                financial calendar. FinancialYear -> the view's Year key.
+                The GenerateCalendar action (mappedTo GenerateYears) and its
+                FromYear/ToYear dialog view GenerateParams live on the
+                GenerateCalendarExtensionBase graph extension.
+  - CompanyCalendar GL201100 -> OrganizationFinPeriodMaint, PrimaryView
+                OrgFinYear (DAC PX.Objects.GL.FinPeriods.OrganizationFinYear)
+                - the company-period surface (FinancialYear + OrganizationID),
+                the done_when probe target for calendar generation: master
+                rows alone do not post, the per-company FinPeriod rows do
+                (B12's "07-2026 does not exist for the LAB5 company"). The
+                OpenPeriods action (mappedTo Open, on the
+                FinPeriodStatusActionsGraphBaseExtension) ships as T37 probe
+                material only - the Open flow redirects to the GL503000
+                processing screen, unfollowable over contract (B13).
   Contract field names = DAC property names verbatim (no rename layer).
   Features (CS100000) stays OUT of the endpoint - writes through any
   contract endpoint do not persist (T3 verdict); the plugin owns features.
 -->
-<Customization level="" description="acu bootstrap: CustomizationPlugin enables features on publish; Bootstrap endpoint exposes company + credit terms + financial currency + GL preferences" product-version="26.101">
+<Customization level="" description="acu bootstrap: CustomizationPlugin enables features on publish; Bootstrap endpoint exposes company + credit terms + financial currency + GL preferences + ledger-company link + financial year + calendars" product-version="26.101">
   <EntityEndpoint>
-    <Endpoint xmlns="http://www.acumatica.com/entity/maintenance/5.31" name="Bootstrap" version="1.2.0" systemContractVersion="4">
+    <Endpoint xmlns="http://www.acumatica.com/entity/maintenance/5.31" name="Bootstrap" version="1.3.0" systemContractVersion="4">
       <TopLevelEntity name="Company" screen="CS101500">
         <Fields>
           <Field name="AcctCD" type="StringValue" />
@@ -259,6 +299,84 @@
             <To object="CuryRecords" field="RoundingLossSubID" />
           </Mapping>
         </Mappings>
+      </TopLevelEntity>
+      <TopLevelEntity name="LedgerCompany" screen="GL201500">
+        <Fields>
+          <Field name="LedgerCD" type="StringValue" />
+          <Field name="OrganizationID" type="StringValue" />
+        </Fields>
+        <Mappings>
+          <Mapping field="LedgerCD">
+            <To object="LedgerRecords" field="LedgerCD" />
+          </Mapping>
+          <Mapping field="OrganizationID">
+            <To object="OrganizationLedgerLinkWithOrganizationSelect" field="OrganizationID" />
+          </Mapping>
+        </Mappings>
+      </TopLevelEntity>
+      <TopLevelEntity name="FinancialYearSettings" screen="GL101000">
+        <Fields>
+          <Field name="BegFinYear" type="DateTimeValue" />
+          <Field name="FinPeriods" type="ShortValue" />
+          <Field name="PeriodType" type="StringValue" />
+        </Fields>
+        <Mappings>
+          <Mapping field="BegFinYear">
+            <To object="FiscalYearSetup" field="BegFinYear" />
+          </Mapping>
+          <Mapping field="FinPeriods">
+            <To object="FiscalYearSetup" field="FinPeriods" />
+          </Mapping>
+          <Mapping field="PeriodType">
+            <To object="FiscalYearSetup" field="PeriodType" />
+          </Mapping>
+        </Mappings>
+        <Actions>
+          <Action name="GeneratePeriods" mappedTo="AutoFill" isDefault="false" />
+        </Actions>
+      </TopLevelEntity>
+      <TopLevelEntity name="MasterCalendar" screen="GL201000">
+        <Fields>
+          <Field name="FinancialYear" type="StringValue" />
+        </Fields>
+        <Mappings>
+          <Mapping field="FinancialYear">
+            <To object="FiscalYear" field="Year" />
+          </Mapping>
+        </Mappings>
+        <Actions>
+          <Action name="GenerateCalendar" mappedTo="GenerateYears" isDefault="false">
+            <Fields>
+              <Field name="FromYear" type="StringValue" />
+              <Field name="ToYear" type="StringValue" />
+            </Fields>
+            <Mappings>
+              <Mapping field="FromYear">
+                <To object="GenerateParams" field="FromYear" />
+              </Mapping>
+              <Mapping field="ToYear">
+                <To object="GenerateParams" field="ToYear" />
+              </Mapping>
+            </Mappings>
+          </Action>
+        </Actions>
+      </TopLevelEntity>
+      <TopLevelEntity name="CompanyCalendar" screen="GL201100">
+        <Fields>
+          <Field name="FinancialYear" type="StringValue" />
+          <Field name="OrganizationID" type="StringValue" />
+        </Fields>
+        <Mappings>
+          <Mapping field="FinancialYear">
+            <To object="OrgFinYear" field="Year" />
+          </Mapping>
+          <Mapping field="OrganizationID">
+            <To object="OrgFinYear" field="OrganizationID" />
+          </Mapping>
+        </Mappings>
+        <Actions>
+          <Action name="OpenPeriods" mappedTo="Open" isDefault="false" />
+        </Actions>
       </TopLevelEntity>
       <TopLevelEntity name="GLPreferences" screen="GL102000">
         <Fields>
