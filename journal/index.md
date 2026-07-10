@@ -60,7 +60,20 @@ Newest first.
   the XML attribute, templates, data-repo refs, and pinned tests moved;
   the T25 digest gate forced the live republish through a resumable
   provision and an independent diff read clean through 1.1.0 — the §T
-  backlog is empty.
+  backlog is empty; T34 adds `GLPreferences` to the endpoint and bumps
+  to 1.2.0 — the live site map corrected the screen ID before any code
+  (GL preferences is GL102000 on this build, the spec's GL105000 was a
+  training-data artifact; V12 amend), reflection settled the field set
+  at exactly two required accounts on `GLSetupRecord`, the data repo
+  gained `40-ledger.yaml` + `50-gl-preferences.yaml`, and a fresh
+  provision applied all eight files with both diffs clean and
+  `JournalTransaction` answering 200 where unbootstrapped tenants threw
+  `PXSetupNotEnteredException`; the "GL batch posts" verify leg then hit
+  a multi-surface wall and backpropped as B12 + T36 — no org-ledger
+  link (the Default `Ledger.Companies` detail is write-tolerated but
+  silently dropped) and no financial calendar (`FinYearSetup` → master
+  year → company periods, each its own gap), so T34's verify narrowed
+  per V17 and T36 owns the GL posting closure.
 - [2026-07-09](2026-07-09.md) — T17 closes the SPEC backlog: `exit
   $LASTEXITCODE` centralized in `_ssh` (single choke point per V18, the
   B4 recurrence class), call-site hand-appends stripped, suffix pinned
@@ -279,6 +292,10 @@ Every Acumatica problem hit so far, one line each. Status: **resolved**
 | 37 | Feature-gated fields are write-tolerated but read-invisible — `Translation*` account pairs on the Bootstrap Currency entity accept a PUT while financial-statement translation is off, but never come back on GET, so YAML claiming them diffs "not returned by endpoint" forever | workaround (seed data omits feature-gated fields its tenant's feature set hides) | [2026-07-10](2026-07-10.md) |
 | 35 | SalesDemo-extract replay: `AccountGroup` is PM201000 (Projects-gated and absent from the extract) and `ChartOfAccountsOrder` + `CashAccount` are server-derived (PUT-tolerated, server keeps its own derivation) — extracted config carrying any of them fails to apply or diffs dirty forever | resolved (B11/V22: strip rule covers references outside the baseline set and server-derived fields; generator strips all four) | [2026-07-09](2026-07-09.md), [2026-07-10](2026-07-10.md) |
 | 38 | Baseline apply order is whatever alphabetical filename sort says — `30-currencies.yaml` gain/loss pairs 422 until the SUB row from the subaccounts file exists, so semantic filenames applied currencies first | resolved (B10/V22: numbered filename prefixes encode the dependency order; dir expansion stays alphabetical) | [2026-07-10](2026-07-10.md) |
+| 39 | Training-data screen IDs lie: the plan named GL preferences as GL105000, but the live site map has no such row — General Ledger Preferences is GL102000 on this build (GL105020/30 are budget restriction screens) | resolved (T34: site-map SQL probe + GL102000.aspx bindings; spec amended before any code) | [2026-07-10](2026-07-10.md) |
+| 40 | Default-endpoint `Ledger` entity's `Companies` detail is write-tolerated but silently dropped — PUT answers 200 echoing the record while the org-ledger link table stays empty, so the batch header cannot default `LedgerID` (the B3/B7 silent-no-op shape wearing a detail list) | open (B12/T36; screen surface is GL201500's `OrganizationLedgerLinkWithOrganizationSelect` view on `GeneralLedgerMaint`) | [2026-07-10](2026-07-10.md) |
+| 41 | GL posting on a fresh tenant needs a setup chain no single entity closes: `FinYearSetup` singleton → master calendar year → company periods, plus the org-ledger link; the Default `FinancialYear` entity inserts bare `{}` but pins the year start to the creation date, and an explicit start date fails the "configure all the Financial Periods" validation both ways the API offers | open (B12/T36; `wrap()` is scalar-only, so detail-carrying routes are also a seed-side mechanism decision) | [2026-07-10](2026-07-10.md) |
+| 42 | The PowerShell reflection probe that settled `GLSetupMaint` stack-overflows on the ledger graphs (`GeneralLedgerMaint`) — same script shape, different type graph | workaround (aspx grep for `TypeName`/`PrimaryView`/`DataField` is the sturdier binding instrument) | [2026-07-10](2026-07-10.md) |
 
 ## Status
 
@@ -309,8 +326,10 @@ Remaining milestones:
   (SPEC T13); the plugin's feature set is data-driven from
   `bootstrap/features.yaml` (SPEC T24).
 - `[OPEN]` Baseline expanded in dependency order — subaccounts, chart of
-  accounts, and financial currencies landed (SPEC T31; numbered prefixes
-  encode apply order); still open: financial calendar → tax
+  accounts, financial currencies (SPEC T31), and the actual ledger + GL
+  preferences (SPEC T34; Finance screens open on a fresh tenant) landed,
+  numbered prefixes encode apply order; still open: GL posting closure —
+  org-ledger link + financial calendar (SPEC T36/B12) → tax
   categories/zones → customer/vendor/item classes (payment terms seed as
   bootstrap credit terms).
 - `[OPEN]` Drift proof: provision two tenants, diff config, zero difference.
