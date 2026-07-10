@@ -32,7 +32,15 @@ Newest first.
   `NoEntitySatisfiesTheConditionException`, not 404); also recorded:
   `Translation*` currency accounts are feature-gated — write-tolerated
   but read-invisible while financial-statement translation is off, so
-  seed YAML must not claim them.
+  seed YAML must not claim them; an evening code review of `src/` fixes
+  two findings (the template comment contradicted the `Translation*`
+  caveat, which lived only in a commit message; `PACKAGE_DESCRIPTION`
+  hand-duplicated the XML root description, now parsed from the
+  template) and specs two latent gaps preventively — V20/T32 (Bootstrap
+  `Currency` name collides with the Default endpoint's, so files naming
+  a Bootstrap-template entity must carry an explicit `endpoint:`) and
+  V21/T33 (T29 changed the contract shape under a held version 1.0.0;
+  bump to 1.1.0 — contract identity is name plus version).
 - [2026-07-09](2026-07-09.md) — T17 closes the SPEC backlog: `exit
   $LASTEXITCODE` centralized in `_ssh` (single choke point per V18, the
   B4 recurrence class), call-site hand-appends stripped, suffix pinned
