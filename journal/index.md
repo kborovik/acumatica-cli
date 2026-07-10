@@ -88,7 +88,15 @@ Newest first.
   round-trip channel, settled by live probe (getPublished rows carry
   only names) — so a digest mismatch (changed features.yaml, older
   tool's package) now reimports + republishes instead of silently
-  skipping.
+  skipping; T26 adds `acu config init` — a seven-file data-repo
+  scaffold shipped as package data (skip-if-exists, placeholder
+  secrets, no git/gpg), with instance resolution moved from the Click
+  group callback to a lazy `pass_instance` decorator so init runs
+  where discovery finds no `acu.yaml`; a near-miss recorded en route:
+  the repo's unanchored `.gitignore` symlink patterns silently
+  excluded five templates from the commit while the suite passed from
+  the working tree (patterns now root-anchored, wheel contents
+  verified by hand).
 - [2026-07-08](2026-07-08.md) — recycle unblocks tenant visibility (stale-map
   corrections); first-login password wall found and defeated (screen-flow,
   then `-aup` preset); `acu tenant create` chains create → recycle →
