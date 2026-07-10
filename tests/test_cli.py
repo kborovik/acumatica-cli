@@ -73,6 +73,49 @@ def _baseline(tmp_path: Path) -> Path:
     return path
 
 
+class FakeDist:
+    """Stands in for importlib.metadata's Distribution in _version tests."""
+
+    def __init__(self, version: str, direct_url: str | None):
+        self.version = version
+        self._direct_url = direct_url
+
+    def read_text(self, filename: str) -> str | None:
+        assert filename == "direct_url.json"
+        return self._direct_url
+
+
+def test_version_marks_editable_install(monkeypatch: pytest.MonkeyPatch) -> None:
+    """PEP 610 editable metadata renders `<version>+dev (<checkout path>)`."""
+    direct_url = '{"url":"file:///home/kb/checkout","dir_info":{"editable":true}}'
+    monkeypatch.setattr(cli, "distribution", lambda name: FakeDist("1.2.3", direct_url))
+
+    assert cli._version() == "1.2.3+dev (/home/kb/checkout)"  # pyright: ignore[reportPrivateUsage]
+
+
+def test_version_plain_without_direct_url(monkeypatch: pytest.MonkeyPatch) -> None:
+    """A wheel install has no direct_url.json and renders the bare version."""
+    monkeypatch.setattr(cli, "distribution", lambda name: FakeDist("1.2.3", None))
+
+    assert cli._version() == "1.2.3"  # pyright: ignore[reportPrivateUsage]
+
+
+def test_version_plain_when_not_editable(monkeypatch: pytest.MonkeyPatch) -> None:
+    """direct_url.json without editable (e.g. `pip install .`) stays plain."""
+    direct_url = '{"url":"file:///home/kb/checkout","dir_info":{}}'
+    monkeypatch.setattr(cli, "distribution", lambda name: FakeDist("1.2.3", direct_url))
+
+    assert cli._version() == "1.2.3"  # pyright: ignore[reportPrivateUsage]
+
+
+def test_version_flag_prints_dist_version() -> None:
+    """`acu --version` exits 0 and carries the installed dist version."""
+    result = CliRunner().invoke(cli.cli, ["--version"])
+
+    assert result.exit_code == 0
+    assert cli._version() in result.output  # pyright: ignore[reportPrivateUsage]
+
+
 def test_tenant_list_renders_table(
     wired: Instance, monkeypatch: pytest.MonkeyPatch
 ) -> None:

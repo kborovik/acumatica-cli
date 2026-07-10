@@ -11,8 +11,10 @@ acu config check                 read-only preflight: discovery, secrets, REST, 
 """
 
 import functools
+import json
 import os
 from collections.abc import Callable
+from importlib.metadata import distribution
 from pathlib import Path
 from typing import Concatenate
 
@@ -27,8 +29,27 @@ from .config import Instance, data_root, load_instance, read_config, scaffold
 from .tenant import TenantManager
 
 
+def _version() -> str:
+    """Render the CLI version, marking editable installs as dev builds.
+
+    A PEP 610 direct_url.json with dir_info.editable true means the package
+    was installed with `pip/uv install -e` from a checkout, so the running
+    code can differ from the released wheel; render `<version>+dev (<path>)`
+    to keep dev output from masquerading as a release. Wheel installs carry
+    no direct_url.json (or editable is absent) and render plain `<version>`.
+    """
+    dist = distribution("acumatica-cli")
+    raw = dist.read_text("direct_url.json")
+    if raw is not None:
+        direct = json.loads(raw)
+        if direct.get("dir_info", {}).get("editable"):
+            checkout = direct.get("url", "").removeprefix("file://")
+            return f"{dist.version}+dev ({checkout})"
+    return dist.version
+
+
 @click.group(help=__doc__)
-@click.version_option(package_name="acumatica-cli")
+@click.version_option(version=_version(), prog_name="acu")
 @click.option(
     "-t", "--tenant", default=None, help="Override the tenant API sessions sign in to"
 )
