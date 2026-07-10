@@ -18,7 +18,7 @@ Configure Acumatica ERP purely from source — no UI, no Configuration Wizard. I
 - cmd: `acu [-t <tenant>] [--host <host>] [--version] <subcommand>` → globals valid only before subcommand; `--host` swaps acu.yaml `host` pre-`Instance` build → `base_url`/`ssh` re-derive; explicit acu.yaml `base_url`/`ssh` still win; `--version` → editable install (PEP 610 `direct_url.json` `dir_info.editable`) renders `<version>+dev (<checkout path>)`, release install plain `<version>`
 - cmd: `acu tenant list|create|delete` → tenant CRUD over SSH; create: `--id` ! + `--login` ! + `--type`/`--parent`/`--hidden`/`--no-init` ?; delete: `--id` + confirm prompt, `--yes` skips
 - cmd: `acu apply [--dry-run] <files|dirs>` → PUT each record; dir arg expands `*.yaml`; dry-run lines `would PUT …`, summary suffixed `(dry run)`
-- cmd: `acu diff <files|dirs>` → GET by `$filter` on key fields, compare normalized; drift → exit 2
+- cmd: `acu diff <files|dirs>` → GET by `$filter` on key fields, compare normalized; optimization-500 (delegate-view fields) → retry record via key-URL GET `/<entity>/<key1>[/<key2>...]` (YAML `key` order); drift → exit 2
 - cmd: `acu provision --id <n> --login <name> [--type] [--parent]` → chains tenant create → bootstrap publish → apply `baseline/` → diff; resumable — skips done steps
 - cmd: `acu schema [--out <dir>]` → OpenAPI dump → `schemas/` (gitignored ~3 MB; regenerate, never version)
 - cmd: `acu config show` → emit complete valid YAML config doc: header comment (creds live in `.env`, never config) + resolved top-level instance map (defaults merged, URLs constructed); `username`/`password` excluded → output round-trips through `load_instance` (`acu config show > acu.yaml` reloads identical); ! same `load_instance` path as live cmds — no parallel resolution
@@ -37,7 +37,7 @@ Configure Acumatica ERP purely from source — no UI, no Configuration Wizard. I
 V1: two-plane split — control plane = SSH (`tenant.py`, tenant CRUD only); data plane = REST (`client.py`); never mixed
 V2: three source kinds never mixed — `baseline/*.yaml` = what, `acu.yaml` = where (never what, never secrets), `.env` = secrets; all three live in data repos, not here; package-embedded config = what — bootstrap feature set sources from data-repo `bootstrap/features.yaml`, never hardcoded in plugin source
 V3: discovery — walk up from cwd to first dir containing `acu.yaml`; `.env` loaded from same dir; none found → hard error
-V4: idempotence — `PUT` keyed upsert is the primitive; `diff` treats source as authoritative, extra live records not flagged; drift → exit 2; resume/skip gate ! verify desired state, never a marker — marker outlives state loss; published-package skip ! content parity (embedded content digest), never existence alone — stale content silently starves config
+V4: idempotence — `PUT` keyed upsert is the primitive; `diff` treats source as authoritative, extra live records not flagged; drift → exit 2; resume/skip gate ! verify desired state, never a marker — marker outlives state loss; published-package skip ! content parity (embedded content digest), never existence alone — stale content silently starves config; diff read-back ! survive delegate-view entities — list-GET optimization-500 → key-URL single-record GET fallback (closes §B.9)
 V5: tenant-map — tenant create ! `AcumaticaERP` app-pool recycle after `ac.exe` (stale map → tenant missing from sign-in + REST silently routes to default tenant); always send explicit valid `tenant`; stale map reroutes named tenants too — data-plane session ! post-login landed-tenant verify, refuse on mismatch (probe discovery → §T.21)
 V6: `AcumaticaClient` ! context manager — logout even on failure (sessions count vs license API-user cap); logout ! `Content-Length: 0` (else IIS 411)
 V7: `CompanyConfig` ! `-h` beside `-iname` + `-dbnew:"False"`; delete uses `Deleted` sub-key + full spec (`ParentID` + `CompanyType`)
@@ -86,6 +86,7 @@ T26|x|`acu config init` — scaffold data repo per §I.cmd row: 7-file template 
 T27|x|`acu config check` — four-probe read-only preflight per §I.cmd row; verify: healthy instance → 4x `ok` exit 0; wrong `ACU_PASSWORD` → REST `fail` while ssh still reports, exit 1; live state unchanged either way|V3,V5,V6,V9,V15,V18
 T28|x|dev-version marker — `--version` reads own dist `direct_url.json` (PEP 610); `dir_info.editable` true → `<version>+dev (<checkout path>)`, else plain `<version>`; no build-backend change, `uv version --bump` release flow intact; offline tests: editable metadata → `+dev` suffix, wheel/no-`direct_url.json` → plain|V19,I.cmd
 T29|.|extend Bootstrap endpoint w/ financial-currency entity (CM202000) — verify: PUT EUR via `Bootstrap/1.0.0` on fresh tenant → EUR-denominated account applies|T12,V12,I.data
+T30|.|diff key-URL fallback per §I.cmd row — `seed.diff` catches optimization-500, retries record via single-record key-URL GET (B9); offline tests: fallback round-trip + non-optimization 500 still raises; live: `acu diff` clean over T29 currencies scratch YAML|V4,V12
 
 ## §B BUGS
 
@@ -98,3 +99,4 @@ B5|2026-07-09|manual tenant delete w/o recycle → stale map; named-tenant REST 
 B6|2026-07-09|bootstrap plugin hardcodes six-feature `Enabled` set in C# — feature flags = config "what" living in tool source; SalesDemo config replay onto bootstrapped tenant: Subaccount PUT 403 (SubAccount off), Account PUT 500 (Multicurrency off)|V2
 B7|2026-07-09|publish skip gate = project existence, not content parity — changed package content silently skips republish (B3 class, one notch subtler)|V4
 B8|2026-07-09|REST `Currency` entity = CM201000 currency list only — `UseForAccounting` write creates no CM.Currency row; EUR-denominated Account PUT 422 persists w/ Multicurrency on (B6 Account-500 attribution half-right: feature bit AND missing financial-currency row)|-
+B9|2026-07-10|contract-API list GET = optimized export — 500s when any field in scope maps to a BQL-delegate view (Bootstrap Currency GL fields -> CuryRecords); PUT persists but `diff` cannot read back|V4
