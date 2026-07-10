@@ -10,7 +10,7 @@ Configure Acumatica ERP purely from source — no UI, no Configuration Wizard. I
 - Python ≥ 3.12; click, httpx, pydantic, rich, pyyaml, python-dotenv; uv build; module `acumatica_cli`; entry `acu`.
 - Default suite fully offline: SSH = monkeypatched `subprocess.run`, REST = `httpx.MockTransport`; no live instance needed; `make check` gate offline-only. Opt-in live tier: pytest marker `e2e`, deselected via addopts, runs only via `make e2e`.
 - Every cmd except `--dry-run` talks to live instance. Final verification live vs acu-dev1 (`acu-dev1.vm.internal`; needs tailnet + GPG key): `cd ~/github/acumatica-baseline && make decrypt && make diff` or `make e2e` here (data symlinks `acu.yaml`/`.env`/`baseline`/`bootstrap` → sibling data repo).
-- Unconfigured tenant fails most entities (500 `PXSetupNotEnteredException` or 403 feature-gated) until bootstrap (features + company/branch); built-in endpoints can't bootstrap; `PUT CompaniesStructure` dead; payment terms have no Default-endpoint entity.
+- Unconfigured tenant fails most entities (500 `PXSetupNotEnteredException` or 403 feature-gated) until bootstrap (features + company/branch); built-in endpoints can't bootstrap; `PUT CompaniesStructure` dead; payment terms have no Default-endpoint entity; financial currency (CM202000) has none either — REST `Currency` = CM201000 currency list only.
 - `ac.exe` has no snapshot support — reference data as code is the primary route.
 
 ## §I INTERFACES
@@ -85,6 +85,7 @@ T25|.|content-aware publish gate — `publish()` embeds deterministic content di
 T26|.|`acu config init` — scaffold data repo per §I.cmd row: 7-file template set via `importlib.resources`, per-file skip-if-exists; build after T24 (features.yaml template copies verified format); verify: empty dir → `init --host h` → `config show` succeeds + `apply --dry-run bootstrap/ baseline/` parses all templates; re-run → all `skip`, zero mutations, exit 0|V2,V3,V9,V15,T24
 T27|.|`acu config check` — four-probe read-only preflight per §I.cmd row; verify: healthy instance → 4x `ok` exit 0; wrong `ACU_PASSWORD` → REST `fail` while ssh still reports, exit 1; live state unchanged either way|V3,V5,V6,V9,V15,V18
 T28|.|dev-version marker — `--version` reads own dist `direct_url.json` (PEP 610); `dir_info.editable` true → `<version>+dev (<checkout path>)`, else plain `<version>`; no build-backend change, `uv version --bump` release flow intact; offline tests: editable metadata → `+dev` suffix, wheel/no-`direct_url.json` → plain|V19,I.cmd
+T29|.|extend Bootstrap endpoint w/ financial-currency entity (CM202000) — verify: PUT EUR via `Bootstrap/1.0.0` on fresh tenant → EUR-denominated account applies|T12,V12,I.data
 
 ## §B BUGS
 
@@ -96,3 +97,4 @@ B4|2026-07-09|sqlcmd list call omitted `exit $LASTEXITCODE` — PowerShell-over-
 B5|2026-07-09|manual tenant delete w/o recycle → stale map; named-tenant REST login silently rerouted to default — `diff` false-green; client guard refuses empty tenant only|V5
 B6|2026-07-09|bootstrap plugin hardcodes six-feature `Enabled` set in C# — feature flags = config "what" living in tool source; SalesDemo config replay onto bootstrapped tenant: Subaccount PUT 403 (SubAccount off), Account PUT 500 (Multicurrency off)|V2
 B7|2026-07-09|publish skip gate = project existence, not content parity — changed package content silently skips republish (B3 class, one notch subtler)|V4
+B8|2026-07-09|REST `Currency` entity = CM201000 currency list only — `UseForAccounting` write creates no CM.Currency row; EUR-denominated Account PUT 422 persists w/ Multicurrency on (B6 Account-500 attribution half-right: feature bit AND missing financial-currency row)|-
