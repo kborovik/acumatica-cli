@@ -55,7 +55,12 @@ Newest first.
   `load_baseline` hard-errors on a file naming a Bootstrap-template
   entity without an explicit `endpoint:` (the ambiguous set parsed from
   `bootstrap_project.xml`, never hand-listed), closing the
-  silent-wrong-endpoint route back to B8.
+  silent-wrong-endpoint route back to B8; T33 lands the bump itself —
+  endpoint now `Bootstrap/1.1.0`, seed-side strings all derived so only
+  the XML attribute, templates, data-repo refs, and pinned tests moved;
+  the T25 digest gate forced the live republish through a resumable
+  provision and an independent diff read clean through 1.1.0 — the §T
+  backlog is empty.
 - [2026-07-09](2026-07-09.md) — T17 closes the SPEC backlog: `exit
   $LASTEXITCODE` centralized in `_ssh` (single choke point per V18, the
   B4 recurrence class), call-site hand-appends stripped, suffix pinned
