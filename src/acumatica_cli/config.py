@@ -6,6 +6,8 @@ docs/rest-api.md — V12), overridable per instance for nonstandard installs.
 """
 
 import os
+from collections.abc import Iterator
+from importlib import resources
 from pathlib import Path
 from typing import Any
 
@@ -14,6 +16,21 @@ from dotenv import load_dotenv
 from pydantic import ValidationError, field_validator, model_validator
 
 from .models import Model, validation_summary
+
+PLACEHOLDER_HOST = "erp.example.com"
+
+# `acu config init` template set: (package resource, destination) pairs.
+# Dotfiles are stored dotless (wheel tooling tends to drop dotfiles) and
+# mapped to their real names on write.
+INIT_TEMPLATES = (
+    ("acu.yaml", "acu.yaml"),
+    ("env", ".env"),
+    ("gitignore", ".gitignore"),
+    ("baseline/uoms.yaml", "baseline/uoms.yaml"),
+    ("bootstrap/company.yaml", "bootstrap/company.yaml"),
+    ("bootstrap/credit-terms.yaml", "bootstrap/credit-terms.yaml"),
+    ("bootstrap/features.yaml", "bootstrap/features.yaml"),
+)
 
 
 class Instance(Model):
@@ -67,6 +84,29 @@ class Instance(Model):
         if not data.get("ssh"):
             data["ssh"] = f"{resolved('ssh_user')}@{host}"
         return data
+
+
+def scaffold(directory: Path, host: str | None = None) -> Iterator[tuple[str, Path]]:
+    """Write the data-repo template set into ``directory``, never overwriting.
+
+    Yields ("write" | "skip", path) per template file. ``host`` replaces the
+    acu.yaml placeholder host; secrets stay placeholders (V2). The directory
+    is created if absent. No git init, no gpg - version control and secret
+    encryption stay the operator's call.
+    """
+    pkg = resources.files("acumatica_cli") / "templates"
+    directory.mkdir(parents=True, exist_ok=True)
+    for resource, dest in INIT_TEMPLATES:
+        target = directory / dest
+        if target.exists():
+            yield "skip", target
+            continue
+        content = (pkg / resource).read_text(encoding="utf-8")
+        if host and dest == "acu.yaml":
+            content = content.replace(PLACEHOLDER_HOST, host)
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_text(content, encoding="utf-8")
+        yield "write", target
 
 
 def data_root() -> Path:

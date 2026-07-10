@@ -1,0 +1,4 @@
+# credentials for the instance in acu.yaml - keep this file out of git
+# (scaffolded .gitignore already lists it; encrypt at rest, e.g. .env.gpg)
+ACU_USER=admin
+ACU_PASSWORD=

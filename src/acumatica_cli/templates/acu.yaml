@@ -1,0 +1,6 @@
+# scaffolded by `acu config init` - print the fully resolved document with:
+#   acu config show
+# host is the only required key; everything else is a code default you can
+# override here (base_url, ssh, endpoint, ...). Credentials live in .env
+# (ACU_USER / ACU_PASSWORD), never in this file.
+host: erp.example.com

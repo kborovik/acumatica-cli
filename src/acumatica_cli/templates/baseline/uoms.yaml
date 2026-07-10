@@ -1,0 +1,12 @@
+# Units of measure (CS203500) via the Default endpoint - a minimal valid
+# seed file: entity + key + records. Verify against the live tenant with:
+#   acu diff baseline/uoms.yaml
+entity: UnitsOfMeasure
+key: UnitID
+records:
+- UnitID: HOUR
+  Description: Hour
+  L3Code: HUR
+- UnitID: PIECE
+  Description: Piece
+  L3Code: PCB

@@ -295,6 +295,101 @@ def test_config_show_round_trips_through_load_instance(
     assert load_instance() == original
 
 
+def test_config_init_scaffolds_data_repo(tmp_path: Path) -> None:
+    # I.cmd config init: 7-file template set into a created-if-absent dir;
+    # runs where V3 discovery finds no acu.yaml (tmp_path has none up-tree)
+    repo = tmp_path / "repo"
+    result = CliRunner().invoke(
+        cli.cli, ["config", "init", "--host", "erp.test", str(repo)]
+    )
+
+    assert result.exit_code == 0
+    expected = [
+        "acu.yaml",
+        ".env",
+        ".gitignore",
+        "baseline/uoms.yaml",
+        "bootstrap/company.yaml",
+        "bootstrap/credit-terms.yaml",
+        "bootstrap/features.yaml",
+    ]
+    for rel in expected:
+        assert (repo / rel).is_file(), rel
+    assert (
+        len([ln for ln in result.output.splitlines() if ln.startswith("write ")]) == 7
+    )
+    acu_yaml = (repo / "acu.yaml").read_text()
+    assert "host: erp.test" in acu_yaml
+    assert "erp.example.com" not in acu_yaml
+
+
+def test_config_init_defaults_to_cwd_with_placeholder_host(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # I.cmd config init: <dir> optional (cwd), --host optional (placeholder)
+    monkeypatch.chdir(tmp_path)
+    result = CliRunner().invoke(cli.cli, ["config", "init"])
+
+    assert result.exit_code == 0
+    assert "host: erp.example.com" in (tmp_path / "acu.yaml").read_text()
+
+
+def test_config_init_rerun_skips_and_never_overwrites(tmp_path: Path) -> None:
+    # I.cmd config init: per-file skip-if-exists - `skip <file> (exists)`,
+    # exit 0, zero mutations
+    CliRunner().invoke(cli.cli, ["config", "init", str(tmp_path)])
+    (tmp_path / "acu.yaml").write_text("host: hand.edited\n")
+
+    result = CliRunner().invoke(cli.cli, ["config", "init", str(tmp_path)])
+
+    assert result.exit_code == 0
+    lines = result.output.splitlines()
+    assert len(lines) == 7
+    assert all(ln.startswith("skip ") and ln.endswith(" (exists)") for ln in lines)
+    assert (tmp_path / "acu.yaml").read_text() == "host: hand.edited\n"
+
+
+def test_config_init_writes_no_secrets(tmp_path: Path) -> None:
+    # V2: .env = placeholder credentials only; acu.yaml = where, never
+    # secrets; .env kept out of git by the scaffolded .gitignore
+    CliRunner().invoke(cli.cli, ["config", "init", str(tmp_path)])
+
+    env = (tmp_path / ".env").read_text()
+    assert "ACU_USER=admin" in env
+    assert "ACU_PASSWORD=\n" in env
+    gitignore = (tmp_path / ".gitignore").read_text()
+    assert ".env" in gitignore
+    assert "schemas/" in gitignore
+    # the acu.yaml comment may NAME the env vars; no credential keys allowed
+    acu_yaml = (tmp_path / "acu.yaml").read_text()
+    assert "password:" not in acu_yaml
+    assert "username:" not in acu_yaml
+
+
+def test_config_init_scaffold_round_trips(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # T26 verify: empty dir -> init --host -> config show succeeds and
+    # apply --dry-run parses every seed template (features.yaml skipped)
+    CliRunner().invoke(cli.cli, ["config", "init", "--host", "erp.test", str(tmp_path)])
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv("ACU_PASSWORD", "secret")
+    monkeypatch.setattr(cli, "AcumaticaClient", DummyClient)
+
+    shown = CliRunner().invoke(cli.cli, ["config", "show"])
+    assert shown.exit_code == 0
+    assert "host: erp.test" in shown.output
+
+    applied = CliRunner().invoke(
+        cli.cli, ["apply", "--dry-run", "bootstrap", "baseline"]
+    )
+    assert applied.exit_code == 0
+    assert "would PUT Company [COMPANY]" in applied.output
+    assert "would PUT CreditTerms [NET30]" in applied.output
+    assert "would PUT UnitsOfMeasure [HOUR]" in applied.output
+    assert applied.output.count("(dry run)") == 3
+
+
 def test_global_host_flag_rederives_urls(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:

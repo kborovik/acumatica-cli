@@ -5,11 +5,15 @@ acu tenant list|create|delete    tenant CRUD (ac.exe over SSH)
 acu apply [--dry-run] FILES...   seed baseline YAML via the REST API
 acu diff FILES...                drift check: baseline vs live tenant
 acu schema [--out DIR]           dump the endpoint's OpenAPI schema
+acu config init [DIR]            scaffold a data repo from templates
 acu config show                  print the resolved target instance
 """
 
+import functools
 import os
+from collections.abc import Callable
 from pathlib import Path
+from typing import Concatenate
 
 import click
 import httpx
@@ -17,7 +21,7 @@ import yaml
 
 from . import bootstrap, firstlogin, output, seed
 from .client import AcumaticaClient
-from .config import Instance, data_root, load_instance
+from .config import Instance, data_root, load_instance, scaffold
 from .tenant import TenantManager
 
 
@@ -33,11 +37,35 @@ from .tenant import TenantManager
 )
 @click.pass_context
 def cli(ctx: click.Context, tenant: str | None, host: str | None) -> None:
-    """Resolve the target instance and stash it in the Click context."""
+    """Stash the global flags; the instance resolves lazily per command.
+
+    Resolution stays out of the group callback so `acu config init` can run
+    where no acu.yaml exists yet (V3 discovery would hard-error).
+    """
+    ctx.obj = (tenant, host)
+
+
+def _resolve_instance(ctx: click.Context) -> Instance:
+    """Build the target Instance from acu.yaml plus the stashed global flags."""
+    tenant, host = ctx.obj
     inst = load_instance(host=host)
     if tenant is not None:
         inst = inst.model_copy(update={"tenant": tenant})
-    ctx.obj = inst
+    return inst
+
+
+def pass_instance[**P, R](f: Callable[Concatenate[Instance, P], R]) -> Callable[P, R]:
+    """Like click.pass_obj, resolving acu.yaml at command time, not group time.
+
+    Every command that talks to an instance takes this decorator; commands
+    that must run without a data repo (config init) simply do not.
+    """
+
+    @functools.wraps(f)
+    def new_func(*args: P.args, **kwargs: P.kwargs) -> R:
+        return f(_resolve_instance(click.get_current_context()), *args, **kwargs)
+
+    return new_func
 
 
 def main() -> None:
@@ -61,7 +89,7 @@ def tenant_group() -> None:
 
 
 @tenant_group.command("list")
-@click.pass_obj
+@pass_instance
 def tenant_list(inst: Instance) -> None:
     """List tenants: CompanyID, sign-in name, internal CD, type."""
     tenants = TenantManager(inst).list()
@@ -102,7 +130,7 @@ def tenant_list(inst: Instance) -> None:
     is_flag=True,
     help="Skip app-pool recycle + first-login password change",
 )
-@click.pass_obj
+@pass_instance
 def tenant_create(
     inst: Instance,
     company_id: int,
@@ -141,7 +169,7 @@ def _init_tenant(inst: Instance, mgr: TenantManager, login_name: str) -> None:
 @tenant_group.command("delete")
 @click.option("--id", "company_id", type=int, required=True)
 @click.confirmation_option(prompt="Delete this tenant and all its data?")
-@click.pass_obj
+@pass_instance
 def tenant_delete(inst: Instance, company_id: int) -> None:
     """Delete the tenant and all its data, then recycle the app pool."""
     mgr = TenantManager(inst)
@@ -153,11 +181,33 @@ def tenant_delete(inst: Instance, company_id: int) -> None:
 
 @cli.group("config")
 def config_group() -> None:
-    """Local read-only config inspection (never talks to a live instance)."""
+    """Configuration ops: init (local write), show (local read)."""
+
+
+@config_group.command("init")
+@click.option(
+    "--host",
+    default=None,
+    help="Instance hostname written into acu.yaml (default: a placeholder)",
+)
+@click.argument(
+    "directory", required=False, type=click.Path(file_okay=False, path_type=Path)
+)
+def config_init(host: str | None, directory: Path | None) -> None:
+    """Scaffold a data repo: acu.yaml, .env, .gitignore, bootstrap/, baseline/.
+
+    Templates ship with the package; every value is a placeholder or a
+    verified minimal example - no secrets. Existing files are never
+    overwritten (reported as skipped). DIRECTORY defaults to the current
+    directory and is created if absent. No git init, no gpg.
+    """
+    for action, path in scaffold(directory or Path.cwd(), host=host):
+        suffix = " (exists)" if action == "skip" else ""
+        output.data(f"{action} {path}{suffix}")
 
 
 @config_group.command("show")
-@click.pass_obj
+@pass_instance
 def config_show(inst: Instance) -> None:
     """Print the fully resolved instance as a complete acu.yaml document.
 
@@ -214,7 +264,7 @@ def expand_files(files: tuple[Path, ...]) -> list[Path]:
     help="Inserted data set: '' = clean, SalesDemo = demo",
 )
 @click.option("--parent", "parent_id", type=int, default=1, show_default=True)
-@click.pass_obj
+@pass_instance
 def provision_cmd(
     inst: Instance,
     company_id: int,
@@ -286,7 +336,7 @@ def provision_cmd(
     "files", nargs=-1, required=True, type=click.Path(exists=True, path_type=Path)
 )
 @click.option("--dry-run", is_flag=True, help="Show what would be PUT without writing")
-@click.pass_obj
+@pass_instance
 def apply_cmd(inst: Instance, files: tuple[Path, ...], dry_run: bool) -> None:
     """Seed baseline YAML into the tenant (idempotent PUT upserts).
 
@@ -308,7 +358,7 @@ def apply_cmd(inst: Instance, files: tuple[Path, ...], dry_run: bool) -> None:
     default=None,
     help="Output directory (default: <data repo>/schemas)",
 )
-@click.pass_obj
+@pass_instance
 def schema_cmd(inst: Instance, out_dir: Path | None) -> None:
     """Dump the endpoint's OpenAPI schema (swagger.json) into schemas/.
 
@@ -332,7 +382,7 @@ def schema_cmd(inst: Instance, out_dir: Path | None) -> None:
 @click.argument(
     "files", nargs=-1, required=True, type=click.Path(exists=True, path_type=Path)
 )
-@click.pass_obj
+@pass_instance
 def diff_cmd(inst: Instance, files: tuple[Path, ...]) -> None:
     """Compare baseline YAML against the live tenant; exit 2 on drift.
 

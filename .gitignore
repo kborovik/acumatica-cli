@@ -1,8 +1,9 @@
 # dev symlinks into the sibling data repo (../acumatica-baseline)
-baseline
-bootstrap
-acu.yaml
-.env
+# root-anchored: src/acumatica_cli/templates/ ships files with these names
+/baseline
+/bootstrap
+/acu.yaml
+/.env
 
 # dumped API schemas — regenerate with acu schema
 schemas/
