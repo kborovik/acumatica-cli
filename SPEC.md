@@ -87,6 +87,7 @@ T27|x|`acu config check` — four-probe read-only preflight per §I.cmd row; ver
 T28|x|dev-version marker — `--version` reads own dist `direct_url.json` (PEP 610); `dir_info.editable` true → `<version>+dev (<checkout path>)`, else plain `<version>`; no build-backend change, `uv version --bump` release flow intact; offline tests: editable metadata → `+dev` suffix, wheel/no-`direct_url.json` → plain|V19,I.cmd
 T29|x|extend Bootstrap endpoint w/ financial-currency entity (CM202000) — verify: PUT EUR via `Bootstrap/1.0.0` on fresh tenant → EUR-denominated account applies|T12,V12,I.data
 T30|x|diff key-URL fallback per §I.cmd row — `seed.diff` catches optimization-500, retries record via single-record key-URL GET (B9); offline tests: fallback round-trip + non-optimization 500 still raises; live: `acu diff` clean over T29 currencies scratch YAML|V4,V12
+T31|.|graduate T29 scratch into data-repo `baseline/` — author `subaccounts.yaml` + `accounts.yaml` (real chart-of-accounts values, not scratch 8710/8720) + `currencies.yaml` (`endpoint: Bootstrap/1.0.0` override; Translation* pairs omitted while translation feature off — write-tolerated, read-invisible); apply-order constraint documented in-file (accounts < currencies < currency-denominated accounts; dir expansion sorts alphabetical); verify: provision fresh scratch tenant zero manual steps → clean diff over everything applied, currencies included|V2,V4,I.data,T29,T30
 
 ## §B BUGS
 
