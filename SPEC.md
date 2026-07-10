@@ -25,6 +25,7 @@ Configure Acumatica ERP purely from source — no UI, no Configuration Wizard. I
 - cfg: `acu.yaml` → flat top-level map = the single target instance: `host` ! only required key, rest ? overrides of code defaults (pydantic field defaults on `Instance`; `base_url`/`ssh` computed from `host`, explicit override wins); no `instances` nesting, no `default_instance`; discovery sentinel; empty or non-map file → hard error
 - env: `ACU_PASSWORD` ! set; `ACU_USER` ? default `admin`; loaded from dir of found `acu.yaml`; encrypted at rest as `.env.gpg`
 - data: `baseline/*.yaml` → `entity` / `key` (string or list) / `records` + `endpoint` ? (per-file contract-endpoint override, e.g. `Bootstrap/1.0.0`); parsed by `seed.py`
+- data: `bootstrap/features.yaml` → ? list of `FeaturesSet` property names (DAC bit flags) → plugin `Enabled` set @ package build; absent → built-in six (FinancialModule, FinancialStandard, DistributionModule, Inventory, Branch, MultiCompany)
 - api: `/entity/Default/25.200.001/` → cookie-session httpx; values wrapped `{"Field": {"value": ...}}`; PUT = keyed upsert
 - ssh: `ac.exe -cm:CompanyConfig` + `sqlcmd` over `ssh` → remote shell PowerShell; `exit $LASTEXITCODE` appended so failures propagate
 - pkg: pypi.org `acumatica-cli` → `pip install acumatica-cli`; publish = GitHub Actions `release.yml` on `release: published`, trusted publishing (OIDC), `uv build` sdist+wheel; no stored API token
@@ -32,9 +33,9 @@ Configure Acumatica ERP purely from source — no UI, no Configuration Wizard. I
 ## §V INVARIANTS
 
 V1: two-plane split — control plane = SSH (`tenant.py`, tenant CRUD only); data plane = REST (`client.py`); never mixed
-V2: three source kinds never mixed — `baseline/*.yaml` = what, `acu.yaml` = where (never what, never secrets), `.env` = secrets; all three live in data repos, not here
+V2: three source kinds never mixed — `baseline/*.yaml` = what, `acu.yaml` = where (never what, never secrets), `.env` = secrets; all three live in data repos, not here; package-embedded config = what — bootstrap feature set sources from data-repo `bootstrap/features.yaml`, never hardcoded in plugin source
 V3: discovery — walk up from cwd to first dir containing `acu.yaml`; `.env` loaded from same dir; none found → hard error
-V4: idempotence — `PUT` keyed upsert is the primitive; `diff` treats source as authoritative, extra live records not flagged; drift → exit 2; resume/skip gate ! verify desired state, never a marker — marker outlives state loss
+V4: idempotence — `PUT` keyed upsert is the primitive; `diff` treats source as authoritative, extra live records not flagged; drift → exit 2; resume/skip gate ! verify desired state, never a marker — marker outlives state loss; published-package skip ! content parity (embedded content digest), never existence alone — stale content silently starves config
 V5: tenant-map — tenant create ! `AcumaticaERP` app-pool recycle after `ac.exe` (stale map → tenant missing from sign-in + REST silently routes to default tenant); always send explicit valid `tenant`; stale map reroutes named tenants too — data-plane session ! post-login landed-tenant verify, refuse on mismatch (probe discovery → §T.21)
 V6: `AcumaticaClient` ! context manager — logout even on failure (sessions count vs license API-user cap); logout ! `Content-Length: 0` (else IIS 411)
 V7: `CompanyConfig` ! `-h` beside `-iname` + `-dbnew:"False"`; delete uses `Deleted` sub-key + full spec (`ParentID` + `CompanyType`)
@@ -77,6 +78,8 @@ T20|x|live E2E tier — `tests/e2e/test_provision_lifecycle.py` drives real `acu
 T21|x|post-login tenant guard — discover verified landed-tenant probe (live archaeology: login response? entity exposing `CompanyKey`?), then `AcumaticaClient.__enter__` refuses session on mismatch; e2e regression: `diff` vs nonexistent tenant ! exit 1|V5,V12
 T22|x|global `--host` flag — swap acu.yaml `host` pre-`Instance` build (post-hoc `model_copy` leaves derived `base_url`/`ssh` stale); explicit `base_url`/`ssh` override wins; acu.yaml stays required, `-t` override idiom; tests: re-derive on override + explicit-`base_url` precedence|V16,I.cmd,I.cfg
 T23|x|PyPI auto-publish — register trusted publisher on pypi.org (repo kborovik/acumatica-cli, workflow `release.yml`); add `.github/workflows/release.yml`: trigger `release: published`, `uv build`, `pypa/gh-action-pypi-publish` OIDC; verify: next `make release patch` → `pip install acumatica-cli==<version>` from pypi.org succeeds|V19,I.pkg
+T24|.|data-driven bootstrap features — `package_zip()` injects `Enabled` list into `bootstrap_plugin.cs` from data-repo `bootstrap/features.yaml`; file absent → built-in six; plugin logs names matching no `FeaturesSet` property (silent-typo guard); author `features.yaml` in data repo (six + `Multicurrency` + `SubAccount`) + verify live: SalesDemo-extract replay onto fresh tenant passes Subaccount + Account applies|V2,T11
+T25|.|content-aware publish gate — `publish()` embeds deterministic content digest (project.xml bytes) in package description; skip ! published + project exists + digest match; digest mismatch → reimport + republish; offline tests pin mismatch→republish path|V4,T24
 
 ## §B BUGS
 
@@ -86,3 +89,5 @@ B2|2026-07-08|CustomizationApi import field `projectContents` + hyphenated proje
 B3|2026-07-08|publish skip keyed on `getPublished` marker — tenant recreate same CompanyID keeps stale publication row while content + plugin writes gone; virgin tenant left unbootstrapped|V4
 B4|2026-07-09|sqlcmd list call omitted `exit $LASTEXITCODE` — PowerShell-over-ssh returns 0 on failed native cmd; failed read → empty tenant list, provision misjudges existence|V18
 B5|2026-07-09|manual tenant delete w/o recycle → stale map; named-tenant REST login silently rerouted to default — `diff` false-green; client guard refuses empty tenant only|V5
+B6|2026-07-09|bootstrap plugin hardcodes six-feature `Enabled` set in C# — feature flags = config "what" living in tool source; SalesDemo config replay onto bootstrapped tenant: Subaccount PUT 403 (SubAccount off), Account PUT 500 (Multicurrency off)|V2
+B7|2026-07-09|publish skip gate = project existence, not content parity — changed package content silently skips republish (B3 class, one notch subtler)|V4
