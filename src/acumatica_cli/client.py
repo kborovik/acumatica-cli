@@ -186,13 +186,17 @@ class AcumaticaClient:
         projects = body.get("projects") or []
         return [p["name"] for p in projects if isinstance(p, dict) and "name" in p]
 
-    def customization_project_exists(self, name: str) -> bool:
-        """True when the project's content rows exist in the session tenant.
+    def customization_project_content(self, name: str) -> bytes | None:
+        """The project's package zip from the session tenant, None when gone.
 
         getPublished alone is a false idempotence proxy: a tenant deleted and
         recreated under the same CompanyID still LISTS the publication while
         the project content (and everything the publish wrote) is gone
-        (verified live vs 26.101.0225).
+        (verified live vs 26.101.0225) — getProject reports "not found" in
+        its log then. The returned zip is the server's own re-serialization,
+        not the imported bytes; its project.xml root carries the description
+        given at import (the digest channel — no other readback exists:
+        getPublished rows hold only names, getProject's body only content).
         """
         try:
             body = self._checked_log(
@@ -201,8 +205,11 @@ class AcumaticaClient:
                 )
             )
         except RuntimeError:
-            return False
-        return bool(body.get("projectContentBase64"))
+            return None
+        content = body.get("projectContentBase64")
+        if not isinstance(content, str) or not content:
+            return None
+        return base64.b64decode(content)
 
     def customization_import(
         self, name: str, zip_bytes: bytes, description: str = ""

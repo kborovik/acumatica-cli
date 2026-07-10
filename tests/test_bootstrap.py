@@ -186,6 +186,24 @@ def test_package_zip_carries_the_bootstrap_endpoint() -> None:
     )
 
 
+def _served_package(description: str) -> str:
+    """A server-style getProject re-serialization, base64-encoded.
+
+    The live server hands back its own serialization of the project — not
+    the imported bytes — with the import's projectDescription in the root
+    description attribute (verified vs 26.101.0225). Only that attribute
+    matters to the skip gate.
+    """
+    root = ET.Element(
+        "Customization",
+        {"level": "", "description": description, "product-version": "26.101"},
+    )
+    buf = io.BytesIO()
+    with zipfile.ZipFile(buf, "w") as zf:
+        zf.writestr("project.xml", ET.tostring(root))
+    return base64.b64encode(buf.getvalue()).decode("ascii")
+
+
 class Api:
     """MockTransport handler: scripted /CustomizationApi + auth responses."""
 
@@ -194,11 +212,19 @@ class Api:
         publish_end: list[httpx.Response],
         published: bool = False,
         content_exists: bool = True,
+        description: str | None = None,
     ):
         self.requests: list[httpx.Request] = []
         self.publish_end = publish_end
         self.published = published
         self.content_exists = content_exists
+        # what the "published" project's description claims; default = the
+        # digest of the default-features package (the matching state)
+        self.description = (
+            bootstrap.package_description(bootstrap.package_zip())
+            if description is None
+            else description
+        )
 
     def __call__(self, request: httpx.Request) -> httpx.Response:
         self.requests.append(request)
@@ -221,7 +247,10 @@ class Api:
             return httpx.Response(200, json=body)
         if path.endswith("/CustomizationApi/getProject"):
             if self.content_exists:
-                return httpx.Response(200, json={"projectContentBase64": "UEs="})
+                return httpx.Response(
+                    200,
+                    json={"projectContentBase64": _served_package(self.description)},
+                )
             # live shape: a recreated tenant lists the publication while the
             # project content is gone - getProject reports in-band
             return httpx.Response(
@@ -275,6 +304,11 @@ def test_publish_runs_import_then_publish_sequence(instance: Instance) -> None:
     # widely documented projectContents binds nothing on this build
     contents = base64.b64decode(import_body["projectContentBase64"])
     assert contents == bootstrap.package_zip()
+    # the description embeds the content digest (V4) - the description is
+    # the CustomizationApi's one round-trip channel, so this is what the
+    # next run's skip gate reads back
+    assert import_body["projectDescription"] == bootstrap.package_description(contents)
+    assert bootstrap.content_digest(contents) in import_body["projectDescription"]
 
     begin_body = json.loads(api.requests[4].content)
     assert begin_body["projectNames"] == [bootstrap.PACKAGE_NAME]
@@ -292,7 +326,8 @@ def test_publish_builds_the_package_with_features(instance: Instance) -> None:
     assert contents != bootstrap.package_zip()
 
 
-def test_publish_skips_when_already_published(instance: Instance) -> None:
+def test_publish_skips_when_content_matches(instance: Instance) -> None:
+    """Skip = published + content digest match, never existence alone (V4)."""
     api = Api(publish_end=[], published=True)
     assert _publish(instance, api) == "already published"
     assert _paths(api) == [
@@ -302,6 +337,47 @@ def test_publish_skips_when_already_published(instance: Instance) -> None:
         "getProject",
         "logout",
     ]
+
+
+@pytest.mark.parametrize(
+    "stale_description",
+    [
+        # same package, different content: another features set was published
+        bootstrap.package_description(bootstrap.package_zip(["MultiCompany"])),
+        # pre-digest description (packages published before the gate existed)
+        bootstrap.PACKAGE_DESCRIPTION,
+    ],
+)
+def test_publish_reruns_on_digest_mismatch(
+    instance: Instance, stale_description: str
+) -> None:
+    """Changed content republishes; a stale skip silently starves config (B7).
+
+    The published project exists and getPublished lists it — existence alone
+    would skip. The description's digest does not match the package built
+    now, so the gate must fall through to a full reimport + republish
+    carrying the new digest (V4).
+    """
+    api = Api(
+        publish_end=[httpx.Response(200, json={"isCompleted": True})],
+        published=True,
+        description=stale_description,
+    )
+    assert _publish(instance, api) == "published"
+    assert _paths(api) == [
+        "login",
+        "Login.aspx",
+        "getPublished",
+        "getProject",
+        "import",
+        "publishBegin",
+        "publishEnd",
+        "logout",
+    ]
+    import_body = json.loads(api.requests[4].content)
+    assert import_body["projectDescription"] == bootstrap.package_description(
+        bootstrap.package_zip()
+    )
 
 
 def test_publish_reruns_when_publication_is_stale(instance: Instance) -> None:

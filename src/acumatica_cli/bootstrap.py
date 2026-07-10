@@ -10,14 +10,16 @@ endpoint exposes CS101500 company + CS206500 credit terms for seeding
 (`bootstrap_project.xml`, serialization verified T12).
 
 Customization publishes are tenant-scoped, so the package must be published
-per tenant; publish() is idempotent — an already-published package is a
-no-op skip, and the plugin's UpdateDatabase is a keyed update on re-run.
+per tenant; publish() is idempotent on content — the skip gate compares the
+digest embedded in the published package's description against the package
+built now, and the plugin's UpdateDatabase is a keyed update on re-run.
 
 The feature set the plugin enables is data, not code (V2): load_features()
 reads the data repo's bootstrap/features.yaml (absent -> the built-in six)
 and package_zip() splices it into the plugin source at build time.
 """
 
+import hashlib
 import io
 import time
 import xml.etree.ElementTree as ET
@@ -110,6 +112,45 @@ def package_zip(features: Sequence[str] | None = None) -> bytes:
     return buf.getvalue()
 
 
+def content_digest(zip_bytes: bytes) -> str:
+    """sha256 hex of the project.xml inside the package zip.
+
+    Digest the XML bytes, not the zip: ET.tostring is deterministic, zip
+    container bytes are not. This is the content-parity token (V4) — it
+    covers everything package_zip splices in, features included.
+    """
+    with zipfile.ZipFile(io.BytesIO(zip_bytes)) as zf:
+        return hashlib.sha256(zf.read("project.xml")).hexdigest()
+
+
+def package_description(zip_bytes: bytes) -> str:
+    """The import description: human text + the content digest.
+
+    The description is the one round-trip channel the CustomizationApi
+    offers (verified live vs 26.101.0225): the import's projectDescription
+    comes back only in the root description attribute of getProject's
+    re-serialized project.xml — getPublished rows hold names alone.
+    """
+    return f"{PACKAGE_DESCRIPTION} [sha256:{content_digest(zip_bytes)}]"
+
+
+def _published_description(client: AcumaticaClient) -> str | None:
+    """The description embedded in the tenant's published package, if any.
+
+    None when the project is gone (recreated tenant, B3) or its content
+    does not parse as a package — both mean "republish".
+    """
+    content = client.customization_project_content(PACKAGE_NAME)
+    if content is None:
+        return None
+    try:
+        with zipfile.ZipFile(io.BytesIO(content)) as zf:
+            root = ET.fromstring(zf.read("project.xml"))
+    except (zipfile.BadZipFile, KeyError, ET.ParseError):
+        return None
+    return root.get("description")
+
+
 def _log_tail(status: dict[str, object], limit: int = 5) -> str:
     """Last few publish-log messages, for a one-line error (SPEC V9)."""
     log = status.get("log")
@@ -130,22 +171,25 @@ def publish(
     """Publish the bootstrap package into the client's session tenant.
 
     ``features`` (default: the built-in six) flows into the plugin's Enabled
-    set via package_zip. Idempotent: returns ``"already published"`` when
-    getPublished lists the package AND its content still exists (a recreated
-    tenant with the same CompanyID keeps the stale publication row while the
-    content and the plugin's writes are gone), else import -> publishBegin ->
+    set via package_zip. Idempotent on content, not existence (V4): the
+    import embeds the digest of the package we build now in the project
+    description, and the skip requires getPublished to list the package AND
+    the published description to carry that same digest. A recreated tenant
+    (stale publication row, content gone — B3) and a content change since
+    the last publish (B7 — e.g. an edited features.yaml) both fail the gate
+    and trigger reimport + republish. Otherwise import -> publishBegin ->
     poll publishEnd until the server reports completion. Transport errors
     while polling are tolerated — publishing restarts the app domain, so the
     site may briefly drop connections mid-publish. Raises RuntimeError on a
     failed publish or on timeout.
     """
+    zip_bytes = package_zip(features)
+    description = package_description(zip_bytes)
     if PACKAGE_NAME in client.customization_published() and (
-        client.customization_project_exists(PACKAGE_NAME)
+        _published_description(client) == description
     ):
         return "already published"
-    client.customization_import(
-        PACKAGE_NAME, package_zip(features), description=PACKAGE_DESCRIPTION
-    )
+    client.customization_import(PACKAGE_NAME, zip_bytes, description=description)
     client.customization_publish_begin([PACKAGE_NAME])
     deadline = time.monotonic() + timeout
     while True:
