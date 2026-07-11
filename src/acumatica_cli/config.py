@@ -50,6 +50,7 @@ class Instance(Model):
     ``user@host``. Everything else is a code default for a stock install.
     """
 
+    api_version: str = "25.200.001"  # V11: /entity/Default/<api_version>/
     base_url: str  # REST root: scheme + host + site path
     ssh: str  # control plane: full user@host
     tenant: str = ""
@@ -58,7 +59,6 @@ class Instance(Model):
     acu_instance_path: str = "C:\\Acumatica\\AcumaticaERP"  # ac.exe -h
     ac_exe: str = "C:\\Program Files\\Acumatica ERP\\Data\\ac.exe"
     db_name: str = "AcumaticaDB"
-    api_version: str = "25.200.001"  # V11: /entity/Default/<api_version>/
     username: str
     password: str
 
