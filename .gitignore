@@ -1,9 +1,12 @@
-# dev symlinks into the sibling data repo (../acumatica-baseline)
+# dev symlinks into the sibling data repo (../acumatica-salesdemo)
 # root-anchored: src/acumatica_cli/templates/ ships files with these names
 /baseline
 /bootstrap
 /setup
+
+# instance config at repo root — decrypted secrets and their ciphertext, never committed
 /.env
+/.env.gpg
 
 # dumped API schemas — regenerate with acu schema
 schemas/

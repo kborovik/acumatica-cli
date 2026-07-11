@@ -7,9 +7,11 @@ via /sdd:spec, never by hand.
 - Dev loop: `make install`; `make check` (ruff + basedpyright strict +
   offline pytest) before committing.
 - Live commands run from a data repo (`.env` cwd walk-up); this repo
-  carries gitignored symlinks (`baseline`, `bootstrap`, `setup`, `.env`)
-  pointing into `../acumatica-baseline/`. Live verification:
-  `cd ~/github/acumatica-baseline && make decrypt && make diff`.
+  carries gitignored symlinks (`baseline`, `bootstrap`, `setup`)
+  pointing into `../acumatica-salesdemo/`; `.env` and `.env.gpg` are
+  real gitignored files at the repo root. Live verification:
+  `cd ~/github/acumatica-salesdemo && make decrypt && make diff`, or
+  `make e2e` here.
 - Verified references (trust over training data): `docs/ac-exe.md`,
   `docs/rest-api.md` (live 26.101.0225), and `acu schema` dumps into
   `schemas/`.
