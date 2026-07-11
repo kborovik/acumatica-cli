@@ -99,7 +99,20 @@ Newest first.
   T54 lands the mechanization T50 queued: `make e2e FILE=<path-or-stem>`
   resolves path-or-stem before pytest and errors on a miss, bare run
   unchanged — verified offline via `make -n` and `--collect-only`
-  (8-test file vs 14-test tier).
+  (8-test file vs 14-test tier). A second `--all` sweep closes the two
+  rows that sweep seeded: T55 adds the `--completion` global —
+  click-native script emit for bash/zsh/fish (bare flag resolves the
+  `$SHELL` basename, unresolvable errors naming the set), eager exit
+  like `--version`, and V23 local-only dynamic completion (`extract
+  --only` completes entity names off the packaged manifest; `apply`/
+  `diff` paths complete via click's native `Path` type), pinned by a
+  test file whose autouse fixture assert-fails any live-path touch
+  under real `ShellComplete` machinery; T56 turns `tenant create
+  --type` into `click.Choice(["SalesDemo", "T100", "U100"])` — the
+  box-verified dataset folders, `System` excluded — so a non-member
+  dies at parse time naming the allowed set before any SSH, omitted
+  still maps to ac.exe's empty CompanyType (clean tenant), and the
+  help metavar documents the exact names.
 - [2026-07-10](2026-07-10.md) — T29 fronts financial currency (CM202000)
   from the Bootstrap endpoint: live archaeology maps the screen's two
   views (general info on the `CurrencyList` primary including
