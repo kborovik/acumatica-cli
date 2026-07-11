@@ -312,16 +312,23 @@ def test_bootstrap_cmd_is_gone(wired: Instance) -> None:
 
 
 def test_config_show_emits_yaml_without_credentials(wired: Instance) -> None:
-    # I.cfg: same load_instance path as live cmds, credentials never printed
+    # I.cfg: same load_instance path as live cmds, credentials never keys;
+    # T41: resolved username surfaces as a comment line after the header
     result = CliRunner().invoke(cli.cli, ["config", "show"])
 
     assert result.exit_code == 0
     assert "base_url: http://acu.test/AcumaticaERP" in result.output
     assert "ssh: user@acu.test" in result.output
     assert "api_version: 25.200.001" in result.output
+    assert "# username: admin" in result.output
     assert "password" not in result.output
-    assert "username" not in result.output
     assert "pw" not in result.output
+    key_lines = [
+        line
+        for line in result.output.splitlines()
+        if line.startswith(("username:", "password:"))
+    ]
+    assert key_lines == []
 
 
 def test_config_show_round_trips_through_load_instance(
@@ -342,6 +349,31 @@ def test_config_show_round_trips_through_load_instance(
     result = CliRunner().invoke(cli.cli, ["config", "show"])
     assert result.exit_code == 0
 
+    regenerated = tmp_path / "regenerated"
+    regenerated.mkdir()
+    (regenerated / "acu.yaml").write_text(result.output)
+    monkeypatch.chdir(regenerated)
+    assert load_instance() == original
+
+
+def test_config_show_username_comment_reflects_acu_user(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # T41: the comment line carries the resolved username (ACU_USER
+    # override, admin default) while the doc still round-trips - the
+    # comment is YAML-inert, never a key
+    (tmp_path / "acu.yaml").write_text(
+        "base_url: http://acu.test/AcumaticaERP\nssh: Administrator@acu.test\n"
+    )
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv("ACU_PASSWORD", "secret")
+    monkeypatch.setenv("ACU_USER", "auditor")
+    original = load_instance()
+
+    result = CliRunner().invoke(cli.cli, ["config", "show"])
+
+    assert result.exit_code == 0
+    assert "# username: auditor" in result.output
     regenerated = tmp_path / "regenerated"
     regenerated.mkdir()
     (regenerated / "acu.yaml").write_text(result.output)

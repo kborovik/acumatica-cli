@@ -235,14 +235,16 @@ def config_show(inst: Instance) -> None:
 
     Resolves through the same load_instance path every live command uses,
     so the printed values are exactly what a live command would trust.
-    Credentials never appear - redirect to a file and edit: the output
-    loads back through load_instance unchanged.
+    Credentials never appear as keys - the resolved username is echoed as
+    a comment only, the password in no form at all. Redirect to a file and
+    edit: the output loads back through load_instance unchanged.
     """
     doc = inst.model_dump(exclude={"username", "password"})
     output.data("# resolved by `acu config show` - a complete acu.yaml")
     output.data(
         "# credentials come from .env (ACU_USER / ACU_PASSWORD), never from here"
     )
+    output.data(f"# username: {inst.username}")
     for line in yaml.safe_dump(doc, sort_keys=False).splitlines():
         output.data(line)
 
