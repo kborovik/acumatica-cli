@@ -21,12 +21,7 @@ from .models import Model, validation_summary
 
 PLACEHOLDER_HOST = "erp.example.com"
 
-# Install-layout constants for a stock acumatica-infra build (docs/ac-exe.md,
-# verified live - V12). Deliberately not config surface: acu.yaml keys of
-# these names are rejected (extra="forbid"), keeping the config a target
-# address, not an install description.
 ACU_INSTANCE_NAME = "AcumaticaERP"  # ac.exe -iname; IIS app-pool name
-# coupling = acumatica-infra convention (see recycle_app_pool)
 ACU_INSTANCE_PATH = "C:\\Acumatica\\AcumaticaERP"  # ac.exe -h
 AC_EXE = "C:\\Program Files\\Acumatica ERP\\Data\\ac.exe"
 DB_NAME = "AcumaticaDB"

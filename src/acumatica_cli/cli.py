@@ -60,33 +60,33 @@ def _version() -> str:
 @click.option(
     "--tenant",
     default=None,
-    help="Acumatica tenant the API session signs in to (acu.yaml tenant)",
+    help="Acumatica tenant name",
 )
 @click.option(
     "--url",
     "base_url",
     default=None,
-    help="REST root URL - scheme, host, and site path (acu.yaml base_url)",
+    help="REST root URL - https://erp.example.com/AcumaticaERP",
 )
 @click.option(
     "--ssh",
     default=None,
-    help="Control-plane SSH target as user@host (acu.yaml ssh)",
+    help="Control-plane SSH as user@host",
 )
 @click.option(
     "--api-version",
     default=None,
-    help="Contract API version in the endpoint URL (acu.yaml api_version)",
+    help="Contract API version",
 )
 @click.option(
     "--username",
     default=None,
-    help="API username (default: ACU_USER, then admin)",
+    help="API username (ACU_USER, default: admin)",
 )
 @click.option(
     "--password",
     default=None,
-    help="API password (default: ACU_PASSWORD from .env or the environment)",
+    help="API password (ACU_PASSWORD)",
 )
 @click.pass_context
 def cli(ctx: click.Context, **flags: str | None) -> None:
