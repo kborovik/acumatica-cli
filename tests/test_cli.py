@@ -163,6 +163,9 @@ def create_env(
     (tmp_path / "bootstrap").mkdir()
     (tmp_path / "bootstrap" / "features.yaml").write_text(FEATURES_YAML)
     monkeypatch.setattr(cli, "find_data_root", lambda: tmp_path)
+    # the exists-skip probe (T47) reads the live tenant list before every
+    # create; an empty list keeps the fresh path exactly as before
+    monkeypatch.setattr(TenantManager, "list", lambda self: [])
     monkeypatch.setattr(
         TenantManager,
         "create",
@@ -262,6 +265,66 @@ def test_tenant_create_recycles_even_when_already_published(
         "recycle",
         "init:Scratch",
     ]
+
+
+def test_tenant_create_exists_skips_create_and_still_chains(
+    create_env: list[str], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # T47 (closes B17): the login already on the instance -> skip the ac.exe
+    # create, but the init + digest-gated publish chain still runs — re-running
+    # create is the republish route for existing tenants (V4: the gate is the
+    # live tenant list, never a marker)
+    monkeypatch.setattr(
+        TenantManager,
+        "list",
+        lambda self: [
+            Tenant(
+                company_id=3,
+                company_cd="Scratch",
+                login_name="Scratch",
+                company_type="",
+            )
+        ],
+    )
+    result = CliRunner().invoke(
+        cli.cli, ["tenant", "create", "--id", "3", "--login", "Scratch"]
+    )
+
+    assert result.exit_code == 0
+    assert "skip create: tenant Scratch exists (id 3)" in result.stdout
+    assert create_env == [
+        "recycle",
+        "init:Scratch",
+        "publish:Scratch:MultiCompany,Multicurrency",
+        "recycle",
+        "init:Scratch",
+    ]
+
+
+def test_tenant_create_exists_id_mismatch_errors(
+    create_env: list[str], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # T47: --id must match the existing tenant's CompanyID — a mismatch is a
+    # hard error naming both, and nothing (create or chain) runs
+    monkeypatch.setattr(
+        TenantManager,
+        "list",
+        lambda self: [
+            Tenant(
+                company_id=2,
+                company_cd="Scratch",
+                login_name="Scratch",
+                company_type="",
+            )
+        ],
+    )
+    result = CliRunner().invoke(
+        cli.cli, ["tenant", "create", "--id", "3", "--login", "Scratch"]
+    )
+
+    assert result.exit_code == 1
+    assert "tenant Scratch exists with CompanyID 2, not 3" in result.output
+    assert create_env == []
 
 
 def test_provision_cmd_is_gone(wired: Instance) -> None:

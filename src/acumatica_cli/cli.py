@@ -190,11 +190,31 @@ def tenant_create(
     (features on, Bootstrap endpoint up). --no-init skips everything after
     the create: an unrecycled tenant is invisible to REST, so the bootstrap
     chain cannot run either.
+
+    Resumable (V4, closes B17): when the login already exists on the
+    instance (tenant list probe - live state, never a marker) the ac.exe
+    create is skipped and the init + digest-gated publish chain still runs,
+    so re-running create is the republish route for existing tenants. --id
+    must match the existing CompanyID, else hard error naming both.
     """
     mgr = TenantManager(inst)
-    with output.step(f"creating tenant {company_id} ({login_name}) on {inst.base_url}"):
-        raw = mgr.create(company_id, login_name, parent_id, not hidden, company_type)
-    output.data(raw.splitlines()[-1] if raw.strip() else "created")
+    existing = next((t for t in mgr.list() if t.login_name == login_name), None)
+    if existing is not None:
+        if existing.company_id != company_id:
+            raise SystemExit(
+                f"tenant {login_name} exists with CompanyID "
+                f"{existing.company_id}, not {company_id}; "
+                f"pass --id {existing.company_id}"
+            )
+        output.data(f"skip create: tenant {login_name} exists (id {company_id})")
+    else:
+        with output.step(
+            f"creating tenant {company_id} ({login_name}) on {inst.base_url}"
+        ):
+            raw = mgr.create(
+                company_id, login_name, parent_id, not hidden, company_type
+            )
+        output.data(raw.splitlines()[-1] if raw.strip() else "created")
     if no_init:
         output.warn("skipping init: tenant is invisible until an app-pool recycle")
         return
