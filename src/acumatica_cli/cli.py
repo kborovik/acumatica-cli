@@ -2,8 +2,8 @@
 
 acu provision --id N --login T   one command: create -> bootstrap -> apply -> diff
 acu tenant list|create|delete    tenant CRUD (ac.exe over SSH)
-acu apply [--dry-run] FILES...   seed baseline YAML via the REST API
-acu diff FILES...                drift check: baseline vs live tenant
+acu apply [--dry-run] [FILES]... seed baseline YAML via the REST API
+acu diff [FILES]...              drift check: baseline vs live tenant
 acu schema [--out DIR]           dump the endpoint's OpenAPI schema
 acu config init [DIR]            scaffold a data repo from templates
 acu config show                  print the resolved target instance
@@ -350,6 +350,29 @@ def config_check(ctx: click.Context) -> None:
         raise SystemExit(1)
 
 
+SEED_DIRS = ("bootstrap", "baseline", "setup")
+
+
+def default_seed_dirs() -> tuple[Path, ...]:
+    """The init-scaffolded seed dirs that exist at the data-repo root.
+
+    apply and diff default to these when called with no FILES, in provision
+    order (bootstrap, baseline, setup); the data repo is the acu.yaml dir
+    (V3 walk-up). None existing is an error - an empty default would make
+    a bare run a silent no-op. Paths come back relative to cwd (the root is
+    always cwd or an ancestor), so a bare run prints exactly what naming
+    the dirs would.
+    """
+    root = data_root()
+    dirs = tuple(
+        Path(os.path.relpath(d)) for name in SEED_DIRS if (d := root / name).is_dir()
+    )
+    if not dirs:
+        expected = ", ".join(f"{name}/" for name in SEED_DIRS)
+        raise SystemExit(f"{root}: none of the seed directories exist ({expected})")
+    return dirs
+
+
 def expand_files(files: tuple[Path, ...]) -> list[Path]:
     """Expand directory arguments into their *.yaml files, sorted.
 
@@ -465,17 +488,19 @@ def provision_cmd(
 
 @cli.command("apply")
 @click.argument(
-    "files", nargs=-1, required=True, type=click.Path(exists=True, path_type=Path)
+    "files", nargs=-1, required=False, type=click.Path(exists=True, path_type=Path)
 )
 @click.option("--dry-run", is_flag=True, help="Show what would be PUT without writing")
 @pass_instance
 def apply_cmd(inst: Instance, files: tuple[Path, ...], dry_run: bool) -> None:
     """Seed baseline YAML into the tenant (idempotent PUT upserts).
 
-    FILES are baseline YAML files or directories containing them.
+    FILES are baseline YAML files or directories containing them. Omitted,
+    they default to the data repo's existing init-scaffolded directories in
+    provision order: bootstrap/, baseline/, setup/.
     """
     with AcumaticaClient(inst) as client:
-        for path in expand_files(files):
+        for path in expand_files(files or default_seed_dirs()):
             baseline = seed.load_baseline(path)
             output.data(
                 f"{path} -> {inst.tenant} on {inst.base_url} ({baseline.entity})"
@@ -516,15 +541,17 @@ def schema_cmd(inst: Instance, out_dir: Path | None) -> None:
 
 @cli.command("diff")
 @click.argument(
-    "files", nargs=-1, required=True, type=click.Path(exists=True, path_type=Path)
+    "files", nargs=-1, required=False, type=click.Path(exists=True, path_type=Path)
 )
 @pass_instance
 def diff_cmd(inst: Instance, files: tuple[Path, ...]) -> None:
     """Compare baseline YAML against the live tenant; exit 2 on drift.
 
-    FILES are baseline YAML files or directories containing them.
+    FILES are baseline YAML files or directories containing them. Omitted,
+    they default to the data repo's existing init-scaffolded directories in
+    provision order: bootstrap/, baseline/, setup/.
     """
-    paths = expand_files(files)
+    paths = expand_files(files or default_seed_dirs())
     drifts: list[str] = []
     with AcumaticaClient(inst) as client:
         for path in paths:

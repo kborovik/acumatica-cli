@@ -33,6 +33,17 @@ records:
   - TermsID: NET30
 """
 
+SETUP_YAML = """\
+action: GenerateCalendar
+entity: MasterCalendar
+endpoint: Bootstrap/1.4.0
+record:
+  FinancialYear: 2026
+done_when:
+  filter: FinancialYear eq '2026'
+"""
+
+
 FEATURES_YAML = "- MultiCompany\n- Multicurrency\n"
 
 
@@ -868,6 +879,92 @@ def test_apply_empty_directory_errors(wired: Instance, tmp_path: Path) -> None:
 
     assert result.exit_code == 1
     assert "no seed *.yaml files in directory" in result.output
+
+
+def _seed_repo(tmp_path: Path) -> None:
+    """A minimal data repo: acu.yaml plus one seed file per scaffolded dir."""
+    (tmp_path / "acu.yaml").write_text("base_url: http://acu.test/AcumaticaERP\n")
+    for dirname, fname, body in (
+        ("bootstrap", "terms.yaml", BOOTSTRAP_YAML),
+        ("baseline", "uoms.yaml", BASELINE),
+        ("setup", "calendar.yaml", SETUP_YAML),
+    ):
+        (tmp_path / dirname).mkdir()
+        (tmp_path / dirname / fname).write_text(body)
+
+
+def test_diff_defaults_to_scaffolded_dirs(
+    wired: Instance, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # T44/I.cmd: FILES omitted -> the existing init-scaffolded dirs at the
+    # data-repo root (V3 walk-up), in provision order
+    _seed_repo(tmp_path)
+    monkeypatch.chdir(tmp_path)
+    seen: list[str] = []
+    monkeypatch.setattr(
+        cli.seed, "diff", lambda client, baseline: seen.append(baseline.path.name) or []
+    )
+
+    result = CliRunner().invoke(cli.cli, ["diff"])
+
+    assert result.exit_code == 0
+    assert seen == ["terms.yaml", "uoms.yaml", "calendar.yaml"]
+    assert "+ no drift on T1 (http://acu.test/AcumaticaERP, 3 file(s))" in result.stderr
+
+
+def test_bare_diff_without_seed_dirs_errors(
+    wired: Instance, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # T44/V9: an empty default would make a bare run a silent no-op - the
+    # error names the expected dirs, exit 1
+    (tmp_path / "acu.yaml").write_text("base_url: http://acu.test/AcumaticaERP\n")
+    monkeypatch.chdir(tmp_path)
+
+    result = CliRunner().invoke(cli.cli, ["diff"])
+
+    assert result.exit_code == 1
+    assert "none of the seed directories exist" in result.output
+    assert "bootstrap/, baseline/, setup/" in result.output
+
+
+def test_explicit_files_override_default_dirs(
+    wired: Instance, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # T44/I.cmd: explicit FILES behavior unchanged - the default never
+    # augments an explicit argument list
+    _seed_repo(tmp_path)
+    monkeypatch.chdir(tmp_path)
+    seen: list[str] = []
+    monkeypatch.setattr(
+        cli.seed, "diff", lambda client, baseline: seen.append(baseline.path.name) or []
+    )
+
+    result = CliRunner().invoke(cli.cli, ["diff", "baseline/uoms.yaml"])
+
+    assert result.exit_code == 0
+    assert seen == ["uoms.yaml"]
+
+
+def test_bare_apply_matches_explicit_dirs(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # T44 verify leg, offline: bare `acu apply --dry-run` over a scaffolded
+    # repo plans exactly what naming the three dirs plans
+    CliRunner().invoke(cli.cli, ["config", "init", "--host", "erp.test", str(tmp_path)])
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv("ACU_PASSWORD", "secret")
+    monkeypatch.setattr(cli, "AcumaticaClient", DummyClient)
+
+    bare = CliRunner().invoke(cli.cli, ["apply", "--dry-run"])
+    explicit = CliRunner().invoke(
+        cli.cli, ["apply", "--dry-run", "bootstrap", "baseline", "setup"]
+    )
+
+    assert bare.exit_code == 0
+    plans = [line for line in bare.output.splitlines() if "would " in line]
+    explicit_plans = [line for line in explicit.output.splitlines() if "would " in line]
+    assert plans
+    assert plans == explicit_plans
 
 
 def test_diff_drift_exits_two_with_lines_on_stdout(
