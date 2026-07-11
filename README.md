@@ -1,8 +1,10 @@
-# Acumatica Config-as-Code CLI
+# Acumatica Config-as-Code
 
-**`acu`** configures Acumatica ERP from YAML files in a git repo. **No UI clicks, no Configuration Wizard.**
+**`acu`** configures Acumatica ERP from YAML files in a git repo. 
 
-The idea is a loop:
+**No UI clicks, no Configuration Wizard.**
+
+## How it works
 
 1. **Read** the target Acumatica deployment and translate its configuration into YAML — config as code.
 2. **Develop** changes in the YAML, in git: edit, review, version.
@@ -20,11 +22,9 @@ Three commands do the work, and every one is safe to re-run:
 
 ## Why
 
-Acumatica configuration normally lives in the web UI: wizards, screens, and
-manual data entry that nobody can review, version, or reproduce. `acu` moves
-that configuration into YAML files in a git repo, so a tenant can be rebuilt
-from scratch, audited in a pull request, and checked for drift like any
-other infrastructure.
+Acumatica configuration normally lives in the web UI: wizards, screens, and manual data entry that nobody can review, version, or reproduce. 
+
+`acu` moves that configuration into YAML files in a git repo, so a tenant can be rebuilt from scratch, audited in a pull request, and checked for drift like any other infrastructure.
 
 ## Quick start
 
