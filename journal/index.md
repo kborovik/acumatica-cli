@@ -108,7 +108,19 @@ Newest first.
   `invoke ProcessAll`, diff clean over twelve files, and a GL batch PUT
   + release answering **Posted**, the criterion B12/B13 kept pushing
   forward; re-run skipped all three actions and the tenant tore down
-  clean.
+  clean; T39 graduates the `setup/` files into the `config init`
+  template set, and the build's planning pass catches the scope short
+  before any code — the row pinned 14 files but the verify leg (a
+  scaffolded GL batch posts) needs the org-ledger link B12 recorded,
+  which only lived in the data repo (B16; V22's self-closing clause
+  generalizes from features to every recorded dependency-chain link the
+  set's own verify chain needs); fifteen files now scaffold —
+  `60-ledger-company` keyed on `LedgerCD` alone per B14 plus the three
+  setup templates with `OrganizationID: COMPANY` matching the company
+  template's `AcctCD`, year values shipped as editable placeholders —
+  with the dry-run round-trip pinning the full apply order across all
+  three dirs and a reference-closure test (B15's sibling) pinning every
+  `OrganizationID` to the company `AcctCD`.
 - [2026-07-09](2026-07-09.md) — T17 closes the SPEC backlog: `exit
   $LASTEXITCODE` centralized in `_ssh` (single choke point per V18, the
   B4 recurrence class), call-site hand-appends stripped, suffix pinned
@@ -334,6 +346,7 @@ Every Acumatica problem hit so far, one line each. Status: **resolved**
 | 43 | Contract-API list GET goes blind on an AND `$filter` spanning fields of different views — each predicate alone matches the row, the conjunction answers 200 `[]`, and the key-URL form 500s with a non-B9 exception, so a composite-key seed file on a multi-view entity phantom-drifts "missing on tenant" behind a PUT that persisted | resolved (B14/V4 clause: multi-view entity seed files key on primary-view fields only; secondary-view fields stay record fields and diff field by field) | [2026-07-10](2026-07-10.md) |
 | 44 | A template/data-repo set can require features its own features.yaml never enables — the scaffolded subaccounts template 403s on the feature-gated GL203000 because the features template shipped the built-in six without SubAccount, while the verified data repo passed only because its list had grown separately | resolved (B15/V22 feature-closure clause: the shipped set must enable every feature its baseline files require; template features.yaml gains SubAccount, a test asserts the closure) | [2026-07-10](2026-07-10.md) |
 | 45 | Processing screens are not entity-action drivable the obvious way: the GL201100 "Open Periods" action is a `PXRedirectHelper` redirect to GL503000 the contract API cannot follow (B13), and the processing graph declares no `PXAction` to map — the process buttons are runtime-registered by `PXFilteredProcessing` | resolved (T37: a contract entity over the GL503000 *filter view* plus an action mapped to the runtime `ProcessAll` drives the processing directly; the filter `Action` field takes stored words like `Open`) | [2026-07-10](2026-07-10.md) |
+| 46 | A shipped file set can satisfy feature closure and still starve its own verify chain — T39 scoped the template set at 14 files while the GL-posting chain it promises needs the org-ledger link that only the data repo carried; a scaffolded tenant would open periods fine and 422 at the batch PUT (B12's known link, outside the scoped set) | resolved (B16/V22: the self-closing clause covers every recorded dependency-chain link the set's own verify chain needs; `60-ledger-company` template ships, a reference-closure test pins `OrganizationID` to the company `AcctCD`) | [2026-07-10](2026-07-10.md) |
 
 ## Status
 
