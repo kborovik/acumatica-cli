@@ -120,7 +120,14 @@ Newest first.
   template's `AcctCD`, year values shipped as editable placeholders —
   with the dry-run round-trip pinning the full apply order across all
   three dirs and a reference-closure test (B15's sibling) pinning every
-  `OrganizationID` to the company `AcctCD`.
+  `OrganizationID` to the company `AcctCD`; the live verify runs the
+  whole scaffolded chain on fresh tenant 5 — provision zero manual
+  steps (11 files, three invokes, diff clean), a GL batch PUT
+  (`Hold: false` required, detail fields are `Account`/`Subaccount`,
+  and the header `BranchID` defaults to COMPANY off the templated
+  org-ledger link) released to **Posted**, closing T35's deferred
+  batch leg through the templates; independent diff clean, init re-run
+  fifteen skips, tenant torn down with the list back to four.
 - [2026-07-09](2026-07-09.md) — T17 closes the SPEC backlog: `exit
   $LASTEXITCODE` centralized in `_ssh` (single choke point per V18, the
   B4 recurrence class), call-site hand-appends stripped, suffix pinned
