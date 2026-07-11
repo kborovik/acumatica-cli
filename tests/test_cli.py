@@ -698,7 +698,7 @@ def test_config_check_flags_only_passes(
             "user@acu.test",
             "--password",
             "pw",
-            "-t",
+            "--tenant",
             "T1",
             "config",
             "check",
@@ -787,6 +787,15 @@ def test_config_check_discovery_fails_without_base_url(
 
     assert result.exit_code == 1
     assert "fail discovery: acu.yaml: missing required key base_url" in result.output
+
+
+def test_tenant_short_flag_is_gone(wired: Instance) -> None:
+    # T43/V16: every flag is long-only - the tenant global was the last
+    # surviving short form (same retirement class as T9's `schema -o`)
+    result = CliRunner().invoke(cli.cli, ["-t", "T1", "config", "show"])
+
+    assert result.exit_code != 0
+    assert "No such option" in result.output
 
 
 def test_global_host_flag_is_gone(wired: Instance) -> None:

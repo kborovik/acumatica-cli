@@ -58,7 +58,6 @@ def _version() -> str:
 @click.group(help=__doc__)
 @click.version_option(version=_version(), prog_name="acu")
 @click.option(
-    "-t",
     "--tenant",
     default=None,
     help="Acumatica tenant the API session signs in to (acu.yaml tenant)",

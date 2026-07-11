@@ -162,7 +162,7 @@ def test_diff_is_clean_on_provisioned_tenant(
     action file's done_when probe answers non-empty, so the FinYearSetup
     row and the 2026 company periods exist on the tenant.
     """
-    proc = acu("-t", scratch_tenant.login, "diff", "baseline", "setup")
+    proc = acu("--tenant", scratch_tenant.login, "diff", "baseline", "setup")
     assert proc.returncode == 0, _combined(proc)
     assert "no drift" in _combined(proc)
 
@@ -196,7 +196,7 @@ def test_diff_detects_injected_drift(
     mutated = tmp_path / source.name
     mutated.write_text(yaml.safe_dump(doc, sort_keys=False))
 
-    proc = acu("-t", scratch_tenant.login, "diff", str(mutated))
+    proc = acu("--tenant", scratch_tenant.login, "diff", str(mutated))
     assert proc.returncode == 2, _combined(proc)
     assert "DRIFT" in _combined(proc)
 
@@ -210,5 +210,5 @@ def test_diff_against_nonexistent_tenant_exits_one(acu: RunAcu) -> None:
     and silently lands on the default tenant, and only the landed-tenant
     guard in AcumaticaClient stands between that and a false-green diff.
     """
-    proc = acu("-t", "NoSuchTenantB5", "diff", "baseline")
+    proc = acu("--tenant", "NoSuchTenantB5", "diff", "baseline")
     assert proc.returncode == 1, _combined(proc)
