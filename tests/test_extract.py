@@ -34,6 +34,13 @@ NO_ENTITY_500_BODY = {
     "exceptionMessage": "No entity satisfies the condition.",
     "exceptionType": "PX.Api.ContractBased.NoEntitySatisfiesTheConditionException",
 }
+SETUP_NOT_ENTERED_500_BODY = {
+    "message": "An error has occurred.",
+    "exceptionMessage": (
+        "The required configuration data is not entered on the Company Branches form."
+    ),
+    "exceptionType": "PX.Data.PXSetupNotEnteredException",
+}
 
 
 class FakeServer:
@@ -41,7 +48,9 @@ class FakeServer:
 
     Entities listed in ``delegate_view`` replay B9: any list GET without a
     $select projection answers the optimization 500; the key-URL GET and
-    the $select-narrowed list GET succeed.
+    the $select-narrowed list GET succeed. Entities listed in
+    ``setup_not_entered`` replay the virgin-tenant empty-state class (B19):
+    every GET answers the PXSetupNotEnteredException 500.
     """
 
     def __init__(
@@ -49,10 +58,12 @@ class FakeServer:
         tables: dict[str, list[dict[str, Any]]],
         keys: dict[str, list[str]],
         delegate_view: frozenset[str] = frozenset(),
+        setup_not_entered: frozenset[str] = frozenset(),
     ):
         self.tables = tables
         self.keys = keys
         self.delegate_view = delegate_view
+        self.setup_not_entered = setup_not_entered
         self.requests: list[httpx.Request] = []
 
     def __call__(self, request: httpx.Request) -> httpx.Response:
@@ -66,6 +77,8 @@ class FakeServer:
             )
         # /AcumaticaERP/entity/<Endpoint>/<version>/<Entity>[/<key>...]
         _, _, entity, *key_path = request.url.path.split("/entity/", 1)[1].split("/")
+        if entity in self.setup_not_entered:
+            return httpx.Response(500, json=SETUP_NOT_ENTERED_500_BODY)
         records = self.tables.get(entity)
         if records is None:
             return httpx.Response(500, json=NO_ENTITY_500_BODY)
@@ -380,8 +393,8 @@ def _run(
     server: FakeServer,
     out: Path,
     **kwargs: Any,
-) -> None:
-    extract.run(_client(instance, server), out, **kwargs)
+) -> int:
+    return extract.run(_client(instance, server), out, **kwargs)
 
 
 def test_run_writes_files_and_reports(
@@ -530,12 +543,23 @@ def test_entity_spec_filter_defaults_to_none() -> None:
     assert _spec().filter is None
 
 
-def test_b9_non_optimization_500_still_raises(
-    instance: Instance, tmp_path: Path
+def test_b9_non_optimization_500_never_takes_fallback(
+    instance: Instance,
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
 ) -> None:
+    """Only the optimization 500 reroutes; any other 500 is a row failure.
+
+    Pre-V24 this aborted the run; now the row reports and the run goes on,
+    but the B9 fallback ($select key list) still never fires for it.
+    """
     server = FakeServer({}, {})  # unknown entity -> non-optimization 500
-    with pytest.raises(RuntimeError, match="No entity satisfies"):
-        _run(instance, server, tmp_path, only=frozenset({"Currency"}))
+    failed = _run(instance, server, tmp_path, only=frozenset({"Currency"}))
+    assert failed == 1
+    err = capsys.readouterr().err
+    assert "x Currency: " in err
+    assert "No entity satisfies" in err
+    assert not any("select" in str(r.url) for r in server.requests)
 
 
 # -- setup/ synthesis: the GL action chain derived back from live state --
@@ -692,6 +716,137 @@ def test_round_trip_is_byte_stable_under_permuted_server_order(
     assert len(files) == 13  # 9 entities + 3 setup + features
     for rel in files:
         assert (a / rel).read_bytes() == (b / rel).read_bytes(), str(rel)
+
+
+# -- V24: per-row failure isolation (B19, gh issue #5) --
+
+
+def test_row_failure_reported_and_run_continues(
+    instance: Instance,
+    server: FakeServer,
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """One failing entity row: x line on stderr, every later row still lands."""
+    server.tables = {k: v for k, v in server.tables.items() if k != "Subaccount"}
+    failed = _run(instance, server, tmp_path)
+    assert failed == 1
+    captured = capsys.readouterr()
+    assert "x Subaccount: " in captured.err
+    assert "No entity satisfies" in captured.err
+    assert "Subaccount" not in captured.out  # failures are process, not data (V9)
+    # rows past the failure all ran: entities, setup synths, features
+    assert (tmp_path / "baseline" / "20-accounts.yaml").is_file()
+    assert (tmp_path / "setup" / "30-open-periods.yaml").is_file()
+    assert (tmp_path / "bootstrap" / "features.yaml").is_file()
+    # 8 surviving entities + 3 synths + features; the failed tally on stderr
+    assert "x 12 written, 0 skipped, 1 failed" in captured.err
+
+
+def test_setup_not_entered_500_skips_clean(
+    instance: Instance,
+    server: FakeServer,
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """The virgin-tenant empty-state 500 classifies as a skip, not a failure."""
+    server.setup_not_entered = frozenset({"Ledger"})
+    failed = _run(instance, server, tmp_path, only=frozenset({"Ledger"}))
+    assert failed == 0
+    captured = capsys.readouterr()
+    target = tmp_path / "baseline" / "40-ledger.yaml"
+    assert f"skip {target} (screen setup not entered)" in captured.out
+    assert not target.exists()
+    assert "+ 0 written, 1 skipped" in captured.err
+
+
+def test_setup_synth_failure_isolated(
+    instance: Instance,
+    server: FakeServer,
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """A synth row's non-empty-state failure reports; later synths still run."""
+    server.tables = {k: v for k, v in server.tables.items() if k != "MasterCalendar"}
+    failed = _run(
+        instance,
+        server,
+        tmp_path,
+        only=frozenset({"master-calendar", "open-periods"}),
+    )
+    assert failed == 1
+    captured = capsys.readouterr()
+    assert "x master-calendar: " in captured.err
+    assert (tmp_path / "setup" / "30-open-periods.yaml").is_file()
+
+
+# the B19 live repro (issue #5): a clean tenant's reads split by server
+# accident between empty 200 [] and PXSetupNotEnteredException 500
+VIRGIN_TABLES: dict[str, list[dict[str, Any]]] = {
+    "Company": [],
+    "CreditTerms": [],
+    "UnitsOfMeasure": TABLES["UnitsOfMeasure"],
+    "FinancialYearSettings": [],
+}
+VIRGIN_SETUP_NOT_ENTERED = frozenset(
+    {
+        "Subaccount",
+        "Account",
+        "Currency",
+        "Ledger",
+        "GLPreferences",
+        "LedgerCompany",
+        "MasterCalendar",
+        "CompanyPeriod",
+    }
+)
+
+
+def test_virgin_tenant_dry_run_walks_full_manifest_exit_0(
+    monkeypatch: pytest.MonkeyPatch, instance: Instance, tmp_path: Path
+) -> None:
+    """The T57 verify leg: a virgin tenant extracts whole, dry-run exits 0."""
+    monkeypatch.setattr(cli, "load_instance", lambda overrides=None: instance)
+    server = FakeServer(VIRGIN_TABLES, KEYS, setup_not_entered=VIRGIN_SETUP_NOT_ENTERED)
+    monkeypatch.setattr(
+        cli, "AcumaticaClient", lambda inst, **kw: _client(inst, server)
+    )
+    result = CliRunner().invoke(
+        cli.cli, ["extract", "--out", str(tmp_path), "--dry-run"]
+    )
+    assert result.exit_code == 0, result.output
+    # every manifest row answered: 2 empty entities + 1 empty synth,
+    # 6 + 2 setup-not-entered rows, the writable entity, features
+    assert result.output.count("(no records)") == 2
+    assert result.output.count("(screen setup not entered)") == 8
+    assert result.output.count("(no financial year setup)") == 1
+    assert (
+        f"would write {tmp_path / 'baseline' / '90-uoms.yaml'} (2 records)"
+        in result.output
+    )
+    # features closure = the built-in six: only the gate-free UoM row produced
+    assert (
+        f"would write {tmp_path / 'bootstrap' / 'features.yaml'} (6 records)"
+        in result.output
+    )
+    assert "+ 2 written, 11 skipped (dry run)" in result.stderr
+    assert list(tmp_path.iterdir()) == []
+
+
+def test_extract_cmd_exits_1_when_any_row_failed(
+    monkeypatch: pytest.MonkeyPatch, instance: Instance, tmp_path: Path
+) -> None:
+    """Exit 1 any row failed, never 2 - drift stays diff's (V9/V24)."""
+    monkeypatch.setattr(cli, "load_instance", lambda overrides=None: instance)
+    tables = {k: v for k, v in TABLES.items() if k != "Subaccount"}
+    server = FakeServer(tables, KEYS, DELEGATE_VIEW)
+    monkeypatch.setattr(
+        cli, "AcumaticaClient", lambda inst, **kw: _client(inst, server)
+    )
+    result = CliRunner().invoke(cli.cli, ["extract", "--out", str(tmp_path)])
+    assert result.exit_code == 1
+    assert "x Subaccount: " in result.stderr
+    assert "1 failed" in result.stderr
 
 
 # -- CLI wiring --

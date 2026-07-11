@@ -31,6 +31,13 @@ def unwrap(entity: dict[str, Any]) -> dict[str, Any]:
 # extract via a $select-narrowed list GET); any other error still raises.
 OPTIMIZATION_500 = "Optimization cannot be performed"
 
+# The empty-state 500 extract classifies as a clean skip (V24): a virgin
+# tenant answers PXSetupNotEnteredException on most entities until bootstrap
+# lands, and the exceptionMessage names the missing form — "The required
+# configuration data is not entered on the <Form> form." (verified vs
+# 26.101.0225, docs/rest-api.md).
+SETUP_NOT_ENTERED_500 = "configuration data is not entered"
+
 
 class AcumaticaClient:
     """Cookie-session client for the contract-based endpoint.

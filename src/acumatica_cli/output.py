@@ -41,7 +41,9 @@ def warn(msg: str) -> None:
 
 def error(msg: str) -> None:
     """Error line on stderr."""
-    err.print(f"x {msg}", style="red")
+    # soft_wrap: same rationale as data() — an error line carries long
+    # URLs and server reasons and must stay one greppable line
+    err.print(f"x {msg}", style="red", soft_wrap=True)
 
 
 def table(title: str, columns: Iterable[str], rows: Iterable[Iterable[str]]) -> None:

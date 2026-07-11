@@ -32,7 +32,12 @@ from pydantic import Field, ValidationError, field_validator, model_validator
 
 from . import output
 from .bootstrap import DEFAULT_FEATURES
-from .client import OPTIMIZATION_500, AcumaticaClient, unwrap
+from .client import (
+    OPTIMIZATION_500,
+    SETUP_NOT_ENTERED_500,
+    AcumaticaClient,
+    unwrap,
+)
 from .models import Model, validation_summary
 from .seed import BOOTSTRAP_ENDPOINT, BOOTSTRAP_ENTITIES
 
@@ -338,26 +343,50 @@ class _Extraction:
         self.only = only
         self.force = force
         self.dry_run = dry_run
+        # per-row tallies for the end summary (V24); failed drives exit 1
+        self.written = 0
+        self.skipped = 0
+        self.failed = 0
 
     def _selected(self, name: str, file: str) -> bool:
         """The --only filter: row name (entity or kind) or file stem."""
         return not self.only or name in self.only or Path(file).stem in self.only
 
+    def _skip(self, target: Path, reason: str) -> None:
+        """Report one clean per-file skip and tally it."""
+        output.data(f"skip {target} ({reason})")
+        self.skipped += 1
+
     def _skip_existing(self, target: Path) -> bool:
         """The per-file skip-if-exists gate; --force disarms it."""
         if target.exists() and not self.force:
-            output.data(f"skip {target} (exists)")
+            self._skip(target, "exists")
             return True
         return False
+
+    def _row_failed(self, name: str, target: Path, err: RuntimeError) -> None:
+        """Classify one row's live-read failure (V24: isolation, not abort).
+
+        A PXSetupNotEnteredException 500 is the virgin-tenant empty-state
+        class — the screen has no data to extract, same answer as 200 [] —
+        so it skips clean. Anything else is a reported row failure; the
+        run continues to the next manifest row either way.
+        """
+        if SETUP_NOT_ENTERED_500 in str(err):
+            self._skip(target, "screen setup not entered")
+            return
+        output.error(f"{name}: {err}")
+        self.failed += 1
 
     def _emit(self, target: Path, text: str, count: int) -> None:
         """Write one destination file, or report what would be written."""
         if self.dry_run:
             output.data(f"would write {target} ({count} records)")
-            return
-        target.parent.mkdir(parents=True, exist_ok=True)
-        target.write_text(text, encoding="utf-8")
-        output.data(f"write {target} ({count} records)")
+        else:
+            target.parent.mkdir(parents=True, exist_ok=True)
+            target.write_text(text, encoding="utf-8")
+            output.data(f"write {target} ({count} records)")
+        self.written += 1
 
     def entities(self) -> set[str]:
         """The entity pass; returns destination files written (or would be)."""
@@ -368,11 +397,15 @@ class _Extraction:
             target = self.out_dir / spec.file
             if self._skip_existing(target):
                 continue
-            live = _fetch(self.client, spec)
-            if not live:
-                output.data(f"skip {target} (no records)")
+            try:
+                live = _fetch(self.client, spec)
+                records = _shape(spec, live)
+            except RuntimeError as err:
+                self._row_failed(spec.entity, target, err)
                 continue
-            records = _shape(spec, live)
+            if not live:
+                self._skip(target, "no records")
+                continue
             self._emit(target, _render(spec, records), len(records))
             produced.add(spec.file)
         return produced
@@ -386,9 +419,13 @@ class _Extraction:
             if self._skip_existing(target):
                 continue
             synthesize, skip_reason = SYNTHESIZERS[synth.kind]
-            doc = synthesize(self.client)
+            try:
+                doc = synthesize(self.client)
+            except RuntimeError as err:
+                self._row_failed(synth.kind, target, err)
+                continue
             if doc is None:
-                output.data(f"skip {target} ({skip_reason})")
+                self._skip(target, skip_reason)
                 if synth.kind == "open-periods":
                     # generated-but-unopened periods replay into a tenant
                     # that cannot post GL (B13/B16 class) - flag it
@@ -427,14 +464,25 @@ def run(
     only: frozenset[str] = frozenset(),
     force: bool = False,
     dry_run: bool = False,
-) -> None:
+) -> int:
     """Extract the manifest file set plus the feature closure under out_dir.
 
     Per file: skip when it exists (--force overwrites), skip when the
     tenant has no records, report-only under --dry-run. `only` filters
     rows by entity name, synthesizer kind, or file stem.
+
+    A failing row is reported and the run continues (V24) - the return
+    value is the failed-row count, 0 when every row wrote or skipped clean
+    (the caller's exit-1 signal).
     """
     extraction = _Extraction(client, out_dir, only, force, dry_run)
     produced = extraction.entities()
     extraction.setup()
     extraction.features(produced)
+    counts = f"{extraction.written} written, {extraction.skipped} skipped"
+    suffix = " (dry run)" if dry_run else ""
+    if extraction.failed:
+        output.error(f"{counts}, {extraction.failed} failed{suffix}")
+    else:
+        output.success(f"{counts}{suffix}")
+    return extraction.failed

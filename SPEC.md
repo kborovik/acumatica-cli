@@ -76,7 +76,7 @@ T53|x|repo hygiene after data-repo rename — untrack `.env.gpg` + `.gitignore` 
 T54|x|`make e2e` optional FILE arg — `make e2e FILE=<path-or-stem>` scopes pytest to one e2e file, bare `make e2e` = whole tier unchanged|V13
 T55|x|add `--completion` global flag — click-native script emit (`bash|zsh|fish`, <shell> ? → `$SHELL` detect) + local-only value completion (`extract --only` entity names from packaged manifest, `apply`/`diff` path args)|V9,V16,V23,I.cmd
 T56|x|tenant create `--type` validation — click choice `SalesDemo|T100|U100` (docs/ac-exe.md verified set, `System` excluded), non-member → error naming allowed set before SSH, omitted = clean tenant; help text documents exact names|V7,V9,V12,V16,I.cmd
-T57|.|extract per-row failure isolation (gh issue #5 — land closes it, `Closes #5`) — row failure reported + continue, `PXSetupNotEnteredException` → screen-setup-not-entered skip, end summary, virgin-tenant dry-run walks full manifest exit 0|V9,V24,I.cmd,T48
+T57|x|extract per-row failure isolation (gh issue #5 — land closes it, `Closes #5`) — row failure reported + continue, `PXSetupNotEnteredException` → screen-setup-not-entered skip, end summary, virgin-tenant dry-run walks full manifest exit 0|V9,V24,I.cmd,T48
 
 ## §B BUGS
 

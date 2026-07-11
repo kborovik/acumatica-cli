@@ -604,17 +604,21 @@ def extract_cmd(
     entity set): each entity is read from the live tenant and written as a
     seed file under bootstrap/ or baseline/ that apply and diff consume
     unchanged. Existing files are skipped unless --force; an entity with
-    no live records produces no file. Exit 0 or 1 - drift detection stays
-    with diff.
+    no live records produces no file. A failing row is reported and the
+    run continues to the next (a virgin tenant extracts whole). Exit 0
+    when every row wrote or skipped clean, 1 when any row failed - drift
+    detection stays with diff.
     """
     with AcumaticaClient(inst) as client:
-        extract.run(
+        failed = extract.run(
             client,
             out_dir or Path("."),
             only=frozenset(only),
             force=force,
             dry_run=dry_run,
         )
+    if failed:
+        raise SystemExit(1)
 
 
 def _exit_on_drift(inst: Instance, drifts: list[str], files: int) -> None:
