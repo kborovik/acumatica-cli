@@ -159,7 +159,14 @@ Newest first.
   text then drops the "Override ..." phrasing (each global names its
   value and fallback source) and T43 retires `-t`, the last short
   flag — `--tenant` only, §V.16's convention line tightening to "no
-  short flags", with a rejection regression pinning the retirement.
+  short flags", with a rejection regression pinning the retirement;
+  T44 (gh issue #2) makes apply/diff FILES optional — omitted, the
+  arguments default to the existing init-scaffolded directories at the
+  data-repo root in provision order (`bootstrap/`, `baseline/`,
+  `setup/`), none existing is a named one-line error rather than a
+  silent no-op, and the defaulted paths render relative to cwd so a
+  bare `acu diff` prints byte-for-byte what naming the directories
+  would — verified live against acu-dev1 both ways.
 - [2026-07-09](2026-07-09.md) — T17 closes the SPEC backlog: `exit
   $LASTEXITCODE` centralized in `_ssh` (single choke point per V18, the
   B4 recurrence class), call-site hand-appends stripped, suffix pinned
