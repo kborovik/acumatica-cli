@@ -85,7 +85,21 @@ Newest first.
   `IsFinancial eq true`, and the live round-trip re-verified green with
   `30-currencies.yaml` at 4 records instead of 172 — the extracted file
   is configuration now, and the e2e tier shed about a minute of
-  sequential one-row GETs per extract leg.
+  sequential one-row GETs per extract leg. A `/sdd:build --all` sweep
+  then closes the backlog: T53's plan gate caught the row's own premise
+  stale — `.env.gpg` had been deliberately tracked four hours before
+  the row was authored claiming untracked, so the gitignore-only edit
+  would have greened `check-ignore` with ciphertext still in the tip —
+  backprop'd as B18 with a V17 premise sibling (spec text asserting
+  repo or live state is probed at authoring); the fix untracked the
+  ciphertext tip-only, gitignored both `.env` forms, synced CLAUDE.md
+  to the renamed data repo, and surfaced along the way that
+  `git commit -- <paths>` silently reverts a staged `rm --cached`
+  (pathspec commits take working-tree state; the amend took the index).
+  T54 lands the mechanization T50 queued: `make e2e FILE=<path-or-stem>`
+  resolves path-or-stem before pytest and errors on a miss, bare run
+  unchanged — verified offline via `make -n` and `--collect-only`
+  (8-test file vs 14-test tier).
 - [2026-07-10](2026-07-10.md) — T29 fronts financial currency (CM202000)
   from the Bootstrap endpoint: live archaeology maps the screen's two
   views (general info on the `CurrencyList` primary including
