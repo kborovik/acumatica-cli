@@ -5,7 +5,7 @@ chains the bootstrap publish, T45) -> `acu apply` -> `acu diff` clean.
 
 Opt-in tier: every test carries the `e2e` marker, which the default suite
 deselects (`make check` stays offline, V13). Run via `make e2e` from the
-repo root, where the gitignored acu.yaml / .env / baseline / bootstrap
+repo root, where the gitignored .env / baseline / bootstrap / setup
 symlinks resolve into ../acumatica-baseline.
 
 The tests drive the installed `acu` binary through subprocess - not

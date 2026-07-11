@@ -130,8 +130,7 @@ class TenantManager:
             f"CompanyType={company_type};LoginName={login_name};"
         )
         admin = (
-            f' -aun:"{self.instance.username}" '
-            f'-aup:"{self.instance.password}" -auc:"False"'
+            f' -aun:"{self.instance.user}" -aup:"{self.instance.password}" -auc:"False"'
         )
         return self._company_config(company, extra=admin)
 

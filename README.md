@@ -40,7 +40,7 @@ acu --tenant DEV diff                   # prove zero drift (exit 2 on drift)
 ## CLI Map
 
 ```text
-acu [-t TENANT]
+acu [--tenant NAME] [--url URL] [--ssh USER@HOST] [--username U] [--password P]
 │
 ├── tenant                            tenant CRUD (ac.exe over SSH — control plane)
 │   ├── list                          CompanyID, sign-in name, internal CD, type
@@ -52,14 +52,17 @@ acu [-t TENANT]
 ├── diff FILES...                     drift check: YAML vs live tenant (exit 2 on drift)
 ├── schema [--out DIR]                dump the endpoint's OpenAPI schema (swagger.json)
 │
-└── config                            local, read-only — never talks to a live instance
-    └── show                          print the resolved target as a complete acu.yaml
+└── config                            configuration ops
+    ├── init [--host HOST] [DIR]      scaffold a data repo (.env plus example YAML)
+    ├── show                          print the resolved target as a complete .env
+    └── check                         read-only preflight: discovery, secrets, REST, SSH
 ```
 
-The target instance comes from `acu.yaml` (found by walking up from the
-current directory); the one global option `-t/--tenant` overrides the tenant
-that API sessions sign in to. Run `acu <command> --help` for details on any
-command.
+The target instance comes from `.env` (found by walking up from the
+current directory), every key an `ACU_*` variable; global options
+(`--tenant`, `--url`, `--ssh`, `--api-version`, `--username`,
+`--password`) override per key. Run `acu <command> --help` for details on
+any command.
 
 ## Installation
 
@@ -108,50 +111,47 @@ acu --help
 
 ## Configuration
 
-Configuration is split into three layers, each answering one question:
+Configuration lives in one file plus your SSH setup:
 
-1. **`acu.yaml`** — *where* to apply. The whole file is the target
-   instance: a flat map with two required keys, one explicit address per
-   plane — `base_url` (the REST root: scheme, host, and site path) and
-   `ssh` (the control-plane `user@host`). Everything else has a code
-   default matching a stock Acumatica install:
+1. **`.env`** — the whole configuration: *where* to apply and *who* signs
+   in, every key an `ACU_*` variable. Three values are required —
+   `ACU_BASE_URL` (the REST root: scheme, host, and site path), `ACU_SSH`
+   (the control-plane `user@host`), and `ACU_PASSWORD`. Everything else
+   has a code default matching a stock Acumatica install:
 
-   ```yaml
-   base_url: http://acu-dev1.vm.internal/AcumaticaERP
-   ssh: Administrator@acu-dev1.vm.internal
-   tenant: Company     # sign-in name of the tenant API sessions use
+   ```sh
+   ACU_BASE_URL=http://acu-dev1.vm.internal/AcumaticaERP
+   ACU_SSH=Administrator@acu-dev1.vm.internal
+   ACU_TENANT=Company    # sign-in name of the tenant API sessions use
+   ACU_USER=admin        # optional, defaults to admin
+   ACU_PASSWORD=...      # required
    ```
 
    Nothing is derived: split-horizon DNS, port forwards, and jump hosts
    are all handled by writing the address you actually want into the two
-   required keys.
+   address keys. The file is found by walking up from the current
+   directory, so any subdirectory of the data repo works; without a
+   `.env`, global flags plus the process environment supply the full
+   config. The data repo stores the file encrypted as `.env.gpg`;
+   `make decrypt` produces the plaintext `.env` once per clone.
 
-   `acu config show` prints the fully resolved instance as a complete,
-   valid `acu.yaml` — every knob visible, credentials excluded. To turn
-   the resolved state into your working config, redirect and edit:
-
-   ```sh
-   acu config show > acu.yaml
-   ```
-
-2. **`.env`** — *who* signs in to the REST API. Loaded from the data-repo
-   root (or the plain environment):
+   `acu config show` prints the fully resolved configuration as a
+   complete, valid `.env` — every knob visible, the password excluded.
+   To turn the resolved state into your working config, redirect and
+   edit:
 
    ```sh
-   ACU_PASSWORD=...    # required
-   ACU_USER=admin      # optional, defaults to admin
+   acu config show > .env
    ```
 
-   The data repo stores it encrypted as `.env.gpg`; `make decrypt` produces
-   the plaintext `.env` once per clone.
-
-3. **SSH** — *how* the control plane reaches the Windows guest. Configured on
-   the guest and in your `~/.ssh`, not in `acu.yaml` — see the next section.
+2. **SSH** — *how* the control plane reaches the Windows guest. Configured on
+   the guest and in your `~/.ssh`, not in `.env` — see the next section.
 
 Verify the result before touching anything live:
 
 ```sh
-acu config show           # the fully resolved instance as acu.yaml, no secrets
+acu config check          # read-only preflight: discovery, secrets, REST, SSH
+acu config show           # the fully resolved configuration as .env, no secrets
 acu apply --dry-run baseline/
 ```
 
@@ -219,4 +219,4 @@ ssh -o BatchMode=yes Administrator@acu-dev1.vm.internal '$PSVersionTable.PSVersi
 A version table means you are ready; a password prompt or
 `'$PSVersionTable.PSVersion' is not recognized...` means requirement 2 or 1
 (respectively) is not met yet. Host aliases, jump hosts, and ports go in your
-`~/.ssh/config` as usual, or set `ssh: user@alias` in `acu.yaml`.
+`~/.ssh/config` as usual, or set `ACU_SSH=user@alias` in `.env`.

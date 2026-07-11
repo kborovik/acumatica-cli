@@ -8,7 +8,7 @@
 # parse into a date object the payload encoder rejects.
 #
 # The 2026 first-year value is a starting point - edit it for your first
-# financial year, like the acu.yaml host placeholder; keep it in step
+# financial year, like the .env host placeholder; keep it in step
 # with setup/20-master-calendar.yaml and setup/30-open-periods.yaml.
 #
 # done_when probes the action's own entity, no filter: the setup

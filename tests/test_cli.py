@@ -283,22 +283,20 @@ def test_bootstrap_cmd_is_gone(wired: Instance) -> None:
     assert "No such command" in result.output
 
 
-def test_config_show_emits_yaml_without_credentials(wired: Instance) -> None:
-    # I.cfg: same load_instance path as live cmds, credentials never keys;
-    # T41: resolved username surfaces as a comment line after the header
+def test_config_show_emits_env_without_password(wired: Instance) -> None:
+    # I.cmd config show: resolved .env-format doc, ACU_* keys with resolved
+    # values; ACU_PASSWORD never emitted in any form (V2)
     result = CliRunner().invoke(cli.cli, ["config", "show"])
 
     assert result.exit_code == 0
-    assert "base_url: http://acu.test/AcumaticaERP" in result.output
-    assert "ssh: user@acu.test" in result.output
-    assert "api_version: 25.200.001" in result.output
-    assert "# username: admin" in result.output
-    assert "password" not in result.output
-    assert "pw" not in result.output
+    assert "ACU_BASE_URL=http://acu.test/AcumaticaERP" in result.output
+    assert "ACU_SSH=user@acu.test" in result.output
+    assert "ACU_TENANT=T1" in result.output
+    assert "ACU_API_VERSION=25.200.001" in result.output
+    assert "ACU_USER=admin" in result.output
+    assert "pw" not in result.output  # the password value, in no form
     key_lines = [
-        line
-        for line in result.output.splitlines()
-        if line.startswith(("username:", "password:"))
+        line for line in result.output.splitlines() if line.startswith("ACU_PASSWORD")
     ]
     assert key_lines == []
 
@@ -306,50 +304,52 @@ def test_config_show_emits_yaml_without_credentials(wired: Instance) -> None:
 def test_config_show_round_trips_through_load_instance(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    # I.cfg: `acu config show > acu.yaml` is a valid config - reloading it
-    # resolves to the identical instance (the whole point of the YAML emit)
-    (tmp_path / "acu.yaml").write_text(
-        "base_url: http://acu.test/AcumaticaERP\n"
-        "ssh: Administrator@acu.test\n"
-        "tenant: T1\n"
+    # I.cmd: `acu config show > .env` is a valid config - reloading it
+    # resolves to the identical instance (the whole point of the .env emit),
+    # the password supplied out of band (process environment)
+    (tmp_path / ".env").write_text(
+        "ACU_BASE_URL=http://acu.test/AcumaticaERP\n"
+        "ACU_SSH=Administrator@acu.test\n"
+        "ACU_TENANT=T1\n"
+        "ACU_PASSWORD=secret\n"
     )
     monkeypatch.chdir(tmp_path)
-    monkeypatch.setenv("ACU_PASSWORD", "secret")
-    monkeypatch.delenv("ACU_USER", raising=False)
     original = load_instance()
 
     result = CliRunner().invoke(cli.cli, ["config", "show"])
     assert result.exit_code == 0
 
-    regenerated = tmp_path / "regenerated"
-    regenerated.mkdir()
-    (regenerated / "acu.yaml").write_text(result.output)
+    regenerated = tmp_path / "regenerated" / "deeper"
+    regenerated.mkdir(parents=True)
+    (regenerated / ".env").write_text(result.output)
     monkeypatch.chdir(regenerated)
+    monkeypatch.setenv("ACU_PASSWORD", "secret")
     assert load_instance() == original
 
 
-def test_config_show_username_comment_reflects_acu_user(
+def test_config_show_env_reflects_acu_user(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    # T41: the comment line carries the resolved username (ACU_USER
-    # override, admin default) while the doc still round-trips - the
-    # comment is YAML-inert, never a key
-    (tmp_path / "acu.yaml").write_text(
-        "base_url: http://acu.test/AcumaticaERP\nssh: Administrator@acu.test\n"
+    # I.cmd: ACU_USER is a real key of the emitted doc (the .env format
+    # carries credentials-except-password by design) and round-trips
+    (tmp_path / ".env").write_text(
+        "ACU_BASE_URL=http://acu.test/AcumaticaERP\n"
+        "ACU_SSH=Administrator@acu.test\n"
+        "ACU_USER=auditor\n"
+        "ACU_PASSWORD=secret\n"
     )
     monkeypatch.chdir(tmp_path)
-    monkeypatch.setenv("ACU_PASSWORD", "secret")
-    monkeypatch.setenv("ACU_USER", "auditor")
     original = load_instance()
 
     result = CliRunner().invoke(cli.cli, ["config", "show"])
 
     assert result.exit_code == 0
-    assert "# username: auditor" in result.output
-    regenerated = tmp_path / "regenerated"
-    regenerated.mkdir()
-    (regenerated / "acu.yaml").write_text(result.output)
+    assert "ACU_USER=auditor" in result.output
+    regenerated = tmp_path / "regenerated" / "deeper"
+    regenerated.mkdir(parents=True)
+    (regenerated / ".env").write_text(result.output)
     monkeypatch.chdir(regenerated)
+    monkeypatch.setenv("ACU_PASSWORD", "secret")
     assert load_instance() == original
 
 
@@ -357,14 +357,12 @@ def test_config_show_reflects_global_flag_overrides(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     # T42/I.cmd: config show resolves through the same load_instance path,
-    # so flag overrides surface per key while untouched keys keep acu.yaml
+    # so flag overrides surface per key while untouched keys keep .env
     # values; the password flag is never emitted in any form (V2)
-    (tmp_path / "acu.yaml").write_text(
-        "base_url: http://acu.test/AcumaticaERP\nssh: Administrator@acu.test\n"
+    (tmp_path / ".env").write_text(
+        "ACU_BASE_URL=http://acu.test/AcumaticaERP\nACU_SSH=Administrator@acu.test\n"
     )
     monkeypatch.chdir(tmp_path)
-    monkeypatch.delenv("ACU_PASSWORD", raising=False)
-    monkeypatch.delenv("ACU_USER", raising=False)
 
     result = CliRunner().invoke(
         cli.cli,
@@ -381,11 +379,13 @@ def test_config_show_reflects_global_flag_overrides(
     )
 
     assert result.exit_code == 0
-    assert "base_url: http://edge.example/AcumaticaERP" in result.output
-    assert "ssh: Administrator@acu.test" in result.output  # acu.yaml survives
-    assert "# username: auditor" in result.output
+    assert "ACU_BASE_URL=http://edge.example/AcumaticaERP" in result.output
+    assert "ACU_SSH=Administrator@acu.test" in result.output  # .env survives
+    assert "ACU_USER=auditor" in result.output
     assert "flag-secret" not in result.output
-    assert "password" not in result.output
+    assert not [
+        line for line in result.output.splitlines() if line.startswith("ACU_PASSWORD")
+    ]
 
 
 def test_url_flag_rejected_after_subcommand(wired: Instance) -> None:
@@ -399,8 +399,8 @@ def test_url_flag_rejected_after_subcommand(wired: Instance) -> None:
 
 
 def test_config_init_scaffolds_data_repo(tmp_path: Path) -> None:
-    # I.cmd config init: 15-file template set into a created-if-absent dir;
-    # runs where V3 discovery finds no acu.yaml (tmp_path has none up-tree)
+    # I.cmd config init: 14-file template set into a created-if-absent dir;
+    # runs where V3 discovery finds no .env (tmp_path has none up-tree)
     repo = tmp_path / "repo"
     result = CliRunner().invoke(
         cli.cli, ["config", "init", "--host", "erp.test", str(repo)]
@@ -408,7 +408,6 @@ def test_config_init_scaffolds_data_repo(tmp_path: Path) -> None:
 
     assert result.exit_code == 0
     expected = [
-        "acu.yaml",
         ".env",
         ".gitignore",
         "baseline/10-subaccounts.yaml",
@@ -427,13 +426,13 @@ def test_config_init_scaffolds_data_repo(tmp_path: Path) -> None:
     for rel in expected:
         assert (repo / rel).is_file(), rel
     assert (
-        len([ln for ln in result.output.splitlines() if ln.startswith("write ")]) == 15
+        len([ln for ln in result.output.splitlines() if ln.startswith("write ")]) == 14
     )
-    # --host substitutes into both scaffolded values (I.cmd config init)
-    acu_yaml = (repo / "acu.yaml").read_text()
-    assert "base_url: http://erp.test/AcumaticaERP" in acu_yaml
-    assert "ssh: Administrator@erp.test" in acu_yaml
-    assert "erp.example.com" not in acu_yaml
+    # --host substitutes into both scaffolded address values (I.cmd config init)
+    env = (repo / ".env").read_text()
+    assert "ACU_BASE_URL=http://erp.test/AcumaticaERP" in env
+    assert "ACU_SSH=Administrator@erp.test" in env
+    assert "erp.example.com" not in env
 
 
 def test_config_init_defaults_to_cwd_with_placeholder_host(
@@ -444,29 +443,29 @@ def test_config_init_defaults_to_cwd_with_placeholder_host(
     result = CliRunner().invoke(cli.cli, ["config", "init"])
 
     assert result.exit_code == 0
-    acu_yaml = (tmp_path / "acu.yaml").read_text()
-    assert "base_url: http://erp.example.com/AcumaticaERP" in acu_yaml
-    assert "ssh: Administrator@erp.example.com" in acu_yaml
+    env = (tmp_path / ".env").read_text()
+    assert "ACU_BASE_URL=http://erp.example.com/AcumaticaERP" in env
+    assert "ACU_SSH=Administrator@erp.example.com" in env
 
 
 def test_config_init_rerun_skips_and_never_overwrites(tmp_path: Path) -> None:
     # I.cmd config init: per-file skip-if-exists - `skip <file> (exists)`,
     # exit 0, zero mutations
     CliRunner().invoke(cli.cli, ["config", "init", str(tmp_path)])
-    (tmp_path / "acu.yaml").write_text("base_url: http://hand.edited/X\n")
+    (tmp_path / ".env").write_text("ACU_BASE_URL=http://hand.edited/X\n")
 
     result = CliRunner().invoke(cli.cli, ["config", "init", str(tmp_path)])
 
     assert result.exit_code == 0
     lines = result.output.splitlines()
-    assert len(lines) == 15
+    assert len(lines) == 14
     assert all(ln.startswith("skip ") and ln.endswith(" (exists)") for ln in lines)
-    assert (tmp_path / "acu.yaml").read_text() == "base_url: http://hand.edited/X\n"
+    assert (tmp_path / ".env").read_text() == "ACU_BASE_URL=http://hand.edited/X\n"
 
 
 def test_config_init_writes_no_secrets(tmp_path: Path) -> None:
-    # V2: .env = placeholder credentials only; acu.yaml = where, never
-    # secrets; .env kept out of git by the scaffolded .gitignore
+    # V2: the scaffolded .env carries placeholder credentials only - never
+    # real secrets - and is kept out of git by the scaffolded .gitignore
     CliRunner().invoke(cli.cli, ["config", "init", str(tmp_path)])
 
     env = (tmp_path / ".env").read_text()
@@ -475,10 +474,6 @@ def test_config_init_writes_no_secrets(tmp_path: Path) -> None:
     gitignore = (tmp_path / ".gitignore").read_text()
     assert ".env" in gitignore
     assert "schemas/" in gitignore
-    # the acu.yaml comment may NAME the env vars; no credential keys allowed
-    acu_yaml = (tmp_path / "acu.yaml").read_text()
-    assert "password:" not in acu_yaml
-    assert "username:" not in acu_yaml
 
 
 def test_config_init_scaffold_round_trips(
@@ -494,7 +489,7 @@ def test_config_init_scaffold_round_trips(
 
     shown = CliRunner().invoke(cli.cli, ["config", "show"])
     assert shown.exit_code == 0
-    assert "base_url: http://erp.test/AcumaticaERP" in shown.output
+    assert "ACU_BASE_URL=http://erp.test/AcumaticaERP" in shown.output
 
     applied = CliRunner().invoke(
         cli.cli, ["apply", "--dry-run", "bootstrap", "baseline", "setup"]
@@ -574,22 +569,18 @@ def test_config_init_template_set_is_reference_closed(tmp_path: Path) -> None:
 
 @pytest.fixture
 def check_repo(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
-    """A real data repo for config check: acu.yaml + .env, password in .env only.
+    """A real data repo for config check: one .env, password in the file only.
 
-    load_dotenv mutates os.environ in place; the setenv-then-delenv pair makes
-    monkeypatch record the pre-test state so the .env-sourced value never
-    leaks into later tests.
+    The conftest autouse scrub keeps the process environment clean, so the
+    secrets probe must source ACU_PASSWORD from the found .env (V3).
     """
-    (tmp_path / "acu.yaml").write_text(
-        "base_url: http://acu.test/AcumaticaERP\n"
-        "ssh: Administrator@acu.test\n"
-        "tenant: T1\n"
+    (tmp_path / ".env").write_text(
+        "ACU_BASE_URL=http://acu.test/AcumaticaERP\n"
+        "ACU_SSH=Administrator@acu.test\n"
+        "ACU_TENANT=T1\n"
+        "ACU_PASSWORD=secret\n"
     )
-    (tmp_path / ".env").write_text("ACU_PASSWORD=secret\n")
     monkeypatch.chdir(tmp_path)
-    monkeypatch.setenv("ACU_PASSWORD", "shadow")
-    monkeypatch.delenv("ACU_PASSWORD")
-    monkeypatch.delenv("ACU_USER", raising=False)
     return tmp_path
 
 
@@ -623,7 +614,7 @@ def test_config_check_all_probes_ok(
     assert result.exit_code == 0
     lines = result.output.splitlines()
     assert lines[0].startswith("ok discovery (")
-    assert lines[0].endswith("acu.yaml)")
+    assert lines[0].endswith(".env)")
     assert lines[1] == "ok secrets (ACU_PASSWORD set)"
     assert lines[2] == "ok rest (http://acu.test/AcumaticaERP, tenant T1)"
     assert lines[3] == "ok ssh (Administrator@acu.test)"
@@ -633,8 +624,9 @@ def test_config_check_all_probes_ok(
 def test_config_check_discovery_fail_stops(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    # V3 lax discovery: no acu.yaml up-tree is fine WITH --url, but with
-    # neither the probe fails naming base_url, exit 1, later probes never run
+    # V3 lax discovery: no .env up-tree is fine WITH --url, but with
+    # neither the probe fails naming ACU_BASE_URL, exit 1, later probes
+    # never run
     probes: list[str] = []
     monkeypatch.chdir(tmp_path)
     monkeypatch.setattr(cli, "AcumaticaClient", lambda *a, **k: probes.append("rest"))
@@ -645,19 +637,17 @@ def test_config_check_discovery_fail_stops(
     assert result.exit_code == 1
     lines = result.output.splitlines()
     assert len(lines) == 1
-    assert lines[0].startswith("fail discovery: no acu.yaml found")
-    assert "base_url" in lines[0]
+    assert lines[0].startswith("fail discovery: no .env found")
+    assert "ACU_BASE_URL" in lines[0]
     assert probes == []
 
 
 def test_config_check_flags_only_passes(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    # T42 verify shape: no acu.yaml, no .env - the globals supply the full
+    # T42 verify shape: no .env anywhere - the globals supply the full
     # config and every probe passes (V3 lax discovery, I.cmd precedence)
     monkeypatch.chdir(tmp_path)
-    monkeypatch.delenv("ACU_PASSWORD", raising=False)
-    monkeypatch.delenv("ACU_USER", raising=False)
     monkeypatch.setattr(cli, "AcumaticaClient", DummyClient)
     monkeypatch.setattr(TenantManager, "ping", lambda self: None)
 
@@ -679,7 +669,7 @@ def test_config_check_flags_only_passes(
 
     assert result.exit_code == 0
     lines = result.output.splitlines()
-    assert lines[0] == "ok discovery (no acu.yaml - flags only)"
+    assert lines[0] == "ok discovery (no .env - flags only)"
     assert lines[1] == "ok secrets (--password)"
     assert lines[2] == "ok rest (http://acu.test/AcumaticaERP, tenant T1)"
     assert lines[3] == "ok ssh (user@acu.test)"
@@ -690,13 +680,12 @@ def test_config_check_secrets_fail_stops(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     # I.cmd config check: discovery/secrets fail stops - no live probes run
-    (tmp_path / "acu.yaml").write_text(
-        "base_url: http://acu.test/AcumaticaERP\n"
-        "ssh: Administrator@acu.test\n"
-        "tenant: T1\n"
+    (tmp_path / ".env").write_text(
+        "ACU_BASE_URL=http://acu.test/AcumaticaERP\n"
+        "ACU_SSH=Administrator@acu.test\n"
+        "ACU_TENANT=T1\n"
     )
     monkeypatch.chdir(tmp_path)
-    monkeypatch.delenv("ACU_PASSWORD", raising=False)
     probes: list[str] = []
     monkeypatch.setattr(cli, "AcumaticaClient", lambda *a, **k: probes.append("rest"))
     monkeypatch.setattr(TenantManager, "ping", lambda self: probes.append("ping"))
@@ -750,15 +739,16 @@ def test_config_check_ssh_fail_still_probes_rest(
 def test_config_check_discovery_fails_without_base_url(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    # I.cmd config check: the discovery probe is walk-up + parse + base_url,
-    # the primary identity key since T40
-    (tmp_path / "acu.yaml").write_text("ssh: Administrator@acu.test\n")
+    # I.cmd config check: the discovery probe is walk-up + parse +
+    # ACU_BASE_URL, the primary identity key since T40
+    (tmp_path / ".env").write_text("ACU_SSH=Administrator@acu.test\n")
     monkeypatch.chdir(tmp_path)
 
     result = CliRunner().invoke(cli.cli, ["config", "check"])
 
     assert result.exit_code == 1
-    assert "fail discovery: acu.yaml: missing required key base_url" in result.output
+    assert "fail discovery:" in result.output
+    assert "missing required key ACU_BASE_URL (or --url)" in result.output
 
 
 def test_tenant_short_flag_is_gone(wired: Instance) -> None:
@@ -843,8 +833,8 @@ def test_apply_empty_directory_errors(wired: Instance, tmp_path: Path) -> None:
 
 
 def _seed_repo(tmp_path: Path) -> None:
-    """A minimal data repo: acu.yaml plus one seed file per scaffolded dir."""
-    (tmp_path / "acu.yaml").write_text("base_url: http://acu.test/AcumaticaERP\n")
+    """A minimal data repo: .env plus one seed file per scaffolded dir."""
+    (tmp_path / ".env").write_text("ACU_BASE_URL=http://acu.test/AcumaticaERP\n")
     for dirname, fname, body in (
         ("bootstrap", "terms.yaml", BOOTSTRAP_YAML),
         ("baseline", "uoms.yaml", BASELINE),
@@ -878,7 +868,7 @@ def test_bare_diff_without_seed_dirs_errors(
 ) -> None:
     # T44/V9: an empty default would make a bare run a silent no-op - the
     # error names the expected dirs, exit 1
-    (tmp_path / "acu.yaml").write_text("base_url: http://acu.test/AcumaticaERP\n")
+    (tmp_path / ".env").write_text("ACU_BASE_URL=http://acu.test/AcumaticaERP\n")
     monkeypatch.chdir(tmp_path)
 
     result = CliRunner().invoke(cli.cli, ["diff"])

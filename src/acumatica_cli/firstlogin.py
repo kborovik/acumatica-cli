@@ -70,7 +70,7 @@ def _rest_login_works(instance: Instance, tenant: str) -> bool:
         r = http.post(
             "/entity/auth/login",
             json={
-                "name": instance.username,
+                "name": instance.user,
                 "password": instance.password,
                 "tenant": tenant,
             },
@@ -123,7 +123,7 @@ def initialize_admin_password(
         fields.update(
             {
                 TENANT_FIELD: tenant,
-                USER_FIELD: instance.username,
+                USER_FIELD: instance.user,
                 PASS_FIELD: SEED_PASSWORD,
                 LOGIN_BUTTON: "Sign In",
             }
@@ -146,7 +146,7 @@ def initialize_admin_password(
         fields.update(
             {
                 TENANT_FIELD: tenant,
-                USER_FIELD: instance.username,
+                USER_FIELD: instance.user,
                 PASS_FIELD: SEED_PASSWORD,
                 NEW_PASS_FIELD: instance.password,
                 CONFIRM_PASS_FIELD: instance.password,

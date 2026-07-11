@@ -1,23 +1,24 @@
-"""The instance target: global flags over acu.yaml over code defaults.
+"""The instance target: global flags over ACU_* environment over code defaults.
 
-Layered resolution, first set wins per key: global flag, acu.yaml (found by
-walking up from cwd — optional, flags plus environment can supply the full
-config), code default. ``base_url`` and ``ssh`` are the only required
-values — one explicit address per plane (V1), never derived. Credentials
-resolve flag over environment (.env loads only beside a found acu.yaml).
+pydantic-settings owns resolution: ``Instance`` is a ``BaseSettings`` with
+env prefix ``ACU_``, and the sole config file is ``.env`` (found by walking
+up from cwd) carrying where + secrets as ``ACU_*`` vars. The file is
+optional - flags plus the process environment can supply the full config.
+Per key the first set value wins: flag, ``ACU_*`` var (process environment
+over a found ``.env``), code default. ``base_url`` and ``ssh`` are the only
+required address values - one explicit address per plane (V1), never
+derived; the password must resolve via ``--password`` or ``ACU_PASSWORD``.
 """
 
-import os
 from collections.abc import Iterator, Mapping
 from importlib import resources
 from pathlib import Path
 from typing import Any
 
-import yaml
-from dotenv import load_dotenv
-from pydantic import ValidationError, field_validator
+from pydantic import ValidationError, field_validator, model_validator
+from pydantic_settings import BaseSettings, DotEnvSettingsSource, SettingsConfigDict
 
-from .models import Model, validation_summary
+from .models import validation_summary
 
 PLACEHOLDER_HOST = "erp.example.com"
 
@@ -30,7 +31,6 @@ DB_NAME = "AcumaticaDB"
 # Dotfiles are stored dotless (wheel tooling tends to drop dotfiles) and
 # mapped to their real names on write.
 INIT_TEMPLATES = (
-    ("acu.yaml", "acu.yaml"),
     ("env", ".env"),
     ("gitignore", ".gitignore"),
     ("baseline/10-subaccounts.yaml", "baseline/10-subaccounts.yaml"),
@@ -48,20 +48,41 @@ INIT_TEMPLATES = (
 )
 
 
-class Instance(Model):
-    """The resolved target: flags over the acu.yaml top-level map + credentials.
+class Instance(BaseSettings):
+    """The resolved target: flags over ACU_* vars (.env or process) over defaults.
 
     One explicit address per plane (V1), no derivation: ``base_url`` is the
     REST root (scheme + host + site path), ``ssh`` the control-plane
     ``user@host``. Install-layout values are module constants, not fields.
+    Unknown ``ACU_*`` vars are ignored, never errors - the environment and
+    ``.env`` legitimately carry non-config vars (``ACU_DEBUG``).
     """
 
-    api_version: str = "25.200.001"  # V11: /entity/Default/<api_version>/
+    model_config = SettingsConfigDict(
+        env_prefix="ACU_",
+        extra="ignore",
+        frozen=True,
+    )
+
     base_url: str  # REST root: scheme + host + site path
     ssh: str  # control plane: full user@host
     tenant: str = ""
-    username: str
-    password: str
+    api_version: str = "25.200.001"  # V11: /entity/Default/<api_version>/
+    user: str = "admin"  # ACU_USER; the --username flag maps here
+    # required, but enforced in load_instance so a blank scaffolded
+    # ACU_PASSWORD= placeholder and a missing var raise the same named error
+    password: str = ""
+
+    @model_validator(mode="before")
+    @classmethod
+    def _blank_required_is_unset(cls, data: Any) -> Any:
+        # a blank ACU_BASE_URL= / ACU_SSH= line reads as missing, not as an
+        # empty address - the hard error names the unresolved key (V3)
+        if isinstance(data, dict):
+            for key in ("base_url", "ssh"):
+                if data.get(key) == "":
+                    del data[key]
+        return data
 
     @field_validator("base_url")
     @classmethod
@@ -78,7 +99,7 @@ def scaffold(directory: Path, host: str | None = None) -> Iterator[tuple[str, Pa
     """Write the data-repo template set into ``directory``, never overwriting.
 
     Yields ("write" | "skip", path) per template file. ``host`` replaces the
-    placeholder host inside the scaffolded acu.yaml ``base_url``/``ssh``
+    placeholder host inside the scaffolded .env ``ACU_BASE_URL``/``ACU_SSH``
     values; secrets stay placeholders (V2). The directory
     is created if absent. No git init, no gpg - version control and secret
     encryption stay the operator's call.
@@ -91,7 +112,7 @@ def scaffold(directory: Path, host: str | None = None) -> Iterator[tuple[str, Pa
             yield "skip", target
             continue
         content = (pkg / resource).read_text(encoding="utf-8")
-        if host and dest == "acu.yaml":
+        if host and dest == ".env":
             content = content.replace(PLACEHOLDER_HOST, host)
         target.parent.mkdir(parents=True, exist_ok=True)
         target.write_text(content, encoding="utf-8")
@@ -99,14 +120,14 @@ def scaffold(directory: Path, host: str | None = None) -> Iterator[tuple[str, Pa
 
 
 def find_data_root() -> Path | None:
-    """Walk up from cwd to the first directory containing acu.yaml, if any.
+    """Walk up from cwd to the first directory containing .env, if any.
 
-    None is not an error (V3): flags plus environment can supply the full
-    config; only commands needing data files (schema, a bare apply/diff)
-    require a data repo and go through data_root instead.
+    None is not an error (V3): flags plus the process environment can supply
+    the full config; only commands needing data files (schema, a bare
+    apply/diff) require a data repo and go through data_root instead.
     """
     for d in [Path.cwd(), *Path.cwd().parents]:
-        if (d / "acu.yaml").is_file():
+        if (d / ".env").is_file():
             return d
     return None
 
@@ -116,59 +137,46 @@ def data_root() -> Path:
     root = find_data_root()
     if root is None:
         raise SystemExit(
-            "acu.yaml not found in the current directory or any parent - "
+            ".env not found in the current directory or any parent - "
             "run acu from inside a data repo (e.g. acumatica-baseline)"
         )
     return root
 
 
-def read_config(root: Path) -> dict[str, Any]:
-    """Parse the acu.yaml at root; hard error unless it is a mapping."""
-    with open(root / "acu.yaml") as f:
-        config = yaml.safe_load(f)
-    if not isinstance(config, dict):
-        raise SystemExit(
-            "acu.yaml: expected a mapping (base_url + ssh + optional overrides)"
-        )
-    return config
+def read_env_values(env_file: Path) -> dict[str, Any]:
+    """Peek at a .env through the same source pydantic-settings resolves with.
+
+    config check's discovery and secrets probes need per-key visibility
+    (did the file supply ACU_BASE_URL / ACU_PASSWORD?) that a full Instance
+    build deliberately hides; reusing DotEnvSettingsSource keeps the parse
+    identical to live resolution, never a parallel one. Keys come back as
+    Instance field names.
+    """
+    return DotEnvSettingsSource(Instance, env_file=env_file)()
 
 
 def load_instance(overrides: Mapping[str, str | None] | None = None) -> Instance:
-    """Resolve the target: global flags over acu.yaml over code defaults.
+    """Resolve the target: global flags over ACU_* environment over defaults.
 
     ``overrides`` carries the global flags keyed by Instance field name;
-    per key the first set value wins (flag, acu.yaml, code default).
-    Credentials resolve flag over environment - .env loads only from the
-    directory of a found acu.yaml, and no acu.yaml is fine (V3): the hard
-    error comes only when a required value (base_url, ssh, password) is
-    still unresolved after the merge, naming the missing key.
+    per key the first set value wins (flag, ACU_* var - process environment
+    over a found .env - code default). No .env is fine (V3): the hard error
+    comes only when a required value (base_url, ssh, password) is still
+    unresolved after the merge, naming the missing key.
     """
     flags = {k: v for k, v in dict(overrides or {}).items() if v is not None}
     root = find_data_root()
-    config: dict[str, Any] = {}
-    if root is not None:
-        load_dotenv(root / ".env")
-        config = read_config(root)
-        if creds := sorted({"username", "password"} & config.keys()):
-            raise SystemExit(
-                f"acu.yaml: credentials never live in config (V2) - "
-                f"remove {', '.join(creds)}; use flags or .env instead"
-            )
-
-    username = flags.pop("username", None) or os.environ.get("ACU_USER", "admin")
-    password = flags.pop("password", None) or os.environ.get("ACU_PASSWORD")
-    if not password:
+    env_file = root / ".env" if root is not None else None
+    try:
+        # _env_file is a real BaseSettings init override; the synthesized
+        # field-only __init__ signature hides it from the type checker
+        inst = Instance(_env_file=env_file, **flags)  # pyright: ignore[reportCallIssue]
+    except ValidationError as exc:
+        source = str(env_file) if env_file is not None else "config (no .env found)"
+        raise SystemExit(f"{source}: {validation_summary(exc)}") from exc
+    if not inst.password:
         raise SystemExit(
             "password not set (pass --password, "
             "or put ACU_PASSWORD in .env or the environment)"
         )
-
-    try:
-        return Instance(
-            username=username,
-            password=password,
-            **{**config, **flags},
-        )
-    except ValidationError as exc:
-        source = "acu.yaml" if root is not None else "config (no acu.yaml found)"
-        raise SystemExit(f"{source}: {validation_summary(exc)}") from exc
+    return inst

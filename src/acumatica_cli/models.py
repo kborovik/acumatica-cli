@@ -1,8 +1,11 @@
 """pydantic is the repo's model standard.
 
-Every structured value crossing a boundary (acu.yaml maps, baseline YAML,
-sqlcmd rows) is a frozen pydantic model validated at parse time — unknown
-fields are rejected, not silently carried.
+Every structured value crossing a boundary (baseline YAML, sqlcmd rows)
+is a frozen pydantic model validated at parse time — unknown fields are
+rejected, not silently carried. The one exception is config.Instance, a
+pydantic-settings BaseSettings (I.cfg) — still frozen and validated, but
+extra-tolerant, since the environment legitimately carries non-config
+ACU_* vars.
 """
 
 from pydantic import BaseModel, ConfigDict, ValidationError

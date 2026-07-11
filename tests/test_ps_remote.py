@@ -18,7 +18,7 @@ SCRIPT = Path(__file__).parent.parent / "scripts" / "ps-remote"
 
 @pytest.fixture
 def bindir(tmp_path: Path) -> Path:
-    """Stub bin dir: ssh records its argv and exits 0; acu emits config yaml."""
+    """Stub bin dir: ssh records its argv and exits 0; acu emits config .env."""
     stubs = tmp_path / "bin"
     stubs.mkdir()
     capture = tmp_path / "ssh-argv"
@@ -27,7 +27,9 @@ def bindir(tmp_path: Path) -> Path:
     ssh.chmod(0o755)
     acu = stubs / "acu"
     acu.write_text(
-        '#!/bin/sh\necho "host: stub.host"\necho "ssh: Administrator@stub.host"\n'
+        "#!/bin/sh\n"
+        'echo "ACU_BASE_URL=http://stub.host/AcumaticaERP"\n'
+        'echo "ACU_SSH=Administrator@stub.host"\n'
     )
     acu.chmod(0o755)
     return stubs

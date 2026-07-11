@@ -1,8 +1,0 @@
-# scaffolded by `acu config init` - print the fully resolved document with:
-#   acu config show
-# base_url (REST root) and ssh (control-plane user@host) are the only
-# required keys; everything else is a code default you can override here
-# (api_version, tenant, ...). Credentials live in .env
-# (ACU_USER / ACU_PASSWORD), never in this file.
-base_url: http://erp.example.com/AcumaticaERP
-ssh: Administrator@erp.example.com

@@ -9,7 +9,7 @@
 # the filter matches - no per-row selection involved.
 #
 # The 2026 year values are a starting point - edit them for your first
-# financial year, like the acu.yaml host placeholder; keep them in step
+# financial year, like the .env host placeholder; keep them in step
 # with setup/10-financial-year.yaml and setup/20-master-calendar.yaml.
 #
 # done_when probes CompanyPeriod (the per-period status surface): an

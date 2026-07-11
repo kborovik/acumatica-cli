@@ -3,7 +3,6 @@
 /baseline
 /bootstrap
 /setup
-/acu.yaml
 /.env
 
 # dumped API schemas — regenerate with acu schema

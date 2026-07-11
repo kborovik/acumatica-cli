@@ -7,7 +7,7 @@
 # -Command string is interpolated away before the inner powershell sees it;
 # -EncodedCommand carries the script byte-exact (utf-16le, per PowerShell).
 #
-# Host defaults to the resolved `ssh` target of the acu.yaml found by cwd
+# Host defaults to the resolved ACU_SSH target of the .env found by cwd
 # walk-up (`acu config show` - the same load_instance path live cmds use);
 # pass user@host explicitly to probe another box.
 set -eu
@@ -22,7 +22,7 @@ if [ ! -f "$file" ]; then
     exit 1
 fi
 
-host=${2:-$(acu config show | sed -n 's/^ssh: //p')}
+host=${2:-$(acu config show | sed -n 's/^ACU_SSH=//p')}
 if [ -z "$host" ]; then
     echo "x no ssh target resolved - pass user@host" >&2
     exit 1

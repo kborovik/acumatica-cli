@@ -10,8 +10,6 @@ from typing import Concatenate
 
 import click
 import httpx
-import yaml
-from dotenv import load_dotenv
 
 from . import bootstrap, firstlogin, output, seed
 from .client import AcumaticaClient
@@ -20,7 +18,7 @@ from .config import (
     data_root,
     find_data_root,
     load_instance,
-    read_config,
+    read_env_values,
     scaffold,
 )
 from .tenant import TenantManager
@@ -70,6 +68,7 @@ def _version() -> str:
 )
 @click.option(
     "--username",
+    "user",
     default=None,
     help="API username (ACU_USER, default: admin)",
 )
@@ -84,19 +83,19 @@ def cli(ctx: click.Context, **flags: str | None) -> None:
 
     Resolution stays out of the group callback so commands that need no
     target (config init) never trigger it; per key a flag beats the
-    acu.yaml value beats the code default (I.cmd precedence).
+    ACU_* var (.env or process) beats the code default (I.cmd precedence).
     """
     ctx.obj = {k: v for k, v in flags.items() if v is not None}
 
 
 def _resolve_instance(ctx: click.Context) -> Instance:
-    """Build the target Instance: stashed global flags over acu.yaml (V3 lax)."""
+    """Build the target Instance: stashed global flags over ACU_* env (V3 lax)."""
     overrides: dict[str, str] = ctx.obj or {}
     return load_instance(overrides)
 
 
 def pass_instance[**P, R](f: Callable[Concatenate[Instance, P], R]) -> Callable[P, R]:
-    """Like click.pass_obj, resolving acu.yaml at command time, not group time.
+    """Like click.pass_obj, resolving config at command time, not group time.
 
     Every command that talks to an instance takes this decorator; commands
     that must run without a data repo (config init) simply do not.
@@ -265,14 +264,14 @@ def config_group() -> None:
 @click.option(
     "--host",
     default=None,
-    help="Hostname substituted into the scaffolded acu.yaml base_url/ssh "
+    help="Hostname substituted into the scaffolded .env ACU_BASE_URL/ACU_SSH "
     "values (default: a placeholder)",
 )
 @click.argument(
     "directory", required=False, type=click.Path(file_okay=False, path_type=Path)
 )
 def config_init(host: str | None, directory: Path | None) -> None:
-    """Scaffold a data repo: acu.yaml, .env, .gitignore, bootstrap/, baseline/, setup/.
+    """Scaffold a data repo: .env, .gitignore, bootstrap/, baseline/, setup/.
 
     Templates ship with the package; every value is a placeholder or a
     verified minimal example - no secrets. Existing files are never
@@ -287,23 +286,19 @@ def config_init(host: str | None, directory: Path | None) -> None:
 @config_group.command("show")
 @pass_instance
 def config_show(inst: Instance) -> None:
-    """Print the fully resolved instance as a complete acu.yaml document.
+    """Print the fully resolved configuration as a complete .env document.
 
     Resolves through the same load_instance path every live command uses,
     so the printed values are exactly what a live command would trust -
-    global flag overrides (--url, --ssh, ...) included.
-    Credentials never appear as keys - the resolved username is echoed as
-    a comment only, the password in no form at all. Redirect to a file and
-    edit: the output loads back through load_instance unchanged.
+    global flag overrides (--url, --ssh, ...) included. The password is
+    never emitted in any form (V2): no ACU_PASSWORD key, no value.
+    Redirect to a file and edit: the output loads back through
+    load_instance unchanged, the password supplied out of band.
     """
-    doc = inst.model_dump(exclude={"username", "password"})
-    output.data("# resolved by `acu config show` - a complete acu.yaml")
-    output.data(
-        "# credentials come from .env (ACU_USER / ACU_PASSWORD), never from here"
-    )
-    output.data(f"# username: {inst.username}")
-    for line in yaml.safe_dump(doc, sort_keys=False).splitlines():
-        output.data(line)
+    output.data("# resolved by `acu config show` - a complete .env")
+    output.data("# ACU_PASSWORD comes from .env or the environment, never from here")
+    for field, value in inst.model_dump(exclude={"password"}).items():
+        output.data(f"ACU_{field.upper()}={value}")
 
 
 @config_group.command("check")
@@ -311,37 +306,40 @@ def config_show(inst: Instance) -> None:
 def config_check(ctx: click.Context) -> None:
     """Read-only preflight of the resolved target, one ok/fail line per probe.
 
-    Dependency order: discovery (acu.yaml walk-up + parse + base_url), then
-    secrets (.env + ACU_PASSWORD), then REST (login, landed-tenant verify,
+    Dependency order: discovery (.env walk-up + parse + ACU_BASE_URL), then
+    secrets (ACU_PASSWORD resolved), then REST (login, landed-tenant verify,
     logout) and ssh (trivial remote command) probed independently - a
     discovery or secrets failure stops, a REST failure still probes ssh and
-    vice versa. Discovery is lax (V3): no acu.yaml passes when --url covers
-    base_url, and flags-only runs (no acu.yaml, no .env) are valid. Writes
+    vice versa. Discovery is lax (V3): no .env passes when --url covers
+    base_url, and flags-only runs (no .env anywhere) are valid. Writes
     nothing: no PUTs, no tenant CRUD. Exit 0 when every probe passes, 1 on
     any failure.
     """
     overrides: dict[str, str] = ctx.obj or {}
     # discovery (V3): lax walk-up + parse; base_url (the primary identity
-    # key) must be resolvable from the flag or the file
+    # key) must be resolvable from the flag, the process environment, or
+    # the found .env - the same sources load_instance merges
+    root = find_data_root()
     try:
-        root = find_data_root()
-        config = read_config(root) if root is not None else {}
-        if not (overrides.get("base_url") or config.get("base_url")):
-            source = "acu.yaml:" if root is not None else "no acu.yaml found and"
-            raise SystemExit(f"{source} missing required key base_url (or --url)")
-    except (SystemExit, yaml.YAMLError) as exc:
+        env_values = read_env_values(root / ".env") if root is not None else {}
+        if not (
+            overrides.get("base_url")
+            or os.environ.get("ACU_BASE_URL")
+            or env_values.get("base_url")
+        ):
+            source = f"{root / '.env'}:" if root is not None else "no .env found and"
+            raise SystemExit(f"{source} missing required key ACU_BASE_URL (or --url)")
+    except SystemExit as exc:
         output.data(f"fail discovery: {exc}")
         raise SystemExit(1) from exc
-    found = root / "acu.yaml" if root is not None else "no acu.yaml - flags only"
+    found = root / ".env" if root is not None else "no .env - flags only"
     output.data(f"ok discovery ({found})")
 
-    # secrets: same sources as load_instance - the flag, then .env beside a
-    # found acu.yaml, then the environment; the value is never printed (V2)
-    if root is not None:
-        load_dotenv(root / ".env")
+    # secrets: same sources as load_instance - the flag, then the process
+    # environment, then the found .env; the value is never printed (V2)
     if overrides.get("password"):
         output.data("ok secrets (--password)")
-    elif os.environ.get("ACU_PASSWORD"):
+    elif os.environ.get("ACU_PASSWORD") or env_values.get("password"):
         output.data("ok secrets (ACU_PASSWORD set)")
     else:
         output.data(
@@ -380,7 +378,7 @@ def default_seed_dirs() -> tuple[Path, ...]:
     """The init-scaffolded seed dirs that exist at the data-repo root.
 
     apply and diff default to these when called with no FILES, in fixed
-    order (bootstrap, baseline, setup); the data repo is the acu.yaml dir
+    order (bootstrap, baseline, setup); the data repo is the .env dir
     (V3 walk-up). None existing is an error - an empty default would make
     a bare run a silent no-op. Paths come back relative to cwd (the root is
     always cwd or an ancestor), so a bare run prints exactly what naming
