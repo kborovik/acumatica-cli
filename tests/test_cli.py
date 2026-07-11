@@ -340,7 +340,7 @@ def test_config_show_round_trips_through_load_instance(
 
 
 def test_config_init_scaffolds_data_repo(tmp_path: Path) -> None:
-    # I.cmd config init: 11-file template set into a created-if-absent dir;
+    # I.cmd config init: 15-file template set into a created-if-absent dir;
     # runs where V3 discovery finds no acu.yaml (tmp_path has none up-tree)
     repo = tmp_path / "repo"
     result = CliRunner().invoke(
@@ -356,15 +356,19 @@ def test_config_init_scaffolds_data_repo(tmp_path: Path) -> None:
         "baseline/20-accounts.yaml",
         "baseline/40-ledger.yaml",
         "baseline/50-gl-preferences.yaml",
+        "baseline/60-ledger-company.yaml",
         "baseline/90-uoms.yaml",
         "bootstrap/company.yaml",
         "bootstrap/credit-terms.yaml",
         "bootstrap/features.yaml",
+        "setup/10-financial-year.yaml",
+        "setup/20-master-calendar.yaml",
+        "setup/30-open-periods.yaml",
     ]
     for rel in expected:
         assert (repo / rel).is_file(), rel
     assert (
-        len([ln for ln in result.output.splitlines() if ln.startswith("write ")]) == 11
+        len([ln for ln in result.output.splitlines() if ln.startswith("write ")]) == 15
     )
     acu_yaml = (repo / "acu.yaml").read_text()
     assert "host: erp.test" in acu_yaml
@@ -392,7 +396,7 @@ def test_config_init_rerun_skips_and_never_overwrites(tmp_path: Path) -> None:
 
     assert result.exit_code == 0
     lines = result.output.splitlines()
-    assert len(lines) == 11
+    assert len(lines) == 15
     assert all(ln.startswith("skip ") and ln.endswith(" (exists)") for ln in lines)
     assert (tmp_path / "acu.yaml").read_text() == "host: hand.edited\n"
 
@@ -418,7 +422,8 @@ def test_config_init_scaffold_round_trips(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     # T26 verify: empty dir -> init --host -> config show succeeds and
-    # apply --dry-run parses every seed template (features.yaml skipped)
+    # apply --dry-run parses every seed template (features.yaml skipped);
+    # T39 extends the round-trip over setup/ action files
     CliRunner().invoke(cli.cli, ["config", "init", "--host", "erp.test", str(tmp_path)])
     monkeypatch.chdir(tmp_path)
     monkeypatch.setenv("ACU_PASSWORD", "secret")
@@ -429,7 +434,7 @@ def test_config_init_scaffold_round_trips(
     assert "host: erp.test" in shown.output
 
     applied = CliRunner().invoke(
-        cli.cli, ["apply", "--dry-run", "bootstrap", "baseline"]
+        cli.cli, ["apply", "--dry-run", "bootstrap", "baseline", "setup"]
     )
     assert applied.exit_code == 0
     assert "would PUT Company [COMPANY]" in applied.output
@@ -439,17 +444,27 @@ def test_config_init_scaffold_round_trips(
     assert "would PUT Account [33000]" in applied.output
     assert "would PUT Ledger [ACTUAL]" in applied.output
     assert "would PUT GLPreferences [32000]" in applied.output
+    assert "would PUT LedgerCompany [ACTUAL]" in applied.output
     assert "would PUT UnitsOfMeasure [HOUR]" in applied.output
-    assert applied.output.count("(dry run)") == 7
+    assert "would invoke GeneratePeriods" in applied.output
+    assert "would invoke GenerateCalendar" in applied.output
+    assert "would invoke ProcessAll" in applied.output
+    assert applied.output.count("(dry run)") == 11
     # V22: numbered prefixes encode apply order - subaccounts before
     # accounts before ledger before GL preferences (which references
-    # accounts 32000/33000), uoms last
+    # accounts 32000/33000) before the org-ledger link, uoms last; the
+    # setup/ action chain follows the whole baseline (financial year
+    # before calendar generation before period activation)
     order = [
         applied.output.index("would PUT Subaccount ["),
         applied.output.index("would PUT Account ["),
         applied.output.index("would PUT Ledger ["),
         applied.output.index("would PUT GLPreferences ["),
+        applied.output.index("would PUT LedgerCompany ["),
         applied.output.index("would PUT UnitsOfMeasure ["),
+        applied.output.index("would invoke GeneratePeriods"),
+        applied.output.index("would invoke GenerateCalendar"),
+        applied.output.index("would invoke ProcessAll"),
     ]
     assert order == sorted(order)
 
@@ -473,6 +488,25 @@ def test_config_init_template_set_is_feature_closed(tmp_path: Path) -> None:
         "MultiCompany",
     ]:
         assert name in features
+
+
+def test_config_init_template_set_is_reference_closed(tmp_path: Path) -> None:
+    # V22 reference closure (B16 sibling of B15): every OrganizationID an
+    # org-referencing template carries must be the organization the shipped
+    # set itself creates - bootstrap/company.yaml's AcctCD - or a scaffolded
+    # provision 422s on an org that does not exist
+    CliRunner().invoke(cli.cli, ["config", "init", str(tmp_path)])
+
+    company = yaml.safe_load((tmp_path / "bootstrap" / "company.yaml").read_text())
+    acct_cd = company["records"][0]["AcctCD"]
+    ledger_link = yaml.safe_load(
+        (tmp_path / "baseline" / "60-ledger-company.yaml").read_text()
+    )
+    assert ledger_link["records"][0]["OrganizationID"] == acct_cd
+    open_periods = yaml.safe_load(
+        (tmp_path / "setup" / "30-open-periods.yaml").read_text()
+    )
+    assert open_periods["record"]["OrganizationID"] == acct_cd
 
 
 @pytest.fixture

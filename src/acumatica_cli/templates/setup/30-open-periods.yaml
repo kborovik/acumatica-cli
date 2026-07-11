@@ -1,0 +1,33 @@
+# Period activation (GL503000) - generated periods land Inactive and GL
+# posting needs Open (batch PUT 422 "financial period is inactive"). The
+# GL201100 Open Periods button redirects to this processing screen
+# (unfollowable over the contract API), so the seed drives GL503000
+# directly: the record sets the processing filter (Action takes the
+# stored word 'Open'; OrganizationID is the org CD through the
+# Organization selector - COMPANY, the organization
+# bootstrap/company.yaml creates), and ProcessAll processes every period
+# the filter matches - no per-row selection involved.
+#
+# The 2026 year values are a starting point - edit them for your first
+# financial year, like the acu.yaml host placeholder; keep them in step
+# with setup/10-financial-year.yaml and setup/20-master-calendar.yaml.
+#
+# done_when probes CompanyPeriod (the per-period status surface): an
+# Open-status row for the year means activation ran. Both filter fields
+# live on that one view - a conjunction spanning views answers 200 with
+# an empty list and the probe would never fire.
+#
+# APPLY ORDER (dir expansion sorts *.yaml alphabetically; numbered
+# prefixes encode order): after 20-master-calendar.yaml - activation
+# consumes the periods generation creates.
+action: ProcessAll
+entity: ManagePeriods
+endpoint: Bootstrap/1.4.0
+record:
+  Action: Open
+  FromYear: "2026"
+  ToYear: "2026"
+  OrganizationID: COMPANY
+done_when:
+  entity: CompanyPeriod
+  filter: FinancialYear eq '2026' and Status eq 'Open'

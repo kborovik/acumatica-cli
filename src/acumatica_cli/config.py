@@ -30,10 +30,14 @@ INIT_TEMPLATES = (
     ("baseline/20-accounts.yaml", "baseline/20-accounts.yaml"),
     ("baseline/40-ledger.yaml", "baseline/40-ledger.yaml"),
     ("baseline/50-gl-preferences.yaml", "baseline/50-gl-preferences.yaml"),
+    ("baseline/60-ledger-company.yaml", "baseline/60-ledger-company.yaml"),
     ("baseline/90-uoms.yaml", "baseline/90-uoms.yaml"),
     ("bootstrap/company.yaml", "bootstrap/company.yaml"),
     ("bootstrap/credit-terms.yaml", "bootstrap/credit-terms.yaml"),
     ("bootstrap/features.yaml", "bootstrap/features.yaml"),
+    ("setup/10-financial-year.yaml", "setup/10-financial-year.yaml"),
+    ("setup/20-master-calendar.yaml", "setup/20-master-calendar.yaml"),
+    ("setup/30-open-periods.yaml", "setup/30-open-periods.yaml"),
 )
 
 

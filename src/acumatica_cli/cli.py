@@ -220,7 +220,7 @@ def config_group() -> None:
     "directory", required=False, type=click.Path(file_okay=False, path_type=Path)
 )
 def config_init(host: str | None, directory: Path | None) -> None:
-    """Scaffold a data repo: acu.yaml, .env, .gitignore, bootstrap/, baseline/.
+    """Scaffold a data repo: acu.yaml, .env, .gitignore, bootstrap/, baseline/, setup/.
 
     Templates ship with the package; every value is a placeholder or a
     verified minimal example - no secrets. Existing files are never

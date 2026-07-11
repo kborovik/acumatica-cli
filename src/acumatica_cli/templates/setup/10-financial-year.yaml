@@ -1,0 +1,27 @@
+# Financial year setup (GL101000) - the FinYearSetup singleton that
+# master-calendar generation requires (GL201000 errors before it starts
+# while the row is missing). Realized by the GeneratePeriods action (the
+# graph's AutoFill) rather than a keyed PUT: a bare field PUT fails the
+# "configure all the Financial Periods" validation, the action fills the
+# period-detail grid that validation demands. Dates quoted: the seed
+# pipeline ships YAML values as JSON verbatim, an unquoted date would
+# parse into a date object the payload encoder rejects.
+#
+# The 2026 first-year value is a starting point - edit it for your first
+# financial year, like the acu.yaml host placeholder; keep it in step
+# with setup/20-master-calendar.yaml and setup/30-open-periods.yaml.
+#
+# done_when probes the action's own entity, no filter: the setup
+# singleton either exists (skip / no drift) or does not (invoke / drift).
+#
+# APPLY ORDER (dir expansion sorts *.yaml alphabetically; numbered
+# prefixes encode order): before 20-master-calendar.yaml - calendar
+# generation consumes this setup row.
+action: GeneratePeriods
+entity: FinancialYearSettings
+endpoint: Bootstrap/1.4.0
+record:
+  BegFinYear: "2026-01-01"
+  FinPeriods: 12
+  PeriodType: Month
+done_when: {}

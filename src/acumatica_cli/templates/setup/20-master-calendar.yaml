@@ -1,0 +1,28 @@
+# Master financial calendar (GL201000) - generate the periods from the
+# financial-year setup. Realized by the GenerateCalendar action
+# (GenerateYears + the FromYear/ToYear dialog parameters). Years travel
+# as strings: the view keys are string Year fields, not numbers.
+#
+# The 2026 year values are a starting point - edit them for your first
+# financial year, like the acu.yaml host placeholder; keep them in step
+# with setup/10-financial-year.yaml and setup/30-open-periods.yaml.
+#
+# done_when probes CompanyCalendar (GL201100), not the master calendar
+# itself: master rows alone do not post - a GL batch needs the
+# per-company financial-period rows, and the company calendar derives
+# from the master, so the company surface is the stronger done evidence.
+#
+# APPLY ORDER (dir expansion sorts *.yaml alphabetically; numbered
+# prefixes encode order): after 10-financial-year.yaml - generation
+# consumes the FinYearSetup row it creates.
+action: GenerateCalendar
+entity: MasterCalendar
+endpoint: Bootstrap/1.4.0
+record:
+  FinancialYear: "2026"
+parameters:
+  FromYear: "2026"
+  ToYear: "2026"
+done_when:
+  entity: CompanyCalendar
+  filter: FinancialYear eq '2026'
