@@ -50,6 +50,10 @@ entities:
   file: baseline/10-subaccounts.yaml
   features: [SubAccount] # GL203000 is feature-gated (B15)
   strip:
+  # server-assigned surrogate identity (instance-global sequence) - a
+  # sourced value is another tenant's row number, so a replayed tenant
+  # diffs dirty forever (B11 class, T50 round-trip)
+  - SubaccountID
   # server audit stamp: every PUT moves it, so a sourced value is
   # permanent drift (B11 class)
   - LastModifiedDateTime
@@ -67,7 +71,10 @@ entities:
   # so a sourced value diffs dirty forever (B11)
   - ChartOfAccountsOrder
   - CashAccount
-  # server audit stamp (B11 class)
+  # server-assigned surrogate identity (B11 class, T50 round-trip)
+  - AccountID
+  # server audit stamps (B11 class)
+  - CreatedDateTime
   - LastModifiedDateTime
 
 - entity: Currency
@@ -91,6 +98,8 @@ entities:
   # the server derives an Actual ledger's currency from the company base
   # currency - a sourced value is redundant or a rejected write (T34)
   - CurrencyID
+  # server audit stamp (B11 class, T50 round-trip)
+  - LastModifiedDateTime
 
 - entity: GLPreferences
   endpoint: bootstrap
