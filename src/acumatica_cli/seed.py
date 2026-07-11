@@ -74,7 +74,7 @@ def _bootstrap_endpoint() -> tuple[str, frozenset[str]]:
 BOOTSTRAP_ENDPOINT, BOOTSTRAP_ENTITIES = _bootstrap_endpoint()
 # The code-default instance endpoint, for the V20 error message - read off
 # the Instance field default rather than hand-synced (V11: one spelling).
-_DEFAULT_ENDPOINT: str = Instance.model_fields["endpoint"].default
+_DEFAULT_ENDPOINT: str = f"Default/{Instance.model_fields['api_version'].default}"
 
 
 class BaselineFile(Model):

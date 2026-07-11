@@ -63,7 +63,7 @@ class DummyClient:
 @pytest.fixture
 def wired(monkeypatch: pytest.MonkeyPatch, instance: Instance) -> Instance:
     """Point the CLI at the fake instance and a no-op REST client."""
-    monkeypatch.setattr(cli, "load_instance", lambda host=None: instance)
+    monkeypatch.setattr(cli, "load_instance", lambda: instance)
     monkeypatch.setattr(cli, "AcumaticaClient", DummyClient)
     return instance
 
@@ -134,7 +134,10 @@ def test_tenant_list_renders_table(
     result = CliRunner().invoke(cli.cli, ["tenant", "list"])
 
     assert result.exit_code == 0
-    assert "Tenants on acu.test" in result.output
+    # rich wraps the table title to the console width, so match the
+    # fragments rather than the one-line concatenation
+    assert "Tenants on" in result.output
+    assert "http://acu.test/AcumaticaERP" in result.output
     assert "Company" in result.output
 
 
@@ -212,7 +215,10 @@ def test_provision_chains_create_bootstrap_apply_diff(provision_env: list[str]) 
         "diff:uoms.yaml",
     ]
     # every session targets the provisioned tenant, not the config default
-    assert "+ no drift on acu.test/Scratch (2 file(s))" in result.stderr
+    assert (
+        "+ no drift on Scratch (http://acu.test/AcumaticaERP, 2 file(s))"
+        in result.stderr
+    )
 
 
 def test_provision_skips_create_when_tenant_exists(
@@ -279,7 +285,7 @@ def test_provision_drift_exits_two(
     )
 
     assert result.exit_code == 2
-    assert "x DRIFT on acu.test/Scratch:" in result.stderr
+    assert "x DRIFT on Scratch (http://acu.test/AcumaticaERP):" in result.stderr
     assert drift in result.output
 
 
@@ -310,9 +316,9 @@ def test_config_show_emits_yaml_without_credentials(wired: Instance) -> None:
     result = CliRunner().invoke(cli.cli, ["config", "show"])
 
     assert result.exit_code == 0
-    assert "host: acu.test" in result.output
     assert "base_url: http://acu.test/AcumaticaERP" in result.output
     assert "ssh: user@acu.test" in result.output
+    assert "api_version: 25.200.001" in result.output
     assert "password" not in result.output
     assert "username" not in result.output
     assert "pw" not in result.output
@@ -323,7 +329,11 @@ def test_config_show_round_trips_through_load_instance(
 ) -> None:
     # I.cfg: `acu config show > acu.yaml` is a valid config - reloading it
     # resolves to the identical instance (the whole point of the YAML emit)
-    (tmp_path / "acu.yaml").write_text("host: acu.test\ntenant: T1\n")
+    (tmp_path / "acu.yaml").write_text(
+        "base_url: http://acu.test/AcumaticaERP\n"
+        "ssh: Administrator@acu.test\n"
+        "tenant: T1\n"
+    )
     monkeypatch.chdir(tmp_path)
     monkeypatch.setenv("ACU_PASSWORD", "secret")
     monkeypatch.delenv("ACU_USER", raising=False)
@@ -370,8 +380,10 @@ def test_config_init_scaffolds_data_repo(tmp_path: Path) -> None:
     assert (
         len([ln for ln in result.output.splitlines() if ln.startswith("write ")]) == 15
     )
+    # --host substitutes into both scaffolded values (I.cmd config init)
     acu_yaml = (repo / "acu.yaml").read_text()
-    assert "host: erp.test" in acu_yaml
+    assert "base_url: http://erp.test/AcumaticaERP" in acu_yaml
+    assert "ssh: Administrator@erp.test" in acu_yaml
     assert "erp.example.com" not in acu_yaml
 
 
@@ -383,14 +395,16 @@ def test_config_init_defaults_to_cwd_with_placeholder_host(
     result = CliRunner().invoke(cli.cli, ["config", "init"])
 
     assert result.exit_code == 0
-    assert "host: erp.example.com" in (tmp_path / "acu.yaml").read_text()
+    acu_yaml = (tmp_path / "acu.yaml").read_text()
+    assert "base_url: http://erp.example.com/AcumaticaERP" in acu_yaml
+    assert "ssh: Administrator@erp.example.com" in acu_yaml
 
 
 def test_config_init_rerun_skips_and_never_overwrites(tmp_path: Path) -> None:
     # I.cmd config init: per-file skip-if-exists - `skip <file> (exists)`,
     # exit 0, zero mutations
     CliRunner().invoke(cli.cli, ["config", "init", str(tmp_path)])
-    (tmp_path / "acu.yaml").write_text("host: hand.edited\n")
+    (tmp_path / "acu.yaml").write_text("base_url: http://hand.edited/X\n")
 
     result = CliRunner().invoke(cli.cli, ["config", "init", str(tmp_path)])
 
@@ -398,7 +412,7 @@ def test_config_init_rerun_skips_and_never_overwrites(tmp_path: Path) -> None:
     lines = result.output.splitlines()
     assert len(lines) == 15
     assert all(ln.startswith("skip ") and ln.endswith(" (exists)") for ln in lines)
-    assert (tmp_path / "acu.yaml").read_text() == "host: hand.edited\n"
+    assert (tmp_path / "acu.yaml").read_text() == "base_url: http://hand.edited/X\n"
 
 
 def test_config_init_writes_no_secrets(tmp_path: Path) -> None:
@@ -431,7 +445,7 @@ def test_config_init_scaffold_round_trips(
 
     shown = CliRunner().invoke(cli.cli, ["config", "show"])
     assert shown.exit_code == 0
-    assert "host: erp.test" in shown.output
+    assert "base_url: http://erp.test/AcumaticaERP" in shown.output
 
     applied = CliRunner().invoke(
         cli.cli, ["apply", "--dry-run", "bootstrap", "baseline", "setup"]
@@ -517,7 +531,11 @@ def check_repo(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
     monkeypatch record the pre-test state so the .env-sourced value never
     leaks into later tests.
     """
-    (tmp_path / "acu.yaml").write_text("host: acu.test\ntenant: T1\n")
+    (tmp_path / "acu.yaml").write_text(
+        "base_url: http://acu.test/AcumaticaERP\n"
+        "ssh: Administrator@acu.test\n"
+        "tenant: T1\n"
+    )
     (tmp_path / ".env").write_text("ACU_PASSWORD=secret\n")
     monkeypatch.chdir(tmp_path)
     monkeypatch.setenv("ACU_PASSWORD", "shadow")
@@ -585,7 +603,11 @@ def test_config_check_secrets_fail_stops(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     # I.cmd config check: discovery/secrets fail stops - no live probes run
-    (tmp_path / "acu.yaml").write_text("host: acu.test\ntenant: T1\n")
+    (tmp_path / "acu.yaml").write_text(
+        "base_url: http://acu.test/AcumaticaERP\n"
+        "ssh: Administrator@acu.test\n"
+        "tenant: T1\n"
+    )
     monkeypatch.chdir(tmp_path)
     monkeypatch.delenv("ACU_PASSWORD", raising=False)
     probes: list[str] = []
@@ -638,27 +660,31 @@ def test_config_check_ssh_fail_still_probes_rest(
     assert "fail ssh: remote command failed (255)" in result.output
 
 
-def test_global_host_flag_rederives_urls(
+def test_config_check_discovery_fails_without_base_url(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    # I.cmd: --host swaps the acu.yaml host before the Instance is built,
-    # so base_url/ssh re-derive; resolution runs through the same
-    # load_instance path config show prints (I.cfg)
-    (tmp_path / "acu.yaml").write_text("host: acu.test\n")
+    # I.cmd config check: the discovery probe is walk-up + parse + base_url,
+    # the primary identity key since T40
+    (tmp_path / "acu.yaml").write_text("ssh: Administrator@acu.test\n")
     monkeypatch.chdir(tmp_path)
-    monkeypatch.setenv("ACU_PASSWORD", "secret")
-    monkeypatch.delenv("ACU_USER", raising=False)
 
+    result = CliRunner().invoke(cli.cli, ["config", "check"])
+
+    assert result.exit_code == 1
+    assert "fail discovery: acu.yaml: missing required key base_url" in result.output
+
+
+def test_global_host_flag_is_gone(wired: Instance) -> None:
+    # T40: derivation retired, nothing for a global --host to re-run; the
+    # flag survives only on config init as template substitution
     result = CliRunner().invoke(cli.cli, ["--host", "edge.example", "config", "show"])
 
-    assert result.exit_code == 0
-    assert "host: edge.example" in result.output
-    assert "base_url: http://edge.example/AcumaticaERP" in result.output
-    assert "ssh: Administrator@edge.example" in result.output
+    assert result.exit_code != 0
+    assert "No such option" in result.output
 
 
-def test_global_host_flag_rejected_after_subcommand(wired: Instance) -> None:
-    # V16: globals valid only before the subcommand
+def test_host_flag_rejected_on_other_subcommands(wired: Instance) -> None:
+    # V16: --host belongs to config init alone
     result = CliRunner().invoke(cli.cli, ["config", "show", "--host", "edge.example"])
 
     assert result.exit_code != 0
@@ -682,7 +708,7 @@ def test_diff_clean_exits_zero(
     result = CliRunner().invoke(cli.cli, ["diff", str(_baseline(tmp_path))])
 
     assert result.exit_code == 0
-    assert "+ no drift on acu.test/T1 (1 file(s))" in result.stderr
+    assert "+ no drift on T1 (http://acu.test/AcumaticaERP, 1 file(s))" in result.stderr
 
 
 def test_diff_directory_expands_to_yaml_files(
@@ -695,7 +721,7 @@ def test_diff_directory_expands_to_yaml_files(
     result = CliRunner().invoke(cli.cli, ["diff", str(tmp_path)])
 
     assert result.exit_code == 0
-    assert "+ no drift on acu.test/T1 (2 file(s))" in result.stderr
+    assert "+ no drift on T1 (http://acu.test/AcumaticaERP, 2 file(s))" in result.stderr
 
 
 def test_directory_expansion_skips_features_yaml(
@@ -708,7 +734,7 @@ def test_directory_expansion_skips_features_yaml(
     result = CliRunner().invoke(cli.cli, ["diff", str(tmp_path)])
 
     assert result.exit_code == 0
-    assert "+ no drift on acu.test/T1 (1 file(s))" in result.stderr
+    assert "+ no drift on T1 (http://acu.test/AcumaticaERP, 1 file(s))" in result.stderr
 
 
 def test_apply_empty_directory_errors(wired: Instance, tmp_path: Path) -> None:
@@ -729,7 +755,7 @@ def test_diff_drift_exits_two_with_lines_on_stdout(
 
     # the load-bearing contract (V9): exit 0 ok, 1 error, 2 drift
     assert result.exit_code == 2
-    assert "x DRIFT on acu.test/T1:" in result.stderr
+    assert "x DRIFT on T1 (http://acu.test/AcumaticaERP):" in result.stderr
     assert drift in result.output
 
 

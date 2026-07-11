@@ -53,25 +53,20 @@ def _version() -> str:
 @click.option(
     "-t", "--tenant", default=None, help="Override the tenant API sessions sign in to"
 )
-@click.option(
-    "--host",
-    default=None,
-    help="Override the acu.yaml host (base_url/ssh re-derive from it)",
-)
 @click.pass_context
-def cli(ctx: click.Context, tenant: str | None, host: str | None) -> None:
+def cli(ctx: click.Context, tenant: str | None) -> None:
     """Stash the global flags; the instance resolves lazily per command.
 
     Resolution stays out of the group callback so `acu config init` can run
     where no acu.yaml exists yet (V3 discovery would hard-error).
     """
-    ctx.obj = (tenant, host)
+    ctx.obj = tenant
 
 
 def _resolve_instance(ctx: click.Context) -> Instance:
     """Build the target Instance from acu.yaml plus the stashed global flags."""
-    tenant, host = ctx.obj
-    inst = load_instance(host=host)
+    tenant: str | None = ctx.obj
+    inst = load_instance()
     if tenant is not None:
         inst = inst.model_copy(update={"tenant": tenant})
     return inst
@@ -117,7 +112,7 @@ def tenant_list(inst: Instance) -> None:
     """List tenants: CompanyID, sign-in name, internal CD, type."""
     tenants = TenantManager(inst).list()
     output.table(
-        f"Tenants on {inst.host}",
+        f"Tenants on {inst.base_url}",
         ("ID", "Login", "CD", "Type"),
         (
             (str(t.company_id), t.login_name, t.company_cd, t.company_type)
@@ -171,7 +166,7 @@ def tenant_create(
     screen's first-login password-change flow as fallback).
     """
     mgr = TenantManager(inst)
-    with output.step(f"creating tenant {company_id} ({login_name}) on {inst.host}"):
+    with output.step(f"creating tenant {company_id} ({login_name}) on {inst.base_url}"):
         raw = mgr.create(company_id, login_name, parent_id, not hidden, company_type)
     output.data(raw.splitlines()[-1] if raw.strip() else "created")
     if no_init:
@@ -214,7 +209,8 @@ def config_group() -> None:
 @click.option(
     "--host",
     default=None,
-    help="Instance hostname written into acu.yaml (default: a placeholder)",
+    help="Hostname substituted into the scaffolded acu.yaml base_url/ssh "
+    "values (default: a placeholder)",
 )
 @click.argument(
     "directory", required=False, type=click.Path(file_okay=False, path_type=Path)
@@ -256,21 +252,19 @@ def config_show(inst: Instance) -> None:
 def config_check(ctx: click.Context) -> None:
     """Read-only preflight of the resolved target, one ok/fail line per probe.
 
-    Dependency order: discovery (acu.yaml walk-up + parse + host), then
+    Dependency order: discovery (acu.yaml walk-up + parse + base_url), then
     secrets (.env + ACU_PASSWORD), then REST (login, landed-tenant verify,
     logout) and ssh (trivial remote command) probed independently - a
     discovery or secrets failure stops, a REST failure still probes ssh and
     vice versa. Writes nothing: no PUTs, no tenant CRUD. Exit 0 when every
     probe passes, 1 on any failure.
     """
-    _tenant, host = ctx.obj
-    # discovery (V3): walk-up + parse + host; the --host global satisfies a
-    # missing host key exactly as it would for a live command
+    # discovery (V3): walk-up + parse + base_url (the primary identity key)
     try:
         root = data_root()
         config = read_config(root)
-        if not (host or config.get("host")):
-            raise SystemExit("acu.yaml: missing required key host")
+        if not config.get("base_url"):
+            raise SystemExit("acu.yaml: missing required key base_url")
     except (SystemExit, yaml.YAMLError) as exc:
         output.data(f"fail discovery: {exc}")
         raise SystemExit(1) from exc
@@ -377,9 +371,11 @@ def provision_cmd(
 
     mgr = TenantManager(inst)
     if any(t.login_name == login_name for t in mgr.list()):
-        output.info(f"tenant {login_name} exists on {inst.host} - skipping create")
+        output.info(f"tenant {login_name} exists on {inst.base_url} - skipping create")
     else:
-        with output.step(f"creating tenant {company_id} ({login_name}) on {inst.host}"):
+        with output.step(
+            f"creating tenant {company_id} ({login_name}) on {inst.base_url}"
+        ):
             raw = mgr.create(company_id, login_name, parent_id, True, company_type)
         output.data(raw.splitlines()[-1] if raw.strip() else "created")
         _init_tenant(inst, mgr, login_name)
@@ -408,7 +404,9 @@ def provision_cmd(
     with AcumaticaClient(inst) as client:
         for path in seed_paths:
             baseline = seed.load_baseline(path)
-            output.data(f"{path} -> {inst.host}/{inst.tenant} ({baseline.entity})")
+            output.data(
+                f"{path} -> {inst.tenant} on {inst.base_url} ({baseline.entity})"
+            )
             n = seed.apply(client, baseline)
             output.data(f"  {n} record(s)")
         # diff everything applied, bootstrap YAML included - a PUT that
@@ -432,7 +430,9 @@ def apply_cmd(inst: Instance, files: tuple[Path, ...], dry_run: bool) -> None:
     with AcumaticaClient(inst) as client:
         for path in expand_files(files):
             baseline = seed.load_baseline(path)
-            output.data(f"{path} -> {inst.host}/{inst.tenant} ({baseline.entity})")
+            output.data(
+                f"{path} -> {inst.tenant} on {inst.base_url} ({baseline.entity})"
+            )
             n = seed.apply(client, baseline, dry_run=dry_run)
             output.data(f"  {n} record(s){' (dry run)' if dry_run else ''}")
 
@@ -454,9 +454,11 @@ def schema_cmd(inst: Instance, out_dir: Path | None) -> None:
     """
     if out_dir is None:
         out_dir = data_root() / "schemas"
-    out_file = out_dir / f"swagger-{inst.endpoint.replace('/', '-')}.json"
+    out_file = out_dir / f"swagger-Default-{inst.api_version}.json"
     with (
-        output.step(f"dumping OpenAPI schema from {inst.host} ({inst.endpoint})"),
+        output.step(
+            f"dumping OpenAPI schema from {inst.base_url} (Default/{inst.api_version})"
+        ),
         AcumaticaClient(inst) as client,
     ):
         raw = client.swagger()
@@ -487,8 +489,8 @@ def diff_cmd(inst: Instance, files: tuple[Path, ...]) -> None:
 def _exit_on_drift(inst: Instance, drifts: list[str], files: int) -> None:
     """Report drift lines and exit 2 (the load-bearing diff contract, V9)."""
     if drifts:
-        output.error(f"DRIFT on {inst.host}/{inst.tenant}:")
+        output.error(f"DRIFT on {inst.tenant} ({inst.base_url}):")
         for line in drifts:
             output.data(f"  {line}")
         raise SystemExit(2)
-    output.success(f"no drift on {inst.host}/{inst.tenant} ({files} file(s))")
+    output.success(f"no drift on {inst.tenant} ({inst.base_url}, {files} file(s))")

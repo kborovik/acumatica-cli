@@ -92,7 +92,7 @@ class TenantManager:
         """
         self._ssh(
             "Import-Module WebAdministration; "
-            f"Restart-WebAppPool -Name '{self.instance.instance_name}'"
+            f"Restart-WebAppPool -Name '{self.instance.acu_instance_name}'"
         )
 
     def _company_config(self, company: str, extra: str = "") -> str:
@@ -102,8 +102,8 @@ class TenantManager:
         return self._ssh(
             f"& '{self.instance.ac_exe}' "
             f'-configmode:"CompanyConfig" -output:"Forced" '
-            f'-iname:"{self.instance.instance_name}" '
-            f'-h:"{self.instance.instance_path}" '
+            f'-iname:"{self.instance.acu_instance_name}" '
+            f'-h:"{self.instance.acu_instance_path}" '
             f'-dbsrvname:"(local)" -dbsrvwinauth:"True" '
             f'-dbname:"{self.instance.db_name}" -dbnew:"False" '
             f'-company:"{company}"{extra}'

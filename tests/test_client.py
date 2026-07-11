@@ -186,6 +186,19 @@ def test_put_wraps_record_and_targets_endpoint(instance: Instance) -> None:
     assert json.loads(request.content) == {"FromUOM": {"value": "KG"}}
 
 
+def test_api_version_override_reaches_url(instance: Instance) -> None:
+    # V11/I.cfg: api_version is the sole version knob; the endpoint-name half
+    # stays hardcoded Default (custom endpoints come in per call via seed)
+    versioned = instance.model_copy(update={"api_version": "24.200.001"})
+    recorder = Recorder({"/UnitsOfMeasure": httpx.Response(200, json={})})
+    _client(versioned, recorder).put("UnitsOfMeasure", {"FromUOM": "KG"})
+
+    (request,) = recorder.requests
+    assert request.url.path == (
+        "/AcumaticaERP/entity/Default/24.200.001/UnitsOfMeasure"
+    )
+
+
 def test_swagger_returns_raw_bytes_from_endpoint(instance: Instance) -> None:
     schema = b'{"openapi": "3.0.1"}'
     recorder = Recorder({"/swagger.json": httpx.Response(200, content=schema)})

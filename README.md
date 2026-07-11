@@ -112,16 +112,20 @@ acu --help
 Configuration is split into three layers, each answering one question:
 
 1. **`acu.yaml`** — *where* to apply. The whole file is the target
-   instance: a flat map where `host` is the only required key; everything
-   else has a code default matching a stock Acumatica install:
+   instance: a flat map with two required keys, one explicit address per
+   plane — `base_url` (the REST root: scheme, host, and site path) and
+   `ssh` (the control-plane `user@host`). Everything else has a code
+   default matching a stock Acumatica install:
 
    ```yaml
-   host: acu-dev1.vm.internal
+   base_url: http://acu-dev1.vm.internal/AcumaticaERP
+   ssh: Administrator@acu-dev1.vm.internal
    tenant: Company     # sign-in name of the tenant API sessions use
    ```
 
-   Optional overrides (defaults shown) for nonstandard installs,
-   split-horizon DNS, port forwards, or jump hosts:
+   Nothing is derived: split-horizon DNS, port forwards, and jump hosts
+   are all handled by writing the address you actually want into the two
+   required keys.
 
    `acu config show` prints the fully resolved instance as a complete,
    valid `acu.yaml` — every knob visible, credentials excluded. To turn

@@ -50,7 +50,7 @@ class AcumaticaClient:
         # session must name its tenant, so refuse before any HTTP happens.
         if not self.instance.tenant:
             raise RuntimeError(
-                f"no tenant set for {self.instance.host} - a session without "
+                f"no tenant set for {self.instance.base_url} - a session without "
                 "an explicit tenant silently lands on the default tenant; "
                 "set tenant in acu.yaml or pass -t/--tenant"
             )
@@ -109,7 +109,9 @@ class AcumaticaClient:
         return html.unescape(m.group(1))
 
     def _url(self, entity: str, endpoint: str | None = None) -> str:
-        return f"/entity/{endpoint or self.instance.endpoint}/{entity}"
+        # V11: versioned path only; the endpoint-name half is hardcoded
+        # Default - custom endpoints arrive per call (seed `endpoint:`)
+        return f"/entity/{endpoint or f'Default/{self.instance.api_version}'}/{entity}"
 
     @staticmethod
     def _checked(r: httpx.Response) -> httpx.Response:

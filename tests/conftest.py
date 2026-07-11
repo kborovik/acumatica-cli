@@ -7,11 +7,11 @@ from acumatica_cli.config import Instance
 
 @pytest.fixture
 def instance() -> Instance:
-    """A host-derived target (plus overrides) that never resolves to a real host."""
+    """A target (required keys plus overrides) that never resolves to a real host."""
     return Instance(
-        host="acu.test",
-        tenant="T1",
+        base_url="http://acu.test/AcumaticaERP",
         ssh="user@acu.test",
+        tenant="T1",
         ac_exe="C:\\Acumatica\\ac.exe",
         db_name="AcuDB",
         username="admin",
