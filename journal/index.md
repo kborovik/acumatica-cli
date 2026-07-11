@@ -52,6 +52,18 @@ Newest first.
   its single spelling), and the mechanization immediately caught the
   one-liner's latent `__pycache__` scope gap — compiled artifacts
   echoing Bootstrap refs now excluded with `-I --exclude-dir`.
+  T49 extends extract to the file kinds with no records to dump:
+  three kind-dispatched synthesizers run backwards through each
+  action's `done_when` surface (financial-year off the
+  `FinancialYearSettings` singleton, master-calendar off the year
+  range probing the last year's `CompanyCalendar`, open-periods off
+  `Status eq 'Open'` with `OrganizationID` from the extracted
+  Company's `AcctCD` — V22 in-set closure; none open → skip + stderr
+  warn, the B13/B16 half-state made visible), and `render_features`
+  derives `bootstrap/features.yaml` as the built-in six plus the
+  `features:` gates of entities whose file is in the output set —
+  derived, not read, because a live `FeaturesSet` GET stays
+  verified-impossible over the contract API.
 - [2026-07-10](2026-07-10.md) — T29 fronts financial currency (CM202000)
   from the Bootstrap endpoint: live archaeology maps the screen's two
   views (general info on the `CurrencyList` primary including
