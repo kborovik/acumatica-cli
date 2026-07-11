@@ -15,8 +15,9 @@ Pre-build archaeology, probed live before this file was written (V12):
   500s with the optimization marker while the $select-narrowed list GET
   answers 200 - extract's fallback is the load-bearing Currency read.
 - Bootstrap Currency serves the entire currency list (~172 rows;
-  IsFinancial marks the configured ones), so the extracted currencies
-  file carries the whole list and the round-trip must replay it.
+  IsFinancial marks the configured ones), so the manifest narrows the
+  read with filter: IsFinancial eq true (T52) - the extracted file
+  carries the configured set and the fallback walks only its keys.
 - Unpaged list GETs are complete at this scale: row counts matched a
   $top=10000 sweep on every probed entity (12 to 172 rows).
 

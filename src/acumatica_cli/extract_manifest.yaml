@@ -9,6 +9,10 @@
 #             leaves a stale ref here (V21)
 #   keys      key fields: the emitted `key:`, the record sort order, and
 #             the B9 fallback's $select projection
+#   filter    OData $filter fragment riding both list reads (the plain
+#             GET and the B9 $select fallback), so the per-key walk only
+#             visits filtered keys; narrows extraction to configured
+#             records when the entity serves tenant-native noise (T52)
 #   file      destination path; the numbered prefix encodes apply order
 #             (V22: dir expansion sorts alphabetically, so a record that
 #             references another entity must sort after the file that
@@ -82,6 +86,11 @@ entities:
   keys: [CuryID]
   file: baseline/30-currencies.yaml
   features: [Multicurrency] # CM202000 financial currency (B6/B8)
+  # Bootstrap Currency serves the whole tenant-native ISO list (~172
+  # rows); IsFinancial marks the configured set (T50 archaeology) -
+  # unfiltered, the extracted file is noise instead of config-as-code
+  # and the B9 per-key walk costs minutes of one-row GETs
+  filter: IsFinancial eq true
   strip:
   # Translation* pairs are read-invisible while the translation feature
   # is off: write-tolerated, never read back, so a sourced value diffs

@@ -1,10 +1,11 @@
 """Live tenant state to seed YAML: the inverse of apply.
 
 Driven by the packaged extract_manifest.yaml - per entity: the source
-endpoint, key fields, destination file, and a strip deny-list or include
-allow-list shaping the extracted records. Emitted files parse via
-seed.load_baseline by construction (V20: bootstrap-entity rows must carry
-an endpoint) and re-extract byte-identically: records sort by key tuple,
+endpoint, key fields, destination file, an optional record filter, and a
+strip deny-list or include allow-list shaping the extracted records.
+Emitted files parse via seed.load_baseline by construction (V20:
+bootstrap-entity rows must carry an endpoint) and re-extract
+byte-identically: records sort by key tuple,
 fields order key-first then alphabetical, None and empty-string values
 are elided.
 
@@ -46,6 +47,7 @@ class EntitySpec(Model):
     keys: list[str] = Field(min_length=1)
     file: str
     endpoint: str | None = None
+    filter: str | None = None
     strip: list[str] = Field(default_factory=list)
     include: list[str] = Field(default_factory=list)
     features: list[str] = Field(default_factory=list)
@@ -130,15 +132,21 @@ def _fetch(client: AcumaticaClient, spec: EntitySpec) -> list[dict[str, Any]]:
     GET to the key fields via $select (delegate fields out of scope), then
     reads each record through the key-URL single-record GET, which skips
     the optimizer (V4: read-back must survive delegate-view entities).
+
+    A manifest filter rides both list reads, so the two paths serve the
+    same record set and the per-key walk only visits filtered keys.
     """
+    narrowed = {"$filter": spec.filter} if spec.filter else {}
     try:
-        return client.get_list(spec.entity, endpoint=spec.endpoint)
+        return client.get_list(
+            spec.entity, params=narrowed or None, endpoint=spec.endpoint
+        )
     except RuntimeError as err:
         if OPTIMIZATION_500 not in str(err):
             raise
     key_rows = client.get_list(
         spec.entity,
-        params={"$select": ",".join(spec.keys)},
+        params={"$select": ",".join(spec.keys)} | narrowed,
         endpoint=spec.endpoint,
     )
     records: list[dict[str, Any]] = []

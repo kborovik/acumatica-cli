@@ -17,7 +17,7 @@ from click.testing import CliRunner
 
 from acumatica_cli import bootstrap, cli, extract, seed
 from acumatica_cli import client as client_mod
-from acumatica_cli.client import AcumaticaClient, wrap
+from acumatica_cli.client import AcumaticaClient, unwrap, wrap
 from acumatica_cli.config import Instance
 
 # -- FakeServer: canned entity tables behind the real contract API shapes --
@@ -90,8 +90,16 @@ class FakeServer:
             return httpx.Response(500, json=OPTIMIZATION_500_BODY)
         flt = params.get("$filter")
         if flt:
-            for m in re.finditer(r"(\w+) eq '([^']*)'", flt):
-                records = [r for r in records if str(r.get(m[1])) == m[2]]
+            # quoted values compare verbatim; bare literals (true/false)
+            # compare case-folded (JSON booleans str() to True/False)
+            for m in re.finditer(r"(\w+) eq (?:'([^']*)'|(\w+))", flt):
+                field, quoted, literal = m.groups()
+                if quoted is not None:
+                    records = [r for r in records if str(r.get(field)) == quoted]
+                else:
+                    records = [
+                        r for r in records if str(r.get(field)).lower() == literal
+                    ]
         if select:
             fields = select.split(",")
             records = [{k: r[k] for k in fields} for r in records]
@@ -174,7 +182,16 @@ TABLES: dict[str, list[dict[str, Any]]] = {
             # stripped by the manifest (T31 Translation* pairs)
             "TranslationGainAcctID": "83000",
             "TranslationLossAcctID": "84000",
-        }
+        },
+        {
+            # tenant-native ISO-list noise: the manifest filter
+            # (IsFinancial eq true) keeps it out of the extraction (T52)
+            "CuryID": "JPY",
+            "Description": "Yen",
+            "DecimalPlaces": 0,
+            "IsActive": False,
+            "IsFinancial": False,
+        },
     ],
     "Ledger": [
         {
@@ -250,6 +267,9 @@ def test_packaged_manifest_is_self_consistent() -> None:
         if spec.entity in seed.BOOTSTRAP_ENTITIES:
             # V20 by construction: the emitted file must carry endpoint:
             assert spec.endpoint == seed.BOOTSTRAP_ENDPOINT, spec.entity
+    # the Currency filter keeps the tenant-native ISO list out (T50/T52)
+    filters = {s.entity: s.filter for s in manifest.entities if s.filter}
+    assert filters == {"Currency": "IsFinancial eq true"}
 
 
 def test_manifest_resolves_symbolic_bootstrap_endpoint() -> None:
@@ -374,7 +394,8 @@ def test_run_writes_files_and_reports(
     out = capsys.readouterr().out
     for spec in extract.load_manifest().entities:
         assert (tmp_path / spec.file).is_file()
-        n = len(TABLES[spec.entity])
+        # the Currency filter drops the non-financial JPY row (T52)
+        n = 1 if spec.entity == "Currency" else len(TABLES[spec.entity])
         assert f"write {tmp_path / spec.file} ({n} records)" in out
 
 
@@ -466,20 +487,47 @@ def test_run_only_filters_entity_name_or_file_stem(
 def test_b9_fallback_selects_keys_then_key_urls(
     instance: Instance, server: FakeServer, tmp_path: Path
 ) -> None:
-    """The optimization 500 reroutes: $select key list, then per-key GETs."""
+    """The optimization 500 reroutes: $select key list, then per-key GETs.
+
+    The manifest filter rides both list reads (T52): the fallback's key
+    list is already narrowed, so the non-financial JPY row never gets a
+    key-URL walk and never reaches the emitted file.
+    """
     _run(instance, server, tmp_path, only=frozenset({"Currency"}))
     currency_requests = [
         (r.url.path.split("/entity/", 1)[1], dict(r.url.params))
         for r in server.requests
     ]
     assert currency_requests == [
-        ("Bootstrap/1.4.0/Currency", {}),  # plain list GET -> 500
-        ("Bootstrap/1.4.0/Currency", {"$select": "CuryID"}),
+        # plain list GET -> 500, filter riding
+        ("Bootstrap/1.4.0/Currency", {"$filter": "IsFinancial eq true"}),
+        (
+            "Bootstrap/1.4.0/Currency",
+            {"$select": "CuryID", "$filter": "IsFinancial eq true"},
+        ),
         ("Bootstrap/1.4.0/Currency/EUR", {}),
     ]
     text = (tmp_path / "baseline" / "30-currencies.yaml").read_text()
     assert "RealGainAcctID" in text  # the key-URL GET returned full records
     assert "TranslationGainAcctID" not in text  # manifest strip still applies
+    assert "JPY" not in text  # the filter narrowed the fallback path
+
+
+def test_fetch_filter_narrows_plain_list_get(
+    instance: Instance, server: FakeServer
+) -> None:
+    """A filter rides the plain list GET too - the non-B9 read path (T52)."""
+    spec = _spec(filter="UnitID eq 'HOUR'")
+    records = extract._fetch(  # pyright: ignore[reportPrivateUsage]
+        _client(instance, server), spec
+    )
+    assert [unwrap(r)["UnitID"] for r in records] == ["HOUR"]
+    assert dict(server.requests[-1].url.params) == {"$filter": "UnitID eq 'HOUR'"}
+
+
+def test_entity_spec_filter_defaults_to_none() -> None:
+    # no filter -> the plain list GET goes out with no params at all
+    assert _spec().filter is None
 
 
 def test_b9_non_optimization_500_still_raises(
