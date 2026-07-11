@@ -63,7 +63,22 @@ Newest first.
   derives `bootstrap/features.yaml` as the built-in six plus the
   `features:` gates of entities whose file is in the output set —
   derived, not read, because a live `FeaturesSet` GET stays
-  verified-impossible over the contract API.
+  verified-impossible over the contract API. T50 closes the extract
+  milestone live: the eight-leg round-trip (configure A from the data
+  repo, extract to a/, configure B from a/ alone, diff clean,
+  re-extract byte-identical, GL batch posts on B) went green on the
+  second run after the predicted strip-list loop — SubaccountID and
+  AccountID are server-assigned surrogates off an instance-global
+  sequence (A extracted 699+, B re-extracted 714+), plus
+  CreatedDateTime on Account and LastModifiedDateTime on Ledger, all
+  B11 class, three manifest strip rows with reasons; archaeology
+  pinned B9 alive (the `$select` fallback is Currency's only working
+  read) and found Bootstrap Currency serves the entire ~172-row
+  tenant-native currency list (`IsFinancial` marks the four configured
+  rows) — replayed and re-extracted stably but noise as
+  config-as-code, so a record-level manifest filter is the queued
+  follow-up; full `make e2e` fourteen for fourteen against the renamed
+  data repo (acumatica-salesdemo, relinked symlinks).
 - [2026-07-10](2026-07-10.md) — T29 fronts financial currency (CM202000)
   from the Bootstrap endpoint: live archaeology maps the screen's two
   views (general info on the `CurrencyList` primary including
