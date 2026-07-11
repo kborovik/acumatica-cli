@@ -112,7 +112,18 @@ Newest first.
   box-verified dataset folders, `System` excluded — so a non-member
   dies at parse time naming the allowed set before any SSH, omitted
   still maps to ac.exe's empty CompanyType (clean tenant), and the
-  help metavar documents the exact names.
+  help metavar documents the exact names. T57 closes B19 (gh issue
+  #5): extract gains per-row failure isolation — each entity fetch and
+  setup synthesis runs inside its own try, `PXSetupNotEnteredException`
+  500s classify as the empty-state skip (`screen setup not entered`,
+  marker text verified live and promoted to `client.py` beside
+  `OPTIMIZATION_500`), real failures print `x <name>: <reason>` on
+  stderr and the run continues, a written/skipped/failed summary ends
+  the run, and exit 1 fires only when a row failed — so a virgin
+  tenant walks the full manifest and exits 0, pinned by a CLI-level
+  test replaying the issue's exact repro; along the way `output.error`
+  gained `soft_wrap` (a wrapped failure line is not one greppable
+  line, the V9/data() rationale).
 - [2026-07-10](2026-07-10.md) — T29 fronts financial currency (CM202000)
   from the Bootstrap endpoint: live archaeology maps the screen's two
   views (general info on the `CurrencyList` primary including
