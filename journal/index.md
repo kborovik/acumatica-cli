@@ -78,7 +78,14 @@ Newest first.
   rows) — replayed and re-extracted stably but noise as
   config-as-code, so a record-level manifest filter is the queued
   follow-up; full `make e2e` fourteen for fourteen against the renamed
-  data repo (acumatica-salesdemo, relinked symlinks).
+  data repo (acumatica-salesdemo, relinked symlinks). T52 builds that
+  filter: `EntitySpec` gains an optional OData `$filter` fragment
+  riding both list reads (plain GET and the B9 `$select` fallback, so
+  the per-key walk only visits filtered keys), the Currency row sets
+  `IsFinancial eq true`, and the live round-trip re-verified green with
+  `30-currencies.yaml` at 4 records instead of 172 — the extracted file
+  is configuration now, and the e2e tier shed about a minute of
+  sequential one-row GETs per extract leg.
 - [2026-07-10](2026-07-10.md) — T29 fronts financial currency (CM202000)
   from the Bootstrap endpoint: live archaeology maps the screen's two
   views (general info on the `CurrencyList` primary including
@@ -479,6 +486,7 @@ Every Acumatica problem hit so far, one line each. Status: **resolved**
 | 44 | A template/data-repo set can require features its own features.yaml never enables — the scaffolded subaccounts template 403s on the feature-gated GL203000 because the features template shipped the built-in six without SubAccount, while the verified data repo passed only because its list had grown separately | resolved (B15/V22 feature-closure clause: the shipped set must enable every feature its baseline files require; template features.yaml gains SubAccount, a test asserts the closure) | [2026-07-10](2026-07-10.md) |
 | 45 | Processing screens are not entity-action drivable the obvious way: the GL201100 "Open Periods" action is a `PXRedirectHelper` redirect to GL503000 the contract API cannot follow (B13), and the processing graph declares no `PXAction` to map — the process buttons are runtime-registered by `PXFilteredProcessing` | resolved (T37: a contract entity over the GL503000 *filter view* plus an action mapped to the runtime `ProcessAll` drives the processing directly; the filter `Action` field takes stored words like `Open`) | [2026-07-10](2026-07-10.md) |
 | 46 | A shipped file set can satisfy feature closure and still starve its own verify chain — T39 scoped the template set at 14 files while the GL-posting chain it promises needs the org-ledger link that only the data repo carried; a scaffolded tenant would open periods fine and 422 at the batch PUT (B12's known link, outside the scoped set) | resolved (B16/V22: the self-closing clause covers every recorded dependency-chain link the set's own verify chain needs; `60-ledger-company` template ships, a reference-closure test pins `OrganizationID` to the company `AcctCD`) | [2026-07-10](2026-07-10.md) |
+| 47 | Bootstrap `Currency` serves the entire tenant-native ISO list (~172 rows, `IsFinancial` marking the four configured) — extract dumped an almanac instead of configuration, and the B9 per-key fallback walked 172 sequential one-row GETs per extract leg | resolved (T52: manifest `filter:` fragment rides both list reads — plain GET and the `$select` fallback — so the per-key walk only visits filtered keys; Currency filters `IsFinancial eq true`) | [2026-07-11](2026-07-11.md) |
 
 ## Status
 
