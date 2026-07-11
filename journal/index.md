@@ -127,7 +127,18 @@ Newest first.
   and the header `BranchID` defaults to COMPANY off the templated
   org-ledger link) released to **Posted**, closing T35's deferred
   batch leg through the templates; independent diff clean, init re-run
-  fifteen skips, tenant torn down with the list back to four.
+  fifteen skips, tenant torn down with the list back to four; T40
+  (gh issue #1) sheds the config derivation — `base_url` + `ssh` become
+  the two required keys, one explicit address per plane, and `host`/
+  `scheme`/`ssh_user` plus `_derive_urls` and its precedence rules are
+  gone; renames land honest prefixes (`acu_instance_name`/
+  `acu_instance_path`), `endpoint` collapses to `api_version` with the
+  `Default` name half hardcoded in the URL builder, the global `--host`
+  dies with the derivation it existed to re-run (`config init --host`
+  survives as template substitution into both scaffolded values), and
+  `extra="forbid"` turns every retired key into a loud named migration
+  signal; live smoke on the migrated data-repo config: `config check`
+  four ok, diff clean through `Default/25.200.001`.
 - [2026-07-09](2026-07-09.md) — T17 closes the SPEC backlog: `exit
   $LASTEXITCODE` centralized in `_ssh` (single choke point per V18, the
   B4 recurrence class), call-site hand-appends stripped, suffix pinned
