@@ -327,6 +327,75 @@ def test_tenant_create_exists_id_mismatch_errors(
     assert create_env == []
 
 
+def test_tenant_create_type_rejects_unknown_dataset(create_env: list[str]) -> None:
+    # T56/V9/V12: --type validates client-side against the box-verified
+    # dataset set (docs/ac-exe.md) - a non-member errors naming the allowed
+    # set, and nothing runs (no SSH, no chain); System stays excluded
+    result = CliRunner().invoke(
+        cli.cli,
+        ["tenant", "create", "--id", "3", "--login", "Scratch", "--type", "System"],
+    )
+
+    assert result.exit_code != 0
+    for name in ("SalesDemo", "T100", "U100"):
+        assert name in result.output
+    assert create_env == []
+
+
+@pytest.mark.parametrize("dataset", ["SalesDemo", "T100", "U100"])
+def test_tenant_create_type_passes_dataset_through(
+    create_env: list[str], monkeypatch: pytest.MonkeyPatch, dataset: str
+) -> None:
+    # T56/V7: a member of the verified set reaches mgr.create unchanged
+    seen: list[str] = []
+    monkeypatch.setattr(
+        TenantManager,
+        "create",
+        lambda self, cid, login, parent, visible, ctype: (
+            seen.append(ctype) or "created"
+        ),
+    )
+    result = CliRunner().invoke(
+        cli.cli,
+        [
+            *("tenant", "create", "--id", "3", "--login", "Scratch"),
+            *("--type", dataset, "--no-init"),
+        ],
+    )
+
+    assert result.exit_code == 0
+    assert seen == [dataset]
+
+
+def test_tenant_create_type_omitted_means_clean_tenant(
+    create_env: list[str], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # T56/I.cmd: --type omitted -> ac.exe's empty CompanyType (clean tenant)
+    seen: list[str] = []
+    monkeypatch.setattr(
+        TenantManager,
+        "create",
+        lambda self, cid, login, parent, visible, ctype: (
+            seen.append(ctype) or "created"
+        ),
+    )
+    result = CliRunner().invoke(
+        cli.cli, ["tenant", "create", "--id", "3", "--login", "Scratch", "--no-init"]
+    )
+
+    assert result.exit_code == 0
+    assert seen == [""]
+
+
+def test_tenant_create_help_lists_exact_dataset_names(wired: Instance) -> None:
+    # T56/V16: the help text documents the exact dataset names - the click
+    # Choice metavar carries the full allowed set
+    result = CliRunner().invoke(cli.cli, ["tenant", "create", "--help"])
+
+    assert result.exit_code == 0
+    assert "SalesDemo|T100|U100" in result.output
+
+
 def test_provision_cmd_is_gone(wired: Instance) -> None:
     # T45: tenant create chains the bootstrap publish itself; the separate
     # provision command must not exist

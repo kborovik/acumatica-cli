@@ -206,8 +206,12 @@ def tenant_list(inst: Instance) -> None:
 @click.option(
     "--type",
     "company_type",
-    default="",
-    help="Inserted data set: '' = clean, SalesDemo = demo",
+    # the V12-verified dataset folders on the box (docs/ac-exe.md); System
+    # is the system-tenant dataset, deliberately not offered
+    type=click.Choice(["SalesDemo", "T100", "U100"]),
+    default=None,
+    help="Data set inserted at creation (omit for a clean tenant); "
+    "T100/U100 are the Acumatica University training sets",
 )
 @click.option("--parent", "parent_id", type=int, default=1, show_default=True)
 @click.option("--hidden", is_flag=True, help="Do not show on the sign-in page")
@@ -221,7 +225,7 @@ def tenant_create(
     inst: Instance,
     company_id: int,
     login_name: str,
-    company_type: str,
+    company_type: str | None,
     parent_id: int,
     hidden: bool,
     no_init: bool,
@@ -257,8 +261,9 @@ def tenant_create(
         with output.step(
             f"creating tenant {company_id} ({login_name}) on {inst.base_url}"
         ):
+            # None = --type omitted = clean tenant (ac.exe's empty CompanyType)
             raw = mgr.create(
-                company_id, login_name, parent_id, not hidden, company_type
+                company_id, login_name, parent_id, not hidden, company_type or ""
             )
         output.data(raw.splitlines()[-1] if raw.strip() else "created")
     if no_init:
