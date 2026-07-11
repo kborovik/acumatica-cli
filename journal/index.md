@@ -33,7 +33,19 @@ Newest first.
   to end from a bare machine via `config init`, a new data-repo layout
   section explains the numbered-prefix ordering, and a latent
   `Add-Content` typo (missing dash on `-Value`) in the SSH setup is
-  fixed.
+  fixed. T48 lands the extract machinery offline — `acu extract` is
+  the inverse of apply, driven by a packaged manifest whose nine rows
+  are the verified GL set and whose strip lists carry the B10/B11/T31
+  reasons as comments; emitted files are byte-stable (records sorted
+  by key tuple, key fields first, None/empty elided) and parse through
+  `load_baseline` by construction (V20 enforced at manifest load, the
+  symbolic `bootstrap` endpoint resolving at load per V21); the B9
+  list-GET fallback narrows via `$select` then reads per-key, with
+  the optimization marker promoted to `client.py` as the one
+  spelling; twenty-two offline tests over a $filter/$select-honoring
+  FakeServer pin the extract-then-diff-clean round-trip, byte
+  stability under permuted server order, and the file-handling
+  surface (skip-vs-`--force`, no-records skip, dry-run, `--only`).
 - [2026-07-10](2026-07-10.md) — T29 fronts financial currency (CM202000)
   from the Bootstrap endpoint: live archaeology maps the screen's two
   views (general info on the `CurrencyList` primary including
