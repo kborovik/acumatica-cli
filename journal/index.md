@@ -155,7 +155,11 @@ Newest first.
   the unresolved keys), a latent duplicate-kwarg crash on config-file
   credential keys becomes a one-line V2 refusal, and the live verify
   runs `config check` flags-only from a bare directory — four ok
-  against acu-dev1 with no `acu.yaml` and no `.env` anywhere.
+  against acu-dev1 with no `acu.yaml` and no `.env` anywhere; help
+  text then drops the "Override ..." phrasing (each global names its
+  value and fallback source) and T43 retires `-t`, the last short
+  flag — `--tenant` only, §V.16's convention line tightening to "no
+  short flags", with a rejection regression pinning the retirement.
 - [2026-07-09](2026-07-09.md) — T17 closes the SPEC backlog: `exit
   $LASTEXITCODE` centralized in `_ssh` (single choke point per V18, the
   B4 recurrence class), call-site hand-appends stripped, suffix pinned
