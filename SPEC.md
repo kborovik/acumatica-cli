@@ -15,7 +15,7 @@ Configure Acumatica ERP purely from source — no UI, no Configuration Wizard. I
 
 ## §I INTERFACES
 
-- cmd: `acu [--tenant <tenant>] [--url <base_url>] [--ssh <user@host>] [--api-version <v>] [--username <u>] [--password <p>] [--version] <subcommand>` → globals valid only before subcommand; config globals override per key, first set wins: flag, `ACU_*` env (`.env` or process), code default; creds: flag, env, `admin` default (username only); `--version` → editable install (PEP 610 `direct_url.json` `dir_info.editable`) renders `<version>+dev (<checkout path>)`, release install plain `<version>`
+- cmd: `acu [--tenant <tenant>] [--url <base_url>] [--ssh <user@host>] [--api-version <v>] [--username <u>] [--password <p>] [--version] [--completion [<shell>]] <subcommand>` → globals valid only before subcommand; config globals override per key, first set wins: flag, `ACU_*` env (`.env` or process), code default; creds: flag, env, `admin` default (username only); `--version` → editable install (PEP 610 `direct_url.json` `dir_info.editable`) renders `<version>+dev (<checkout path>)`, release install plain `<version>`; `--completion` → emit click completion script (`bash|zsh|fish`; <shell> ? → `$SHELL` basename, unresolvable → error naming supported shells), eager exit like `--version` — enable = user sources output; value completion local-only per V23
 - cmd: `acu tenant list|create|delete` → tenant CRUD over SSH; create: `--id` ! + `--login` ! + `--type`/`--parent`/`--hidden`/`--no-init` ?, then chains bootstrap publish (data plane, content-digest skip per V4) — tenant create + bootstrap one step; create resumable: login already exists → skip ac.exe create (`--id` ! match existing CompanyID, else error), init + publish chain still runs — republish route for existing tenants; delete: `--id` + confirm prompt, `--yes` skips
 - cmd: `acu apply [--dry-run] [files|dirs]` → PUT each record; dir arg expands `*.yaml`; args ? → default = existing init-scaffolded dirs @ data-repo root, fixed order (`bootstrap/`, `baseline/`, `setup/`); none exist → error exit 1 naming dirs; dry-run lines `would PUT …`, summary suffixed `(dry run)`
 - cmd: `acu diff [files|dirs]` → GET by `$filter` on key fields, compare normalized; args ? → same default set as `apply`; optimization-500 (delegate-view fields) → retry record via key-URL GET `/<entity>/<key1>[/<key2>...]` (YAML `key` order); drift → exit 2
@@ -56,6 +56,7 @@ V19: release pipeline — `make release <part>` sole release path (bump + commit
 V20: seed endpoint routing ! unambiguous — baseline `entity` named in shipped Bootstrap template ! explicit per-file `endpoint:`; absent → hard error naming both endpoints, never silent Default-endpoint PUT (§B.8 class — Bootstrap `Currency` vs Default CM201000 list; symptom returns behind clean apply)
 V21: endpoint contract identity = name+version — entity or field shape change in `bootstrap_project.xml` ! version bump; version held → older build's digest gate republishes prior contract under same identity (silent downgrade, no version signal in seed failures)
 V22: baseline reference closure — record field referencing another entity ! that entity exist @ PUT time: tenant-native or created by earlier-sorting baseline file (dir expansion alphabetical = sole ordering mechanism; filename prefixes encode order); feature closure sibling — file whose entity feature-gated ! its FeaturesSet name enabled in `bootstrap/features.yaml`; full audit recipe → `.spec/check-extras.md` §V.22
+V23: completion path local-only — `--completion` script emit + dynamic value completion read package data + data-repo files (cwd walk-up) + `.env` only; never REST, never SSH, never live instance (fires per keystroke)
 
 ## §T TASKS
 
@@ -72,6 +73,7 @@ T51|x|mechanize pre-commit audit into one runner — `.spec/scripts/check-all` e
 T52|x|extract manifest record filter — `EntitySpec` gains `filter:` ? (OData `$filter` fragment, both list reads); Currency row `IsFinancial eq true` (~172-row ISO list → 4 configured)|V4,V12,V22,T48,T50
 T53|x|repo hygiene after data-repo rename — untrack `.env.gpg` + `.gitignore` gains it; CLAUDE.md syncs data-repo name + symlink set + verify cmd to §C|V2,V13,V17
 T54|x|`make e2e` optional FILE arg — `make e2e FILE=<path-or-stem>` scopes pytest to one e2e file, bare `make e2e` = whole tier unchanged|V13
+T55|.|add `--completion` global flag — click-native script emit (`bash|zsh|fish`, <shell> ? → `$SHELL` detect) + local-only value completion (`extract --only` entity names from packaged manifest, `apply`/`diff` path args)|V9,V16,V23,I.cmd
 
 ## §B BUGS
 
