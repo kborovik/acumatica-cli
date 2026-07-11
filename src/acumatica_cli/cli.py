@@ -25,7 +25,14 @@ from dotenv import load_dotenv
 
 from . import bootstrap, firstlogin, output, seed
 from .client import AcumaticaClient
-from .config import Instance, data_root, load_instance, read_config, scaffold
+from .config import (
+    Instance,
+    data_root,
+    find_data_root,
+    load_instance,
+    read_config,
+    scaffold,
+)
 from .tenant import TenantManager
 
 
@@ -53,23 +60,34 @@ def _version() -> str:
 @click.option(
     "-t", "--tenant", default=None, help="Override the tenant API sessions sign in to"
 )
+@click.option(
+    "--url", "base_url", default=None, help="Override the REST root (acu.yaml base_url)"
+)
+@click.option(
+    "--ssh", default=None, help="Override the control-plane user@host (acu.yaml ssh)"
+)
+@click.option(
+    "--api-version",
+    default=None,
+    help="Override the contract API version (acu.yaml api_version)",
+)
+@click.option("--username", default=None, help="Override ACU_USER / the admin default")
+@click.option("--password", default=None, help="Override ACU_PASSWORD")
 @click.pass_context
-def cli(ctx: click.Context, tenant: str | None) -> None:
+def cli(ctx: click.Context, **flags: str | None) -> None:
     """Stash the global flags; the instance resolves lazily per command.
 
-    Resolution stays out of the group callback so `acu config init` can run
-    where no acu.yaml exists yet (V3 discovery would hard-error).
+    Resolution stays out of the group callback so commands that need no
+    target (config init) never trigger it; per key a flag beats the
+    acu.yaml value beats the code default (I.cmd precedence).
     """
-    ctx.obj = tenant
+    ctx.obj = {k: v for k, v in flags.items() if v is not None}
 
 
 def _resolve_instance(ctx: click.Context) -> Instance:
-    """Build the target Instance from acu.yaml plus the stashed global flags."""
-    tenant: str | None = ctx.obj
-    inst = load_instance()
-    if tenant is not None:
-        inst = inst.model_copy(update={"tenant": tenant})
-    return inst
+    """Build the target Instance: stashed global flags over acu.yaml (V3 lax)."""
+    overrides: dict[str, str] = ctx.obj or {}
+    return load_instance(overrides)
 
 
 def pass_instance[**P, R](f: Callable[Concatenate[Instance, P], R]) -> Callable[P, R]:
@@ -234,7 +252,8 @@ def config_show(inst: Instance) -> None:
     """Print the fully resolved instance as a complete acu.yaml document.
 
     Resolves through the same load_instance path every live command uses,
-    so the printed values are exactly what a live command would trust.
+    so the printed values are exactly what a live command would trust -
+    global flag overrides (--url, --ssh, ...) included.
     Credentials never appear as keys - the resolved username is echoed as
     a comment only, the password in no form at all. Redirect to a file and
     edit: the output loads back through load_instance unchanged.
@@ -258,29 +277,40 @@ def config_check(ctx: click.Context) -> None:
     secrets (.env + ACU_PASSWORD), then REST (login, landed-tenant verify,
     logout) and ssh (trivial remote command) probed independently - a
     discovery or secrets failure stops, a REST failure still probes ssh and
-    vice versa. Writes nothing: no PUTs, no tenant CRUD. Exit 0 when every
-    probe passes, 1 on any failure.
+    vice versa. Discovery is lax (V3): no acu.yaml passes when --url covers
+    base_url, and flags-only runs (no acu.yaml, no .env) are valid. Writes
+    nothing: no PUTs, no tenant CRUD. Exit 0 when every probe passes, 1 on
+    any failure.
     """
-    # discovery (V3): walk-up + parse + base_url (the primary identity key)
+    overrides: dict[str, str] = ctx.obj or {}
+    # discovery (V3): lax walk-up + parse; base_url (the primary identity
+    # key) must be resolvable from the flag or the file
     try:
-        root = data_root()
-        config = read_config(root)
-        if not config.get("base_url"):
-            raise SystemExit("acu.yaml: missing required key base_url")
+        root = find_data_root()
+        config = read_config(root) if root is not None else {}
+        if not (overrides.get("base_url") or config.get("base_url")):
+            source = "acu.yaml:" if root is not None else "no acu.yaml found and"
+            raise SystemExit(f"{source} missing required key base_url (or --url)")
     except (SystemExit, yaml.YAMLError) as exc:
         output.data(f"fail discovery: {exc}")
         raise SystemExit(1) from exc
-    output.data(f"ok discovery ({root / 'acu.yaml'})")
+    found = root / "acu.yaml" if root is not None else "no acu.yaml - flags only"
+    output.data(f"ok discovery ({found})")
 
-    # secrets: same sources as load_instance - .env beside acu.yaml, then
-    # the environment; the value itself is never printed (V2)
-    load_dotenv(root / ".env")
-    if not os.environ.get("ACU_PASSWORD"):
+    # secrets: same sources as load_instance - the flag, then .env beside a
+    # found acu.yaml, then the environment; the value is never printed (V2)
+    if root is not None:
+        load_dotenv(root / ".env")
+    if overrides.get("password"):
+        output.data("ok secrets (--password)")
+    elif os.environ.get("ACU_PASSWORD"):
+        output.data("ok secrets (ACU_PASSWORD set)")
+    else:
         output.data(
-            "fail secrets: ACU_PASSWORD not set (put it in .env or the environment)"
+            "fail secrets: password not set (pass --password, "
+            "or put ACU_PASSWORD in .env or the environment)"
         )
         raise SystemExit(1)
-    output.data("ok secrets (ACU_PASSWORD set)")
 
     # both live probes run through the exact objects live commands use, so
     # a pass here proves the real code path, not a parallel one

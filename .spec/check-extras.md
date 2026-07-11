@@ -29,7 +29,7 @@ run cmd, apply exemption filter, any surviving match = violation
 
 ## §V.16 — option-convention recipe (extracted from SPEC.md §V.16)
 
-- globals (`-t/--tenant`, `--version`) valid only before subcommand
+- globals (`-t/--tenant`, `--url`, `--ssh`, `--api-version`, `--username`, `--password`, `--version`) valid only before subcommand
 - file/dir inputs positional variadic; dirs expand `*.yaml`
 - `--dry-run` lines `would <VERB> …`, summary suffixed `(dry run)`
 - long flags kebab-case; short flags reserved for globals

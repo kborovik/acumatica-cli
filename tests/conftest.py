@@ -12,8 +12,6 @@ def instance() -> Instance:
         base_url="http://acu.test/AcumaticaERP",
         ssh="user@acu.test",
         tenant="T1",
-        ac_exe="C:\\Acumatica\\ac.exe",
-        db_name="AcuDB",
         username="admin",
         password="pw",
     )

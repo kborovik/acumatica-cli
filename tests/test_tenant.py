@@ -58,7 +58,8 @@ def test_list_parses_sqlcmd_rows_and_skips_noise(
             company_type="Custom",
         ),
     ]
-    assert "AcuDB.dbo.Company" in run.commands[0]
+    # DB name = config.py constant (T42), no longer an Instance field
+    assert "AcumaticaDB.dbo.Company" in run.commands[0]
 
 
 def test_ssh_failure_raises_with_output(instance: Instance, run: FakeRun) -> None:

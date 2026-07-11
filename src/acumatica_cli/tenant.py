@@ -6,7 +6,7 @@ see docs/ac-exe.md) plus a sqlcmd read side.
 
 import subprocess
 
-from .config import Instance
+from .config import AC_EXE, ACU_INSTANCE_NAME, ACU_INSTANCE_PATH, DB_NAME, Instance
 from .models import Model
 
 
@@ -65,7 +65,7 @@ class TenantManager:
         query = (
             "SET NOCOUNT ON; "
             "SELECT CompanyID, CompanyCD, ISNULL(CompanyKey, ''), CompanyType "
-            f"FROM {self.instance.db_name}.dbo.Company ORDER BY CompanyID"
+            f"FROM {DB_NAME}.dbo.Company ORDER BY CompanyID"
         )
         out = self._ssh(f'sqlcmd -S "(local)" -E -C -W -h -1 -s "|" -Q "{query}"')
         tenants = []
@@ -92,7 +92,7 @@ class TenantManager:
         """
         self._ssh(
             "Import-Module WebAdministration; "
-            f"Restart-WebAppPool -Name '{self.instance.acu_instance_name}'"
+            f"Restart-WebAppPool -Name '{ACU_INSTANCE_NAME}'"
         )
 
     def _company_config(self, company: str, extra: str = "") -> str:
@@ -100,12 +100,12 @@ class TenantManager:
         # find the site; without -h its web.config step dies on a null path
         # (verified 2026-07-08, docs/ac-exe.md).
         return self._ssh(
-            f"& '{self.instance.ac_exe}' "
+            f"& '{AC_EXE}' "
             f'-configmode:"CompanyConfig" -output:"Forced" '
-            f'-iname:"{self.instance.acu_instance_name}" '
-            f'-h:"{self.instance.acu_instance_path}" '
+            f'-iname:"{ACU_INSTANCE_NAME}" '
+            f'-h:"{ACU_INSTANCE_PATH}" '
             f'-dbsrvname:"(local)" -dbsrvwinauth:"True" '
-            f'-dbname:"{self.instance.db_name}" -dbnew:"False" '
+            f'-dbname:"{DB_NAME}" -dbnew:"False" '
             f'-company:"{company}"{extra}'
         )
 

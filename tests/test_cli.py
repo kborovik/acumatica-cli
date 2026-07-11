@@ -63,7 +63,7 @@ class DummyClient:
 @pytest.fixture
 def wired(monkeypatch: pytest.MonkeyPatch, instance: Instance) -> Instance:
     """Point the CLI at the fake instance and a no-op REST client."""
-    monkeypatch.setattr(cli, "load_instance", lambda: instance)
+    monkeypatch.setattr(cli, "load_instance", lambda overrides=None: instance)
     monkeypatch.setattr(cli, "AcumaticaClient", DummyClient)
     return instance
 
@@ -381,6 +381,51 @@ def test_config_show_username_comment_reflects_acu_user(
     assert load_instance() == original
 
 
+def test_config_show_reflects_global_flag_overrides(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # T42/I.cmd: config show resolves through the same load_instance path,
+    # so flag overrides surface per key while untouched keys keep acu.yaml
+    # values; the password flag is never emitted in any form (V2)
+    (tmp_path / "acu.yaml").write_text(
+        "base_url: http://acu.test/AcumaticaERP\nssh: Administrator@acu.test\n"
+    )
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.delenv("ACU_PASSWORD", raising=False)
+    monkeypatch.delenv("ACU_USER", raising=False)
+
+    result = CliRunner().invoke(
+        cli.cli,
+        [
+            "--url",
+            "http://edge.example/AcumaticaERP",
+            "--username",
+            "auditor",
+            "--password",
+            "flag-secret",
+            "config",
+            "show",
+        ],
+    )
+
+    assert result.exit_code == 0
+    assert "base_url: http://edge.example/AcumaticaERP" in result.output
+    assert "ssh: Administrator@acu.test" in result.output  # acu.yaml survives
+    assert "# username: auditor" in result.output
+    assert "flag-secret" not in result.output
+    assert "password" not in result.output
+
+
+def test_url_flag_rejected_after_subcommand(wired: Instance) -> None:
+    # V16: globals valid only before the subcommand - T42 flags included
+    result = CliRunner().invoke(
+        cli.cli, ["config", "show", "--url", "http://edge.example"]
+    )
+
+    assert result.exit_code != 0
+    assert "No such option" in result.output
+
+
 def test_config_init_scaffolds_data_repo(tmp_path: Path) -> None:
     # I.cmd config init: 15-file template set into a created-if-absent dir;
     # runs where V3 discovery finds no acu.yaml (tmp_path has none up-tree)
@@ -616,7 +661,8 @@ def test_config_check_all_probes_ok(
 def test_config_check_discovery_fail_stops(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    # V3: no acu.yaml up-tree -> fail discovery, exit 1, later probes never run
+    # V3 lax discovery: no acu.yaml up-tree is fine WITH --url, but with
+    # neither the probe fails naming base_url, exit 1, later probes never run
     probes: list[str] = []
     monkeypatch.chdir(tmp_path)
     monkeypatch.setattr(cli, "AcumaticaClient", lambda *a, **k: probes.append("rest"))
@@ -627,8 +673,45 @@ def test_config_check_discovery_fail_stops(
     assert result.exit_code == 1
     lines = result.output.splitlines()
     assert len(lines) == 1
-    assert lines[0].startswith("fail discovery: acu.yaml not found")
+    assert lines[0].startswith("fail discovery: no acu.yaml found")
+    assert "base_url" in lines[0]
     assert probes == []
+
+
+def test_config_check_flags_only_passes(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # T42 verify shape: no acu.yaml, no .env - the globals supply the full
+    # config and every probe passes (V3 lax discovery, I.cmd precedence)
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.delenv("ACU_PASSWORD", raising=False)
+    monkeypatch.delenv("ACU_USER", raising=False)
+    monkeypatch.setattr(cli, "AcumaticaClient", DummyClient)
+    monkeypatch.setattr(TenantManager, "ping", lambda self: None)
+
+    result = CliRunner().invoke(
+        cli.cli,
+        [
+            "--url",
+            "http://acu.test/AcumaticaERP",
+            "--ssh",
+            "user@acu.test",
+            "--password",
+            "pw",
+            "-t",
+            "T1",
+            "config",
+            "check",
+        ],
+    )
+
+    assert result.exit_code == 0
+    lines = result.output.splitlines()
+    assert lines[0] == "ok discovery (no acu.yaml - flags only)"
+    assert lines[1] == "ok secrets (--password)"
+    assert lines[2] == "ok rest (http://acu.test/AcumaticaERP, tenant T1)"
+    assert lines[3] == "ok ssh (user@acu.test)"
+    assert "pw" not in result.output  # the secret value is never printed (V2)
 
 
 def test_config_check_secrets_fail_stops(
@@ -651,7 +734,7 @@ def test_config_check_secrets_fail_stops(
     assert result.exit_code == 1
     lines = result.output.splitlines()
     assert lines[0].startswith("ok discovery (")
-    assert lines[1].startswith("fail secrets: ACU_PASSWORD not set")
+    assert lines[1].startswith("fail secrets: password not set")
     assert len(lines) == 2
     assert probes == []
 

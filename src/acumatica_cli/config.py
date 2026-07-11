@@ -1,13 +1,14 @@
-"""The instance target (acu.yaml, found by walking up from cwd) + credentials (.env).
+"""The instance target: global flags over acu.yaml over code defaults.
 
-Layered defaults: ``base_url`` and ``ssh`` are the only required acu.yaml
-keys — one explicit address per plane (V1), never derived. Everything else
-is a code default transcribed from the verified references (docs/ac-exe.md,
-docs/rest-api.md — V12), overridable per instance for nonstandard installs.
+Layered resolution, first set wins per key: global flag, acu.yaml (found by
+walking up from cwd — optional, flags plus environment can supply the full
+config), code default. ``base_url`` and ``ssh`` are the only required
+values — one explicit address per plane (V1), never derived. Credentials
+resolve flag over environment (.env loads only beside a found acu.yaml).
 """
 
 import os
-from collections.abc import Iterator
+from collections.abc import Iterator, Mapping
 from importlib import resources
 from pathlib import Path
 from typing import Any
@@ -19,6 +20,16 @@ from pydantic import ValidationError, field_validator
 from .models import Model, validation_summary
 
 PLACEHOLDER_HOST = "erp.example.com"
+
+# Install-layout constants for a stock acumatica-infra build (docs/ac-exe.md,
+# verified live - V12). Deliberately not config surface: acu.yaml keys of
+# these names are rejected (extra="forbid"), keeping the config a target
+# address, not an install description.
+ACU_INSTANCE_NAME = "AcumaticaERP"  # ac.exe -iname; IIS app-pool name
+# coupling = acumatica-infra convention (see recycle_app_pool)
+ACU_INSTANCE_PATH = "C:\\Acumatica\\AcumaticaERP"  # ac.exe -h
+AC_EXE = "C:\\Program Files\\Acumatica ERP\\Data\\ac.exe"
+DB_NAME = "AcumaticaDB"
 
 # `acu config init` template set: (package resource, destination) pairs.
 # Dotfiles are stored dotless (wheel tooling tends to drop dotfiles) and
@@ -43,22 +54,17 @@ INIT_TEMPLATES = (
 
 
 class Instance(Model):
-    """The resolved target: the acu.yaml top-level map + credentials.
+    """The resolved target: flags over the acu.yaml top-level map + credentials.
 
     One explicit address per plane (V1), no derivation: ``base_url`` is the
     REST root (scheme + host + site path), ``ssh`` the control-plane
-    ``user@host``. Everything else is a code default for a stock install.
+    ``user@host``. Install-layout values are module constants, not fields.
     """
 
     api_version: str = "25.200.001"  # V11: /entity/Default/<api_version>/
     base_url: str  # REST root: scheme + host + site path
     ssh: str  # control plane: full user@host
     tenant: str = ""
-    acu_instance_name: str = "AcumaticaERP"  # ac.exe -iname; IIS app-pool
-    # name coupling = acumatica-infra convention (see recycle_app_pool)
-    acu_instance_path: str = "C:\\Acumatica\\AcumaticaERP"  # ac.exe -h
-    ac_exe: str = "C:\\Program Files\\Acumatica ERP\\Data\\ac.exe"
-    db_name: str = "AcumaticaDB"
     username: str
     password: str
 
@@ -97,15 +103,28 @@ def scaffold(directory: Path, host: str | None = None) -> Iterator[tuple[str, Pa
         yield "write", target
 
 
-def data_root() -> Path:
-    """Walk up from cwd to the first directory containing acu.yaml."""
+def find_data_root() -> Path | None:
+    """Walk up from cwd to the first directory containing acu.yaml, if any.
+
+    None is not an error (V3): flags plus environment can supply the full
+    config; only commands needing data files (provision, schema) require a
+    data repo and go through data_root instead.
+    """
     for d in [Path.cwd(), *Path.cwd().parents]:
         if (d / "acu.yaml").is_file():
             return d
-    raise SystemExit(
-        "acu.yaml not found in the current directory or any parent - "
-        "run acu from inside a data repo (e.g. acumatica-baseline)"
-    )
+    return None
+
+
+def data_root() -> Path:
+    """The data repo root, for commands that need its files, not just config."""
+    root = find_data_root()
+    if root is None:
+        raise SystemExit(
+            "acu.yaml not found in the current directory or any parent - "
+            "run acu from inside a data repo (e.g. acumatica-baseline)"
+        )
+    return root
 
 
 def read_config(root: Path) -> dict[str, Any]:
@@ -119,22 +138,42 @@ def read_config(root: Path) -> dict[str, Any]:
     return config
 
 
-def load_instance() -> Instance:
-    """Resolve the target from acu.yaml and merge credentials from .env/environment."""
-    root = data_root()
-    load_dotenv(root / ".env")
+def load_instance(overrides: Mapping[str, str | None] | None = None) -> Instance:
+    """Resolve the target: global flags over acu.yaml over code defaults.
 
-    config = read_config(root)
+    ``overrides`` carries the global flags keyed by Instance field name;
+    per key the first set value wins (flag, acu.yaml, code default).
+    Credentials resolve flag over environment - .env loads only from the
+    directory of a found acu.yaml, and no acu.yaml is fine (V3): the hard
+    error comes only when a required value (base_url, ssh, password) is
+    still unresolved after the merge, naming the missing key.
+    """
+    flags = {k: v for k, v in dict(overrides or {}).items() if v is not None}
+    root = find_data_root()
+    config: dict[str, Any] = {}
+    if root is not None:
+        load_dotenv(root / ".env")
+        config = read_config(root)
+        if creds := sorted({"username", "password"} & config.keys()):
+            raise SystemExit(
+                f"acu.yaml: credentials never live in config (V2) - "
+                f"remove {', '.join(creds)}; use flags or .env instead"
+            )
 
-    password = os.environ.get("ACU_PASSWORD")
+    username = flags.pop("username", None) or os.environ.get("ACU_USER", "admin")
+    password = flags.pop("password", None) or os.environ.get("ACU_PASSWORD")
     if not password:
-        raise SystemExit("ACU_PASSWORD not set (put it in .env or the environment)")
+        raise SystemExit(
+            "password not set (pass --password, "
+            "or put ACU_PASSWORD in .env or the environment)"
+        )
 
     try:
         return Instance(
-            username=os.environ.get("ACU_USER", "admin"),
+            username=username,
             password=password,
-            **config,
+            **{**config, **flags},
         )
     except ValidationError as exc:
-        raise SystemExit(f"acu.yaml: {validation_summary(exc)}") from exc
+        source = "acu.yaml" if root is not None else "config (no acu.yaml found)"
+        raise SystemExit(f"{source}: {validation_summary(exc)}") from exc
