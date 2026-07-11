@@ -138,7 +138,12 @@ Newest first.
   survives as template substitution into both scaffolded values), and
   `extra="forbid"` turns every retired key into a loud named migration
   signal; live smoke on the migrated data-repo config: `config check`
-  four ok, diff clean through `Default/25.200.001`.
+  four ok, diff clean through `Default/25.200.001`; T41 follows on —
+  `config show` emits the resolved username (`ACU_USER` or the `admin`
+  default) as a comment line after the header, so the printed doc names
+  the full identity a live command would use while credentials never
+  appear as keys and the output still round-trips through
+  `load_instance`.
 - [2026-07-09](2026-07-09.md) — T17 closes the SPEC backlog: `exit
   $LASTEXITCODE` centralized in `_ssh` (single choke point per V18, the
   B4 recurrence class), call-site hand-appends stripped, suffix pinned
