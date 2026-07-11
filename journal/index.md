@@ -162,11 +162,20 @@ Newest first.
   short flags", with a rejection regression pinning the retirement;
   T44 (gh issue #2) makes apply/diff FILES optional — omitted, the
   arguments default to the existing init-scaffolded directories at the
-  data-repo root in provision order (`bootstrap/`, `baseline/`,
+  data-repo root in fixed order (`bootstrap/`, `baseline/`,
   `setup/`), none existing is a named one-line error rather than a
   silent no-op, and the defaulted paths render relative to cwd so a
   bare `acu diff` prints byte-for-byte what naming the directories
-  would — verified live against acu-dev1 both ways.
+  would — verified live against acu-dev1 both ways; T45 (gh issue #3)
+  retires `acu provision` — the bootstrap chain (digest-gated publish,
+  unconditional post-publish recycle, site-return wait) folds into
+  `acu tenant create`, which now hands back an apply-ready tenant in
+  one step (`--no-init` skips the whole tail; feature loading goes lax
+  via `find_data_root` so a flags-only create publishes the built-in
+  six), the exists-skip dies with provision's resumability story, and
+  the e2e lifecycle rewrites to the SPEC goal sentence verbatim —
+  tenant create → bare apply → bare diff clean → idempotent re-apply →
+  drift exit 2, six passed live on a fresh scratch tenant.
 - [2026-07-09](2026-07-09.md) — T17 closes the SPEC backlog: `exit
   $LASTEXITCODE` centralized in `_ssh` (single choke point per V18, the
   B4 recurrence class), call-site hand-appends stripped, suffix pinned
@@ -407,10 +416,10 @@ Mechanisms:
    — `[DONE]` — proven end-to-end on both planes: `baseline/*.yaml` through
    the Default endpoint and `bootstrap/*.yaml` (company + credit terms)
    through the custom `Bootstrap/1.0.0` endpoint, write path live-verified.
-4. **One-command provisioning** (`acu provision`: create → bootstrap →
-   apply → diff) — `[DONE]` — virgin-tenant E2E green live: create →
-   publish (features via plugin) → apply (company + credit terms + UOMs) →
-   drift check over everything applied, exit 0.
+4. **One-command provisioning** — `[DONE]` — folded into the surface
+   (T45): `acu tenant create` bootstraps at birth (publish + recycle),
+   then bare `acu apply` / `acu diff` (T44) cover the seeding half;
+   virgin-tenant E2E green live over the three-command chain, exit 0.
 
 Remaining milestones:
 
@@ -434,8 +443,8 @@ Remaining milestones:
   terms).
 - `[OPEN]` Drift proof: provision two tenants, diff config, zero difference.
 - `[OPEN]` Timing captured (manual baseline vs automated).
-- `[OPEN]` Repo clean and runnable; README shows `acu provision` reproducing
-  the numbers.
+- `[OPEN]` Repo clean and runnable; README shows the tenant create →
+  apply → diff chain reproducing the numbers.
 
 Target config domains (what a configured tenant must carry): chart of
 accounts (GL), customer/vendor classes, payment terms, tax zones/categories,
