@@ -15,6 +15,19 @@ and status below.
 
 Newest first.
 
+- [2026-07-11](2026-07-11.md) — T47 makes `acu tenant create` resumable,
+  closing B17: a live tenant-list probe before the ac.exe create (V4 —
+  state, never a marker) skips creation when the login already exists
+  and runs the init + digest-gated publish chain unchanged, so
+  re-running create is the republish route for existing tenants;
+  `--id` mismatch against the existing CompanyID is a hard error naming
+  both (ac.exe would treat the create as an overwrite); the live verify
+  replayed B17's stranding — Company (id 2) skipped create, the T25
+  digest gate caught the pre-T37 package content and republished
+  Bootstrap 1.4.0, the first diff honestly reported the one true gap
+  (`action ProcessAll: not applied` — readable at last with the
+  endpoint restored), one `make apply` invoked exactly that action, and
+  `make diff` exited 0; the §T backlog is empty.
 - [2026-07-10](2026-07-10.md) — T29 fronts financial currency (CM202000)
   from the Bootstrap endpoint: live archaeology maps the screen's two
   views (general info on the `CurrencyList` primary including
