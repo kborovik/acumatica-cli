@@ -143,7 +143,19 @@ Newest first.
   default) as a comment line after the header, so the printed doc names
   the full identity a live command would use while credentials never
   appear as keys and the output still round-trips through
-  `load_instance`.
+  `load_instance`; T42 makes the config file itself optional — the
+  install-layout survivors (`acu_instance_name`/`acu_instance_path`/
+  `ac_exe`/`db_name`) demote from `Instance` fields to `config.py`
+  constants (rejected as keys by the same `extra="forbid"` migration
+  signal), the group gains `--url`/`--ssh`/`--api-version`/
+  `--username`/`--password` merged before the model builds (per key:
+  flag, acu.yaml, code default; credentials flag over environment),
+  discovery goes lax per the V3 rewrite (no `acu.yaml` means an empty
+  config and no `.env` load, the hard error moves post-merge and names
+  the unresolved keys), a latent duplicate-kwarg crash on config-file
+  credential keys becomes a one-line V2 refusal, and the live verify
+  runs `config check` flags-only from a bare directory — four ok
+  against acu-dev1 with no `acu.yaml` and no `.env` anywhere.
 - [2026-07-09](2026-07-09.md) — T17 closes the SPEC backlog: `exit
   $LASTEXITCODE` centralized in `_ssh` (single choke point per V18, the
   B4 recurrence class), call-site hand-appends stripped, suffix pinned
