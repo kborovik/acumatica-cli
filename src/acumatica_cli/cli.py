@@ -58,21 +58,37 @@ def _version() -> str:
 @click.group(help=__doc__)
 @click.version_option(version=_version(), prog_name="acu")
 @click.option(
-    "-t", "--tenant", default=None, help="Override the tenant API sessions sign in to"
+    "-t",
+    "--tenant",
+    default=None,
+    help="Acumatica tenant the API session signs in to (acu.yaml tenant)",
 )
 @click.option(
-    "--url", "base_url", default=None, help="Override the REST root (acu.yaml base_url)"
+    "--url",
+    "base_url",
+    default=None,
+    help="REST root URL - scheme, host, and site path (acu.yaml base_url)",
 )
 @click.option(
-    "--ssh", default=None, help="Override the control-plane user@host (acu.yaml ssh)"
+    "--ssh",
+    default=None,
+    help="Control-plane SSH target as user@host (acu.yaml ssh)",
 )
 @click.option(
     "--api-version",
     default=None,
-    help="Override the contract API version (acu.yaml api_version)",
+    help="Contract API version in the endpoint URL (acu.yaml api_version)",
 )
-@click.option("--username", default=None, help="Override ACU_USER / the admin default")
-@click.option("--password", default=None, help="Override ACU_PASSWORD")
+@click.option(
+    "--username",
+    default=None,
+    help="API username (default: ACU_USER, then admin)",
+)
+@click.option(
+    "--password",
+    default=None,
+    help="API password (default: ACU_PASSWORD from .env or the environment)",
+)
 @click.pass_context
 def cli(ctx: click.Context, **flags: str | None) -> None:
     """Stash the global flags; the instance resolves lazily per command.
