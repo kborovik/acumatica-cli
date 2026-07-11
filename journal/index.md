@@ -27,7 +27,13 @@ Newest first.
   Bootstrap 1.4.0, the first diff honestly reported the one true gap
   (`action ProcessAll: not applied` — readable at last with the
   endpoint restored), one `make apply` invoked exactly that action, and
-  `make diff` exited 0; the §T backlog is empty.
+  `make diff` exited 0; the §T backlog is empty. Same day, a README
+  refresh catches the docs up to v0.3.0: the T44 default directories
+  and T47 republish route land in the CLI map, the quick start runs end
+  to end from a bare machine via `config init`, a new data-repo layout
+  section explains the numbered-prefix ordering, and a latent
+  `Add-Content` typo (missing dash on `-Value`) in the SSH setup is
+  fixed.
 - [2026-07-10](2026-07-10.md) — T29 fronts financial currency (CM202000)
   from the Bootstrap endpoint: live archaeology maps the screen's two
   views (general info on the `CurrencyList` primary including
