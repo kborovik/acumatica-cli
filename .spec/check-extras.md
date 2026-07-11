@@ -44,3 +44,34 @@ for granular /sdd:check runs.
 - cmd: `.spec/scripts/check-all parity` — sweep logic (version sed, `tr` escape-fold, `grep -vF` literal filter) lives in the script, single spelling (§T.51)
 - scope: `src/` + `tests/` + data symlinks (`baseline/`, `bootstrap/`) — XML version attribute = reference, not scanned; SPEC.md closed-§T rows + `journal/` quote retired versions, exempt by scope
 - empty output = parity; surviving `file:line` → bail: `stale Bootstrap/<ver> ref vs bootstrap_project.xml Endpoint version per §V.21 — version bump sweeps every ref, stale ref = silent-downgrade class surfacing at PUT time`
+
+## §V.4 — idempotence recipe (extracted from SPEC.md §V.4)
+
+- resume/skip gate verifies desired state, never a marker — marker outlives state loss
+- published-package skip = content parity (embedded content digest), never existence alone — stale content silently starves config
+- diff read-back survives delegate-view entities — list-GET optimization-500 → key-URL single-record GET fallback (closes §B.9)
+- multi-view entity seed file keys on primary-view fields only — cross-view `$filter` AND answers 200 `[]` while each predicate alone matches, key-URL GET 500s non-B9 so fallback never fires; secondary-view fields stay record fields, diff field-by-field (closes §B.14)
+- action file (`setup/*.yaml`) realizes state via contract action, not upsert — `done_when` live-state probe = verify gate both directions: apply skip (probe non-empty → `skip <action> (already done)`), diff drift (probe empty → `action <name>: not applied`, exit 2); probe coarse present/absent — action leaves no keyed record to field-diff
+
+## §V.5 — tenant-map symptom recipe (extracted from SPEC.md §V.5)
+
+- stale map symptom: tenant missing from sign-in + REST silently routes to default tenant; named tenants rerouted too
+- post-login landed-tenant verify refuses session on mismatch (probe discovery → §T.21)
+
+## §V.15 — cmd-grammar verb map (extracted from SPEC.md §V.15)
+
+- `tenant` = control plane resource; `create` alone chains a data-plane bootstrap publish after the SSH create — §V.1 module split intact
+- `config` = configuration ops: `init` local write, `show` local read, `check` live read-only preflight
+
+## §V.17 — spec-state dependency recipe (extracted from SPEC.md §V.17)
+
+- verify-gate leg: criterion never depends on capability another § records dead/pending unless citing the unblocking §T row
+- retirement leg: dropping a cmd/surface re-routes every § recording it as recovery/fallback route — orphaned recorded role = silent capability loss surfacing live later
+- premise leg: § text asserting repo/live state ("untracked", "exists", "published") probed @ authoring (`git ls-files` class) — stale premise plans the wrong edit, literal verify gate greens while the recorded concern stands
+
+## §V.22 — reference-closure recipe (extracted from SPEC.md §V.22)
+
+- extract-derived files strip fields referencing entities outside the baseline set (AccountGroup class)
+- extract-derived files strip server-derived fields — PUT-tolerated, server keeps own derivation, sourced value = permanent drift (ChartOfAccountsOrder/CashAccount class, Translation* sibling)
+- shipped init template set self-closing: templates' `features.yaml` enables every feature the shipped baseline templates require (closes §B.15)
+- template set ships every recorded dependency-chain link its own verify chain needs — GL-posting chain = ledger + org-ledger link + GL prefs + calendar + open periods (closes §B.16)
