@@ -1,4 +1,7 @@
-"""Live provision lifecycle against the real instance (SPEC G, `make e2e`).
+"""Live tenant lifecycle against the real instance (SPEC G, `make e2e`).
+
+The lifecycle is the SPEC G pipeline verbatim: `acu tenant create` (which
+chains the bootstrap publish, T45) -> `acu apply` -> `acu diff` clean.
 
 Opt-in tier: every test carries the `e2e` marker, which the default suite
 deselects (`make check` stays offline, V13). Run via `make e2e` from the
@@ -56,9 +59,9 @@ def acu() -> RunAcu:
     """Run the real acu binary from the repo root, capturing text output.
 
     Output is streamed through to the terminal as it arrives (acu's own
-    step lines are the progress indicator for the minutes-long provision)
-    while still being buffered for the assertions. `make e2e` passes -s so
-    pytest does not swallow the stream.
+    step lines are the progress indicator for the minutes-long create +
+    apply) while still being buffered for the assertions. `make e2e`
+    passes -s so pytest does not swallow the stream.
     """
 
     def run(*args: str) -> subprocess.CompletedProcess[str]:
@@ -139,49 +142,52 @@ def _combined(proc: subprocess.CompletedProcess[str]) -> str:
     return proc.stdout + proc.stderr
 
 
-def test_provision_builds_clean_tenant(
+def test_tenant_create_bootstraps_at_birth(
     acu: RunAcu, scratch_tenant: ScratchTenant
 ) -> None:
+    """T45: create chains the bootstrap publish - tenant + bootstrap one step."""
     proc = acu(
-        "provision",
+        "tenant",
+        "create",
         "--id",
         str(scratch_tenant.company_id),
         "--login",
         scratch_tenant.login,
     )
     assert proc.returncode == 0, _combined(proc)
-    assert "no drift" in _combined(proc)
+    assert f"tenant {scratch_tenant.login} is ready" in _combined(proc)
+    assert "AcuBootstrap published" in _combined(proc)
 
 
-def test_diff_is_clean_on_provisioned_tenant(
+def test_apply_configures_the_fresh_tenant(
     acu: RunAcu, scratch_tenant: ScratchTenant
 ) -> None:
-    """Independent read-back over baseline/ AND setup/ (T36).
+    """Bare apply sweeps the default dirs (T44): bootstrap/, baseline/, setup/."""
+    proc = acu("--tenant", scratch_tenant.login, "apply")
+    assert proc.returncode == 0, _combined(proc)
+
+
+def test_diff_is_clean_on_configured_tenant(
+    acu: RunAcu, scratch_tenant: ScratchTenant
+) -> None:
+    """Independent read-back over everything applied (SPEC G byte-identical).
 
     A clean setup/ diff is the live proof of the whole GL setup chain: each
     action file's done_when probe answers non-empty, so the FinYearSetup
     row and the 2026 company periods exist on the tenant.
     """
-    proc = acu("--tenant", scratch_tenant.login, "diff", "baseline", "setup")
+    proc = acu("--tenant", scratch_tenant.login, "diff")
     assert proc.returncode == 0, _combined(proc)
     assert "no drift" in _combined(proc)
 
 
-def test_provision_is_idempotent(acu: RunAcu, scratch_tenant: ScratchTenant) -> None:
-    proc = acu(
-        "provision",
-        "--id",
-        str(scratch_tenant.company_id),
-        "--login",
-        scratch_tenant.login,
-    )
+def test_apply_is_idempotent(acu: RunAcu, scratch_tenant: ScratchTenant) -> None:
+    proc = acu("--tenant", scratch_tenant.login, "apply")
     assert proc.returncode == 0, _combined(proc)
-    assert "skipping create" in _combined(proc)
     # every setup/ action re-verifies through its done_when probe and
     # skips - the T36 re-run leg: no second invoke, zero mutations
     assert "skip GeneratePeriods (already done)" in _combined(proc)
     assert "skip GenerateCalendar (already done)" in _combined(proc)
-    assert "no drift" in _combined(proc)
 
 
 def test_diff_detects_injected_drift(

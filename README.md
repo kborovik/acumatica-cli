@@ -7,8 +7,8 @@ Every operation is idempotent:
 
 - `acu apply` upserts records by key — running it twice is safe
 - `acu diff` detects drift between your YAML and the live tenant
-- `acu provision` takes an empty instance to a fully configured tenant in
-  one command, and skips every step that is already done
+- `acu tenant create` bootstraps the new tenant at birth, so it is ready
+  for `acu apply` in one step
 
 > **Development environment.** All development and live verification is done
 > against Acumatica ERP **26.101.0225** running on **Windows Server 2025**,
@@ -32,8 +32,9 @@ acu config show     # sanity-check the resolved target
 ```
 
 ```sh
-acu provision --id 3 --login DEV        # create → bootstrap → apply → diff
-acu diff baseline/                      # later: prove zero drift (exit 2 on drift)
+acu tenant create --id 3 --login DEV    # create the tenant + bootstrap it
+acu --tenant DEV apply                  # seed bootstrap/, baseline/, setup/
+acu --tenant DEV diff                   # prove zero drift (exit 2 on drift)
 ```
 
 ## CLI Map
@@ -41,12 +42,10 @@ acu diff baseline/                      # later: prove zero drift (exit 2 on dri
 ```text
 acu [-t TENANT]
 │
-├── provision --id N --login NAME     one command: create → bootstrap → apply → diff
-│             [--type SalesDemo] [--parent N]
-│
 ├── tenant                            tenant CRUD (ac.exe over SSH — control plane)
 │   ├── list                          CompanyID, sign-in name, internal CD, type
-│   ├── create                        create a tenant and make it automation-ready
+│   ├── create --id N --login NAME    create a tenant + bootstrap it, ready to apply
+│   │          [--type SalesDemo] [--parent N] [--hidden] [--no-init]
 │   └── delete                        delete a tenant and its data, recycle app pool
 │
 ├── apply [--dry-run] FILES...        seed baseline YAML via REST (idempotent PUT upserts)
@@ -162,19 +161,18 @@ acu apply --dry-run baseline/
 
 - **Control plane (SSH):** tenant create/delete/list via `ac.exe
   -cm:CompanyConfig` and `sqlcmd` on the Windows guest — see
-  [`docs/ac-exe.md`](docs/ac-exe.md). Used by `acu tenant` and the first step
-  of `acu provision`.
+  [`docs/ac-exe.md`](docs/ac-exe.md). Used by `acu tenant`.
 - **Data plane (REST):** baseline configuration and reference data through
   the contract-based API (`/entity/Default/25.200.001/`), where `PUT` is a
   keyed upsert — see [`docs/rest-api.md`](docs/rest-api.md). Used by
   `acu apply`, `acu diff`, and `acu schema`.
 
 If you only apply and diff baseline YAML, you never need SSH. SSH setup is
-required only for `acu tenant` and `acu provision`.
+required only for `acu tenant`.
 
 ## SSH setup (control plane)
 
-`acu tenant` and `acu provision` run commands on the Windows guest through
+`acu tenant` runs commands on the Windows guest through
 plain `ssh`. Two things about this setup are not obvious, and both are hard
 requirements:
 

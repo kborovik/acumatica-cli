@@ -1,14 +1,4 @@
-"""acu - Acumatica configuration as code.
-
-acu provision --id N --login T   one command: create -> bootstrap -> apply -> diff
-acu tenant list|create|delete    tenant CRUD (ac.exe over SSH)
-acu apply [--dry-run] [FILES]... seed baseline YAML via the REST API
-acu diff [FILES]...              drift check: baseline vs live tenant
-acu schema [--out DIR]           dump the endpoint's OpenAPI schema
-acu config init [DIR]            scaffold a data repo from templates
-acu config show                  print the resolved target instance
-acu config check                 read-only preflight: discovery, secrets, REST, ssh
-"""
+"""acu - Acumatica configuration as code."""
 
 import functools
 import json
@@ -179,7 +169,7 @@ def tenant_list(inst: Instance) -> None:
 @click.option(
     "--no-init",
     is_flag=True,
-    help="Skip app-pool recycle + first-login password change",
+    help="Skip app-pool recycle, first-login password change, and bootstrap",
 )
 @pass_instance
 def tenant_create(
@@ -191,12 +181,16 @@ def tenant_create(
     hidden: bool,
     no_init: bool,
 ) -> None:
-    """Create a tenant and make it automation-ready.
+    """Create a tenant and bootstrap it - ready for `acu apply` in one step.
 
     Chains the verified steps (docs/ac-exe.md, docs/rest-api.md): ac.exe
     CompanyConfig with the admin password preset, an app-pool recycle so the
-    running app sees the tenant, then a REST login check (with the sign-in
-    screen's first-login password-change flow as fallback).
+    running app sees the tenant, a REST login check (with the sign-in
+    screen's first-login password-change flow as fallback), then the
+    bootstrap package publish that makes the virgin tenant configurable
+    (features on, Bootstrap endpoint up). --no-init skips everything after
+    the create: an unrecycled tenant is invisible to REST, so the bootstrap
+    chain cannot run either.
     """
     mgr = TenantManager(inst)
     with output.step(f"creating tenant {company_id} ({login_name}) on {inst.base_url}"):
@@ -206,6 +200,7 @@ def tenant_create(
         output.warn("skipping init: tenant is invisible until an app-pool recycle")
         return
     _init_tenant(inst, mgr, login_name)
+    _bootstrap_tenant(inst, mgr, login_name)
 
 
 def _init_tenant(inst: Instance, mgr: TenantManager, login_name: str) -> None:
@@ -215,6 +210,34 @@ def _init_tenant(inst: Instance, mgr: TenantManager, login_name: str) -> None:
     with output.step("verifying REST login (screen-flow password change as fallback)"):
         result = firstlogin.initialize_admin_password(inst, tenant=login_name)
     output.success(f"admin {result}; tenant {login_name} is ready")
+
+
+def _bootstrap_tenant(inst: Instance, mgr: TenantManager, login_name: str) -> None:
+    """Publish the bootstrap package into the fresh tenant (data plane).
+
+    Idempotent on content, not existence (V4): publish() skips only when the
+    published package carries the digest of the package built now. The
+    session targets the new tenant explicitly (V5), never a config default.
+    The feature set is data (V2): bootstrap/features.yaml in the data repo,
+    no data repo or no file -> the built-in six.
+    """
+    inst = inst.model_copy(update={"tenant": login_name})
+    root = find_data_root()
+    features = bootstrap.load_features(root) if root is not None else None
+    with (
+        output.step(f"publishing {bootstrap.PACKAGE_NAME} to {inst.tenant}"),
+        AcumaticaClient(inst) as client,
+    ):
+        result = bootstrap.publish(client, features=features)
+    output.success(f"{bootstrap.PACKAGE_NAME} {result}")
+    # unconditional: the publish restarts the site BEFORE its DB transaction
+    # commits, so the restarted domain caches the feature slot pre-plugin
+    # (verified live: gated screens stay 403 until one more recycle); on the
+    # skip path a recycle is the cheap way to make a resumed run sound too
+    with output.step("recycling app pool (feature set loads at app start)"):
+        mgr.recycle_app_pool()
+    with output.step("waiting for the site to come back"):
+        firstlogin.initialize_admin_password(inst, tenant=login_name)
 
 
 @tenant_group.command("delete")
@@ -356,7 +379,7 @@ SEED_DIRS = ("bootstrap", "baseline", "setup")
 def default_seed_dirs() -> tuple[Path, ...]:
     """The init-scaffolded seed dirs that exist at the data-repo root.
 
-    apply and diff default to these when called with no FILES, in provision
+    apply and diff default to these when called with no FILES, in fixed
     order (bootstrap, baseline, setup); the data repo is the acu.yaml dir
     (V3 walk-up). None existing is an error - an empty default would make
     a bare run a silent no-op. Paths come back relative to cwd (the root is
@@ -391,101 +414,6 @@ def expand_files(files: tuple[Path, ...]) -> list[Path]:
     return paths
 
 
-@cli.command("provision")
-@click.option(
-    "--id",
-    "company_id",
-    type=int,
-    required=True,
-    help="CompanyID (first free is usually 3)",
-)
-@click.option(
-    "--login",
-    "login_name",
-    required=True,
-    help="Acumatica tenant name as shown on the sign-in page",
-)
-@click.option(
-    "--type",
-    "company_type",
-    default="",
-    help="Inserted data set: '' = clean, SalesDemo = demo",
-)
-@click.option("--parent", "parent_id", type=int, default=1, show_default=True)
-@pass_instance
-def provision_cmd(
-    inst: Instance,
-    company_id: int,
-    login_name: str,
-    company_type: str,
-    parent_id: int,
-) -> None:
-    """One command to a configured tenant: create -> bootstrap -> apply -> diff.
-
-    Chains the verified pipeline (docs/rest-api.md) idempotently: tenant
-    create over SSH (skipped when the login name already exists), bootstrap
-    package publish (skipped when already published), bootstrap/ YAML through
-    the custom endpoint, baseline/ through the Default endpoint, setup/
-    action files (skipped when their done_when probe verifies the state),
-    then a drift check over everything applied - exit 2 on drift.
-    """
-    root = data_root()
-    baseline_dir = root / "baseline"
-    if not baseline_dir.is_dir():
-        raise SystemExit(f"{baseline_dir}: not a directory - nothing to provision")
-    seed_dirs = [
-        d for d in (root / "bootstrap", baseline_dir, root / "setup") if d.is_dir()
-    ]
-    # every session below signs in to the provisioned tenant, never a default
-    inst = inst.model_copy(update={"tenant": login_name})
-
-    mgr = TenantManager(inst)
-    if any(t.login_name == login_name for t in mgr.list()):
-        output.info(f"tenant {login_name} exists on {inst.base_url} - skipping create")
-    else:
-        with output.step(
-            f"creating tenant {company_id} ({login_name}) on {inst.base_url}"
-        ):
-            raw = mgr.create(company_id, login_name, parent_id, True, company_type)
-        output.data(raw.splitlines()[-1] if raw.strip() else "created")
-        _init_tenant(inst, mgr, login_name)
-
-    # feature set = data (V2): bootstrap/features.yaml, absent -> built-in six
-    features = bootstrap.load_features(root)
-    with (
-        output.step(f"publishing {bootstrap.PACKAGE_NAME} to {inst.tenant}"),
-        AcumaticaClient(inst) as client,
-    ):
-        result = bootstrap.publish(client, features=features)
-    output.success(f"{bootstrap.PACKAGE_NAME} {result}")
-    # unconditional: the publish restarts the site BEFORE its DB transaction
-    # commits, so the restarted domain caches the feature slot pre-plugin
-    # (verified live: gated screens stay 403 until one more recycle); on the
-    # skip path a recycle is the cheap way to make a resumed run sound too
-    with output.step("recycling app pool (feature set loads at app start)"):
-        mgr.recycle_app_pool()
-    with output.step("waiting for the site to come back"):
-        firstlogin.initialize_admin_password(inst, tenant=login_name)
-
-    # fresh session: publishing restarts the app domain, so don't trust the
-    # cookie that watched it happen
-    drifts: list[str] = []
-    seed_paths = expand_files(tuple(seed_dirs))
-    with AcumaticaClient(inst) as client:
-        for path in seed_paths:
-            baseline = seed.load_baseline(path)
-            output.data(
-                f"{path} -> {inst.tenant} on {inst.base_url} ({baseline.entity})"
-            )
-            n = seed.apply(client, baseline)
-            output.data(f"  {n} record(s)")
-        # diff everything applied, bootstrap YAML included - a PUT that
-        # answers 200 can persist nothing (T3), the drift check is the proof
-        for path in seed_paths:
-            drifts += seed.diff(client, seed.load_baseline(path))
-    _exit_on_drift(inst, drifts, len(seed_paths))
-
-
 @cli.command("apply")
 @click.argument(
     "files", nargs=-1, required=False, type=click.Path(exists=True, path_type=Path)
@@ -497,7 +425,7 @@ def apply_cmd(inst: Instance, files: tuple[Path, ...], dry_run: bool) -> None:
 
     FILES are baseline YAML files or directories containing them. Omitted,
     they default to the data repo's existing init-scaffolded directories in
-    provision order: bootstrap/, baseline/, setup/.
+    fixed order: bootstrap/, baseline/, setup/.
     """
     with AcumaticaClient(inst) as client:
         for path in expand_files(files or default_seed_dirs()):
@@ -549,7 +477,7 @@ def diff_cmd(inst: Instance, files: tuple[Path, ...]) -> None:
 
     FILES are baseline YAML files or directories containing them. Omitted,
     they default to the data repo's existing init-scaffolded directories in
-    provision order: bootstrap/, baseline/, setup/.
+    fixed order: bootstrap/, baseline/, setup/.
     """
     paths = expand_files(files or default_seed_dirs())
     drifts: list[str] = []

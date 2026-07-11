@@ -153,20 +153,16 @@ def test_tenant_list_renders_table(
 
 
 @pytest.fixture
-def provision_env(
+def create_env(
     wired: Instance, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> list[str]:
-    """A data repo + monkeypatched chain that records every provisioning step."""
+    """A data repo + monkeypatched chain that records every create step."""
     calls: list[str] = []
-    (tmp_path / "bootstrap").mkdir()
-    (tmp_path / "bootstrap" / "credit-terms.yaml").write_text(BOOTSTRAP_YAML)
     # features.yaml is package-build config: it must reach publish() as the
-    # feature list (V2) and never enter the apply/diff seed sweep
+    # feature list (V2)
+    (tmp_path / "bootstrap").mkdir()
     (tmp_path / "bootstrap" / "features.yaml").write_text(FEATURES_YAML)
-    (tmp_path / "baseline").mkdir()
-    (tmp_path / "baseline" / "uoms.yaml").write_text(BASELINE)
-    monkeypatch.setattr(cli, "data_root", lambda: tmp_path)
-    monkeypatch.setattr(TenantManager, "list", lambda self: [])
+    monkeypatch.setattr(cli, "find_data_root", lambda: tmp_path)
     monkeypatch.setattr(
         TenantManager,
         "create",
@@ -184,138 +180,103 @@ def provision_env(
         cli.bootstrap,
         "publish",
         lambda client, **k: (
-            calls.append("publish:" + ",".join(k["features"])) or "published"
+            calls.append(
+                f"publish:{client.instance.tenant}:"
+                + (",".join(k["features"]) if k["features"] else "default")
+            )
+            or "published"
         ),
-    )
-    monkeypatch.setattr(
-        cli.seed,
-        "apply",
-        lambda client, baseline, dry_run=False: (
-            calls.append(f"apply:{baseline.path.name}") or len(baseline.records)
-        ),
-    )
-    monkeypatch.setattr(
-        cli.seed,
-        "diff",
-        lambda client, baseline: calls.append(f"diff:{baseline.path.name}") or [],
     )
     return calls
 
 
-def test_provision_chains_create_bootstrap_apply_diff(provision_env: list[str]) -> None:
+def test_tenant_create_chains_init_and_bootstrap(create_env: list[str]) -> None:
     result = CliRunner().invoke(
-        cli.cli, ["provision", "--id", "3", "--login", "Scratch"]
+        cli.cli, ["tenant", "create", "--id", "3", "--login", "Scratch"]
     )
 
     assert result.exit_code == 0
-    # the ordered pipeline from docs/rest-api.md, bootstrap YAML before
-    # baseline; the post-publish recycle reloads the feature slot (the
-    # publish's own restart caches it before the plugin's insert commits);
-    # the drift check covers everything applied, bootstrap YAML included
-    # (a PUT that answers 200 can persist nothing - T3)
-    assert provision_env == [
+    # the ordered pipeline from docs/ac-exe.md + docs/rest-api.md (T45):
+    # create over SSH, recycle + login check (V5), then the bootstrap
+    # publish into the NEW tenant (never the config default) followed by
+    # the post-publish recycle - the publish's own restart caches the
+    # feature slot before the plugin's insert commits
+    assert create_env == [
         "create",
         "recycle",
         "init:Scratch",
-        "publish:MultiCompany,Multicurrency",
+        "publish:Scratch:MultiCompany,Multicurrency",
         "recycle",
         "init:Scratch",
-        "apply:credit-terms.yaml",
-        "apply:uoms.yaml",
-        "diff:credit-terms.yaml",
-        "diff:uoms.yaml",
     ]
-    # every session targets the provisioned tenant, not the config default
-    assert (
-        "+ no drift on Scratch (http://acu.test/AcumaticaERP, 2 file(s))"
-        in result.stderr
-    )
+    assert "tenant Scratch is ready" in result.stderr
+    assert "AcuBootstrap published" in result.stderr
 
 
-def test_provision_skips_create_when_tenant_exists(
-    provision_env: list[str], monkeypatch: pytest.MonkeyPatch
-) -> None:
-    tenant = Tenant(
-        company_id=3, company_cd="Company3", login_name="Scratch", company_type="Custom"
-    )
-    monkeypatch.setattr(TenantManager, "list", lambda self: [tenant])
+def test_tenant_create_no_init_skips_bootstrap(create_env: list[str]) -> None:
+    # an unrecycled tenant is invisible to REST, so --no-init must skip the
+    # whole init + bootstrap chain, not just the recycle
     result = CliRunner().invoke(
-        cli.cli, ["provision", "--id", "3", "--login", "Scratch"]
+        cli.cli, ["tenant", "create", "--id", "3", "--login", "Scratch", "--no-init"]
     )
 
     assert result.exit_code == 0
-    assert provision_env == [
-        "publish:MultiCompany,Multicurrency",
-        "recycle",
-        "init:Scratch",
-        "apply:credit-terms.yaml",
-        "apply:uoms.yaml",
-        "diff:credit-terms.yaml",
-        "diff:uoms.yaml",
-    ]
-    assert "skipping create" in result.stderr
+    assert create_env == ["create"]
+    assert "skipping init" in result.stderr
 
 
-def test_provision_recycles_even_when_already_published(
-    provision_env: list[str], monkeypatch: pytest.MonkeyPatch
+def test_tenant_create_defaults_features_without_data_repo(
+    create_env: list[str], monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    tenant = Tenant(
-        company_id=3, company_cd="Company3", login_name="Scratch", company_type="Custom"
+    # no data repo (V3 lax discovery) -> publish() gets features=None and
+    # falls back to the built-in six (SPEC I.data)
+    monkeypatch.setattr(cli, "find_data_root", lambda: None)
+    result = CliRunner().invoke(
+        cli.cli, ["tenant", "create", "--id", "3", "--login", "Scratch"]
     )
-    monkeypatch.setattr(TenantManager, "list", lambda self: [tenant])
+
+    assert result.exit_code == 0
+    assert "publish:Scratch:default" in create_env
+
+
+def test_tenant_create_recycles_even_when_already_published(
+    create_env: list[str], monkeypatch: pytest.MonkeyPatch
+) -> None:
     monkeypatch.setattr(
         cli.bootstrap,
         "publish",
-        lambda client, **k: provision_env.append("publish") or "already published",
+        lambda client, **k: create_env.append("publish") or "already published",
     )
     result = CliRunner().invoke(
-        cli.cli, ["provision", "--id", "3", "--login", "Scratch"]
+        cli.cli, ["tenant", "create", "--id", "3", "--login", "Scratch"]
     )
 
     # resume path: the recycle stays — a publish interrupted before its
     # recycle would otherwise leave the feature slot cached pre-plugin
     assert result.exit_code == 0
-    assert provision_env == [
+    assert create_env == [
+        "create",
+        "recycle",
+        "init:Scratch",
         "publish",
         "recycle",
         "init:Scratch",
-        "apply:credit-terms.yaml",
-        "apply:uoms.yaml",
-        "diff:credit-terms.yaml",
-        "diff:uoms.yaml",
     ]
 
 
-def test_provision_drift_exits_two(
-    provision_env: list[str], monkeypatch: pytest.MonkeyPatch
-) -> None:
-    drift = "UnitsOfMeasure [KG].Description: source='Kilogram' live='kg'"
-    monkeypatch.setattr(cli.seed, "diff", lambda client, baseline: [drift])
-    result = CliRunner().invoke(
-        cli.cli, ["provision", "--id", "3", "--login", "Scratch"]
-    )
+def test_provision_cmd_is_gone(wired: Instance) -> None:
+    # T45: tenant create chains the bootstrap publish itself; the separate
+    # provision command must not exist
+    result = CliRunner().invoke(cli.cli, ["provision"])
 
-    assert result.exit_code == 2
-    assert "x DRIFT on Scratch (http://acu.test/AcumaticaERP):" in result.stderr
-    assert drift in result.output
-
-
-def test_provision_requires_a_baseline_dir(
-    provision_env: list[str], tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    monkeypatch.setattr(cli, "data_root", lambda: tmp_path / "empty")
-    result = CliRunner().invoke(
-        cli.cli, ["provision", "--id", "3", "--login", "Scratch"]
-    )
-
-    assert result.exit_code == 1
-    assert "nothing to provision" in result.output
-    assert provision_env == []
+    assert result.exit_code != 0
+    assert "No such command" in result.output
 
 
 def test_bootstrap_cmd_is_gone(wired: Instance) -> None:
-    # T8: bootstrap.publish() stays a module; resumable provision is the
-    # recovery route — the standalone command must not exist
+    # T8: bootstrap.publish() stays a module; re-running tenant create (its
+    # digest-gated publish chain) is the recovery route — the standalone
+    # command must not exist
     result = CliRunner().invoke(cli.cli, ["bootstrap"])
 
     assert result.exit_code != 0
@@ -575,7 +536,7 @@ def test_config_init_template_set_is_feature_closed(tmp_path: Path) -> None:
     # V22 feature closure (B15): the scaffolded features.yaml must enable
     # every feature the shipped baseline templates require - the Subaccount
     # template PUTs against feature-gated GL203000, so SubAccount must be
-    # in the list or a scaffolded provision 403s at the first baseline file
+    # in the list or a scaffolded apply 403s at the first baseline file
     CliRunner().invoke(cli.cli, ["config", "init", str(tmp_path)])
 
     features = yaml.safe_load((tmp_path / "bootstrap" / "features.yaml").read_text())
@@ -596,7 +557,7 @@ def test_config_init_template_set_is_reference_closed(tmp_path: Path) -> None:
     # V22 reference closure (B16 sibling of B15): every OrganizationID an
     # org-referencing template carries must be the organization the shipped
     # set itself creates - bootstrap/company.yaml's AcctCD - or a scaffolded
-    # provision 422s on an org that does not exist
+    # apply 422s on an org that does not exist
     CliRunner().invoke(cli.cli, ["config", "init", str(tmp_path)])
 
     company = yaml.safe_load((tmp_path / "bootstrap" / "company.yaml").read_text())
@@ -897,7 +858,7 @@ def test_diff_defaults_to_scaffolded_dirs(
     wired: Instance, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     # T44/I.cmd: FILES omitted -> the existing init-scaffolded dirs at the
-    # data-repo root (V3 walk-up), in provision order
+    # data-repo root (V3 walk-up), in fixed order
     _seed_repo(tmp_path)
     monkeypatch.chdir(tmp_path)
     seen: list[str] = []

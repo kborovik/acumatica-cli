@@ -24,7 +24,7 @@ test: .venv ## Run the test suite (pytest, offline — no live instance needed)
 	$(call header,Running pytest)
 	uv run pytest
 
-e2e: ## Live E2E vs the data-repo instance: provision scratch tenant, diff, destroy (needs tailnet + decrypted .env)
+e2e: ## Live E2E vs the data-repo instance: create scratch tenant, apply, diff, destroy (needs tailnet + decrypted .env)
 	test -e acu.yaml || { echo "acu.yaml not found — symlink it from ../acumatica-baseline"; exit 1; }
 	test -e .env || { echo ".env missing — run 'make decrypt' in ../acumatica-baseline"; exit 1; }
 	$(call header,Running live E2E (creates and destroys tenant E2E))

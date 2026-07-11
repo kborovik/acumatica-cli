@@ -343,7 +343,7 @@ False; restarts the app) and read
 - **The feature slot outlives the publish restart.** The publish restarts
   the site BEFORE its DB transaction commits, so the restarted domain
   caches the pre-plugin feature set — feature-gated screens keep answering
-  403 until one more app-pool recycle. `acu provision` recycles
+  403 until one more app-pool recycle. `acu tenant create` recycles
   unconditionally after its publish step.
 
 ## Conventions for the seeding layer

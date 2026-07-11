@@ -102,8 +102,8 @@ def find_data_root() -> Path | None:
     """Walk up from cwd to the first directory containing acu.yaml, if any.
 
     None is not an error (V3): flags plus environment can supply the full
-    config; only commands needing data files (provision, schema) require a
-    data repo and go through data_root instead.
+    config; only commands needing data files (schema, a bare apply/diff)
+    require a data repo and go through data_root instead.
     """
     for d in [Path.cwd(), *Path.cwd().parents]:
         if (d / "acu.yaml").is_file():
