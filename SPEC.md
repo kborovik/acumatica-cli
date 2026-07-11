@@ -73,7 +73,7 @@ T51|x|mechanize pre-commit audit into one runner — `.spec/scripts/check-all` e
 T52|x|extract manifest record filter — `EntitySpec` gains `filter:` ? (OData `$filter` fragment, both list reads); Currency row `IsFinancial eq true` (~172-row ISO list → 4 configured)|V4,V12,V22,T48,T50
 T53|x|repo hygiene after data-repo rename — untrack `.env.gpg` + `.gitignore` gains it; CLAUDE.md syncs data-repo name + symlink set + verify cmd to §C|V2,V13,V17
 T54|x|`make e2e` optional FILE arg — `make e2e FILE=<path-or-stem>` scopes pytest to one e2e file, bare `make e2e` = whole tier unchanged|V13
-T55|.|add `--completion` global flag — click-native script emit (`bash|zsh|fish`, <shell> ? → `$SHELL` detect) + local-only value completion (`extract --only` entity names from packaged manifest, `apply`/`diff` path args)|V9,V16,V23,I.cmd
+T55|x|add `--completion` global flag — click-native script emit (`bash|zsh|fish`, <shell> ? → `$SHELL` detect) + local-only value completion (`extract --only` entity names from packaged manifest, `apply`/`diff` path args)|V9,V16,V23,I.cmd
 T56|.|tenant create `--type` validation — click choice `SalesDemo|T100|U100` (docs/ac-exe.md verified set, `System` excluded), non-member → error naming allowed set before SSH, omitted = clean tenant; help text documents exact names|V7,V9,V12,V16,I.cmd
 
 ## §B BUGS

@@ -10,6 +10,7 @@ from typing import Concatenate
 
 import click
 import httpx
+from click.shell_completion import get_completion_class
 
 from . import bootstrap, extract, firstlogin, output, seed
 from .client import AcumaticaClient
@@ -43,8 +44,53 @@ def _version() -> str:
     return dist.version
 
 
+# flag_value sentinel: a bare --completion means "detect from $SHELL"
+_DETECT_SHELL = "auto"
+
+
+def _completion_script(shell: str) -> str:
+    """The click completion script for one supported shell (I.cmd --completion).
+
+    The _DETECT_SHELL sentinel resolves the shell from $SHELL's basename,
+    so a bare --completion works in the shell it runs in; an unsupported
+    or undetectable shell errors naming the supported set (V9: exit 1).
+    Emission is local-only (V23): click renders the script text, nothing
+    live is touched - enabling is the user's job (source the output).
+    """
+    if shell == _DETECT_SHELL:
+        shell = Path(os.environ.get("SHELL", "")).name
+    completion_cls = get_completion_class(shell)
+    if completion_cls is None:
+        raise SystemExit(
+            f"cannot emit completion for shell {shell!r} (supported: bash, zsh, fish)"
+        )
+    return completion_cls(cli, {}, "acu", "_ACU_COMPLETE").source()
+
+
+def _emit_completion(
+    ctx: click.Context, _param: click.Parameter, shell: str | None
+) -> None:
+    """Print the completion script and exit - eager, like --version (V16)."""
+    if shell is None or ctx.resilient_parsing:
+        return
+    output.data(_completion_script(shell))
+    ctx.exit()
+
+
 @click.group(help=__doc__)
 @click.version_option(version=_version(), prog_name="acu")
+@click.option(
+    "--completion",
+    is_flag=False,
+    flag_value=_DETECT_SHELL,
+    default=None,
+    expose_value=False,
+    is_eager=True,
+    callback=_emit_completion,
+    metavar="[bash|zsh|fish]",
+    help="Print the shell completion script and exit; a bare --completion "
+    "detects the shell from $SHELL. Enable by sourcing the output.",
+)
 @click.option(
     "--tenant",
     default=None,
@@ -506,6 +552,21 @@ def diff_cmd(inst: Instance, files: tuple[Path, ...]) -> None:
     _exit_on_drift(inst, drifts, len(paths))
 
 
+def _complete_only(
+    _ctx: click.Context, _param: click.Parameter, incomplete: str
+) -> list[str]:
+    """--only value completion: entity names off the packaged manifest.
+
+    Fires per keystroke, so it stays local-only (V23): the manifest is
+    package data - never REST, never SSH, never a live instance.
+    """
+    return [
+        spec.entity
+        for spec in extract.load_manifest().entities
+        if spec.entity.startswith(incomplete)
+    ]
+
+
 @cli.command("extract")
 @click.option(
     "--out",
@@ -517,6 +578,7 @@ def diff_cmd(inst: Instance, files: tuple[Path, ...]) -> None:
 @click.option(
     "--only",
     multiple=True,
+    shell_complete=_complete_only,
     help="Limit to matching manifest rows (entity name or file stem); repeatable",
 )
 @click.option("--force", is_flag=True, help="Overwrite existing files")
