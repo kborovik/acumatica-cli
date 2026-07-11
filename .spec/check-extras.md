@@ -4,6 +4,11 @@ Consumed by /sdd:check (cascade scan) and sweep tasks. Each recipe:
 run cmd, apply exemption filter, any surviving match = violation
 → bail w/ recipe msg; no commit until match-free.
 
+Build pre-commit entry: `.spec/scripts/check-all` runs every recipe
+below (legs `ascii` `extras` `parity`; one leg arg = that recipe only),
+exit 1 on any surviving match — per-recipe cmds + bail msgs below stay
+for granular /sdd:check runs.
+
 ## §V.9 — ASCII-only output audit
 
 - cmd: `.spec/scripts/check-ascii src/`
@@ -36,7 +41,6 @@ run cmd, apply exemption filter, any surviving match = violation
 
 ## §V.21 — endpoint-version parity (T33 sweep mechanized)
 
-- cmd: `v=$(sed -n 's/.*name="Bootstrap" version="\([0-9.]*\)".*/\1/p' src/acumatica_cli/bootstrap_project.xml); grep -rn 'Bootstrap/[0-9][0-9.]*' src tests baseline bootstrap | tr -d '\\' | grep -vF "Bootstrap/$v"`
+- cmd: `.spec/scripts/check-all parity` — sweep logic (version sed, `tr` escape-fold, `grep -vF` literal filter) lives in the script, single spelling (§T.51)
 - scope: `src/` + `tests/` + data symlinks (`baseline/`, `bootstrap/`) — XML version attribute = reference, not scanned; SPEC.md closed-§T rows + `journal/` quote retired versions, exempt by scope
-- `tr -d '\\'` folds regex-escaped refs (`Bootstrap/1\.1\.0` in test match patterns) into the literal filter; `grep -vF` keeps version dots literal
 - empty output = parity; surviving `file:line` → bail: `stale Bootstrap/<ver> ref vs bootstrap_project.xml Endpoint version per §V.21 — version bump sweeps every ref, stale ref = silent-downgrade class surfacing at PUT time`

@@ -1,0 +1,80 @@
+#!/usr/bin/env bash
+# check-all [leg...] - run the .spec/check-extras.md audit recipes (SPEC ST.51).
+#
+# The build pre-commit entry: one command instead of three hand-copied
+# ones. Legs: ascii (check-ascii src/), extras (check-extras.sh V1/V10/
+# V18 drift greps), parity (SV.21 Bootstrap endpoint-version sweep - the
+# sweep logic lives here and the doc references this script, so the
+# one-liner has a single spelling). No args = every leg; a leg argument
+# runs just that recipe (per-recipe granularity for /sdd:check).
+#
+# Output (V9: ASCII, stdout = data): each failing leg streams its
+# surviving output, then one `check-all: <leg> ok|FAIL` line per leg.
+# Exit 1 when any leg fails, 0 clean.
+set -u
+cd "$(dirname "$0")/../.." || exit 1
+
+SCRIPTS=.spec/scripts
+fail=0
+
+ascii() { python3 "$SCRIPTS/check-ascii" src/; }
+
+extras() { bash "$SCRIPTS/check-extras.sh"; }
+
+# SV.21 endpoint-version parity: every literal Bootstrap/<ver> ref in
+# src/, tests/, and the data symlinks must match bootstrap_project.xml's
+# Endpoint version - a stale ref is the silent-downgrade class surfacing
+# at PUT time. tr folds regex-escaped refs (Bootstrap/1\.4\.0 in test
+# match patterns) into the literal filter; grep -vF keeps version dots
+# literal. The XML version attribute itself is the reference, not a
+# scanned ref (no slash form).
+parity() {
+    local v hits d dirs
+    v=$(sed -n 's/.*name="Bootstrap" version="\([0-9.]*\)".*/\1/p' \
+        src/acumatica_cli/bootstrap_project.xml)
+    if [ -z "$v" ]; then
+        echo "no Endpoint version in src/acumatica_cli/bootstrap_project.xml"
+        return 1
+    fi
+    dirs=""
+    for d in src tests baseline bootstrap; do
+        [ -e "$d" ] && dirs="$dirs $d"
+    done
+    # -I skips binary files and --exclude-dir skips __pycache__: compiled
+    # artifacts echo source refs and are not sources themselves
+    # shellcheck disable=SC2086  # fixed dir names, splitting intended
+    hits=$(grep -rnI --exclude-dir=__pycache__ 'Bootstrap/[0-9][0-9.]*' \
+        $dirs 2>/dev/null | tr -d '\\' | grep -vF "Bootstrap/$v")
+    if [ -n "$hits" ]; then
+        printf '%s\n' "$hits"
+        return 1
+    fi
+    return 0
+}
+
+run_leg() {
+    local name=$1 out status
+    out=$("$name" 2>&1)
+    status=$?
+    if [ "$status" -ne 0 ]; then
+        [ -n "$out" ] && printf '%s\n' "$out"
+        printf 'check-all: %s FAIL\n' "$name"
+        fail=1
+    else
+        printf 'check-all: %s ok\n' "$name"
+    fi
+}
+
+if [ "$#" -eq 0 ]; then
+    set -- ascii extras parity
+fi
+for leg in "$@"; do
+    case "$leg" in
+    ascii | extras | parity) run_leg "$leg" ;;
+    *)
+        echo "check-all: unknown leg '$leg' (legs: ascii extras parity)" >&2
+        exit 1
+        ;;
+    esac
+done
+exit "$fail"
