@@ -12,9 +12,10 @@ from urllib.parse import unquote
 
 import httpx
 import pytest
+import yaml
 from click.testing import CliRunner
 
-from acumatica_cli import cli, extract, seed
+from acumatica_cli import bootstrap, cli, extract, seed
 from acumatica_cli import client as client_mod
 from acumatica_cli.client import AcumaticaClient, wrap
 from acumatica_cli.config import Instance
@@ -190,6 +191,25 @@ TABLES: dict[str, list[dict[str, Any]]] = {
         {"UnitID": "PIECE", "Description": "Piece", "L3Code": "PCB"},
         {"UnitID": "HOUR", "Description": "Hour", "L3Code": "HUR"},
     ],
+    # -- setup/ synthesis sources (T49): the state the GL action chain left --
+    "FinancialYearSettings": [
+        {
+            # DateTimeValue: the synthesizer keeps the date part only
+            "BegFinYear": "2026-01-01T00:00:00+00:00",
+            "FinPeriods": 12,
+            "PeriodType": "Month",
+        }
+    ],
+    "MasterCalendar": [{"FinancialYear": "2026"}, {"FinancialYear": "2027"}],
+    "CompanyCalendar": [
+        {"FinancialYear": "2026", "OrganizationID": "COMPANY"},
+        {"FinancialYear": "2027", "OrganizationID": "COMPANY"},
+    ],
+    "CompanyPeriod": [
+        {"FinancialYear": "2026", "FinPeriodID": "012026", "Status": "Open"},
+        {"FinancialYear": "2027", "FinPeriodID": "012027", "Status": "Open"},
+        {"FinancialYear": "2027", "FinPeriodID": "022027", "Status": "Inactive"},
+    ],
 }
 KEYS = {spec.entity: spec.keys for spec in extract.load_manifest().entities}
 DELEGATE_VIEW = frozenset({"Currency"})
@@ -217,8 +237,14 @@ def test_packaged_manifest_is_self_consistent() -> None:
         "LedgerCompany",
         "UnitsOfMeasure",
     ]
-    files = [s.file for s in manifest.entities]
+    assert [(s.kind, s.file) for s in manifest.setup] == [
+        ("financial-year", "setup/10-financial-year.yaml"),
+        ("master-calendar", "setup/20-master-calendar.yaml"),
+        ("open-periods", "setup/30-open-periods.yaml"),
+    ]
+    files = [s.file for s in manifest.entities] + [s.file for s in manifest.setup]
     assert len(files) == len(set(files))
+    assert extract.FEATURES_FILE not in files
     for spec in manifest.entities:
         assert spec.keys, spec.entity
         if spec.entity in seed.BOOTSTRAP_ENTITIES:
@@ -246,6 +272,20 @@ def test_manifest_rejects_duplicate_files() -> None:
     spec = extract.EntitySpec(entity="Ledger", keys=["LedgerID"], file="dup.yaml")
     with pytest.raises(ValueError, match="duplicate destination files"):
         extract.Manifest(entities=[spec, spec])
+
+
+def test_manifest_rejects_row_claiming_features_file() -> None:
+    # bootstrap/features.yaml belongs to the feature-closure render
+    spec = extract.EntitySpec(
+        entity="Ledger", keys=["LedgerID"], file=extract.FEATURES_FILE
+    )
+    with pytest.raises(ValueError, match="duplicate destination files"):
+        extract.Manifest(entities=[spec])
+
+
+def test_setup_synth_rejects_unknown_kind() -> None:
+    with pytest.raises(ValueError, match="unknown setup synthesizer kind"):
+        extract.SetupSynth(kind="bogus", file="setup/x.yaml")
 
 
 def test_entity_spec_rejects_empty_keys() -> None:
@@ -379,7 +419,33 @@ def test_run_dry_run_writes_nothing(
     _run(instance, server, tmp_path, dry_run=True)
     out = capsys.readouterr().out
     assert f"would write {tmp_path / 'bootstrap' / 'company.yaml'} (1 records)" in out
+    assert (
+        f"would write {tmp_path / 'setup' / '10-financial-year.yaml'} (1 records)"
+        in out
+    )
+    # 8 = the built-in six + Multicurrency + SubAccount: dry-run gates
+    # count would-write files, nothing is on disk yet
+    assert f"would write {tmp_path / 'bootstrap' / 'features.yaml'} (8 records)" in out
     assert list(tmp_path.iterdir()) == []
+
+
+def test_rerun_skips_every_emitted_file(
+    instance: Instance,
+    server: FakeServer,
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """Second run: every destination skips; --force rewrites them all."""
+    _run(instance, server, tmp_path)
+    capsys.readouterr()
+    _run(instance, server, tmp_path)
+    lines = [ln for ln in capsys.readouterr().out.splitlines() if ln]
+    assert len(lines) == 13  # 9 entities + 3 setup + features
+    assert all(ln.startswith("skip ") and ln.endswith("(exists)") for ln in lines)
+    _run(instance, server, tmp_path, force=True)
+    lines = [ln for ln in capsys.readouterr().out.splitlines() if ln]
+    assert len(lines) == 13
+    assert all(ln.startswith("write ") for ln in lines)
 
 
 def test_run_only_filters_entity_name_or_file_stem(
@@ -424,6 +490,120 @@ def test_b9_non_optimization_500_still_raises(
         _run(instance, server, tmp_path, only=frozenset({"Currency"}))
 
 
+# -- setup/ synthesis: the GL action chain derived back from live state --
+
+
+def test_synthesized_financial_year(
+    instance: Instance, server: FakeServer, tmp_path: Path
+) -> None:
+    _run(instance, server, tmp_path, only=frozenset({"financial-year"}))
+    doc = yaml.safe_load((tmp_path / "setup" / "10-financial-year.yaml").read_text())
+    assert doc == {
+        "action": "GeneratePeriods",
+        "entity": "FinancialYearSettings",
+        "endpoint": seed.BOOTSTRAP_ENDPOINT,
+        # BegFinYear: date part only, off the live ISO datetime
+        "record": {"BegFinYear": "2026-01-01", "FinPeriods": 12, "PeriodType": "Month"},
+        "done_when": {},
+    }
+
+
+def test_synthesized_master_calendar_spans_year_range(
+    instance: Instance, server: FakeServer, tmp_path: Path
+) -> None:
+    _run(instance, server, tmp_path, only=frozenset({"master-calendar"}))
+    doc = yaml.safe_load((tmp_path / "setup" / "20-master-calendar.yaml").read_text())
+    assert doc == {
+        "action": "GenerateCalendar",
+        "entity": "MasterCalendar",
+        "endpoint": seed.BOOTSTRAP_ENDPOINT,
+        "record": {"FinancialYear": "2026"},
+        "parameters": {"FromYear": "2026", "ToYear": "2027"},
+        # the last year is the stronger done evidence: generation
+        # completed through the range
+        "done_when": {"entity": "CompanyCalendar", "filter": "FinancialYear eq '2027'"},
+    }
+
+
+def test_synthesized_open_periods_sources_company_org(
+    instance: Instance, server: FakeServer, tmp_path: Path
+) -> None:
+    """OrganizationID = the extracted Company AcctCD (V22 in-set closure)."""
+    _run(instance, server, tmp_path, only=frozenset({"open-periods"}))
+    doc = yaml.safe_load((tmp_path / "setup" / "30-open-periods.yaml").read_text())
+    assert doc == {
+        "action": "ProcessAll",
+        "entity": "ManagePeriods",
+        "endpoint": seed.BOOTSTRAP_ENDPOINT,
+        "record": {
+            "Action": "Open",
+            "FromYear": "2026",
+            "ToYear": "2027",
+            "OrganizationID": "COMPANY",
+        },
+        "done_when": {
+            "entity": "CompanyPeriod",
+            "filter": "FinancialYear eq '2027' and Status eq 'Open'",
+        },
+    }
+
+
+def test_open_periods_none_open_skips_with_warn(
+    instance: Instance,
+    server: FakeServer,
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    server.tables = server.tables | {
+        "CompanyPeriod": [
+            {"FinancialYear": "2026", "FinPeriodID": "012026", "Status": "Inactive"}
+        ]
+    }
+    _run(instance, server, tmp_path, only=frozenset({"open-periods"}))
+    captured = capsys.readouterr()
+    target = tmp_path / "setup" / "30-open-periods.yaml"
+    assert f"skip {target} (no open periods)" in captured.out
+    assert "no open periods on tenant" in captured.err
+    assert not target.exists()
+
+
+# -- features closure (V22/B15) --
+
+
+def test_features_closure_unions_gates_of_record_producing_entities(
+    instance: Instance, server: FakeServer, tmp_path: Path
+) -> None:
+    """features.yaml = the built-in six + gates, and load_features parses it."""
+    _run(instance, server, tmp_path)
+    assert bootstrap.load_features(tmp_path) == [
+        *bootstrap.DEFAULT_FEATURES,
+        "Multicurrency",
+        "SubAccount",
+    ]
+
+
+def test_features_closure_drops_gate_when_no_records(
+    instance: Instance, server: FakeServer, tmp_path: Path
+) -> None:
+    server.tables = server.tables | {"Subaccount": []}
+    _run(instance, server, tmp_path)
+    names = bootstrap.load_features(tmp_path)
+    assert "SubAccount" not in names
+    assert "Multicurrency" in names
+
+
+def test_features_closure_counts_preexisting_files(
+    instance: Instance, server: FakeServer, tmp_path: Path
+) -> None:
+    """A prior run's file is in the output set even when this run skips it."""
+    server.tables = server.tables | {"Subaccount": []}
+    target = tmp_path / "baseline" / "10-subaccounts.yaml"
+    target.parent.mkdir(parents=True)
+    target.write_text("operator-edited\n")
+    _run(instance, server, tmp_path)
+    assert "SubAccount" in bootstrap.load_features(tmp_path)
+
+
 # -- the round-trip: emitted files parse and diff clean --
 
 
@@ -433,14 +613,20 @@ def test_round_trip_every_file_parses_and_diffs_clean(
     """Extract -> load_baseline -> diff against the same live state = clean.
 
     Proves V20 by construction (bootstrap entities carry endpoint:) and
-    that shaping (strip/elide) never manufactures drift.
+    that shaping (strip/elide) never manufactures drift; action files
+    diff through their synthesized done_when probes (V4).
     """
     _run(instance, server, tmp_path)
     diff_client = _client(instance, server)
-    for spec in extract.load_manifest().entities:
+    manifest = extract.load_manifest()
+    for spec in manifest.entities:
         parsed = seed.load_baseline(tmp_path / spec.file)
         assert isinstance(parsed, seed.BaselineFile)
         assert seed.diff(diff_client, parsed) == [], spec.entity
+    for synth in manifest.setup:
+        action = seed.load_baseline(tmp_path / synth.file)
+        assert isinstance(action, seed.ActionFile)
+        assert seed.diff(diff_client, action) == [], synth.kind
 
 
 def test_round_trip_is_byte_stable_under_permuted_server_order(
@@ -453,8 +639,11 @@ def test_round_trip_is_byte_stable_under_permuted_server_order(
     a, b = tmp_path / "a", tmp_path / "b"
     _run(instance, FakeServer(TABLES, KEYS, DELEGATE_VIEW), a)
     _run(instance, FakeServer(permuted, KEYS, DELEGATE_VIEW), b)
-    for spec in extract.load_manifest().entities:
-        assert (a / spec.file).read_bytes() == (b / spec.file).read_bytes(), spec.file
+    files = sorted(p.relative_to(a) for p in a.rglob("*.yaml"))
+    assert files == sorted(p.relative_to(b) for p in b.rglob("*.yaml"))
+    assert len(files) == 13  # 9 entities + 3 setup + features
+    for rel in files:
+        assert (a / rel).read_bytes() == (b / rel).read_bytes(), str(rel)
 
 
 # -- CLI wiring --

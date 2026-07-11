@@ -8,10 +8,20 @@ an endpoint) and re-extract byte-identically: records sort by key tuple,
 fields order key-first then alphabetical, None and empty-string values
 are elided.
 
+setup/ action files are synthesized, not dumped: an action leaves no
+keyed record to extract, so each manifest setup row's kind-dispatched
+synthesizer reads the live state the action created (the done_when
+surface) and derives the action file back. bootstrap/features.yaml is
+the feature closure (V22/B15): the built-in six plus the union of the
+manifest features: gates over record-producing entities - a live
+FeaturesSet read is not available over the contract API (keyless
+BqlDelegate view), so the closure derives from what the tenant serves.
+
 Extract reads live state and writes local files only - drift stays diff's
 job (exit 2 never happens here).
 """
 
+from collections.abc import Callable, Iterable
 from importlib import resources
 from pathlib import Path
 from typing import Any
@@ -20,9 +30,13 @@ import yaml
 from pydantic import Field, ValidationError, field_validator, model_validator
 
 from . import output
+from .bootstrap import DEFAULT_FEATURES
 from .client import OPTIMIZATION_500, AcumaticaClient, unwrap
 from .models import Model, validation_summary
 from .seed import BOOTSTRAP_ENDPOINT, BOOTSTRAP_ENTITIES
+
+# The one non-manifest destination: the feature-closure file (V22/B15).
+FEATURES_FILE = "bootstrap/features.yaml"
 
 
 class EntitySpec(Model):
@@ -51,14 +65,20 @@ class EntitySpec(Model):
 
 
 class SetupSynth(Model):
-    """One setup/ synthesis row: a kind-dispatched action-file synthesizer.
-
-    The synthesizers themselves land with T49; the model anchors the
-    manifest shape (kind selects the synthesizer, file the destination).
-    """
+    """One setup/ synthesis row: a kind-dispatched action-file synthesizer."""
 
     kind: str
     file: str
+
+    @field_validator("kind")
+    @classmethod
+    def _known_kind(cls, v: str) -> str:
+        if v not in SYNTHESIZERS:
+            raise ValueError(
+                f"unknown setup synthesizer kind '{v}' "
+                f"(known: {', '.join(sorted(SYNTHESIZERS))})"
+            )
+        return v
 
 
 class Manifest(Model):
@@ -77,7 +97,12 @@ class Manifest(Model):
                     f"entity '{spec.entity}' is served by the packaged "
                     f"{BOOTSTRAP_ENDPOINT} and must carry an endpoint"
                 )
-        files = [s.file for s in self.entities] + [s.file for s in self.setup]
+        # FEATURES_FILE is claimed by the feature-closure render, never a row
+        files = (
+            [s.file for s in self.entities]
+            + [s.file for s in self.setup]
+            + [FEATURES_FILE]
+        )
         dupes = {f for f in files if files.count(f) > 1}
         if dupes:
             raise ValueError(f"duplicate destination files: {sorted(dupes)}")
@@ -171,6 +196,223 @@ def _render(spec: EntitySpec, records: list[dict[str, Any]]) -> str:
     return yaml.safe_dump(doc, sort_keys=False, default_flow_style=False)
 
 
+# -- setup/ synthesis: derive action files back from the state they created --
+
+
+def _years(rows: list[dict[str, Any]]) -> list[str]:
+    """Sorted distinct FinancialYear values off a live row set."""
+    return sorted({str(unwrap(r)["FinancialYear"]) for r in rows})
+
+
+def _synth_financial_year(client: AcumaticaClient) -> dict[str, Any] | None:
+    """The FinYearSetup singleton back as its GeneratePeriods action file."""
+    live = client.get_list("FinancialYearSettings", endpoint=BOOTSTRAP_ENDPOINT)
+    if not live:
+        return None
+    settings = unwrap(live[0])
+    return {
+        "action": "GeneratePeriods",
+        "entity": "FinancialYearSettings",
+        "endpoint": BOOTSTRAP_ENDPOINT,
+        "record": {
+            # DateTimeValue comes back as a full ISO datetime; the action
+            # record wants the date, quoted (the seed pipeline ships YAML
+            # values as JSON verbatim - the setup/ template rationale)
+            "BegFinYear": str(settings["BegFinYear"]).split("T")[0],
+            "FinPeriods": settings["FinPeriods"],
+            "PeriodType": settings["PeriodType"],
+        },
+        # the setup singleton either exists or does not - no filter
+        "done_when": {},
+    }
+
+
+def _synth_master_calendar(client: AcumaticaClient) -> dict[str, Any] | None:
+    """The master-calendar year range back as its GenerateCalendar action file."""
+    live = client.get_list("MasterCalendar", endpoint=BOOTSTRAP_ENDPOINT)
+    if not live:
+        return None
+    years = _years(live)
+    return {
+        "action": "GenerateCalendar",
+        "entity": "MasterCalendar",
+        "endpoint": BOOTSTRAP_ENDPOINT,
+        "record": {"FinancialYear": years[0]},
+        "parameters": {"FromYear": years[0], "ToYear": years[-1]},
+        # the company calendar derives from the master, so it is the
+        # stronger done evidence (the setup/ template rationale); the last
+        # year means generation completed through the range
+        "done_when": {
+            "entity": "CompanyCalendar",
+            "filter": f"FinancialYear eq '{years[-1]}'",
+        },
+    }
+
+
+def _synth_open_periods(client: AcumaticaClient) -> dict[str, Any] | None:
+    """The open-period range back as its GL503000 ProcessAll action file."""
+    live = client.get_list(
+        "CompanyPeriod",
+        params={"$filter": "Status eq 'Open'"},
+        endpoint=BOOTSTRAP_ENDPOINT,
+    )
+    if not live:
+        return None
+    years = _years(live)
+    # OrganizationID = the extracted Company's AcctCD: the reference
+    # resolves inside the emitted set (V22 - bootstrap/company.yaml
+    # creates the organization the action names)
+    companies = client.get_list("Company", endpoint=BOOTSTRAP_ENDPOINT)
+    if not companies:
+        raise RuntimeError("open-periods: no Company on tenant")
+    org = sorted(str(unwrap(c)["AcctCD"]) for c in companies)[0]
+    return {
+        "action": "ProcessAll",
+        "entity": "ManagePeriods",
+        "endpoint": BOOTSTRAP_ENDPOINT,
+        "record": {
+            "Action": "Open",
+            "FromYear": years[0],
+            "ToYear": years[-1],
+            "OrganizationID": org,
+        },
+        # both filter fields live on the one CompanyPeriod view (a
+        # conjunction spanning views answers 200 [] - B14 class); the last
+        # year Open means activation completed through the range
+        "done_when": {
+            "entity": "CompanyPeriod",
+            "filter": f"FinancialYear eq '{years[-1]}' and Status eq 'Open'",
+        },
+    }
+
+
+# kind -> (synthesizer, skip reason when the live state is absent);
+# SetupSynth validates manifest kinds against this registry
+type Synthesizer = Callable[[AcumaticaClient], dict[str, Any] | None]
+SYNTHESIZERS: dict[str, tuple[Synthesizer, str]] = {
+    "financial-year": (_synth_financial_year, "no financial year setup"),
+    "master-calendar": (_synth_master_calendar, "no master calendar"),
+    "open-periods": (_synth_open_periods, "no open periods"),
+}
+
+
+def render_features(gates: Iterable[str]) -> str:
+    """The feature-closure bootstrap/features.yaml: built-in six + gates.
+
+    Deterministic order (byte-stable re-extract): the built-in six in
+    their bootstrap.DEFAULT_FEATURES spelling, then the extra gates
+    alphabetically.
+    """
+    names = list(DEFAULT_FEATURES) + sorted(set(gates) - set(DEFAULT_FEATURES))
+    header = (
+        "# FeaturesSet property names the bootstrap plugin enables on publish -\n"
+        "# the built-in minimum plus every features: gate the extracted seed\n"
+        "# files require (feature closure). A misspelled name enables nothing -\n"
+        "# the plugin flags it in the publish log.\n"
+    )
+    return header + yaml.safe_dump(names, default_flow_style=False)
+
+
+class _Extraction:
+    """One extract run: the three passes share the run's knobs as state."""
+
+    def __init__(
+        self,
+        client: AcumaticaClient,
+        out_dir: Path,
+        only: frozenset[str],
+        force: bool,
+        dry_run: bool,
+    ) -> None:
+        self.client = client
+        self.manifest = load_manifest()
+        self.out_dir = out_dir
+        self.only = only
+        self.force = force
+        self.dry_run = dry_run
+
+    def _selected(self, name: str, file: str) -> bool:
+        """The --only filter: row name (entity or kind) or file stem."""
+        return not self.only or name in self.only or Path(file).stem in self.only
+
+    def _skip_existing(self, target: Path) -> bool:
+        """The per-file skip-if-exists gate; --force disarms it."""
+        if target.exists() and not self.force:
+            output.data(f"skip {target} (exists)")
+            return True
+        return False
+
+    def _emit(self, target: Path, text: str, count: int) -> None:
+        """Write one destination file, or report what would be written."""
+        if self.dry_run:
+            output.data(f"would write {target} ({count} records)")
+            return
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_text(text, encoding="utf-8")
+        output.data(f"write {target} ({count} records)")
+
+    def entities(self) -> set[str]:
+        """The entity pass; returns destination files written (or would be)."""
+        produced: set[str] = set()
+        for spec in self.manifest.entities:
+            if not self._selected(spec.entity, spec.file):
+                continue
+            target = self.out_dir / spec.file
+            if self._skip_existing(target):
+                continue
+            live = _fetch(self.client, spec)
+            if not live:
+                output.data(f"skip {target} (no records)")
+                continue
+            records = _shape(spec, live)
+            self._emit(target, _render(spec, records), len(records))
+            produced.add(spec.file)
+        return produced
+
+    def setup(self) -> None:
+        """The setup/ pass: synthesize each action file back from live state."""
+        for synth in self.manifest.setup:
+            if not self._selected(synth.kind, synth.file):
+                continue
+            target = self.out_dir / synth.file
+            if self._skip_existing(target):
+                continue
+            synthesize, skip_reason = SYNTHESIZERS[synth.kind]
+            doc = synthesize(self.client)
+            if doc is None:
+                output.data(f"skip {target} ({skip_reason})")
+                if synth.kind == "open-periods":
+                    # generated-but-unopened periods replay into a tenant
+                    # that cannot post GL (B13/B16 class) - flag it
+                    output.warn(
+                        "no open periods on tenant - a replayed tenant "
+                        "cannot post GL until periods are opened"
+                    )
+                continue
+            text = yaml.safe_dump(doc, sort_keys=False, default_flow_style=False)
+            self._emit(target, text, 1)
+
+    def features(self, produced: set[str]) -> None:
+        """The feature-closure pass (V22/B15).
+
+        Gates union over entities whose destination file is in the output
+        set - produced this run or already on disk.
+        """
+        if not self._selected("features", FEATURES_FILE):
+            return
+        target = self.out_dir / FEATURES_FILE
+        if self._skip_existing(target):
+            return
+        gates = [
+            gate
+            for spec in self.manifest.entities
+            if spec.file in produced or (self.out_dir / spec.file).exists()
+            for gate in spec.features
+        ]
+        text = render_features(gates)
+        self._emit(target, text, len(yaml.safe_load(text)))
+
+
 def run(
     client: AcumaticaClient,
     out_dir: Path,
@@ -178,28 +420,13 @@ def run(
     force: bool = False,
     dry_run: bool = False,
 ) -> None:
-    """Extract every manifest entity into seed files under out_dir.
+    """Extract the manifest file set plus the feature closure under out_dir.
 
     Per file: skip when it exists (--force overwrites), skip when the
     tenant has no records, report-only under --dry-run. `only` filters
-    rows by entity name or file stem.
+    rows by entity name, synthesizer kind, or file stem.
     """
-    manifest = load_manifest()
-    for spec in manifest.entities:
-        if only and spec.entity not in only and Path(spec.file).stem not in only:
-            continue
-        target = out_dir / spec.file
-        if target.exists() and not force:
-            output.data(f"skip {target} (exists)")
-            continue
-        live = _fetch(client, spec)
-        if not live:
-            output.data(f"skip {target} (no records)")
-            continue
-        records = _shape(spec, live)
-        if dry_run:
-            output.data(f"would write {target} ({len(records)} records)")
-            continue
-        target.parent.mkdir(parents=True, exist_ok=True)
-        target.write_text(_render(spec, records), encoding="utf-8")
-        output.data(f"write {target} ({len(records)} records)")
+    extraction = _Extraction(client, out_dir, only, force, dry_run)
+    produced = extraction.entities()
+    extraction.setup()
+    extraction.features(produced)

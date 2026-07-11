@@ -18,7 +18,13 @@
 #   include   allow-list: the only non-key fields kept (mutually
 #             exclusive with strip); key fields always survive both
 #   features  FeaturesSet gates the entity's screen needs (V22 feature
-#             closure; consumed by the features.yaml synthesis, T49)
+#             closure; consumed by the features.yaml synthesis)
+#
+# Per setup row (setup/ action files are synthesized, not record dumps -
+# an action leaves no keyed record to extract, so each kind reads the
+# live state the action created and derives the action file back):
+#   kind      selects the synthesizer in extract.py
+#   file      destination path; numbered prefixes encode apply order
 
 entities:
 
@@ -102,3 +108,18 @@ entities:
 - entity: UnitsOfMeasure
   keys: [UnitID]
   file: baseline/90-uoms.yaml
+
+# setup/ - the GL action chain (T36/T37): financial-year setup, then
+# calendar generation, then period activation; numbered prefixes mirror
+# the verified apply order.
+
+setup:
+
+- kind: financial-year
+  file: setup/10-financial-year.yaml
+
+- kind: master-calendar
+  file: setup/20-master-calendar.yaml
+
+- kind: open-periods
+  file: setup/30-open-periods.yaml
