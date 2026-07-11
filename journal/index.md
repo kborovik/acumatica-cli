@@ -46,6 +46,12 @@ Newest first.
   FakeServer pin the extract-then-diff-clean round-trip, byte
   stability under permuted server order, and the file-handling
   surface (skip-vs-`--force`, no-records skip, dry-run, `--only`).
+  T51 folds the three hand-copied pre-commit audit commands into
+  `.spec/scripts/check-all` (legs ascii/extras/parity, aggregated
+  exit code; the §V.21 sweep one-liner graduates into the script as
+  its single spelling), and the mechanization immediately caught the
+  one-liner's latent `__pycache__` scope gap — compiled artifacts
+  echoing Bootstrap refs now excluded with `-I --exclude-dir`.
 - [2026-07-10](2026-07-10.md) — T29 fronts financial currency (CM202000)
   from the Bootstrap endpoint: live archaeology maps the screen's two
   views (general info on the `CurrencyList` primary including
