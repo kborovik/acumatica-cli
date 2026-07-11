@@ -25,6 +25,13 @@ def unwrap(entity: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+# The list GET's optimized-export failure (B9): the contract API's list GET
+# 500s with this marker when any field in scope maps to a BQL-delegate view.
+# The one error read paths retry around (seed.diff via the key-URL GET,
+# extract via a $select-narrowed list GET); any other error still raises.
+OPTIMIZATION_500 = "Optimization cannot be performed"
+
+
 class AcumaticaClient:
     """Cookie-session client for the contract-based endpoint.
 

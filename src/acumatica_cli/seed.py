@@ -45,7 +45,7 @@ import yaml
 from pydantic import Field, ValidationError, field_validator, model_validator
 
 from . import output
-from .client import AcumaticaClient, unwrap
+from .client import OPTIMIZATION_500, AcumaticaClient, unwrap
 from .config import Instance
 from .models import Model, validation_summary
 
@@ -213,11 +213,6 @@ def apply(
     return len(baseline.records)
 
 
-# The list GET's optimized-export failure (B9) - the one error diff retries
-# via the key-URL single-record GET; any other error still raises
-_OPTIMIZATION_500 = "Optimization cannot be performed"
-
-
 def _fetch(
     client: AcumaticaClient, baseline: BaselineFile, record: dict[str, Any]
 ) -> dict[str, Any] | None:
@@ -237,7 +232,7 @@ def _fetch(
         )
         return live[0] if live else None
     except RuntimeError as err:
-        if _OPTIMIZATION_500 not in str(err):
+        if OPTIMIZATION_500 not in str(err):
             raise
         return client.get_record(
             baseline.entity, [record[k] for k in baseline.keys], baseline.endpoint

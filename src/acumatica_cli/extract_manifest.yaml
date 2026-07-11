@@ -1,0 +1,104 @@
+# extract_manifest.yaml - what `acu extract` reads off a live tenant and
+# how each entity becomes a seed file (the inverse of apply).
+#
+# Per entity row:
+#   entity    contract entity name (the GET source and the emitted `entity:`)
+#   endpoint  omitted = the instance Default endpoint; the symbolic name
+#             `bootstrap` resolves to the packaged Bootstrap endpoint at
+#             load (seed.BOOTSTRAP_ENDPOINT), so a version bump never
+#             leaves a stale ref here (V21)
+#   keys      key fields: the emitted `key:`, the record sort order, and
+#             the B9 fallback's $select projection
+#   file      destination path; the numbered prefix encodes apply order
+#             (V22: dir expansion sorts alphabetically, so a record that
+#             references another entity must sort after the file that
+#             creates it - B10)
+#   strip     deny-list: live fields dropped from extracted records; the
+#             inline reasons are load-bearing (B10/B11 knowledge as code)
+#   include   allow-list: the only non-key fields kept (mutually
+#             exclusive with strip); key fields always survive both
+#   features  FeaturesSet gates the entity's screen needs (V22 feature
+#             closure; consumed by the features.yaml synthesis, T49)
+
+entities:
+
+# bootstrap/ - the virgin-tenant phase via the custom Bootstrap endpoint:
+# built-in endpoints cannot create the first organization (C).
+
+- entity: Company
+  endpoint: bootstrap
+  keys: [AcctCD]
+  file: bootstrap/company.yaml
+
+- entity: CreditTerms
+  endpoint: bootstrap
+  keys: [TermsID]
+  file: bootstrap/credit-terms.yaml
+
+# baseline/ - numbered prefixes encode the V22 reference chain:
+# subaccounts < accounts < currencies < ledger < GL preferences <
+# org-ledger link; units of measure reference nothing and sort last.
+
+- entity: Subaccount
+  keys: [SubaccountCD]
+  file: baseline/10-subaccounts.yaml
+  features: [SubAccount] # GL203000 is feature-gated (B15)
+  strip:
+  # server audit stamp: every PUT moves it, so a sourced value is
+  # permanent drift (B11 class)
+  - LastModifiedDateTime
+
+- entity: Account
+  keys: [AccountCD]
+  file: baseline/20-accounts.yaml
+  strip:
+  # references PM account groups outside the baseline set - absent on a
+  # fresh tenant, PUT 422s (B10)
+  - AccountGroup
+  # references CM rate types outside the baseline set (B10 class, T31)
+  - RevaluationRateType
+  # server-derived: PUT-tolerated, the server keeps its own derivation,
+  # so a sourced value diffs dirty forever (B11)
+  - ChartOfAccountsOrder
+  - CashAccount
+  # server audit stamp (B11 class)
+  - LastModifiedDateTime
+
+- entity: Currency
+  endpoint: bootstrap
+  keys: [CuryID]
+  file: baseline/30-currencies.yaml
+  features: [Multicurrency] # CM202000 financial currency (B6/B8)
+  strip:
+  # Translation* pairs are read-invisible while the translation feature
+  # is off: write-tolerated, never read back, so a sourced value diffs
+  # "not returned by endpoint" (T31, V22 server-derived sibling)
+  - TranslationGainAcctID
+  - TranslationGainSubID
+  - TranslationLossAcctID
+  - TranslationLossSubID
+
+- entity: Ledger
+  keys: [LedgerID]
+  file: baseline/40-ledger.yaml
+  strip:
+  # the server derives an Actual ledger's currency from the company base
+  # currency - a sourced value is redundant or a rejected write (T34)
+  - CurrencyID
+
+- entity: GLPreferences
+  endpoint: bootstrap
+  keys: [RetEarnAccountID]
+  file: baseline/50-gl-preferences.yaml
+
+- entity: LedgerCompany
+  endpoint: bootstrap
+  # LedgerCD alone, never [LedgerCD, OrganizationID]: the entity spans
+  # two views, and a cross-view composite key phantom-drifts "missing on
+  # tenant" (B14); OrganizationID stays a record field
+  keys: [LedgerCD]
+  file: baseline/60-ledger-company.yaml
+
+- entity: UnitsOfMeasure
+  keys: [UnitID]
+  file: baseline/90-uoms.yaml

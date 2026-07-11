@@ -11,7 +11,7 @@ from typing import Concatenate
 import click
 import httpx
 
-from . import bootstrap, firstlogin, output, seed
+from . import bootstrap, extract, firstlogin, output, seed
 from .client import AcumaticaClient
 from .config import (
     Instance,
@@ -504,6 +504,50 @@ def diff_cmd(inst: Instance, files: tuple[Path, ...]) -> None:
             baseline = seed.load_baseline(path)
             drifts += seed.diff(client, baseline)
     _exit_on_drift(inst, drifts, len(paths))
+
+
+@cli.command("extract")
+@click.option(
+    "--out",
+    "out_dir",
+    type=click.Path(file_okay=False, path_type=Path),
+    default=None,
+    help="Output directory (default: current directory)",
+)
+@click.option(
+    "--only",
+    multiple=True,
+    help="Limit to matching manifest rows (entity name or file stem); repeatable",
+)
+@click.option("--force", is_flag=True, help="Overwrite existing files")
+@click.option(
+    "--dry-run", is_flag=True, help="Show what would be written without writing"
+)
+@pass_instance
+def extract_cmd(
+    inst: Instance,
+    out_dir: Path | None,
+    only: tuple[str, ...],
+    force: bool,
+    dry_run: bool,
+) -> None:
+    """Extract live tenant state into seed YAML files (the inverse of apply).
+
+    Manifest-driven (the packaged extract manifest carries the verified
+    entity set): each entity is read from the live tenant and written as a
+    seed file under bootstrap/ or baseline/ that apply and diff consume
+    unchanged. Existing files are skipped unless --force; an entity with
+    no live records produces no file. Exit 0 or 1 - drift detection stays
+    with diff.
+    """
+    with AcumaticaClient(inst) as client:
+        extract.run(
+            client,
+            out_dir or Path("."),
+            only=frozenset(only),
+            force=force,
+            dry_run=dry_run,
+        )
 
 
 def _exit_on_drift(inst: Instance, drifts: list[str], files: int) -> None:
