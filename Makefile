@@ -24,10 +24,15 @@ test: .venv ## Run the test suite (pytest, offline — no live instance needed)
 	$(call header,Running pytest)
 	uv run pytest
 
-e2e: ## Live E2E vs the data-repo instance: create scratch tenant, apply, diff, destroy (needs tailnet + decrypted .env)
-	test -e .env || { echo ".env missing — run 'make decrypt' in ../acumatica-baseline"; exit 1; }
+# `make e2e FILE=<path-or-stem>` scopes the run to one e2e file (tried as a
+# path, then tests/e2e/<FILE>, then tests/e2e/<FILE>.py); unset = whole tier.
+e2e_target := $(if $(FILE),$(firstword $(wildcard $(FILE) tests/e2e/$(FILE) tests/e2e/$(FILE).py)),tests/e2e)
+
+e2e: ## Live E2E vs the data-repo instance: create scratch tenant, apply, diff, destroy (needs tailnet + decrypted .env); FILE=<path-or-stem> scopes to one file
+	test -e .env || { echo ".env missing — decrypt .env.gpg at the repo root"; exit 1; }
+	test -n "$(e2e_target)" || { echo "no e2e file matches FILE=$(FILE) (tried it as a path, tests/e2e/$(FILE), tests/e2e/$(FILE).py)"; exit 1; }
 	$(call header,Running live E2E (creates and destroys tenant E2E))
-	uv run pytest -o addopts= -m e2e -v -s tests/e2e
+	uv run pytest -o addopts= -m e2e -v -s $(e2e_target)
 
 py-format:
 	$(call header,Running Ruff format)
