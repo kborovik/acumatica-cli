@@ -175,7 +175,20 @@ Newest first.
   six), the exists-skip dies with provision's resumability story, and
   the e2e lifecycle rewrites to the SPEC goal sentence verbatim —
   tenant create → bare apply → bare diff clean → idempotent re-apply →
-  drift exit 2, six passed live on a fresh scratch tenant.
+  drift exit 2, six passed live on a fresh scratch tenant; T46 (gh
+  issue #4) collapses config to one file — `Instance` becomes a
+  pydantic-settings `BaseSettings` (env prefix `ACU_`), `.env` carries
+  where + secrets and is itself the walk-up discovery sentinel,
+  `acu.yaml` dies (template, loader, symlink), `config show` emits a
+  resolved `.env` document (password in no form), and two library
+  edges got caught in tests — `populate_by_name` teaching the env
+  source an undocumented `ACU_USERNAME` synonym (fixed by renaming the
+  field to `user` so prefix + name is exactly `ACU_USER`) and blank
+  placeholder values validating as empty strings (a before-validator
+  makes blank required keys read as missing); live check 4x ok vs
+  acu-dev1, and the smoke surfaced a pre-existing gap: tenant Company
+  still runs the pre-T37 Bootstrap package (1.4.0 seed files 404
+  there) with no CLI republish path for an existing tenant.
 - [2026-07-09](2026-07-09.md) — T17 closes the SPEC backlog: `exit
   $LASTEXITCODE` centralized in `_ssh` (single choke point per V18, the
   B4 recurrence class), call-site hand-appends stripped, suffix pinned
