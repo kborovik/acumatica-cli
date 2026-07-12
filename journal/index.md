@@ -123,7 +123,15 @@ Newest first.
   tenant walks the full manifest and exits 0, pinned by a CLI-level
   test replaying the issue's exact repro; along the way `output.error`
   gained `soft_wrap` (a wrapped failure line is not one greppable
-  line, the V9/data() rationale).
+  line, the V9/data() rationale). A closing backprop completes T56's
+  record: B20 lands for gh issue #6 (the free-string `--type` that
+  silently created an empty tenant listing as Demo), the invariant
+  folds into V16's option conventions (enum-domain values validate at
+  parse over a verified set; a free string never reaches a remote that
+  accepts any value), and the issue closes with the deliberate
+  deviations named — the static verified set instead of a live
+  `Database/Data` probe, and omit-the-flag rather than `--type ''` as
+  the clean-tenant route.
 - [2026-07-10](2026-07-10.md) — T29 fronts financial currency (CM202000)
   from the Bootstrap endpoint: live archaeology maps the screen's two
   views (general info on the `CurrencyList` primary including
