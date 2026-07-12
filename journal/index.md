@@ -131,7 +131,28 @@ Newest first.
   accepts any value), and the issue closes with the deliberate
   deviations named — the static verified set instead of a live
   `Database/Data` probe, and omit-the-flag rather than `--type ''` as
-  the clean-tenant route.
+  the clean-tenant route. The day's second backprop (B21, gh issue #7)
+  came from the first SalesDemo tenant the extract met: the B14
+  workaround keyed LedgerCompany on `LedgerCD` alone, which holds only
+  while each ledger links one organization — SalesDemo links three, so
+  extract emitted a file whose key could not tell its records apart,
+  diff exited 2 forever, and no layer audited key-tuple uniqueness;
+  V25 records the class. T58 lands the fix as the
+  `[LedgerCD, OrganizationID]` pair key (chosen over an endpoint
+  reshape — no version bump, no B12-class detail-PUT gamble): diff's
+  read-back filters on the first key only and matches the rest
+  client-side, since a cross-view `$filter` AND answers 200 `[]`
+  (B14); V25 enforcement lands at both points (extract `_shape` dup
+  tuple → V24 row failure, file never emitted; `load_baseline` dup
+  tuple → hard error naming entity and tuple). Live on acu-dev1: a new
+  SalesDemo e2e extracts the 14-record pair-keyed file and diffs it
+  clean; the round-trip went eight for eight after repairing its
+  stale skip probe (T57's `N skipped` summary had falsified the
+  whole-stream substring assertion since landing); the e2e tier
+  gained a shared conftest (acu runner, live_instance, tenant
+  janitor). Routed onward: the `.spec/check-extras.md` §V.4 line
+  still records the B14-era "keys on primary-view fields only" rule
+  the pair key supersedes.
 - [2026-07-10](2026-07-10.md) — T29 fronts financial currency (CM202000)
   from the Bootstrap endpoint: live archaeology maps the screen's two
   views (general info on the `CurrencyList` primary including
