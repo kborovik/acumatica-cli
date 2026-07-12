@@ -8,7 +8,12 @@
 #             load (seed.BOOTSTRAP_ENDPOINT), so a version bump never
 #             leaves a stale ref here (V21)
 #   keys      key fields: the emitted `key:`, the record sort order, and
-#             the B9 fallback's $select projection
+#             the B9 fallback's $select projection; the tuple must
+#             identify each record (V25 - a dup tuple is a row failure)
+#             and the FIRST key must be a primary-view field filterable
+#             alone: diff's read-back filters on it and matches the rest
+#             client-side, because a $filter AND spanning views answers
+#             200 [] (B14/B21)
 #   filter    OData $filter fragment riding both list reads (the plain
 #             GET and the B9 $select fallback), so the per-key walk only
 #             visits filtered keys; narrows extraction to configured
@@ -117,10 +122,13 @@ entities:
 
 - entity: LedgerCompany
   endpoint: bootstrap
-  # LedgerCD alone, never [LedgerCD, OrganizationID]: the entity spans
-  # two views, and a cross-view composite key phantom-drifts "missing on
-  # tenant" (B14); OrganizationID stays a record field
-  keys: [LedgerCD]
+  # one record per org-ledger link: a multi-org tenant links several
+  # organizations to one ledger, so LedgerCD alone under-keys the file
+  # (B21) and the key is the pair. The pair spans two views - a $filter
+  # AND across views answers 200 [] while each predicate alone matches
+  # (B14) - so LedgerCD (the primary-view field) sits first: diff's
+  # read-back filters on it alone and matches OrganizationID client-side
+  keys: [LedgerCD, OrganizationID]
   file: baseline/60-ledger-company.yaml
 
 - entity: UnitsOfMeasure

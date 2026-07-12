@@ -24,36 +24,34 @@ Pre-build archaeology, probed live before this file was written (V12):
 Opt-in tier: `e2e` marker, deselected by the default suite (V13). Run
 via `make e2e` from the repo root, where the gitignored .env / baseline
 / bootstrap / setup symlinks resolve into the sibling data repo. The
-tests drive the installed `acu` binary through subprocess (V9 contract
-as scripts see it) and are sequential and stateful by design; the
-session fixture always deletes both scratch tenants and recycles (V5).
+tests drive the installed `acu` binary through the shared conftest
+runner (V9 contract as scripts see it) and are sequential and stateful
+by design; the session fixture always deletes both scratch tenants and
+recycles (V5).
 """
 
-import contextlib
 import difflib
 import subprocess
-import sys
-import threading
 import time
 from collections.abc import Callable, Iterator
 from pathlib import Path
-from typing import IO, NamedTuple
+from typing import NamedTuple
 
 import pytest
 
 from acumatica_cli.client import AcumaticaClient, unwrap
-from acumatica_cli.config import Instance, load_instance
+from acumatica_cli.config import Instance
 from acumatica_cli.extract import FEATURES_FILE, load_manifest
 from acumatica_cli.seed import load_baseline
 from acumatica_cli.tenant import TenantManager
 
 pytestmark = pytest.mark.e2e
 
-REPO_ROOT = Path(__file__).resolve().parents[2]
 LOGIN_A = "E2EA"
 LOGIN_B = "E2EB"
 
 RunAcu = Callable[..., subprocess.CompletedProcess[str]]
+DeleteTenant = Callable[[str], None]
 
 
 class ScratchPair(NamedTuple):
@@ -63,91 +61,22 @@ class ScratchPair(NamedTuple):
     id_b: int
 
 
-def _pump(pipe: IO[str], lines: list[str], sink: IO[str]) -> None:
-    """Copy one pipe to a live sink line by line, keeping every line."""
-    for line in pipe:
-        lines.append(line)
-        sink.write(line)
-        sink.flush()
-
-
 @pytest.fixture(scope="session")
-def acu() -> RunAcu:
-    """Run the real acu binary from the repo root, streaming text output."""
-
-    def run(*args: str) -> subprocess.CompletedProcess[str]:
-        sys.stderr.write(f"$ acu {' '.join(args)}\n")
-        sys.stderr.flush()
-        with subprocess.Popen(
-            ["acu", *args],
-            cwd=REPO_ROOT,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
-            text=True,
-        ) as proc:
-            assert proc.stdout is not None
-            assert proc.stderr is not None
-            out: list[str] = []
-            err: list[str] = []
-            readers = [
-                threading.Thread(target=_pump, args=(proc.stdout, out, sys.stdout)),
-                threading.Thread(target=_pump, args=(proc.stderr, err, sys.stderr)),
-            ]
-            for reader in readers:
-                reader.start()
-            try:
-                returncode = proc.wait(timeout=1800)
-            except subprocess.TimeoutExpired:
-                proc.kill()
-                raise
-            finally:
-                for reader in readers:
-                    reader.join()
-        return subprocess.CompletedProcess(
-            ["acu", *args], returncode, "".join(out), "".join(err)
-        )
-
-    return run
-
-
-@pytest.fixture(scope="session")
-def live_instance() -> Instance:
-    """The real target, resolved exactly as every live command resolves it."""
-    try:
-        with contextlib.chdir(REPO_ROOT):
-            return load_instance()
-    except SystemExit as exc:
-        pytest.exit(
-            f"live config missing ({exc}) - "
-            "run 'make decrypt' in the sibling data repo",
-            returncode=1,
-        )
-
-
-def _delete_if_present(mgr: TenantManager, login: str) -> None:
-    """Delete the named tenant if it exists, then recycle (V5) to forget it."""
-    tenant = next((t for t in mgr.list() if t.login_name == login), None)
-    if tenant is None:
-        return
-    mgr.delete(tenant.company_id)
-    mgr.recycle_app_pool()
-
-
-@pytest.fixture(scope="session")
-def scratch_pair(live_instance: Instance) -> Iterator[ScratchPair]:
+def scratch_pair(
+    tenant_manager: TenantManager, delete_tenant: DeleteTenant
+) -> Iterator[ScratchPair]:
     """Bracket the session with two clean scratch-tenant slots.
 
     Setup clears leftovers from a crashed run and reserves the next two
     free CompanyIDs (A is created before B, so B's slot is free when its
     create runs); teardown always deletes both and recycles (V5).
     """
-    mgr = TenantManager(live_instance)
     for login in (LOGIN_A, LOGIN_B):
-        _delete_if_present(mgr, login)
-    base = max(t.company_id for t in mgr.list())
+        delete_tenant(login)
+    base = max(t.company_id for t in tenant_manager.list())
     yield ScratchPair(id_a=base + 1, id_b=base + 2)
     for login in (LOGIN_A, LOGIN_B):
-        _delete_if_present(mgr, login)
+        delete_tenant(login)
 
 
 @pytest.fixture(scope="session")
@@ -197,7 +126,11 @@ def test_extract_dumps_tenant_a(
     manifest = load_manifest()
     proc = acu("--tenant", LOGIN_A, "extract", "--out", str(dir_a))
     assert proc.returncode == 0, _combined(proc)
-    assert "skip" not in _combined(proc), _combined(proc)
+    # per-file skip lines only (stdout = data): the run summary always
+    # carries "N skipped" since T57, so a whole-stream substring probe
+    # would trip on a fully-written extract
+    skips = [ln for ln in proc.stdout.splitlines() if ln.startswith("skip ")]
+    assert not skips, _combined(proc)
     expected = (
         {spec.file for spec in manifest.entities}
         | {synth.file for synth in manifest.setup}

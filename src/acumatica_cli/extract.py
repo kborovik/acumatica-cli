@@ -22,6 +22,7 @@ Extract reads live state and writes local files only - drift stays diff's
 job (exit 2 never happens here).
 """
 
+import itertools
 from collections.abc import Callable, Iterable
 from importlib import resources
 from pathlib import Path
@@ -172,6 +173,11 @@ def _shape(spec: EntitySpec, live: list[dict[str, Any]]) -> list[dict[str, Any]]
     always survive), elide None and empty-string values, order fields key
     fields first (manifest order) then alphabetical, and sort records by
     key tuple - server order never leaks into the emitted bytes.
+
+    Records duplicating the declared key tuple are a hard error (V25): an
+    under-keyed file diffs as permanent false drift and apply collapses
+    the dup records into one PUT target (B21) - the caller reports the
+    row failure and never emits the file.
     """
     shaped: list[dict[str, Any]] = []
     for entity in live:
@@ -194,7 +200,16 @@ def _shape(spec: EntitySpec, live: list[dict[str, Any]]) -> list[dict[str, Any]]
         ordered = {k: keep[k] for k in spec.keys}
         ordered |= {k: keep[k] for k in sorted(keep.keys() - set(spec.keys))}
         shaped.append(ordered)
-    return sorted(shaped, key=lambda r: tuple(str(r[k]) for k in spec.keys))
+    shaped.sort(key=lambda r: tuple(str(r[k]) for k in spec.keys))
+    idents = [tuple(str(r[k]) for k in spec.keys) for r in shaped]
+    for prev, cur in itertools.pairwise(idents):
+        if prev == cur:
+            raise RuntimeError(
+                f"records duplicate key tuple [{', '.join(cur)}] - the "
+                f"declared key ({', '.join(spec.keys)}) does not identify "
+                "each record"
+            )
+    return shaped
 
 
 def _render(spec: EntitySpec, records: list[dict[str, Any]]) -> str:

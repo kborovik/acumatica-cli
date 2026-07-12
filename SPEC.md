@@ -78,7 +78,7 @@ T54|x|`make e2e` optional FILE arg — `make e2e FILE=<path-or-stem>` scopes pyt
 T55|x|add `--completion` global flag — click-native script emit (`bash|zsh|fish`, <shell> ? → `$SHELL` detect) + local-only value completion (`extract --only` entity names from packaged manifest, `apply`/`diff` path args)|V9,V16,V23,I.cmd
 T56|x|tenant create `--type` validation (gh issue #6 — closed post-land) — click choice `SalesDemo|T100|U100` (docs/ac-exe.md verified set, `System` excluded), non-member → error naming allowed set before SSH, omitted = clean tenant; help text documents exact names|V7,V9,V12,V16,I.cmd,B20
 T57|x|extract per-row failure isolation (gh issue #5 — land closes it, `Closes #5`) — row failure reported + continue, `PXSetupNotEnteredException` → screen-setup-not-entered skip, end summary, virgin-tenant dry-run walks full manifest exit 0|V9,V24,I.cmd,T48
-T58|.|fix multi-org LedgerCompany identity (gh issue #7 — land closes it, `Closes #7`) — per-org record shape or key so declared key identifies each row; multi-org SalesDemo extract → diff clean; B14 regression: single-org tenant no phantom-drift; V25 enforcement lands here (extract row-failure + `load_baseline` dup-tuple error)|V4,V12,V24,V25,I.cmd,T48,T50
+T58|x|fix multi-org LedgerCompany identity (gh issue #7 — land closes it, `Closes #7`) — per-org record shape or key so declared key identifies each row; multi-org SalesDemo extract → diff clean; B14 regression: single-org tenant no phantom-drift; V25 enforcement lands here (extract row-failure + `load_baseline` dup-tuple error)|V4,V12,V24,V25,I.cmd,T48,T50
 
 ## §B BUGS
 

@@ -92,11 +92,23 @@ class BaselineFile(Model):
         return v if isinstance(v, list) else [v]
 
     @model_validator(mode="after")
-    def _records_carry_keys(self) -> "BaselineFile":
+    def _keys_identify_records(self) -> "BaselineFile":
+        # V25: the declared key tuple must uniquely identify records - a
+        # dup-keyed file diffs as permanent false drift and apply collapses
+        # the dup records into one PUT target (B21)
+        seen: set[tuple[str, ...]] = set()
         for i, record in enumerate(self.records):
             for k in self.keys:
                 if k not in record:
                     raise ValueError(f"records[{i}] missing key field '{k}'")
+            ident = tuple(str(record[k]) for k in self.keys)
+            if ident in seen:
+                raise ValueError(
+                    f"entity '{self.entity}': records[{i}] duplicates key "
+                    f"tuple [{', '.join(ident)}] - the declared key must "
+                    "identify each record"
+                )
+            seen.add(ident)
         return self
 
 
@@ -155,6 +167,9 @@ def _norm(value: Any) -> str:
 
 
 def _filter_for(record: dict[str, Any], keys: list[str]) -> str:
+    # callers pass single-view key sets only: a conjunction spanning the
+    # entity's views answers 200 [] (B14), so _fetch filters on the first
+    # key alone and matches the rest client-side
     return " and ".join(f"{k} eq '{record[k]}'" for k in keys)
 
 
@@ -218,25 +233,38 @@ def _fetch(
 ) -> dict[str, Any] | None:
     """The live record matching the source record's keys, or None.
 
-    Primary read = list GET by $filter on the key fields. Entities mapping a
-    BQL-delegate view (Bootstrap Currency GL fields -> CuryRecords, B9) 500
-    on that optimized export; the key-URL single-record GET skips the
-    optimizer, so diff falls back to it on exactly that error (V4: read-back
-    must survive delegate-view entities).
+    Primary read = list GET by $filter on the FIRST key field only, any
+    remaining key fields matched client-side: a $filter conjunction that
+    spans the entity's views answers 200 [] while each predicate alone
+    matches (B14), so a multi-key filter can never be trusted - the first
+    key names a primary-view field by seed-file convention (B21, the
+    multi-org LedgerCompany read). Single-key files behave as before.
+
+    Entities mapping a BQL-delegate view (Bootstrap Currency GL fields ->
+    CuryRecords, B9) 500 on that optimized export; the key-URL
+    single-record GET skips the optimizer, so diff falls back to it on
+    exactly that error (V4: read-back must survive delegate-view entities).
     """
     try:
         live = client.get_list(
             baseline.entity,
-            params={"$filter": _filter_for(record, baseline.keys)},
+            params={"$filter": _filter_for(record, baseline.keys[:1])},
             endpoint=baseline.endpoint,
         )
-        return live[0] if live else None
     except RuntimeError as err:
         if OPTIMIZATION_500 not in str(err):
             raise
         return client.get_record(
             baseline.entity, [record[k] for k in baseline.keys], baseline.endpoint
         )
+    for row in live:
+        actual = unwrap(row)
+        if all(
+            k in actual and _norm(actual[k]) == _norm(record[k])
+            for k in baseline.keys[1:]
+        ):
+            return row
+    return None
 
 
 def diff(client: AcumaticaClient, baseline: BaselineFile | ActionFile) -> list[str]:

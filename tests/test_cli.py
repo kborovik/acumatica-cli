@@ -634,7 +634,7 @@ def test_config_init_scaffold_round_trips(
     assert "would PUT Account [33000]" in applied.output
     assert "would PUT Ledger [ACTUAL]" in applied.output
     assert "would PUT GLPreferences [32000]" in applied.output
-    assert "would PUT LedgerCompany [ACTUAL]" in applied.output
+    assert "would PUT LedgerCompany [ACTUAL, COMPANY]" in applied.output
     assert "would PUT UnitsOfMeasure [HOUR]" in applied.output
     assert "would invoke GeneratePeriods" in applied.output
     assert "would invoke GenerateCalendar" in applied.output

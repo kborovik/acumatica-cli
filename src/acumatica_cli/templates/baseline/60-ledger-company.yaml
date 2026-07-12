@@ -7,18 +7,20 @@
 # rather than a setup/ action: the link IS a keyed record, so diff reads
 # it back field by field.
 #
-# KEY on LedgerCD alone, not [LedgerCD, OrganizationID]: the entity spans
-# two views, and a $filter that ANDs predicates across views answers 200
-# with an empty list even though each predicate alone matches - a
-# composite key phantom-drifts "missing on tenant" behind a PUT that
-# worked. OrganizationID stays in the record and diffs field by field.
+# KEY = the [LedgerCD, OrganizationID] pair, one record per org-ledger
+# link: a multi-organization tenant links several organizations to one
+# ledger, so LedgerCD alone would not identify each record. The pair
+# spans two views, and a $filter that ANDs predicates across views
+# answers 200 with an empty list even though each predicate alone
+# matches - so LedgerCD (the primary-view field) stays first in the key:
+# diff filters on it alone and matches OrganizationID client-side.
 #
 # APPLY ORDER (dir expansion sorts *.yaml alphabetically; numbered
 # prefixes encode order): after 40-ledger.yaml - the ACTUAL ledger must
 # exist; the COMPANY organization exists from the bootstrap/ phase
 # (company.yaml).
 entity: LedgerCompany
-key: LedgerCD
+key: [LedgerCD, OrganizationID]
 endpoint: Bootstrap/1.4.0
 records:
 - LedgerCD: ACTUAL

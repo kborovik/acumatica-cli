@@ -216,7 +216,13 @@ TABLES: dict[str, list[dict[str, Any]]] = {
         }
     ],
     "GLPreferences": [{"RetEarnAccountID": "32000", "YtdNetIncAccountID": "33000"}],
-    "LedgerCompany": [{"LedgerCD": "ACTUAL", "OrganizationID": "COMPANY"}],
+    # the gh-issue-#7 repro shape (B21): one ledger, three org links -
+    # the pair key keeps every link distinct through the round-trip
+    "LedgerCompany": [
+        {"LedgerCD": "ACTUAL", "OrganizationID": "CAPITAL"},
+        {"LedgerCD": "ACTUAL", "OrganizationID": "PRODUCTS"},
+        {"LedgerCD": "ACTUAL", "OrganizationID": "SERVICES"},
+    ],
     "UnitsOfMeasure": [
         {"UnitID": "PIECE", "Description": "Piece", "L3Code": "PCB"},
         {"UnitID": "HOUR", "Description": "Hour", "L3Code": "HUR"},
@@ -283,6 +289,11 @@ def test_packaged_manifest_is_self_consistent() -> None:
     # the Currency filter keeps the tenant-native ISO list out (T50/T52)
     filters = {s.entity: s.filter for s in manifest.entities if s.filter}
     assert filters == {"Currency": "IsFinancial eq true"}
+    # V25/B21: the pair identifies each org-ledger link; LedgerCD (the
+    # primary-view field) must stay first - diff's read-back filters on
+    # the first key alone (B14)
+    keys = {s.entity: s.keys for s in manifest.entities}
+    assert keys["LedgerCompany"] == ["LedgerCD", "OrganizationID"]
 
 
 def test_manifest_resolves_symbolic_bootstrap_endpoint() -> None:
@@ -383,6 +394,17 @@ def test_shape_missing_key_field_is_a_hard_error() -> None:
         extract._shape(  # pyright: ignore[reportPrivateUsage]
             _spec(), [wrap({"Description": "no key"})]
         )
+
+
+def test_shape_duplicate_key_tuple_is_a_hard_error() -> None:
+    # V25/B21: an under-declared key surfaces at shape time - the file
+    # would diff as permanent false drift, so it must never be emitted
+    live = [
+        wrap({"UnitID": "HOUR", "Description": "Hour"}),
+        wrap({"UnitID": "HOUR", "Description": "Stunde"}),
+    ]
+    with pytest.raises(RuntimeError, match=r"duplicate key tuple \[HOUR\].*\(UnitID\)"):
+        extract._shape(_spec(), live)  # pyright: ignore[reportPrivateUsage]
 
 
 # -- run: file handling, filters, dry-run --
@@ -758,6 +780,30 @@ def test_setup_not_entered_500_skips_clean(
     assert f"skip {target} (screen setup not entered)" in captured.out
     assert not target.exists()
     assert "+ 0 written, 1 skipped" in captured.err
+
+
+def test_duplicate_key_tuple_is_row_failure_and_run_continues(
+    instance: Instance,
+    server: FakeServer,
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """V25 through V24: dup key tuple -> x line, no file, later rows land."""
+    server.tables = server.tables | {
+        "Subaccount": [
+            {"SubaccountCD": "000000", "Description": "Default"},
+            {"SubaccountCD": "000000", "Description": "Duplicate"},
+        ]
+    }
+    failed = _run(instance, server, tmp_path)
+    assert failed == 1
+    captured = capsys.readouterr()
+    assert "x Subaccount: records duplicate key tuple [000000]" in captured.err
+    assert not (tmp_path / "baseline" / "10-subaccounts.yaml").exists()
+    # rows past the failure all ran; the failed file never gates them
+    assert (tmp_path / "baseline" / "20-accounts.yaml").is_file()
+    assert (tmp_path / "bootstrap" / "features.yaml").is_file()
+    assert "x 12 written, 0 skipped, 1 failed" in captured.err
 
 
 def test_setup_synth_failure_isolated(

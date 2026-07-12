@@ -72,6 +72,49 @@ def test_load_baseline_parses_endpoint_override(tmp_path: Path) -> None:
     assert seed.load_baseline(_write(tmp_path, text)).endpoint == "Bootstrap/1.4.0"
 
 
+LEDGER_LINK_YAML = """\
+entity: LedgerCompany
+key: [LedgerCD, OrganizationID]
+endpoint: Bootstrap/1.4.0
+records:
+  - LedgerCD: ACTUAL
+    OrganizationID: PRODUCTS
+  - LedgerCD: ACTUAL
+    OrganizationID: SERVICES
+"""
+
+
+def test_load_baseline_accepts_records_distinct_on_second_key_field(
+    tmp_path: Path,
+) -> None:
+    # the multi-org shape (B21): records share LedgerCD, the pair is unique
+    baseline = _baseline(tmp_path, LEDGER_LINK_YAML)
+    assert len(baseline.records) == 2
+
+
+def test_load_baseline_rejects_duplicate_key_tuple(tmp_path: Path) -> None:
+    """V25/B21: a file whose declared key does not identify each record.
+
+    The hard error names the entity and the first duplicated tuple - the
+    hand-authored sibling of extract's row failure (an under-keyed file
+    diffs as permanent false drift; apply collapses the dups to one PUT).
+    """
+    text = LEDGER_LINK_YAML.replace(
+        "OrganizationID: SERVICES", "OrganizationID: PRODUCTS"
+    )
+    with pytest.raises(
+        SystemExit,
+        match=r"LedgerCompany.*records\[1\] duplicates key tuple \[ACTUAL, PRODUCTS\]",
+    ):
+        seed.load_baseline(_write(tmp_path, text))
+
+
+def test_load_baseline_rejects_duplicate_single_key(tmp_path: Path) -> None:
+    text = BASELINE.replace("UOM: HOUR", "UOM: KG")
+    with pytest.raises(SystemExit, match=r"records\[1\] duplicates key tuple \[KG\]"):
+        seed.load_baseline(_write(tmp_path, text))
+
+
 AMBIGUOUS_YAML = """\
 entity: Currency
 key: CuryID
@@ -242,6 +285,69 @@ def test_diff_normalizes_booleans(tmp_path: Path, instance: Instance) -> None:
     baseline = seed.load_baseline(_write(tmp_path, text))
     # live returns the Python bool True; source YAML parses to bool too
     recorder = Recorder({"/E": _live({"K": "A", "Active": True})})
+
+    assert seed.diff(_client(instance, recorder), baseline) == []
+
+
+def test_diff_multi_key_filters_first_key_only(
+    tmp_path: Path, instance: Instance
+) -> None:
+    """B14/B21: a multi-key read-back never sends a cross-view $filter AND.
+
+    The list GET filters on the first (primary-view) key alone - a
+    conjunction spanning views answers 200 [] while each predicate alone
+    matches - and the remaining key fields pick the record client-side,
+    so each of a multi-org tenant's links diffs against its own row.
+    """
+    baseline = _baseline(tmp_path, LEDGER_LINK_YAML)
+    recorder = Recorder(
+        {
+            "/LedgerCompany": _live(
+                {"LedgerCD": "ACTUAL", "OrganizationID": "CAPITAL"},
+                {"LedgerCD": "ACTUAL", "OrganizationID": "PRODUCTS"},
+                {"LedgerCD": "ACTUAL", "OrganizationID": "SERVICES"},
+            )
+        }
+    )
+
+    assert seed.diff(_client(instance, recorder), baseline) == []
+    filters = [r.url.params["$filter"] for r in recorder.requests]
+    assert filters == ["LedgerCD eq 'ACTUAL'", "LedgerCD eq 'ACTUAL'"]
+
+
+def test_diff_multi_key_no_matching_row_is_missing(
+    tmp_path: Path, instance: Instance
+) -> None:
+    baseline = _baseline(tmp_path, LEDGER_LINK_YAML)
+    recorder = Recorder(
+        {"/LedgerCompany": _live({"LedgerCD": "ACTUAL", "OrganizationID": "CAPITAL"})}
+    )
+
+    drifts = seed.diff(_client(instance, recorder), baseline)
+
+    assert drifts == [
+        "LedgerCompany [ACTUAL, PRODUCTS]: missing on tenant",
+        "LedgerCompany [ACTUAL, SERVICES]: missing on tenant",
+    ]
+
+
+def test_diff_multi_key_single_org_no_phantom_drift(
+    tmp_path: Path, instance: Instance
+) -> None:
+    # the B14 regression leg: one link per ledger (the single-org tenant)
+    # reads back clean under the pair key - no "missing on tenant"
+    text = """\
+entity: LedgerCompany
+key: [LedgerCD, OrganizationID]
+endpoint: Bootstrap/1.4.0
+records:
+  - LedgerCD: ACTUAL
+    OrganizationID: COMPANY
+"""
+    baseline = _baseline(tmp_path, text)
+    recorder = Recorder(
+        {"/LedgerCompany": _live({"LedgerCD": "ACTUAL", "OrganizationID": "COMPANY"})}
+    )
 
     assert seed.diff(_client(instance, recorder), baseline) == []
 
