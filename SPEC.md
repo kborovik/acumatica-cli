@@ -59,6 +59,7 @@ V22: baseline reference closure — record field referencing another entity ! th
 V23: completion path local-only — `--completion` script emit + dynamic value completion read package data + data-repo files (cwd walk-up) + `.env` only; never REST, never SSH, never live instance (fires per keystroke)
 V24: extract per-row failure isolation — row failure (fetch or synth) → `x <name>: <reason>`, run continues to next manifest row; `PXSetupNotEnteredException` 500 = empty-state class → `skip <path> (screen setup not entered)`, not failure; run ends w/ summary; exit 0 all rows wrote or skipped clean, 1 any row failed; virgin tenant → full-manifest walk exit 0 (closes §B.19)
 V25: seed-file key identity — declared key tuple ! uniquely identify records; extract dup key tuple → row failure per V24, file never emitted; `load_baseline` dup key tuple → hard error naming entity + first dup tuple — catches hand-authored files (§B.14 workaround class; closes §B.21)
+V26: org-scoped view read ! explicit org context — contract entity over org-scoped screen (GL201100 class) answers 200 [] on multi-org tenant w/o org parameter; probe or synth standing on such view ! org-parameterized read or per-org iteration; single-org green not multi-org proof — verify gate for org-scoped surface ! cover multi-org tenant (closes §B.22)
 
 ## §T TASKS
 
@@ -79,6 +80,7 @@ T55|x|add `--completion` global flag — click-native script emit (`bash|zsh|fis
 T56|x|tenant create `--type` validation (gh issue #6 — closed post-land) — click choice `SalesDemo|T100|U100` (docs/ac-exe.md verified set, `System` excluded), non-member → error naming allowed set before SSH, omitted = clean tenant; help text documents exact names|V7,V9,V12,V16,I.cmd,B20
 T57|x|extract per-row failure isolation (gh issue #5 — land closes it, `Closes #5`) — row failure reported + continue, `PXSetupNotEnteredException` → screen-setup-not-entered skip, end summary, virgin-tenant dry-run walks full manifest exit 0|V9,V24,I.cmd,T48
 T58|x|fix multi-org LedgerCompany identity (gh issue #7 — land closes it, `Closes #7`) — per-org record shape or key so declared key identifies each row; multi-org SalesDemo extract → diff clean; B14 regression: single-org tenant no phantom-drift; V25 enforcement lands here (extract row-failure + `load_baseline` dup-tuple error)|V4,V12,V24,V25,I.cmd,T48,T50
+T59|.|multi-org period/calendar reads (gh issue #8 — land closes it, `Closes #8`) — org-parameterize CompanyPeriod/CompanyCalendar read surface (org-filtered read or per-org iteration): extract on multi-org tenant emits setup/30-open-periods.yaml + "cannot post GL" warning only when no period actually open, diff reads GenerateCalendar + ProcessAll applied, single-org unchanged; contract shape change → Bootstrap version bump per V21|V4,V12,V21,V26,I.cmd,T48,T49,T50
 
 ## §B BUGS
 
@@ -98,3 +100,4 @@ B18|2026-07-11|T53 premise ".env.gpg untracked + unignored" authored while file 
 B19|2026-07-11|extract loop no per-row isolation — first raising row aborts every later manifest row (entity, setup synth, features); virgin-tenant `PXSetupNotEnteredException` 500 hard-aborts while siblings answer 200 `[]`|V24
 B20|2026-07-11|tenant create `--type` free string forwarded verbatim to ac.exe CompanyConfig — any string accepted, unknown dataset name inserts nothing, virgin tenant lists as Demo (gh issue #6)|V16
 B21|2026-07-11|B14 workaround under-keys LedgerCompany (`keys: [LedgerCD]`) — multi-org tenant 3 org links per ledger, extract emits records dup on declared key; no layer audits key-tuple uniqueness; diff permanent false drift exit 2, apply would collapse org links to one|V25
+B22|2026-07-12|GL201100 org-scoped views (Bootstrap CompanyPeriod/CompanyCalendar) answer 200 [] on multi-org tenant — contract session carries no org context; extract skips 30-open-periods w/ false warning, diff calendar done_when probes never fire; single-org e2e masked class (gh issue #8)|V26
