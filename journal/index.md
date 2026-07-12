@@ -15,6 +15,25 @@ and status below.
 
 Newest first.
 
+- [2026-07-12](2026-07-12.md) — T59 live probe: the GL201100 org-scoped
+  views (CompanyPeriod / CompanyCalendar, B22's class) have no
+  accessible org-context handle over the contract API. Against the
+  multi-org `SalesDemo2` tenant (3 orgs, 14 ledger links, a real
+  16-year calendar), every lightweight mechanism was ruled out read-only:
+  grid `$filter` on the org field returns `200 []` (the field is real and
+  filterable — Default `CompanyFinancialPeriod.Company` — the view is just
+  empty without context), key-URL naming the org returns not-found, and
+  branch-at-login with a valid branch CD returns "Invalid credentials" —
+  but only for the *SalesDemo dataset's* admin. Correction same day: our
+  bootstrap-preset admin branch-logs-in clean on the `Company` tenant
+  (id 2, ours) and reads the org-scoped views, so the contract API's
+  org-context handle is the **branch at login** (per-org session). Project
+  decision: drop the SalesDemo dataset for the multi-org story, develop a
+  multi-org company from scratch as config-as-code, and make extract/diff
+  org-aware via per-org branch sessions — re-scoping T59 (mechanism found)
+  and the SalesDemo-based e2e legs. Friction: the probing tripped the
+  license API-session cap, cleared instantly by an app-pool recycle (no
+  host reboot needed).
 - [2026-07-11](2026-07-11.md) — T47 makes `acu tenant create` resumable,
   closing B17: a live tenant-list probe before the ac.exe create (V4 —
   state, never a marker) skips creation when the login already exists
