@@ -58,6 +58,7 @@ V21: endpoint contract identity = name+version — entity or field shape change 
 V22: baseline reference closure — record field referencing another entity ! that entity exist @ PUT time: tenant-native or created by earlier-sorting baseline file (dir expansion alphabetical = sole ordering mechanism; filename prefixes encode order); feature closure sibling — file whose entity feature-gated ! its FeaturesSet name enabled in `bootstrap/features.yaml`; full audit recipe → `.spec/check-extras.md` §V.22
 V23: completion path local-only — `--completion` script emit + dynamic value completion read package data + data-repo files (cwd walk-up) + `.env` only; never REST, never SSH, never live instance (fires per keystroke)
 V24: extract per-row failure isolation — row failure (fetch or synth) → `x <name>: <reason>`, run continues to next manifest row; `PXSetupNotEnteredException` 500 = empty-state class → `skip <path> (screen setup not entered)`, not failure; run ends w/ summary; exit 0 all rows wrote or skipped clean, 1 any row failed; virgin tenant → full-manifest walk exit 0 (closes §B.19)
+V25: seed-file key identity — declared key tuple ! uniquely identify records; extract dup key tuple → row failure per V24, file never emitted; `load_baseline` dup key tuple → hard error naming entity + first dup tuple — catches hand-authored files (§B.14 workaround class; closes §B.21)
 
 ## §T TASKS
 
@@ -77,6 +78,7 @@ T54|x|`make e2e` optional FILE arg — `make e2e FILE=<path-or-stem>` scopes pyt
 T55|x|add `--completion` global flag — click-native script emit (`bash|zsh|fish`, <shell> ? → `$SHELL` detect) + local-only value completion (`extract --only` entity names from packaged manifest, `apply`/`diff` path args)|V9,V16,V23,I.cmd
 T56|x|tenant create `--type` validation (gh issue #6 — closed post-land) — click choice `SalesDemo|T100|U100` (docs/ac-exe.md verified set, `System` excluded), non-member → error naming allowed set before SSH, omitted = clean tenant; help text documents exact names|V7,V9,V12,V16,I.cmd,B20
 T57|x|extract per-row failure isolation (gh issue #5 — land closes it, `Closes #5`) — row failure reported + continue, `PXSetupNotEnteredException` → screen-setup-not-entered skip, end summary, virgin-tenant dry-run walks full manifest exit 0|V9,V24,I.cmd,T48
+T58|.|fix multi-org LedgerCompany identity (gh issue #7 — land closes it, `Closes #7`) — per-org record shape or key so declared key identifies each row; multi-org SalesDemo extract → diff clean; B14 regression: single-org tenant no phantom-drift; V25 enforcement lands here (extract row-failure + `load_baseline` dup-tuple error)|V4,V12,V24,V25,I.cmd,T48,T50
 
 ## §B BUGS
 
@@ -95,3 +97,4 @@ B17|2026-07-10|T45 retired provision w/o re-routing T8-recorded recovery role (r
 B18|2026-07-11|T53 premise ".env.gpg untracked + unignored" authored while file tracked since 8ad8441 — repo state never probed @ amend; gitignore-only leg = ignored-but-tracked, green verify over standing concern|V17
 B19|2026-07-11|extract loop no per-row isolation — first raising row aborts every later manifest row (entity, setup synth, features); virgin-tenant `PXSetupNotEnteredException` 500 hard-aborts while siblings answer 200 `[]`|V24
 B20|2026-07-11|tenant create `--type` free string forwarded verbatim to ac.exe CompanyConfig — any string accepted, unknown dataset name inserts nothing, virgin tenant lists as Demo (gh issue #6)|V16
+B21|2026-07-11|B14 workaround under-keys LedgerCompany (`keys: [LedgerCD]`) — multi-org tenant 3 org links per ledger, extract emits records dup on declared key; no layer audits key-tuple uniqueness; diff permanent false drift exit 2, apply would collapse org links to one|V25
