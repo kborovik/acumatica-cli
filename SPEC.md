@@ -49,7 +49,7 @@ V12: `docs/ac-exe.md` + `docs/rest-api.md` verified vs live 26.101.0225 — trus
 V13: `make check` (ruff + basedpyright strict + offline pytest) before every commit
 V14: journal — after meaningful work append/extend `journal/YYYY-MM-DD.md` + sync `journal/index.md`; dead ends stay in (findings, not noise)
 V15: cmd grammar — exactly two forms: `acu [globals] <noun> <verb> [options]` = resource ops; `acu [globals] <verb> [options] [args]` = data plane; no third form; surface encodes V1 split; verb map → `.spec/check-extras.md` §V.15
-V16: option conventions — globals valid only before subcommand; resource identity = explicit `--id`, never positional; `--dry-run` wherever mutation; destructive ops confirm prompt, `--yes` skips; full convention audit → `.spec/check-extras.md` §V.16
+V16: option conventions — globals valid only before subcommand; resource identity = explicit `--id`, never positional; `--dry-run` wherever mutation; destructive ops confirm prompt, `--yes` skips; enum-domain option value = click.Choice @ parse over V12-verified set, free string never forwarded to remote accepting any value (closes §B.20); full convention audit → `.spec/check-extras.md` §V.16
 V17: spec-state dependencies stay live — §T verify gate ! satisfiable vs current spec state; retirement ! re-route every recorded recovery/fallback role (closes §B.17); premise assertions ! probed @ authoring (closes §B.18); full audit recipe → `.spec/check-extras.md` §V.17
 V18: `_ssh` appends `exit $LASTEXITCODE` to every remote command — single choke point, call sites never hand-append (PowerShell-over-ssh returns 0 on failed native cmd)
 V19: release pipeline — `make release <part>` sole release path (bump + commit + tag + gh release); release published → `release.yml` builds (`uv build`) + publishes to pypi.org via trusted publishing (OIDC); no PyPI API token in repo or GitHub secrets; tag `v<version>` == pyproject `version`
@@ -75,7 +75,7 @@ T52|x|extract manifest record filter — `EntitySpec` gains `filter:` ? (OData `
 T53|x|repo hygiene after data-repo rename — untrack `.env.gpg` + `.gitignore` gains it; CLAUDE.md syncs data-repo name + symlink set + verify cmd to §C|V2,V13,V17
 T54|x|`make e2e` optional FILE arg — `make e2e FILE=<path-or-stem>` scopes pytest to one e2e file, bare `make e2e` = whole tier unchanged|V13
 T55|x|add `--completion` global flag — click-native script emit (`bash|zsh|fish`, <shell> ? → `$SHELL` detect) + local-only value completion (`extract --only` entity names from packaged manifest, `apply`/`diff` path args)|V9,V16,V23,I.cmd
-T56|x|tenant create `--type` validation — click choice `SalesDemo|T100|U100` (docs/ac-exe.md verified set, `System` excluded), non-member → error naming allowed set before SSH, omitted = clean tenant; help text documents exact names|V7,V9,V12,V16,I.cmd
+T56|x|tenant create `--type` validation (gh issue #6 — closed post-land) — click choice `SalesDemo|T100|U100` (docs/ac-exe.md verified set, `System` excluded), non-member → error naming allowed set before SSH, omitted = clean tenant; help text documents exact names|V7,V9,V12,V16,I.cmd,B20
 T57|x|extract per-row failure isolation (gh issue #5 — land closes it, `Closes #5`) — row failure reported + continue, `PXSetupNotEnteredException` → screen-setup-not-entered skip, end summary, virgin-tenant dry-run walks full manifest exit 0|V9,V24,I.cmd,T48
 
 ## §B BUGS
@@ -94,3 +94,4 @@ B16|2026-07-10|T39 verify leg "GL batch posts" while template set (11 → 14) om
 B17|2026-07-10|T45 retired provision w/o re-routing T8-recorded recovery role (resumable provision = existing-tenant republish route) — Company stranded pre-T37 Bootstrap, data-repo `make diff` red since 1.4.0 bump|V17
 B18|2026-07-11|T53 premise ".env.gpg untracked + unignored" authored while file tracked since 8ad8441 — repo state never probed @ amend; gitignore-only leg = ignored-but-tracked, green verify over standing concern|V17
 B19|2026-07-11|extract loop no per-row isolation — first raising row aborts every later manifest row (entity, setup synth, features); virgin-tenant `PXSetupNotEnteredException` 500 hard-aborts while siblings answer 200 `[]`|V24
+B20|2026-07-11|tenant create `--type` free string forwarded verbatim to ac.exe CompanyConfig — any string accepted, unknown dataset name inserts nothing, virgin tenant lists as Demo (gh issue #6)|V16
