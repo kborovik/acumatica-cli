@@ -50,7 +50,7 @@ for granular /sdd:check runs.
 - resume/skip gate verifies desired state, never a marker — marker outlives state loss
 - published-package skip = content parity (embedded content digest), never existence alone — stale content silently starves config
 - diff read-back survives delegate-view entities — list-GET optimization-500 → key-URL single-record GET fallback (closes §B.9)
-- multi-view entity seed file keys on primary-view fields only — cross-view `$filter` AND answers 200 `[]` while each predicate alone matches, key-URL GET 500s non-B9 so fallback never fires; secondary-view fields stay record fields, diff field-by-field (closes §B.14)
+- multi-view entity composite key legal, first key ! primary-view field filterable alone — cross-view `$filter` AND answers 200 `[]` while each predicate alone matches, key-URL GET 500s non-B9 so B9 fallback never fires; diff read-back filters on first key only, matches remaining key fields client-side; key-tuple uniqueness → §V.25 (closes §B.14)
 - action file (`setup/*.yaml`) realizes state via contract action, not upsert — `done_when` live-state probe = verify gate both directions: apply skip (probe non-empty → `skip <action> (already done)`), diff drift (probe empty → `action <name>: not applied`, exit 2); probe coarse present/absent — action leaves no keyed record to field-diff
 
 ## §V.5 — tenant-map symptom recipe (extracted from SPEC.md §V.5)
