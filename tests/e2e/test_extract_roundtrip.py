@@ -1,13 +1,15 @@
 """Live extract round-trip against the real instance (T50, `make e2e`).
 
 The round-trip is extract's proof of fitness as the inverse of apply:
-tenant A is configured from the data repo and dumped into a/; tenant B
-is created fresh and configured from a/ alone; diff over a/ reads B
-clean (V4); a second extract from B into b/ must come back byte-identical
-to a/ - any server-derived field the manifest fails to strip surfaces
-here as a byte difference (V22). The GL batch leg proves the replayed
-setup chain is complete end to end (B16 class): a hand-built batch PUT
-releases to Posted on B.
+tenant A is configured from the scaffolded synthetic data repo (T63:
+the conftest scaffolds the packaged config-init templates into a tmp
+dir - single org, no repo-root symlinks, no dataset tenants) and dumped
+into a/; tenant B is created fresh and configured from a/ alone; diff
+over a/ reads B clean (V4); a second extract from B into b/ must come
+back byte-identical to a/ - any server-derived field the manifest fails
+to strip surfaces here as a byte difference (V22). The GL batch leg
+proves the replayed setup chain is complete end to end (B16 class): a
+hand-built batch PUT releases to Posted on B.
 
 Pre-build archaeology, probed live before this file was written (V12):
 
@@ -22,8 +24,8 @@ Pre-build archaeology, probed live before this file was written (V12):
   $top=10000 sweep on every probed entity (12 to 172 rows).
 
 Opt-in tier: `e2e` marker, deselected by the default suite (V13). Run
-via `make e2e` from the repo root, where the gitignored .env / baseline
-/ bootstrap / setup symlinks resolve into the sibling data repo. The
+via `make e2e` from the repo root; the only repo-root file involved is
+the decrypted .env, copied into the scaffold by the conftest. The
 tests drive the installed `acu` binary through the shared conftest
 runner (V9 contract as scripts see it) and are sequential and stateful
 by design; the session fixture always deletes both scratch tenants and
@@ -105,7 +107,7 @@ def test_tenant_a_bootstraps(acu: RunAcu, scratch_pair: ScratchPair) -> None:
 
 
 def test_apply_configures_tenant_a(acu: RunAcu, scratch_pair: ScratchPair) -> None:
-    """Bare apply sweeps the data repo's bootstrap/, baseline/, setup/."""
+    """Bare apply sweeps the scaffolded repo's bootstrap/, baseline/, setup/."""
     proc = acu("--tenant", LOGIN_A, "apply")
     assert proc.returncode == 0, _combined(proc)
 
@@ -219,8 +221,9 @@ def test_gl_batch_posts_on_tenant_b(
     scalar-only and Details is a list, so the test talks to the client's
     session directly), released via ReleaseJournalTransaction, then the
     batch is polled by key URL until Posted. The date sits inside the
-    replayed open-period year; accounts and the ZERO subaccount come
-    from the replayed baseline.
+    replayed open-period year (2026, the template setup/ chain); the
+    accounts (10100 Cash, 11000 Accounts Receivable) and the ZERO
+    subaccount come from the replayed template baseline.
     """
     inst = live_instance.model_copy(update={"tenant": LOGIN_B})
     payload = {
@@ -235,7 +238,7 @@ def test_gl_batch_posts_on_tenant_b(
                 "DebitAmount": {"value": 125.0},
             },
             {
-                "Account": {"value": "10200"},
+                "Account": {"value": "11000"},
                 "Subaccount": {"value": "000000"},
                 "CreditAmount": {"value": 125.0},
             },

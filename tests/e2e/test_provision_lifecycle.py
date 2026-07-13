@@ -1,42 +1,45 @@
 """Live tenant lifecycle against the real instance (SPEC G, `make e2e`).
 
-The lifecycle is the SPEC G pipeline verbatim: `acu tenant create` (which
-chains the bootstrap publish, T45) -> `acu apply` -> `acu diff` clean.
+The lifecycle is the SPEC G pipeline verbatim, self-contained (T63): the
+conftest scaffolds a synthetic single-org company from the packaged
+`acu config init` templates into a tmp data repo, then `acu tenant
+create` (which chains the bootstrap publish, T45) -> `acu apply` ->
+`acu diff` clean, all running from that repo. Bare apply/diff exercise
+the default-dirs path (I.cmd): the scaffolded bootstrap/ baseline/
+setup/ are the data-repo root dirs the walk-up finds.
 
-Opt-in tier: every test carries the `e2e` marker, which the default suite
-deselects (`make check` stays offline, V13). Run via `make e2e` from the
-repo root, where the gitignored .env / baseline / bootstrap / setup
-symlinks resolve into ../acumatica-baseline.
+Opt-in tier: every test carries the `e2e` marker, which the default
+suite deselects (`make check` stays offline, V13). Run via `make e2e`
+from the repo root; the only repo-root file involved is the decrypted
+.env (the instance address, copied into the scaffold) - no data
+symlinks, no dataset tenants.
 
 The tests drive the installed `acu` binary through subprocess - not
 CliRunner - so the exit-code and plain-text contract (V9) is exercised
-exactly as a script or agent sees it. They are sequential and stateful by
-design: pytest runs them in file order, and each step builds on the tenant
-state the previous one proved. The session-scoped fixture below brackets
-the run: it clears any leftover scratch tenant on the way in and always
-deletes it on the way out, so nothing persists on the instance.
+exactly as a script or agent sees it. They are sequential and stateful
+by design: pytest runs them in file order, and each step builds on the
+tenant state the previous one proved. The session-scoped fixture below
+brackets the run: it clears any leftover scratch tenant on the way in
+and always deletes it on the way out, so nothing persists on the
+instance.
 """
 
-import contextlib
 import subprocess
-import sys
-import threading
 from collections.abc import Callable, Iterator
 from pathlib import Path
-from typing import IO, Any, NamedTuple
+from typing import Any, NamedTuple
 
 import pytest
 import yaml
 
-from acumatica_cli.config import Instance, load_instance
 from acumatica_cli.tenant import TenantManager
 
 pytestmark = pytest.mark.e2e
 
-REPO_ROOT = Path(__file__).resolve().parents[2]
 SCRATCH_LOGIN = "E2E"
 
 RunAcu = Callable[..., subprocess.CompletedProcess[str]]
+DeleteTenant = Callable[[str], None]
 
 
 class ScratchTenant(NamedTuple):
@@ -46,95 +49,20 @@ class ScratchTenant(NamedTuple):
     company_id: int
 
 
-def _pump(pipe: IO[str], lines: list[str], sink: IO[str]) -> None:
-    """Copy one pipe to a live sink line by line, keeping every line."""
-    for line in pipe:
-        lines.append(line)
-        sink.write(line)
-        sink.flush()
-
-
 @pytest.fixture(scope="session")
-def acu() -> RunAcu:
-    """Run the real acu binary from the repo root, capturing text output.
-
-    Output is streamed through to the terminal as it arrives (acu's own
-    step lines are the progress indicator for the minutes-long create +
-    apply) while still being buffered for the assertions. `make e2e`
-    passes -s so pytest does not swallow the stream.
-    """
-
-    def run(*args: str) -> subprocess.CompletedProcess[str]:
-        sys.stderr.write(f"$ acu {' '.join(args)}\n")
-        sys.stderr.flush()
-        with subprocess.Popen(
-            ["acu", *args],
-            cwd=REPO_ROOT,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
-            text=True,
-        ) as proc:
-            assert proc.stdout is not None
-            assert proc.stderr is not None
-            out: list[str] = []
-            err: list[str] = []
-            readers = [
-                threading.Thread(target=_pump, args=(proc.stdout, out, sys.stdout)),
-                threading.Thread(target=_pump, args=(proc.stderr, err, sys.stderr)),
-            ]
-            for reader in readers:
-                reader.start()
-            try:
-                returncode = proc.wait(timeout=1800)
-            except subprocess.TimeoutExpired:
-                proc.kill()
-                raise
-            finally:
-                for reader in readers:
-                    reader.join()
-        return subprocess.CompletedProcess(
-            ["acu", *args], returncode, "".join(out), "".join(err)
-        )
-
-    return run
-
-
-@pytest.fixture(scope="session")
-def live_instance() -> Instance:
-    """The real target, resolved exactly as every live command resolves it."""
-    try:
-        with contextlib.chdir(REPO_ROOT):
-            return load_instance()
-    except SystemExit as exc:
-        pytest.exit(
-            f"live config missing ({exc}) - "
-            "run 'make decrypt' in ../acumatica-baseline",
-            returncode=1,
-        )
-
-
-def _delete_if_present(mgr: TenantManager, login: str) -> None:
-    """Delete the named tenant if it exists, then recycle (V5) to forget it."""
-    tenant = next((t for t in mgr.list() if t.login_name == login), None)
-    if tenant is None:
-        return
-    mgr.delete(tenant.company_id)
-    mgr.recycle_app_pool()
-
-
-@pytest.fixture(scope="session")
-def scratch_tenant(live_instance: Instance) -> Iterator[ScratchTenant]:
+def scratch_tenant(
+    tenant_manager: TenantManager, delete_tenant: DeleteTenant
+) -> Iterator[ScratchTenant]:
     """Bracket the session with a clean scratch-tenant slot.
 
     Setup clears a leftover tenant from a crashed run and picks the next
     free CompanyID; teardown always deletes the tenant (TenantManager.delete
     has no confirmation prompt, unlike the CLI command).
     """
-    mgr = TenantManager(live_instance)
-    _delete_if_present(mgr, SCRATCH_LOGIN)
-    company_id = max(t.company_id for t in mgr.list()) + 1
+    delete_tenant(SCRATCH_LOGIN)
+    company_id = max(t.company_id for t in tenant_manager.list()) + 1
     yield ScratchTenant(login=SCRATCH_LOGIN, company_id=company_id)
-    _delete_if_present(mgr, SCRATCH_LOGIN)
+    delete_tenant(SCRATCH_LOGIN)
 
 
 def _combined(proc: subprocess.CompletedProcess[str]) -> str:
@@ -191,9 +119,9 @@ def test_apply_is_idempotent(acu: RunAcu, scratch_tenant: ScratchTenant) -> None
 
 
 def test_diff_detects_injected_drift(
-    acu: RunAcu, scratch_tenant: ScratchTenant, tmp_path: Path
+    acu: RunAcu, scratch_tenant: ScratchTenant, data_repo: Path, tmp_path: Path
 ) -> None:
-    source = sorted((REPO_ROOT / "baseline").glob("*.yaml"))[0]
+    source = sorted((data_repo / "baseline").glob("*.yaml"))[0]
     doc: dict[str, Any] = yaml.safe_load(source.read_text())
     keys = doc["key"] if isinstance(doc["key"], list) else [doc["key"]]
     record: dict[str, Any] = doc["records"][0]
