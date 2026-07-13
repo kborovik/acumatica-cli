@@ -12,7 +12,7 @@ import click
 import httpx
 from click.shell_completion import get_completion_class
 
-from . import bootstrap, extract, firstlogin, output, seed
+from . import bootstrap, extract, firstlogin, output, run, seed
 from .client import AcumaticaClient
 from .config import (
     Instance,
@@ -555,6 +555,42 @@ def diff_cmd(inst: Instance, files: tuple[Path, ...]) -> None:
             baseline = seed.load_baseline(path)
             drifts += seed.diff(client, baseline)
     _exit_on_drift(inst, drifts, len(paths))
+
+
+@cli.command("run")
+@click.argument(
+    "files", nargs=-1, required=False, type=click.Path(exists=True, path_type=Path)
+)
+@click.option("--dry-run", is_flag=True, help="Parse and list steps without any HTTP")
+@pass_instance
+def run_cmd(inst: Instance, files: tuple[Path, ...], dry_run: bool) -> None:
+    """Execute transaction scenario YAML against the live tenant.
+
+    FILES are scenario YAML files or directories containing them. Omitted,
+    they default to the data repo's scenario/ directory. Transactions are
+    executed forward (the server assigns document numbers), never upserted;
+    delta expectations snapshot before the first step and compare after the
+    last, so a scenario re-runs safely on a warm tenant. Exit 0 when every
+    expectation holds, 1 on any step error or expectation miss.
+    """
+    if not files:
+        default = data_root() / "scenario"
+        if not default.is_dir():
+            raise SystemExit(f"{default}: scenario directory does not exist")
+        files = (Path(os.path.relpath(default)),)
+    paths = expand_files(files)
+    scenarios = [run.load_scenario(path) for path in paths]
+    ok = True
+    if dry_run:
+        for scenario in scenarios:
+            run.run(None, scenario, dry_run=True)
+    else:
+        with AcumaticaClient(inst) as client:
+            for scenario in scenarios:
+                ok = run.run(client, scenario) and ok
+    if not ok:
+        raise SystemExit(1)
+    output.success(f"{len(scenarios)} scenario(s) passed on {inst.tenant}")
 
 
 def _complete_only(

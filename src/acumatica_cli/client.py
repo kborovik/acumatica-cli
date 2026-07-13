@@ -230,11 +230,21 @@ class AcumaticaClient:
         return self._checked(self._http.get(self._url("swagger.json"))).content
 
     def put(
-        self, entity: str, record: dict[str, Any], endpoint: str | None = None
+        self,
+        entity: str,
+        record: dict[str, Any],
+        endpoint: str | None = None,
+        params: dict[str, str] | None = None,
     ) -> dict[str, Any]:
-        """Upsert by the entity's key fields — the idempotence primitive."""
+        """Upsert by the entity's key fields — the idempotence primitive.
+
+        `params` carries OData query options — the contract-inquiry idiom
+        (T62) is a PUT of the parameter record with `$expand=Results`.
+        """
         return self._checked(
-            self._http.put(self._url(entity, endpoint), json=wrap(record))
+            self._http.put(
+                self._url(entity, endpoint), json=wrap(record), params=params
+            )
         ).json()
 
     # seconds between polls of a long-running action's status URL; module
