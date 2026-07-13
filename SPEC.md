@@ -49,7 +49,7 @@ V10: every model inherits `models.Model` (pydantic frozen, `extra="forbid"`) —
 V11: REST targets versioned path only (`Default/25.200.001`), never unversioned alias
 V12: `docs/ac-exe.md` + `docs/rest-api.md` verified vs live 26.101.0225 — trust over training data, re-verify on upgrade; dumped schema (`acu schema`) = authoritative field reference
 V13: `make check` (ruff + basedpyright strict + offline pytest) before every commit
-V14: journal — after meaningful work append/extend `journal/YYYY-MM-DD.md` + sync `journal/index.md`; dead ends stay in (findings, not noise)
+V14: friction record — major Acumatica API friction (vendor docs wrong/missing, silent no-op write, read 500/empty w/o cause, feature gate) → gh issue on this repo: symptom, then live evidence, then workaround/fix; dead ends stay recorded (findings, not noise)
 V15: cmd grammar — exactly two forms: `acu [globals] <noun> <verb> [options]` = resource ops; `acu [globals] <verb> [options] [args]` = data plane; no third form; surface encodes V1 split; verb map → `.spec/check-extras.md` §V.15
 V16: option conventions — globals valid only before subcommand; resource identity = explicit `--id`, never positional; `--dry-run` wherever mutation; destructive ops confirm prompt, `--yes` skips; enum-domain option value = click.Choice @ parse over V12-verified set, free string never forwarded to remote accepting any value (closes §B.20); full convention audit → `.spec/check-extras.md` §V.16
 V17: spec-state dependencies stay live — §T verify gate ! satisfiable vs current spec state; retirement ! re-route every recorded recovery/fallback role (closes §B.17); premise assertions ! probed @ authoring (closes §B.18); full audit recipe → `.spec/check-extras.md` §V.17
