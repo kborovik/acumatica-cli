@@ -16,7 +16,7 @@ default: .venv help
 # Python dev (lint / format / types)
 ###############################################################################
 
-check: .venv lint test ## Run all checks (lint + offline tests; live verification runs from acumatica-baseline)
+check: .venv lint test ## Run all checks (lint + offline tests; live verification = make e2e)
 
 lint: .venv py-format py-lint py-types ## Lint Python code
 
@@ -28,10 +28,10 @@ test: .venv ## Run the test suite (pytest, offline — no live instance needed)
 # path, then tests/e2e/<FILE>, then tests/e2e/<FILE>.py); unset = whole tier.
 e2e_target := $(if $(FILE),$(firstword $(wildcard $(FILE) tests/e2e/$(FILE) tests/e2e/$(FILE).py)),tests/e2e)
 
-e2e: ## Live E2E vs the data-repo instance: create scratch tenant, apply, diff, destroy (needs tailnet + decrypted .env); FILE=<path-or-stem> scopes to one file
+e2e: ## Live E2E, self-contained: scaffold a tmp data repo from packaged templates, create scratch tenants, apply, diff, destroy (needs tailnet + decrypted .env); FILE=<path-or-stem> scopes to one file
 	test -e .env || { echo ".env missing — decrypt .env.gpg at the repo root"; exit 1; }
 	test -n "$(e2e_target)" || { echo "no e2e file matches FILE=$(FILE) (tried it as a path, tests/e2e/$(FILE), tests/e2e/$(FILE).py)"; exit 1; }
-	$(call header,Running live E2E (creates and destroys tenant E2E))
+	$(call header,Running live E2E (creates and destroys scratch tenants))
 	uv run pytest -o addopts= -m e2e -v -s $(e2e_target)
 
 py-format:
