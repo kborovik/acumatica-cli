@@ -14,15 +14,42 @@ from .config import Instance
 
 
 def wrap(record: dict[str, Any]) -> dict[str, Any]:
-    """Plain dict -> contract-API body: {"Field": {"value": ...}}."""
-    return {k: {"value": v} for k, v in record.items()}
+    """Plain dict -> contract-API body: {"Field": {"value": ...}}.
+
+    A list value is a detail array (T60): the list itself is NEVER
+    value-wrapped, each dict row wraps recursively — the shape the live
+    JournalTransaction PUT proved (T50/T37 e2e payload). The contract's
+    OWN control fields travel bare, never value-wrapped: `id` (row GUID —
+    the only handle that makes a detail-row PUT an update instead of an
+    insert) and `delete` (row-removal marker).
+    """
+
+    def _value(v: Any) -> Any:
+        if isinstance(v, list):
+            return [wrap(row) if isinstance(row, dict) else row for row in v]
+        return {"value": v}
+
+    return {k: v if k in ("id", "delete") else _value(v) for k, v in record.items()}
 
 
 def unwrap(entity: dict[str, Any]) -> dict[str, Any]:
-    """Contract-API entity -> plain dict (top-level value fields only)."""
-    return {
-        k: v["value"] for k, v in entity.items() if isinstance(v, dict) and "value" in v
-    }
+    """Contract-API entity -> plain dict (value fields + detail arrays).
+
+    Inverse of wrap (T60): a list of dicts unwraps row by row; lists that
+    are empty or whose rows carry no value fields are elided (a detail
+    array the source never claimed must not surface, and expanded `files`
+    descriptors are plain dicts that would unwrap to noise). Non-value
+    dicts (custom, _links, note) stay excluded as before.
+    """
+    out: dict[str, Any] = {}
+    for k, v in entity.items():
+        if isinstance(v, dict) and "value" in v:
+            out[k] = v["value"]
+        elif isinstance(v, list) and v and all(isinstance(row, dict) for row in v):
+            rows = [unwrap(row) for row in v]
+            if any(rows):
+                out[k] = rows
+    return out
 
 
 # The list GET's optimized-export failure (B9): the contract API's list GET
@@ -159,7 +186,11 @@ class AcumaticaClient:
         ).json()
 
     def get_record(
-        self, entity: str, keys: Sequence[Any], endpoint: str | None = None
+        self,
+        entity: str,
+        keys: Sequence[Any],
+        endpoint: str | None = None,
+        params: dict[str, str] | None = None,
     ) -> dict[str, Any] | None:
         """GET one record by key URL — the delegate-view-safe read (B9).
 
@@ -167,10 +198,12 @@ class AcumaticaClient:
         scope maps to a BQL-delegate view; the key-URL form skips the
         optimizer and returns the full record (verified vs 26.101.0225).
         Returns None when no record matches — the server answers that with
-        a 500 NoEntitySatisfiesTheConditionException, not a 404.
+        a 500 NoEntitySatisfiesTheConditionException, not a 404. Detail
+        arrays only travel under a $expand param (T60), same as the list
+        GET.
         """
         path = "/".join(quote(str(k), safe="") for k in keys)
-        r = self._http.get(f"{self._url(entity, endpoint)}/{path}")
+        r = self._http.get(f"{self._url(entity, endpoint)}/{path}", params=params)
         if r.status_code == 500:
             try:
                 missing = "NoEntitySatisfiesTheCondition" in r.json().get(

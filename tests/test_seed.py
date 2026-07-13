@@ -201,6 +201,172 @@ def test_filter_for_joins_keys() -> None:
     assert filter_for(record, ["UOM", "ToUOM"]) == "UOM eq 'KG' and ToUOM eq 'G'"
 
 
+KIT_YAML = """\
+entity: KitSpecification
+key: [KitInventoryID, RevisionID]
+detail_keys: { StockComponents: ComponentID }
+records:
+  - KitInventoryID: GW-EDGE
+    RevisionID: V1
+    StockComponents:
+      - { ComponentID: MB-CM4, ComponentQty: 1 }
+      - { ComponentID: PSU-12V, ComponentQty: 1 }
+"""
+
+
+def test_load_baseline_parses_detail_keys(tmp_path: Path) -> None:
+    baseline = _baseline(tmp_path, KIT_YAML)
+    assert baseline.detail_keys == {"StockComponents": "ComponentID"}
+    assert len(baseline.records[0]["StockComponents"]) == 2
+
+
+def test_load_baseline_rejects_list_field_without_detail_key(tmp_path: Path) -> None:
+    # T60, the V25 sibling: diff cannot match detail rows without a key
+    text = KIT_YAML.replace("detail_keys: { StockComponents: ComponentID }\n", "")
+    with pytest.raises(SystemExit, match=r"StockComponents is a detail list"):
+        seed.load_baseline(_write(tmp_path, text))
+
+
+def test_load_baseline_rejects_duplicate_detail_key(tmp_path: Path) -> None:
+    text = KIT_YAML.replace("ComponentID: PSU-12V", "ComponentID: MB-CM4")
+    with pytest.raises(
+        SystemExit, match=r"StockComponents\[1\] duplicates detail key \[MB-CM4\]"
+    ):
+        seed.load_baseline(_write(tmp_path, text))
+
+
+def test_load_baseline_rejects_detail_row_missing_key_field(tmp_path: Path) -> None:
+    text = KIT_YAML.replace("ComponentID: PSU-12V, ", "")
+    with pytest.raises(
+        SystemExit, match=r"StockComponents\[1\] missing detail key field"
+    ):
+        seed.load_baseline(_write(tmp_path, text))
+
+
+def _kit_live(*components: dict[str, Any], extra_fields: bool = True) -> httpx.Response:
+    rows = []
+    for c in components:
+        row: dict[str, Any] = {k: {"value": v} for k, v in c.items()}
+        if extra_fields:
+            # server-derived detail fields the source never claims
+            row["LineNbr"] = {"value": 1}
+            row["id"] = "row-guid"
+        rows.append(row)
+    return httpx.Response(
+        200,
+        json=[
+            {
+                "KitInventoryID": {"value": "GW-EDGE"},
+                "RevisionID": {"value": "V1"},
+                "StockComponents": rows,
+            }
+        ],
+    )
+
+
+def test_diff_details_clean_when_order_differs(
+    tmp_path: Path, instance: Instance
+) -> None:
+    # order-insensitive: live rows permuted vs source, extra server-derived
+    # detail fields (LineNbr, id) ignored - source-side comparison only
+    baseline = seed.load_baseline(_write(tmp_path, KIT_YAML))
+    recorder = Recorder(
+        {
+            "/KitSpecification": _kit_live(
+                {"ComponentID": "PSU-12V", "ComponentQty": 1.0},
+                {"ComponentID": "MB-CM4", "ComponentQty": 1.0},
+            )
+        }
+    )
+    assert seed.diff(_client(instance, recorder), baseline) == []
+
+
+def test_diff_details_reports_missing_extra_and_changed(
+    tmp_path: Path, instance: Instance
+) -> None:
+    """T60/V4: the record owns its detail list.
+
+    Missing source row, changed sub-field, and - unlike top-level records -
+    an extra live row all drift.
+    """
+    baseline = seed.load_baseline(_write(tmp_path, KIT_YAML))
+    recorder = Recorder(
+        {
+            "/KitSpecification": _kit_live(
+                {"ComponentID": "MB-CM4", "ComponentQty": 2.0},
+                {"ComponentID": "SD-32GB", "ComponentQty": 1.0},
+            )
+        }
+    )
+    drifts = seed.diff(_client(instance, recorder), baseline)
+    assert (
+        "KitSpecification [GW-EDGE, V1].StockComponents[MB-CM4].ComponentQty: "
+        "source=1 live=2.0" in drifts
+    )
+    assert (
+        "KitSpecification [GW-EDGE, V1].StockComponents[PSU-12V]: "
+        "missing on tenant" in drifts
+    )
+    assert (
+        "KitSpecification [GW-EDGE, V1].StockComponents[SD-32GB]: "
+        "extra on tenant" in drifts
+    )
+    assert len(drifts) == 3
+
+
+def test_apply_put_carries_unwrapped_detail_list(
+    tmp_path: Path, instance: Instance
+) -> None:
+    # the PUT body must carry the T50-proven shape: rows wrapped, the
+    # list itself bare; record absent live -> rows travel id-less
+    baseline = seed.load_baseline(_write(tmp_path, KIT_YAML))
+    recorder = Recorder()
+    seed.apply(_client(instance, recorder), baseline)
+    body = json.loads(recorder.requests[-1].content)
+    assert body["StockComponents"][0]["ComponentID"] == {"value": "MB-CM4"}
+    assert isinstance(body["StockComponents"], list)
+    assert "id" not in body["StockComponents"][0]
+
+
+def test_apply_injects_live_detail_row_ids(tmp_path: Path, instance: Instance) -> None:
+    """T60/V4: re-apply matches live detail rows by id, never re-inserts.
+
+    The contract API matches detail rows by row GUID only (live-verified:
+    an id-less re-PUT 500s "Component Item must be unique"). Matched
+    source rows gain the live id; live rows the source no longer claims
+    ride along as {id, delete: true} - apply converges what diff flags.
+    """
+    baseline = seed.load_baseline(_write(tmp_path, KIT_YAML))
+    live_record = {
+        "KitInventoryID": {"value": "GW-EDGE"},
+        "RevisionID": {"value": "V1"},
+        "StockComponents": [
+            {
+                "ComponentID": {"value": "MB-CM4"},
+                "ComponentQty": {"value": 1.0},
+                "id": "guid-mb",
+            },
+            {
+                "ComponentID": {"value": "OBSOLETE"},
+                "ComponentQty": {"value": 1.0},
+                "id": "guid-old",
+            },
+        ],
+    }
+    recorder = Recorder({"/KitSpecification": httpx.Response(200, json=[live_record])})
+    seed.apply(_client(instance, recorder), baseline)
+    body = json.loads(recorder.requests[-1].content)
+    rows = {
+        r["ComponentID"]["value"]: r
+        for r in body["StockComponents"]
+        if "ComponentID" in r
+    }
+    assert rows["MB-CM4"]["id"] == "guid-mb"  # matched -> update, id bare
+    assert "id" not in rows["PSU-12V"]  # new row -> insert
+    deletes = [r for r in body["StockComponents"] if r.get("delete") is True]
+    assert deletes == [{"id": "guid-old", "delete": True}]
+
+
 def test_filter_for_key_literals_follow_scalar_type() -> None:
     """T61: filter literals type by YAML scalar - never string-quote non-strings.
 

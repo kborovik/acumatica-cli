@@ -31,6 +31,49 @@ def test_unwrap_keeps_only_value_fields() -> None:
     assert unwrap(entity) == {"CurrencyID": "CAD"}
 
 
+def test_wrap_detail_list_rows_wrap_the_list_does_not() -> None:
+    """T60: the T50-proven JournalTransaction payload shape, exactly.
+
+    The detail list itself is never value-wrapped; each row wraps like a
+    record. Anything else 422s or silently drops the rows.
+    """
+    assert wrap(
+        {
+            "KitInventoryID": "GW-EDGE",
+            "StockComponents": [{"ComponentID": "MB-CM4", "ComponentQty": 1}],
+        }
+    ) == {
+        "KitInventoryID": {"value": "GW-EDGE"},
+        "StockComponents": [
+            {"ComponentID": {"value": "MB-CM4"}, "ComponentQty": {"value": 1}}
+        ],
+    }
+
+
+def test_unwrap_inverts_detail_lists_and_elides_noise() -> None:
+    """T60: detail arrays unwrap row by row; valueless-row lists elide.
+
+    Expanded `files` descriptors are plain dicts (no value wrapping) and
+    must not surface as empty rows; empty lists stay elided.
+    """
+    entity = {
+        "KitInventoryID": {"value": "GW-EDGE"},
+        "StockComponents": [
+            {
+                "ComponentID": {"value": "MB-CM4"},
+                "ComponentQty": {"value": 1.0},
+                "id": "row-guid",
+            }
+        ],
+        "NonStockComponents": [],
+        "files": [{"id": "f", "filename": "a.txt"}],
+    }
+    assert unwrap(entity) == {
+        "KitInventoryID": "GW-EDGE",
+        "StockComponents": [{"ComponentID": "MB-CM4", "ComponentQty": 1.0}],
+    }
+
+
 def _response(status: int, body: Any = None) -> httpx.Response:
     request = httpx.Request("PUT", "http://acu.test/AcumaticaERP/entity/x")
     if body is None:

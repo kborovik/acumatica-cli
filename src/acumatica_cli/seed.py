@@ -12,6 +12,22 @@ Baseline file format:
       - CurrencyID: "CAD"
         Description: Canadian Dollar
 
+A record field holding a LIST is a detail array (T60) - each row a field
+map, PUT with the whole record (the list itself never value-wrapped).
+Every list field needs a detail_keys entry naming the field that
+identifies its rows; diff matches rows by that key, order-insensitive,
+and unlike top-level records an extra live detail row IS drift - the
+record owns its list:
+
+    entity: KitSpecification
+    key: [KitInventoryID, RevisionID]
+    detail_keys: { StockComponents: ComponentID }
+    records:
+      - KitInventoryID: GW-EDGE
+        RevisionID: V1
+        StockComponents:
+          - { ComponentID: MB-CM4, ComponentQty: 1 }
+
 Action file format (setup/*.yaml) - desired state realized by a contract
 action plus a done_when live-state probe, for setup verbs a keyed PUT
 cannot express (calendar generation and the like):
@@ -85,6 +101,7 @@ class BaselineFile(Model):
     keys: list[str] = Field(alias="key")
     records: list[dict[str, Any]]
     endpoint: str | None = None  # bootstrap YAML targets the custom endpoint
+    detail_keys: dict[str, str] | None = None  # {ListField: RowKeyField} (T60)
 
     @field_validator("keys", mode="before")
     @classmethod
@@ -109,7 +126,39 @@ class BaselineFile(Model):
                     "identify each record"
                 )
             seen.add(ident)
+            self._check_details(i, record)
         return self
+
+    def _check_details(self, i: int, record: dict[str, Any]) -> None:
+        # T60, the V25 sibling for detail arrays: every list field needs a
+        # detail_keys entry (diff cannot match rows without one) and that
+        # key must identify each source row - a dup diffs as permanent
+        # false drift exactly like B21's top-level class
+        for field, value in record.items():
+            if not isinstance(value, list):
+                continue
+            key = (self.detail_keys or {}).get(field)
+            if key is None:
+                raise ValueError(
+                    f"entity '{self.entity}': records[{i}].{field} is a "
+                    "detail list but has no detail_keys entry - add "
+                    f"detail_keys: {{{field}: <RowKeyField>}}"
+                )
+            seen_rows: set[str] = set()
+            for j, row in enumerate(value):
+                if not isinstance(row, dict) or key not in row:
+                    raise ValueError(
+                        f"entity '{self.entity}': records[{i}].{field}[{j}] "
+                        f"missing detail key field '{key}'"
+                    )
+                ident = str(row[key])
+                if ident in seen_rows:
+                    raise ValueError(
+                        f"entity '{self.entity}': records[{i}].{field}[{j}] "
+                        f"duplicates detail key [{ident}] - the detail key "
+                        "must identify each row"
+                    )
+                seen_rows.add(ident)
 
 
 class DoneProbe(Model):
@@ -235,9 +284,48 @@ def apply(
         if dry_run:
             output.data(f"  would PUT {baseline.entity} [{label}]")
         else:
-            client.put(baseline.entity, record, endpoint=baseline.endpoint)
+            body = record
+            if any(isinstance(v, list) for v in record.values()):
+                body = _with_detail_ids(client, baseline, record)
+            client.put(baseline.entity, body, endpoint=baseline.endpoint)
             output.data(f"  PUT {baseline.entity} [{label}]")
     return len(baseline.records)
+
+
+def _with_detail_ids(
+    client: AcumaticaClient, baseline: BaselineFile, record: dict[str, Any]
+) -> dict[str, Any]:
+    """Source record + live detail-row ids — the detail upsert handle (T60).
+
+    The contract API matches detail rows by row GUID only: a re-PUT
+    without ids re-INSERTS every row (live-verified on KitSpecification —
+    500 "Component Item must be unique"). So apply pre-fetches the live
+    record, injects each matching live row's `id` (matched by the
+    detail_keys field), and appends `{id, delete: true}` rows for live
+    rows the source no longer claims — the record owns its list (V4
+    detail semantics), so apply converges exactly what diff would flag.
+    Record absent live → first PUT creates, rows travel id-less.
+    """
+    live = _fetch(client, baseline, record)
+    if live is None:
+        return record
+    out = dict(record)
+    for field, rows in record.items():
+        if not isinstance(rows, list):
+            continue
+        key = (baseline.detail_keys or {})[field]  # load-validated
+        live_ids: dict[str, Any] = {}
+        for live_row in live.get(field) or []:
+            value = live_row.get(key)
+            if isinstance(value, dict) and "value" in value and "id" in live_row:
+                live_ids[_norm(value["value"])] = live_row["id"]
+        merged: list[dict[str, Any]] = []
+        for row in rows:
+            row_id = live_ids.pop(_norm(row[key]), None)
+            merged.append({**row, "id": row_id} if row_id is not None else row)
+        merged.extend({"id": row_id, "delete": True} for row_id in live_ids.values())
+        out[field] = merged
+    return out
 
 
 def _fetch(
@@ -256,18 +344,27 @@ def _fetch(
     CuryRecords, B9) 500 on that optimized export; the key-URL
     single-record GET skips the optimizer, so diff falls back to it on
     exactly that error (V4: read-back must survive delegate-view entities).
+
+    Detail arrays only travel under $expand (T60): without it every GET
+    answers top-level fields alone, diff would report each source detail
+    row missing and apply's id-injection would see nothing to match.
     """
+    params = {"$filter": _filter_for(record, baseline.keys[:1])}
+    detail_fields = [f for f in (baseline.detail_keys or {}) if f in record]
+    if detail_fields:
+        params["$expand"] = ",".join(sorted(detail_fields))
     try:
         live = client.get_list(
-            baseline.entity,
-            params={"$filter": _filter_for(record, baseline.keys[:1])},
-            endpoint=baseline.endpoint,
+            baseline.entity, params=params, endpoint=baseline.endpoint
         )
     except RuntimeError as err:
         if OPTIMIZATION_500 not in str(err):
             raise
         return client.get_record(
-            baseline.entity, [record[k] for k in baseline.keys], baseline.endpoint
+            baseline.entity,
+            [record[k] for k in baseline.keys],
+            baseline.endpoint,
+            params={"$expand": params["$expand"]} if detail_fields else None,
         )
     for row in live:
         actual = unwrap(row)
@@ -302,10 +399,51 @@ def diff(client: AcumaticaClient, baseline: BaselineFile | ActionFile) -> list[s
             continue
         actual = unwrap(live)
         for field, expected in record.items():
-            if field not in actual:
+            if isinstance(expected, list):
+                key = (baseline.detail_keys or {})[field]  # load-validated
+                live_rows = actual.get(field, [])
+                drifts.extend(_diff_details(label, field, key, expected, live_rows))
+            elif field not in actual:
                 drifts.append(f"{label}.{field}: not returned by endpoint")
             elif _norm(actual[field]) != _norm(expected):
                 drifts.append(
                     f"{label}.{field}: source={expected!r} live={actual[field]!r}"
                 )
+    return drifts
+
+
+def _diff_details(
+    label: str,
+    field: str,
+    key: str,
+    expected: list[dict[str, Any]],
+    live_rows: list[dict[str, Any]],
+) -> list[str]:
+    """Detail-array drift (T60): rows matched by detail key, order-insensitive.
+
+    Unlike top-level records (V4 exemption), an extra live detail row IS
+    drift - the record owns its list, apply cannot converge a live row the
+    source never claimed. Within a matched row only source-side fields
+    compare (server-derived LineNbr and ids stay omitted from source).
+    """
+    drifts: list[str] = []
+    live_by_key = {_norm(row[key]): row for row in live_rows if key in row}
+    for row in expected:
+        ident = _norm(row[key])
+        live_row = live_by_key.pop(ident, None)
+        if live_row is None:
+            drifts.append(f"{label}.{field}[{row[key]}]: missing on tenant")
+            continue
+        for sub, want in row.items():
+            if sub not in live_row:
+                drifts.append(
+                    f"{label}.{field}[{row[key]}].{sub}: not returned by endpoint"
+                )
+            elif _norm(live_row[sub]) != _norm(want):
+                drifts.append(
+                    f"{label}.{field}[{row[key]}].{sub}: "
+                    f"source={want!r} live={live_row[sub]!r}"
+                )
+    for ident in live_by_key:
+        drifts.append(f"{label}.{field}[{ident}]: extra on tenant")
     return drifts
