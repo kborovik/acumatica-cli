@@ -1,4 +1,4 @@
-# General Ledger preferences (GL102000) via the custom Bootstrap/1.5.0
+# General Ledger preferences (GL102000) via the custom Bootstrap/1.6.0
 # endpoint (the per-file endpoint: override) - the Default endpoint has
 # no GL-setup entity, and every Finance screen throws
 # PXSetupNotEnteredException until the GLSetup singleton row exists. The
@@ -12,7 +12,7 @@
 # referenced here must exist.
 entity: GLPreferences
 key: RetEarnAccountID
-endpoint: Bootstrap/1.5.0
+endpoint: Bootstrap/1.6.0
 records:
 - RetEarnAccountID: '32000'
   YtdNetIncAccountID: '33000'

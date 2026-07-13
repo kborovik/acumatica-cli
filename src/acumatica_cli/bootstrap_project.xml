@@ -192,6 +192,23 @@
                 (live-read 2026-07-13). TransitAcctId (DAC spelling off
                 the aspx - lowercase d) + TransitSubID = the cash-in-
                 transit pair; HoldEntry = the echo flag.
+  - VendorClass AP201000 -> VendorClassMaint, PrimaryView
+                VendorClassRecord (PX.Objects.AP.VendorClass) - the
+                Default endpoint's VendorClass is skeletal (ClassID/
+                Description/Attributes) and Vendor carries no discount
+                fields, so vendor inserts 422 on the cash-discount pair
+                the class should default (T64, gh issue #13). Exposes
+                id + descr + TermsID + the GL-account pairs off the
+                screen's GL Accounts tab (aspx-verified 2026-07-13).
+  - StatementCycle AR202800 -> ARStatementMaint, PrimaryView
+                ARStatementCycleRecord (PX.Objects.AR.ARStatementCycle) -
+                no Default-endpoint entity, and Customer inserts 422
+                "'Statement Cycle ID' cannot be empty" (T64 follow-up
+                proven live 2026-07-13; the class defaults it). PrepareOn
+                takes the stored-word list; Day00 rides the
+                fixed-day-of-month choice; the AgeDays00-02 aging bounds
+                default inconsistently at raw insert ("end day earlier
+                than its start day" 422) so the seed supplies them.
   - CashAccount CA202000 -> CashAccountMaint, PrimaryView CashAccount
                 (PX.Objects.CA.CashAccount) - Default endpoint answers
                 404. CuryID stays out (derived from the GL account,
@@ -201,9 +218,9 @@
   Features (CS100000) stays OUT of the endpoint - writes through any
   contract endpoint do not persist (T3 verdict); the plugin owns features.
 -->
-<Customization level="" description="acu bootstrap: CustomizationPlugin enables features on publish; Bootstrap endpoint exposes company + credit terms + financial currency + GL preferences + ledger-company link + financial year + calendars + period activation + module preferences (IN/AP/AR/SO/PO) + availability rule + posting class + cash account" product-version="26.101">
+<Customization level="" description="acu bootstrap: CustomizationPlugin enables features on publish; Bootstrap endpoint exposes company + credit terms + financial currency + GL preferences + ledger-company link + financial year + calendars + period activation + module preferences (IN/AP/AR/SO/PO) + availability rule + posting class + cash account + vendor class + statement cycle" product-version="26.101">
   <EntityEndpoint>
-    <Endpoint xmlns="http://www.acumatica.com/entity/maintenance/5.31" name="Bootstrap" version="1.5.0" systemContractVersion="4">
+    <Endpoint xmlns="http://www.acumatica.com/entity/maintenance/5.31" name="Bootstrap" version="1.6.0" systemContractVersion="4">
       <TopLevelEntity name="Company" screen="CS101500">
         <Fields>
           <Field name="AcctCD" type="StringValue" />
@@ -749,6 +766,98 @@
           </Mapping>
           <Mapping field="TransitSubID">
             <To object="CASetupRecord" field="TransitSubID" />
+          </Mapping>
+        </Mappings>
+      </TopLevelEntity>
+      <TopLevelEntity name="VendorClass" screen="AP201000">
+        <Fields>
+          <Field name="VendorClassID" type="StringValue" />
+          <Field name="Descr" type="StringValue" />
+          <Field name="TermsID" type="StringValue" />
+          <Field name="APAcctID" type="StringValue" />
+          <Field name="APSubID" type="StringValue" />
+          <Field name="ExpenseAcctID" type="StringValue" />
+          <Field name="ExpenseSubID" type="StringValue" />
+          <Field name="DiscTakenAcctID" type="StringValue" />
+          <Field name="DiscTakenSubID" type="StringValue" />
+          <Field name="POAccrualAcctID" type="StringValue" />
+          <Field name="POAccrualSubID" type="StringValue" />
+          <Field name="PrepaymentAcctID" type="StringValue" />
+          <Field name="PrepaymentSubID" type="StringValue" />
+        </Fields>
+        <Mappings>
+          <Mapping field="VendorClassID">
+            <To object="VendorClassRecord" field="VendorClassID" />
+          </Mapping>
+          <Mapping field="Descr">
+            <To object="VendorClassRecord" field="Descr" />
+          </Mapping>
+          <Mapping field="TermsID">
+            <To object="VendorClassRecord" field="TermsID" />
+          </Mapping>
+          <Mapping field="APAcctID">
+            <To object="VendorClassRecord" field="APAcctID" />
+          </Mapping>
+          <Mapping field="APSubID">
+            <To object="VendorClassRecord" field="APSubID" />
+          </Mapping>
+          <Mapping field="ExpenseAcctID">
+            <To object="VendorClassRecord" field="ExpenseAcctID" />
+          </Mapping>
+          <Mapping field="ExpenseSubID">
+            <To object="VendorClassRecord" field="ExpenseSubID" />
+          </Mapping>
+          <Mapping field="DiscTakenAcctID">
+            <To object="VendorClassRecord" field="DiscTakenAcctID" />
+          </Mapping>
+          <Mapping field="DiscTakenSubID">
+            <To object="VendorClassRecord" field="DiscTakenSubID" />
+          </Mapping>
+          <Mapping field="POAccrualAcctID">
+            <To object="VendorClassRecord" field="POAccrualAcctID" />
+          </Mapping>
+          <Mapping field="POAccrualSubID">
+            <To object="VendorClassRecord" field="POAccrualSubID" />
+          </Mapping>
+          <Mapping field="PrepaymentAcctID">
+            <To object="VendorClassRecord" field="PrepaymentAcctID" />
+          </Mapping>
+          <Mapping field="PrepaymentSubID">
+            <To object="VendorClassRecord" field="PrepaymentSubID" />
+          </Mapping>
+        </Mappings>
+      </TopLevelEntity>
+      <TopLevelEntity name="StatementCycle" screen="AR202800">
+        <Fields>
+          <Field name="StatementCycleId" type="StringValue" />
+          <Field name="Descr" type="StringValue" />
+          <Field name="PrepareOn" type="StringValue" />
+          <Field name="Day00" type="ShortValue" />
+          <Field name="AgeDays00" type="ShortValue" />
+          <Field name="AgeDays01" type="ShortValue" />
+          <Field name="AgeDays02" type="ShortValue" />
+        </Fields>
+        <Mappings>
+          <Mapping field="StatementCycleId">
+            <To object="ARStatementCycleRecord" field="StatementCycleId" />
+          </Mapping>
+          <Mapping field="Descr">
+            <To object="ARStatementCycleRecord" field="Descr" />
+          </Mapping>
+          <Mapping field="PrepareOn">
+            <To object="ARStatementCycleRecord" field="PrepareOn" />
+          </Mapping>
+          <Mapping field="Day00">
+            <To object="ARStatementCycleRecord" field="Day00" />
+          </Mapping>
+          <Mapping field="AgeDays00">
+            <To object="ARStatementCycleRecord" field="AgeDays00" />
+          </Mapping>
+          <Mapping field="AgeDays01">
+            <To object="ARStatementCycleRecord" field="AgeDays01" />
+          </Mapping>
+          <Mapping field="AgeDays02">
+            <To object="ARStatementCycleRecord" field="AgeDays02" />
           </Mapping>
         </Mappings>
       </TopLevelEntity>

@@ -1,4 +1,4 @@
-# Org-ledger link (GL201500) via the custom Bootstrap/1.5.0 endpoint (the
+# Org-ledger link (GL201500) via the custom Bootstrap/1.6.0 endpoint (the
 # per-file endpoint: override). The Default endpoint's Ledger.Companies
 # detail is write-tolerated then silently dropped (PUT answers 200 and
 # echoes the row, the link table stays empty), so the link writes through
@@ -21,7 +21,7 @@
 # (company.yaml).
 entity: LedgerCompany
 key: [LedgerCD, OrganizationID]
-endpoint: Bootstrap/1.5.0
+endpoint: Bootstrap/1.6.0
 records:
 - LedgerCD: ACTUAL
   OrganizationID: COMPANY

@@ -17,7 +17,7 @@
 # consumes the FinYearSetup row it creates.
 action: GenerateCalendar
 entity: MasterCalendar
-endpoint: Bootstrap/1.5.0
+endpoint: Bootstrap/1.6.0
 record:
   FinancialYear: "2026"
 parameters:

@@ -18,7 +18,9 @@ def wrap(record: dict[str, Any]) -> dict[str, Any]:
 
     A list value is a detail array (T60): the list itself is NEVER
     value-wrapped, each dict row wraps recursively — the shape the live
-    JournalTransaction PUT proved (T50/T37 e2e payload). The contract's
+    JournalTransaction PUT proved (T50/T37 e2e payload). A dict value is
+    a linked entity (T65): a bare nested object, wrapped recursively —
+    live-verified Vendor MainContact/Address/Country PUT. The contract's
     OWN control fields travel bare, never value-wrapped: `id` (row GUID —
     the only handle that makes a detail-row PUT an update instead of an
     insert) and `delete` (row-removal marker).
@@ -27,6 +29,8 @@ def wrap(record: dict[str, Any]) -> dict[str, Any]:
     def _value(v: Any) -> Any:
         if isinstance(v, list):
             return [wrap(row) if isinstance(row, dict) else row for row in v]
+        if isinstance(v, dict):
+            return wrap(v)
         return {"value": v}
 
     return {k: v if k in ("id", "delete") else _value(v) for k, v in record.items()}
@@ -35,16 +39,22 @@ def wrap(record: dict[str, Any]) -> dict[str, Any]:
 def unwrap(entity: dict[str, Any]) -> dict[str, Any]:
     """Contract-API entity -> plain dict (value fields + detail arrays).
 
-    Inverse of wrap (T60): a list of dicts unwraps row by row; lists that
-    are empty or whose rows carry no value fields are elided (a detail
-    array the source never claimed must not surface, and expanded `files`
-    descriptors are plain dicts that would unwrap to noise). Non-value
-    dicts (custom, _links, note) stay excluded as before.
+    Inverse of wrap (T60/T65): a list of dicts unwraps row by row; lists
+    that are empty or whose rows carry no value fields are elided (a
+    detail array the source never claimed must not surface, and expanded
+    `files` descriptors are plain dicts that would unwrap to noise). A
+    non-value dict is a linked entity — unwrapped recursively, kept only
+    when something survives, so bookkeeping dicts (custom, _links, note)
+    stay excluded exactly as before.
     """
     out: dict[str, Any] = {}
     for k, v in entity.items():
         if isinstance(v, dict) and "value" in v:
             out[k] = v["value"]
+        elif isinstance(v, dict):
+            nested = unwrap(v)
+            if nested:
+                out[k] = nested
         elif isinstance(v, list) and v and all(isinstance(row, dict) for row in v):
             rows = [unwrap(row) for row in v]
             if any(rows):

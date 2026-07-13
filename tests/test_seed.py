@@ -68,14 +68,14 @@ def test_load_baseline_rejects_record_without_key(tmp_path: Path) -> None:
 
 
 def test_load_baseline_parses_endpoint_override(tmp_path: Path) -> None:
-    text = BASELINE + "endpoint: Bootstrap/1.5.0\n"
-    assert seed.load_baseline(_write(tmp_path, text)).endpoint == "Bootstrap/1.5.0"
+    text = BASELINE + "endpoint: Bootstrap/1.6.0\n"
+    assert seed.load_baseline(_write(tmp_path, text)).endpoint == "Bootstrap/1.6.0"
 
 
 LEDGER_LINK_YAML = """\
 entity: LedgerCompany
 key: [LedgerCD, OrganizationID]
-endpoint: Bootstrap/1.5.0
+endpoint: Bootstrap/1.6.0
 records:
   - LedgerCD: ACTUAL
     OrganizationID: PRODUCTS
@@ -126,7 +126,7 @@ records:
 def test_bootstrap_entities_parsed_from_packaged_template() -> None:
     # V2: the ambiguous set comes from bootstrap_project.xml, never a
     # hand-list - parity pinned here so a template edit surfaces offline
-    assert seed.BOOTSTRAP_ENDPOINT == "Bootstrap/1.5.0"
+    assert seed.BOOTSTRAP_ENDPOINT == "Bootstrap/1.6.0"
     assert {
         "Company",
         "CreditTerms",
@@ -148,6 +148,8 @@ def test_bootstrap_entities_parsed_from_packaged_template() -> None:
         "CashAccount",
         "CAPreferences",
         "ReasonCode",
+        "VendorClass",
+        "StatementCycle",
     } == seed.BOOTSTRAP_ENTITIES
 
 
@@ -160,7 +162,7 @@ def test_load_baseline_rejects_bootstrap_entity_without_endpoint(
     a different screen than the author meant (Bootstrap Currency = CM202000,
     Default Currency = CM201000 list).
     """
-    with pytest.raises(SystemExit, match=r"Default/25\.200\.001.*Bootstrap/1\.5\.0"):
+    with pytest.raises(SystemExit, match=r"Default/25\.200\.001.*Bootstrap/1\.6\.0"):
         seed.load_baseline(_write(tmp_path, AMBIGUOUS_YAML))
 
 
@@ -168,7 +170,7 @@ def test_load_baseline_bootstrap_entity_explicit_endpoint_passes(
     tmp_path: Path,
 ) -> None:
     # V20: explicit endpoint: disambiguates - either target is legitimate
-    for endpoint in ("Bootstrap/1.5.0", "Default/25.200.001"):
+    for endpoint in ("Bootstrap/1.6.0", "Default/25.200.001"):
         text = AMBIGUOUS_YAML + f"endpoint: {endpoint}\n"
         assert seed.load_baseline(_write(tmp_path, text)).endpoint == endpoint
 
@@ -176,7 +178,7 @@ def test_load_baseline_bootstrap_entity_explicit_endpoint_passes(
 def test_apply_and_diff_target_endpoint_override(
     tmp_path: Path, instance: Instance
 ) -> None:
-    text = BASELINE + "endpoint: Bootstrap/1.5.0\n"
+    text = BASELINE + "endpoint: Bootstrap/1.6.0\n"
     baseline = seed.load_baseline(_write(tmp_path, text))
     recorder = Recorder({"/UnitsOfMeasure": _live({"UOM": "KG"})})
 
@@ -184,7 +186,7 @@ def test_apply_and_diff_target_endpoint_override(
     seed.diff(_client(instance, recorder), baseline)
 
     paths = {r.url.path for r in recorder.requests}
-    assert paths == {"/AcumaticaERP/entity/Bootstrap/1.5.0/UnitsOfMeasure"}
+    assert paths == {"/AcumaticaERP/entity/Bootstrap/1.6.0/UnitsOfMeasure"}
 
 
 def test_norm_folds_booleans_and_strips() -> None:
@@ -530,7 +532,7 @@ def test_diff_multi_key_single_org_no_phantom_drift(
     text = """\
 entity: LedgerCompany
 key: [LedgerCD, OrganizationID]
-endpoint: Bootstrap/1.5.0
+endpoint: Bootstrap/1.6.0
 records:
   - LedgerCD: ACTUAL
     OrganizationID: COMPANY
@@ -566,7 +568,7 @@ NO_ENTITY_500 = httpx.Response(
 CURRENCY_YAML = """\
 entity: Currency
 key: CuryID
-endpoint: Bootstrap/1.5.0
+endpoint: Bootstrap/1.6.0
 records:
   - CuryID: EUR
     Description: Euro
@@ -594,8 +596,8 @@ def test_diff_falls_back_to_key_url_on_optimization_500(
     assert seed.diff(_client(instance, recorder), baseline) == []
     paths = [r.url.path for r in recorder.requests]
     assert [p.split("/entity/", 1)[1] for p in paths] == [
-        "Bootstrap/1.5.0/Currency",
-        "Bootstrap/1.5.0/Currency/EUR",
+        "Bootstrap/1.6.0/Currency",
+        "Bootstrap/1.6.0/Currency/EUR",
     ]
 
 
@@ -625,7 +627,7 @@ def test_diff_non_optimization_500_still_raises(
 ACTION_YAML = """\
 action: GenerateCalendar
 entity: MasterCalendar
-endpoint: Bootstrap/1.5.0
+endpoint: Bootstrap/1.6.0
 record:
   FinancialYear: 2026
 parameters:
@@ -699,8 +701,8 @@ def test_apply_action_invokes_on_204_never_following_location(
     assert [
         (r.method, r.url.path.split("/entity/", 1)[1]) for r in recorder.requests
     ] == [
-        ("GET", "Bootstrap/1.5.0/MasterCalendar"),
-        ("POST", "Bootstrap/1.5.0/MasterCalendar/GenerateCalendar"),
+        ("GET", "Bootstrap/1.6.0/MasterCalendar"),
+        ("POST", "Bootstrap/1.6.0/MasterCalendar/GenerateCalendar"),
     ]
     assert "invoke GenerateCalendar [MasterCalendar]" in capsys.readouterr().out
 
@@ -729,7 +731,7 @@ def test_apply_action_polls_202_location_to_completion(
     """202 = long-running: poll the Location status URL until it answers 204."""
     action = _action(tmp_path)
     status_path = (
-        "/AcumaticaERP/entity/Bootstrap/1.5.0/MasterCalendar"
+        "/AcumaticaERP/entity/Bootstrap/1.6.0/MasterCalendar"
         "/GenerateCalendar/status/abc"
     )
     polls: list[str] = []
@@ -797,7 +799,7 @@ def test_probe_routes_filter_and_defaults(tmp_path: Path, instance: Instance) ->
     seed.diff(_client(instance, recorder), action)
 
     (request,) = recorder.requests
-    assert request.url.path.endswith("/Bootstrap/1.5.0/MasterCalendar")
+    assert request.url.path.endswith("/Bootstrap/1.6.0/MasterCalendar")
     assert request.url.params["$filter"] == "FinancialYear eq '2026'"
 
 
@@ -827,4 +829,57 @@ def test_diff_normalizes_numbers_by_value(tmp_path: Path, instance: Instance) ->
     recorder.respond["/E"] = _live({"K": "A", "Pct": 0.5, "Days": 30})
     assert seed.diff(_client(instance, recorder), baseline) == [
         "E [A].Pct: source=0 live=0.5"
+    ]
+
+
+VENDOR_YAML = """\
+entity: Vendor
+key: VendorID
+records:
+  - VendorID: SHENZHEN
+    VendorName: Shenzhen Circuit Supply
+    MainContact:
+      Address:
+        Country: US
+"""
+
+
+def test_apply_wraps_linked_entity_bare(tmp_path: Path, instance: Instance) -> None:
+    # T65: a nested dict is a linked entity - bare nested object, fields
+    # wrapped (the live-verified Vendor MainContact/Address/Country shape)
+    baseline = seed.load_baseline(_write(tmp_path, VENDOR_YAML))
+    recorder = Recorder()
+    seed.apply(_client(instance, recorder), baseline)
+    body = json.loads(recorder.requests[-1].content)
+    assert body["MainContact"] == {"Address": {"Country": {"value": "US"}}}
+
+
+def test_fetch_expands_linked_entity_paths(tmp_path: Path, instance: Instance) -> None:
+    # T65: the expand set derives from the record shape - dict fields by
+    # slash path, and diff's read must carry it or nested fields vanish
+    baseline = seed.load_baseline(_write(tmp_path, VENDOR_YAML))
+    live = {
+        "VendorID": {"value": "SHENZHEN"},
+        "VendorName": {"value": "Shenzhen Circuit Supply"},
+        "MainContact": {"Address": {"Country": {"value": "US"}}},
+    }
+    recorder = Recorder({"/Vendor": httpx.Response(200, json=[live])})
+    assert seed.diff(_client(instance, recorder), baseline) == []
+    (request,) = recorder.requests
+    assert request.url.params["$expand"] == "MainContact,MainContact/Address"
+
+
+def test_diff_nested_reports_changed_and_missing(
+    tmp_path: Path, instance: Instance
+) -> None:
+    baseline = seed.load_baseline(_write(tmp_path, VENDOR_YAML))
+    live = {
+        "VendorID": {"value": "SHENZHEN"},
+        "VendorName": {"value": "Shenzhen Circuit Supply"},
+        "MainContact": {"Address": {"Country": {"value": "CA"}}},
+    }
+    recorder = Recorder({"/Vendor": httpx.Response(200, json=[live])})
+    drifts = seed.diff(_client(instance, recorder), baseline)
+    assert drifts == [
+        "Vendor [SHENZHEN].MainContact.Address.Country: source='US' live='CA'"
     ]

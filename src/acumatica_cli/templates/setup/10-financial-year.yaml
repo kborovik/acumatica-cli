@@ -19,7 +19,7 @@
 # generation consumes this setup row.
 action: GeneratePeriods
 entity: FinancialYearSettings
-endpoint: Bootstrap/1.5.0
+endpoint: Bootstrap/1.6.0
 record:
   BegFinYear: "2026-01-01"
   FinPeriods: 12

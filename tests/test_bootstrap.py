@@ -155,7 +155,7 @@ def test_package_zip_carries_the_bootstrap_endpoint() -> None:
     (item,) = root.findall("EntityEndpoint")
     (endpoint,) = item.findall(f"{ns}Endpoint")
     assert endpoint.get("name") == "Bootstrap"
-    assert endpoint.get("version") == "1.5.0"
+    assert endpoint.get("version") == "1.6.0"
     # SystemContracts.V4 is the build's only IsCurrent implementation
     assert endpoint.get("systemContractVersion") == "4"
     entities = {e.get("name"): e for e in endpoint.findall(f"{ns}TopLevelEntity")}
@@ -180,6 +180,8 @@ def test_package_zip_carries_the_bootstrap_endpoint() -> None:
         "CashAccount",
         "CAPreferences",
         "ReasonCode",
+        "VendorClass",
+        "StatementCycle",
     }
     # features stay OUT: contract-endpoint writes to CS100000 do not
     # persist (T3 verdict) - the CustomizationPlugin owns features
@@ -363,6 +365,41 @@ def test_package_zip_carries_the_bootstrap_endpoint() -> None:
             ("HoldEntry", "TransitAcctId", "TransitSubID"),
             "CASetupRecord",
         ),
+        # vendor class (T64): the Default contract is skeletal and Vendor
+        # has no discount fields - the GL-accounts tab rides Bootstrap
+        "VendorClass": dict.fromkeys(
+            (
+                "VendorClassID",
+                "Descr",
+                "TermsID",
+                *(
+                    f"{kind}{part}"
+                    for kind in (
+                        "AP",
+                        "Expense",
+                        "DiscTaken",
+                        "POAccrual",
+                        "Prepayment",
+                    )
+                    for part in ("AcctID", "SubID")
+                ),
+            ),
+            "VendorClassRecord",
+        ),
+        # statement cycle (T64 follow-up): Customer inserts hard-require
+        # one via the class default; AR202800 has no Default entity
+        "StatementCycle": dict.fromkeys(
+            (
+                "StatementCycleId",
+                "Descr",
+                "PrepareOn",
+                "Day00",
+                "AgeDays00",
+                "AgeDays01",
+                "AgeDays02",
+            ),
+            "ARStatementCycleRecord",
+        ),
         # cash account (T61): CuryID stays out - derived from the GL
         # account (B11 server-derived class); payment-method links are
         # the conditional PaymentMethodAccount follow-up, not here
@@ -449,6 +486,8 @@ def test_bootstrap_endpoint_carries_the_t61_distribution_entities() -> None:
         "CashAccount": "CA202000",
         "CAPreferences": "CA101000",
         "ReasonCode": "CS211000",
+        "VendorClass": "AP201000",
+        "StatementCycle": "AR202800",
     }
     for entity, screen in screens.items():
         assert entities[entity].get("screen") == screen

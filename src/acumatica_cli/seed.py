@@ -7,7 +7,7 @@ Baseline file format:
 
     entity: Currency          # entity name in the contract endpoint
     key: CurrencyID           # key field(s), string or list
-    endpoint: Bootstrap/1.5.0 # optional: override the instance endpoint
+    endpoint: Bootstrap/1.6.0 # optional: override the instance endpoint
     records:
       - CurrencyID: "CAD"
         Description: Canadian Dollar
@@ -34,7 +34,7 @@ cannot express (calendar generation and the like):
 
     action: GenerateCalendar          # action name on the endpoint entity
     entity: MasterCalendar            # entity the action hangs off
-    endpoint: Bootstrap/1.5.0         # optional: override the instance endpoint
+    endpoint: Bootstrap/1.6.0         # optional: override the instance endpoint
     record:     { FinancialYear: 2026 }
     parameters: { FromYear: 2026, ToYear: 2026 }   # optional
     done_when:  { filter: "FinancialYear eq '2026'" }
@@ -234,6 +234,23 @@ def _filter_for(record: dict[str, Any], keys: list[str]) -> str:
     return " and ".join(f"{k} eq {literal(record[k])}" for k in keys)
 
 
+def _expand_paths(record: dict[str, Any], prefix: str = "") -> list[str]:
+    """$expand paths a record's shape demands (T60/T65).
+
+    A list field is a detail array - expands by name; a dict field is a
+    linked entity - expands by name plus the slash path of every nested
+    dict (`MainContact`, `MainContact/Address`).
+    """
+    paths: list[str] = []
+    for field, value in record.items():
+        if isinstance(value, list):
+            paths.append(f"{prefix}{field}")
+        elif isinstance(value, dict):
+            paths.append(f"{prefix}{field}")
+            paths.extend(_expand_paths(value, f"{prefix}{field}/"))
+    return sorted(paths)
+
+
 def _probe(client: AcumaticaClient, action: ActionFile) -> bool:
     """Run the done_when live-state probe; non-empty = action already realized.
 
@@ -345,14 +362,17 @@ def _fetch(
     single-record GET skips the optimizer, so diff falls back to it on
     exactly that error (V4: read-back must survive delegate-view entities).
 
-    Detail arrays only travel under $expand (T60): without it every GET
-    answers top-level fields alone, diff would report each source detail
-    row missing and apply's id-injection would see nothing to match.
+    Detail arrays and linked entities only travel under $expand
+    (T60/T65): without it every GET answers top-level scalars alone,
+    diff would report each source detail row or nested field missing
+    and apply's id-injection would see nothing to match. The expand set
+    derives from the record's own shape - a list field expands by name,
+    a dict field by its slash path (`MainContact/Address`).
     """
     params = {"$filter": _filter_for(record, baseline.keys[:1])}
-    detail_fields = [f for f in (baseline.detail_keys or {}) if f in record]
-    if detail_fields:
-        params["$expand"] = ",".join(sorted(detail_fields))
+    expand = _expand_paths(record)
+    if expand:
+        params["$expand"] = ",".join(expand)
     try:
         live = client.get_list(
             baseline.entity, params=params, endpoint=baseline.endpoint
@@ -364,7 +384,7 @@ def _fetch(
             baseline.entity,
             [record[k] for k in baseline.keys],
             baseline.endpoint,
-            params={"$expand": params["$expand"]} if detail_fields else None,
+            params={"$expand": params["$expand"]} if expand else None,
         )
     for row in live:
         actual = unwrap(row)
@@ -403,12 +423,31 @@ def diff(client: AcumaticaClient, baseline: BaselineFile | ActionFile) -> list[s
                 key = (baseline.detail_keys or {})[field]  # load-validated
                 live_rows = actual.get(field, [])
                 drifts.extend(_diff_details(label, field, key, expected, live_rows))
+            elif isinstance(expected, dict):
+                drifts.extend(
+                    _diff_nested(f"{label}.{field}", expected, actual.get(field))
+                )
             elif field not in actual:
                 drifts.append(f"{label}.{field}: not returned by endpoint")
             elif _norm(actual[field]) != _norm(expected):
                 drifts.append(
                     f"{label}.{field}: source={expected!r} live={actual[field]!r}"
                 )
+    return drifts
+
+
+def _diff_nested(path: str, expected: dict[str, Any], live: Any) -> list[str]:
+    """Linked-entity drift (T65): recurse source-side fields only."""
+    if not isinstance(live, dict):
+        return [f"{path}: not returned by endpoint"]
+    drifts: list[str] = []
+    for field, want in expected.items():
+        if isinstance(want, dict):
+            drifts.extend(_diff_nested(f"{path}.{field}", want, live.get(field)))
+        elif field not in live:
+            drifts.append(f"{path}.{field}: not returned by endpoint")
+        elif _norm(live[field]) != _norm(want):
+            drifts.append(f"{path}.{field}: source={want!r} live={live[field]!r}")
     return drifts
 
 
