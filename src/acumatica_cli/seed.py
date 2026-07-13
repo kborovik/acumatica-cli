@@ -7,7 +7,7 @@ Baseline file format:
 
     entity: Currency          # entity name in the contract endpoint
     key: CurrencyID           # key field(s), string or list
-    endpoint: Bootstrap/1.4.0 # optional: override the instance endpoint
+    endpoint: Bootstrap/1.5.0 # optional: override the instance endpoint
     records:
       - CurrencyID: "CAD"
         Description: Canadian Dollar
@@ -18,7 +18,7 @@ cannot express (calendar generation and the like):
 
     action: GenerateCalendar          # action name on the endpoint entity
     entity: MasterCalendar            # entity the action hangs off
-    endpoint: Bootstrap/1.4.0         # optional: override the instance endpoint
+    endpoint: Bootstrap/1.5.0         # optional: override the instance endpoint
     record:     { FinancialYear: 2026 }
     parameters: { FromYear: 2026, ToYear: 2026 }   # optional
     done_when:  { filter: "FinancialYear eq '2026'" }
@@ -169,8 +169,20 @@ def _norm(value: Any) -> str:
 def _filter_for(record: dict[str, Any], keys: list[str]) -> str:
     # callers pass single-view key sets only: a conjunction spanning the
     # entity's views answers 200 [] (B14), so _fetch filters on the first
-    # key alone and matches the rest client-side
-    return " and ".join(f"{k} eq '{record[k]}'" for k in keys)
+    # key alone and matches the rest client-side. Literal typing follows
+    # the YAML scalar type: bools and numbers travel bare - a quoted
+    # 'false' against Edm.Boolean answers 500 "binary operator with
+    # incompatible types" (T61 - INPreferences keyed on HoldEntry), and
+    # numeric Edm types are the same class. Strings stay quoted, so
+    # numeric-looking codes ('000000') are unaffected.
+    def literal(value: Any) -> str:
+        if isinstance(value, bool):
+            return str(value).lower()
+        if isinstance(value, int | float):
+            return str(value)
+        return f"'{value}'"
+
+    return " and ".join(f"{k} eq {literal(record[k])}" for k in keys)
 
 
 def _probe(client: AcumaticaClient, action: ActionFile) -> bool:

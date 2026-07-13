@@ -535,12 +535,12 @@ def test_b9_fallback_selects_keys_then_key_urls(
     ]
     assert currency_requests == [
         # plain list GET -> 500, filter riding
-        ("Bootstrap/1.4.0/Currency", {"$filter": "IsFinancial eq true"}),
+        ("Bootstrap/1.5.0/Currency", {"$filter": "IsFinancial eq true"}),
         (
-            "Bootstrap/1.4.0/Currency",
+            "Bootstrap/1.5.0/Currency",
             {"$select": "CuryID", "$filter": "IsFinancial eq true"},
         ),
-        ("Bootstrap/1.4.0/Currency/EUR", {}),
+        ("Bootstrap/1.5.0/Currency/EUR", {}),
     ]
     text = (tmp_path / "baseline" / "30-currencies.yaml").read_text()
     assert "RealGainAcctID" in text  # the key-URL GET returned full records

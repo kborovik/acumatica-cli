@@ -1,11 +1,11 @@
-# Company (CS101500) via the custom Bootstrap/1.4.0 endpoint (the per-file
+# Company (CS101500) via the custom Bootstrap/1.5.0 endpoint (the per-file
 # endpoint: override) - built-in endpoints cannot create the first
 # organization on a virgin tenant. List values are the EXTERNAL labels
 # ('Without Branches', not the DAC's 'WithoutBranches'); CountryID feeds
 # the org's Main Address - required on first save.
 entity: Company
 key: AcctCD
-endpoint: Bootstrap/1.4.0
+endpoint: Bootstrap/1.5.0
 records:
 - AcctCD: COMPANY
   AcctName: Example Company

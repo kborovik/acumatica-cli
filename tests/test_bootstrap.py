@@ -155,7 +155,7 @@ def test_package_zip_carries_the_bootstrap_endpoint() -> None:
     (item,) = root.findall("EntityEndpoint")
     (endpoint,) = item.findall(f"{ns}Endpoint")
     assert endpoint.get("name") == "Bootstrap"
-    assert endpoint.get("version") == "1.4.0"
+    assert endpoint.get("version") == "1.5.0"
     # SystemContracts.V4 is the build's only IsCurrent implementation
     assert endpoint.get("systemContractVersion") == "4"
     entities = {e.get("name"): e for e in endpoint.findall(f"{ns}TopLevelEntity")}
@@ -170,6 +170,16 @@ def test_package_zip_carries_the_bootstrap_endpoint() -> None:
         "CompanyCalendar",
         "CompanyPeriod",
         "ManagePeriods",
+        "INPreferences",
+        "APPreferences",
+        "ARPreferences",
+        "SOPreferences",
+        "POPreferences",
+        "AvailabilityCalculationRule",
+        "PostingClass",
+        "CashAccount",
+        "CAPreferences",
+        "ReasonCode",
     }
     # features stay OUT: contract-endpoint writes to CS100000 do not
     # persist (T3 verdict) - the CustomizationPlugin owns features
@@ -291,6 +301,75 @@ def test_package_zip_carries_the_bootstrap_endpoint() -> None:
             ("Action", "FromYear", "ToYear", "OrganizationID"),
             "Filter",
         ),
+        # T61 module-prefs singletons: every field carries a PXDefault,
+        # the singleton just has to exist - one echo field each, bound
+        # to the screen's own primary view (aspx-verified 2026-07-13);
+        # SOPreferences' echo field doubles as the R1 order-type probe
+        "INPreferences": dict.fromkeys(
+            (
+                "HoldEntry",
+                "INProgressAcctID",
+                "INProgressSubID",
+                "IssuesReasonCode",
+                "ReceiptReasonCode",
+                "AdjustmentReasonCode",
+                "PIReasonCode",
+            ),
+            "setup",
+        ),
+        "APPreferences": {"HoldEntry": "Setup"},
+        "ARPreferences": {"HoldEntry": "ARSetupRecord"},
+        "SOPreferences": {"DefaultOrderType": "sosetup"},
+        "POPreferences": dict.fromkeys(
+            ("HoldReceipts", "RCReturnReasonCodeID"),
+            "Setup",
+        ),
+        # reason codes (T61): the INSetup reason-code fields hard-require
+        # rows and CS211000 has no Default-endpoint entity
+        "ReasonCode": dict.fromkeys(
+            ("ReasonCodeID", "Descr", "Usage", "AccountID", "SubID"),
+            "reasoncode",
+        ),
+        # empty tenant has zero INAvailabilityScheme rows and ItemClass
+        # hard-requires one (T61); the Incl* booleans all default
+        "AvailabilityCalculationRule": dict.fromkeys(
+            ("AvailabilitySchemeID", "Description"),
+            "Schemes",
+        ),
+        # posting class (T61): id + descr + acct-source combos + acct/sub
+        # segment masks + sub masks, all on the primary postclass view
+        "PostingClass": dict.fromkeys(
+            (
+                "PostClassID",
+                "Descr",
+                *(
+                    f"{kind}{part}"
+                    for kind in (
+                        "Invt",
+                        "Sales",
+                        "COGS",
+                        "POAccrual",
+                        "PPV",
+                        "LCVariance",
+                    )
+                    for part in ("AcctDefault", "SubMask", "AcctID", "SubID")
+                ),
+            ),
+            "postclass",
+        ),
+        # CA setup singleton (T61): CashAccount 500s until it exists;
+        # TransitAcctId spelling = the DAC prop off the live aspx
+        "CAPreferences": dict.fromkeys(
+            ("HoldEntry", "TransitAcctId", "TransitSubID"),
+            "CASetupRecord",
+        ),
+        # cash account (T61): CuryID stays out - derived from the GL
+        # account (B11 server-derived class); payment-method links are
+        # the conditional PaymentMethodAccount follow-up, not here
+        "CashAccount": dict.fromkeys(
+            ("CashAccountCD", "Descr", "AccountID", "SubID", "BranchID", "Active"),
+            "CashAccount",
+        ),
     }
     for entity, expected in views.items():
         fields = {
@@ -340,6 +419,58 @@ def test_package_zip_carries_the_bootstrap_endpoint() -> None:
         "FinPeriods": "ShortValue",
         "PeriodType": "StringValue",
     }
+
+
+def test_bootstrap_endpoint_carries_the_t61_distribution_entities() -> None:
+    """Pin the T61 distribution setup chain screens and value types.
+
+    Screens verified vs the live aspx files (2026-07-13): the five
+    module-prefs singletons whose absence 500s every distribution entity
+    (gh issue #10 probe evidence), plus the availability rule ItemClass
+    hard-requires, the posting class, and the cash account. The prefs
+    echo flags and CashAccount Active are booleans; everything else
+    (keys, text, stored-word combos, segment masks, selector CD strings)
+    travels as StringValue.
+    """
+    ns = "{http://www.acumatica.com/entity/maintenance/5.31}"
+    with zipfile.ZipFile(io.BytesIO(bootstrap.package_zip())) as zf:
+        root = ET.fromstring(zf.read("project.xml"))
+    (item,) = root.findall("EntityEndpoint")
+    (endpoint,) = item.findall(f"{ns}Endpoint")
+    entities = {e.get("name"): e for e in endpoint.findall(f"{ns}TopLevelEntity")}
+    screens = {
+        "INPreferences": "IN101000",
+        "APPreferences": "AP101000",
+        "ARPreferences": "AR101000",
+        "SOPreferences": "SO101000",
+        "POPreferences": "PO101000",
+        "AvailabilityCalculationRule": "IN201500",
+        "PostingClass": "IN206000",
+        "CashAccount": "CA202000",
+        "CAPreferences": "CA101000",
+        "ReasonCode": "CS211000",
+    }
+    for entity, screen in screens.items():
+        assert entities[entity].get("screen") == screen
+    for entity, field in (
+        ("INPreferences", "HoldEntry"),
+        ("APPreferences", "HoldEntry"),
+        ("ARPreferences", "HoldEntry"),
+        ("POPreferences", "HoldReceipts"),
+        ("CAPreferences", "HoldEntry"),
+        ("CashAccount", "Active"),
+    ):
+        (boolean_field,) = (
+            f
+            for f in entities[entity].findall(f"{ns}Fields/{ns}Field")
+            if f.get("name") == field
+        )
+        assert boolean_field.get("type") == "BooleanValue"
+    for entity in ("SOPreferences", "PostingClass", "AvailabilityCalculationRule"):
+        non_bool = {
+            f.get("type") for f in entities[entity].findall(f"{ns}Fields/{ns}Field")
+        }
+        assert non_bool == {"StringValue"}
 
 
 def test_bootstrap_endpoint_carries_the_gl_setup_actions() -> None:

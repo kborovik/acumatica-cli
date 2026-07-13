@@ -68,14 +68,14 @@ def test_load_baseline_rejects_record_without_key(tmp_path: Path) -> None:
 
 
 def test_load_baseline_parses_endpoint_override(tmp_path: Path) -> None:
-    text = BASELINE + "endpoint: Bootstrap/1.4.0\n"
-    assert seed.load_baseline(_write(tmp_path, text)).endpoint == "Bootstrap/1.4.0"
+    text = BASELINE + "endpoint: Bootstrap/1.5.0\n"
+    assert seed.load_baseline(_write(tmp_path, text)).endpoint == "Bootstrap/1.5.0"
 
 
 LEDGER_LINK_YAML = """\
 entity: LedgerCompany
 key: [LedgerCD, OrganizationID]
-endpoint: Bootstrap/1.4.0
+endpoint: Bootstrap/1.5.0
 records:
   - LedgerCD: ACTUAL
     OrganizationID: PRODUCTS
@@ -126,7 +126,7 @@ records:
 def test_bootstrap_entities_parsed_from_packaged_template() -> None:
     # V2: the ambiguous set comes from bootstrap_project.xml, never a
     # hand-list - parity pinned here so a template edit surfaces offline
-    assert seed.BOOTSTRAP_ENDPOINT == "Bootstrap/1.4.0"
+    assert seed.BOOTSTRAP_ENDPOINT == "Bootstrap/1.5.0"
     assert {
         "Company",
         "CreditTerms",
@@ -138,6 +138,16 @@ def test_bootstrap_entities_parsed_from_packaged_template() -> None:
         "CompanyCalendar",
         "CompanyPeriod",
         "ManagePeriods",
+        "INPreferences",
+        "APPreferences",
+        "ARPreferences",
+        "SOPreferences",
+        "POPreferences",
+        "AvailabilityCalculationRule",
+        "PostingClass",
+        "CashAccount",
+        "CAPreferences",
+        "ReasonCode",
     } == seed.BOOTSTRAP_ENTITIES
 
 
@@ -150,7 +160,7 @@ def test_load_baseline_rejects_bootstrap_entity_without_endpoint(
     a different screen than the author meant (Bootstrap Currency = CM202000,
     Default Currency = CM201000 list).
     """
-    with pytest.raises(SystemExit, match=r"Default/25\.200\.001.*Bootstrap/1\.4\.0"):
+    with pytest.raises(SystemExit, match=r"Default/25\.200\.001.*Bootstrap/1\.5\.0"):
         seed.load_baseline(_write(tmp_path, AMBIGUOUS_YAML))
 
 
@@ -158,7 +168,7 @@ def test_load_baseline_bootstrap_entity_explicit_endpoint_passes(
     tmp_path: Path,
 ) -> None:
     # V20: explicit endpoint: disambiguates - either target is legitimate
-    for endpoint in ("Bootstrap/1.4.0", "Default/25.200.001"):
+    for endpoint in ("Bootstrap/1.5.0", "Default/25.200.001"):
         text = AMBIGUOUS_YAML + f"endpoint: {endpoint}\n"
         assert seed.load_baseline(_write(tmp_path, text)).endpoint == endpoint
 
@@ -166,7 +176,7 @@ def test_load_baseline_bootstrap_entity_explicit_endpoint_passes(
 def test_apply_and_diff_target_endpoint_override(
     tmp_path: Path, instance: Instance
 ) -> None:
-    text = BASELINE + "endpoint: Bootstrap/1.4.0\n"
+    text = BASELINE + "endpoint: Bootstrap/1.5.0\n"
     baseline = seed.load_baseline(_write(tmp_path, text))
     recorder = Recorder({"/UnitsOfMeasure": _live({"UOM": "KG"})})
 
@@ -174,7 +184,7 @@ def test_apply_and_diff_target_endpoint_override(
     seed.diff(_client(instance, recorder), baseline)
 
     paths = {r.url.path for r in recorder.requests}
-    assert paths == {"/AcumaticaERP/entity/Bootstrap/1.4.0/UnitsOfMeasure"}
+    assert paths == {"/AcumaticaERP/entity/Bootstrap/1.5.0/UnitsOfMeasure"}
 
 
 def test_norm_folds_booleans_and_strips() -> None:
@@ -189,6 +199,21 @@ def test_filter_for_joins_keys() -> None:
     record = {"UOM": "KG", "ToUOM": "G"}
     filter_for = seed._filter_for  # pyright: ignore[reportPrivateUsage]
     assert filter_for(record, ["UOM", "ToUOM"]) == "UOM eq 'KG' and ToUOM eq 'G'"
+
+
+def test_filter_for_key_literals_follow_scalar_type() -> None:
+    """T61: filter literals type by YAML scalar - never string-quote non-strings.
+
+    A quoted 'false' against an Edm.Boolean field answers 500 "binary
+    operator with incompatible types" (surfaced by INPreferences keyed
+    HoldEntry); numeric Edm types are the same class. Strings stay quoted
+    so numeric-looking codes ('000000') keep their leading zeros.
+    """
+    filter_for = seed._filter_for  # pyright: ignore[reportPrivateUsage]
+    assert filter_for({"HoldEntry": False}, ["HoldEntry"]) == "HoldEntry eq false"
+    assert filter_for({"HoldEntry": True}, ["HoldEntry"]) == "HoldEntry eq true"
+    assert filter_for({"DayDue00": 30}, ["DayDue00"]) == "DayDue00 eq 30"
+    assert filter_for({"SubID": "000000"}, ["SubID"]) == "SubID eq '000000'"
 
 
 class Recorder:
@@ -339,7 +364,7 @@ def test_diff_multi_key_single_org_no_phantom_drift(
     text = """\
 entity: LedgerCompany
 key: [LedgerCD, OrganizationID]
-endpoint: Bootstrap/1.4.0
+endpoint: Bootstrap/1.5.0
 records:
   - LedgerCD: ACTUAL
     OrganizationID: COMPANY
@@ -375,7 +400,7 @@ NO_ENTITY_500 = httpx.Response(
 CURRENCY_YAML = """\
 entity: Currency
 key: CuryID
-endpoint: Bootstrap/1.4.0
+endpoint: Bootstrap/1.5.0
 records:
   - CuryID: EUR
     Description: Euro
@@ -403,8 +428,8 @@ def test_diff_falls_back_to_key_url_on_optimization_500(
     assert seed.diff(_client(instance, recorder), baseline) == []
     paths = [r.url.path for r in recorder.requests]
     assert [p.split("/entity/", 1)[1] for p in paths] == [
-        "Bootstrap/1.4.0/Currency",
-        "Bootstrap/1.4.0/Currency/EUR",
+        "Bootstrap/1.5.0/Currency",
+        "Bootstrap/1.5.0/Currency/EUR",
     ]
 
 
@@ -434,7 +459,7 @@ def test_diff_non_optimization_500_still_raises(
 ACTION_YAML = """\
 action: GenerateCalendar
 entity: MasterCalendar
-endpoint: Bootstrap/1.4.0
+endpoint: Bootstrap/1.5.0
 record:
   FinancialYear: 2026
 parameters:
@@ -508,8 +533,8 @@ def test_apply_action_invokes_on_204_never_following_location(
     assert [
         (r.method, r.url.path.split("/entity/", 1)[1]) for r in recorder.requests
     ] == [
-        ("GET", "Bootstrap/1.4.0/MasterCalendar"),
-        ("POST", "Bootstrap/1.4.0/MasterCalendar/GenerateCalendar"),
+        ("GET", "Bootstrap/1.5.0/MasterCalendar"),
+        ("POST", "Bootstrap/1.5.0/MasterCalendar/GenerateCalendar"),
     ]
     assert "invoke GenerateCalendar [MasterCalendar]" in capsys.readouterr().out
 
@@ -538,7 +563,7 @@ def test_apply_action_polls_202_location_to_completion(
     """202 = long-running: poll the Location status URL until it answers 204."""
     action = _action(tmp_path)
     status_path = (
-        "/AcumaticaERP/entity/Bootstrap/1.4.0/MasterCalendar"
+        "/AcumaticaERP/entity/Bootstrap/1.5.0/MasterCalendar"
         "/GenerateCalendar/status/abc"
     )
     polls: list[str] = []
@@ -606,7 +631,7 @@ def test_probe_routes_filter_and_defaults(tmp_path: Path, instance: Instance) ->
     seed.diff(_client(instance, recorder), action)
 
     (request,) = recorder.requests
-    assert request.url.path.endswith("/Bootstrap/1.4.0/MasterCalendar")
+    assert request.url.path.endswith("/Bootstrap/1.5.0/MasterCalendar")
     assert request.url.params["$filter"] == "FinancialYear eq '2026'"
 
 

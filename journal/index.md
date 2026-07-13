@@ -15,6 +15,20 @@ and status below.
 
 Newest first.
 
+- [2026-07-13](2026-07-13.md) — T61 build: Bootstrap/1.5.0 grew to
+  eighteen entities (five module-prefs singletons, availability rule,
+  posting class, cash account — plus ReasonCode and CAPreferences the
+  live tenant demanded mid-build). Live iterations corrected the plan
+  four times: INSetup names six no-default fields (WIP pair + four
+  reason codes), POSetup one, CashAccount gates on CASetup, and
+  warehouses are implicit with MultipleWarehouses off (user inserts
+  500 "used for transit"). B23 backpropped: `_filter_for`
+  string-quoted boolean key literals — Edm type error on the first
+  boolean-keyed singleton; fix folded into V4. Hazard recorded:
+  publishing from this repo's root (own `.env`, no features.yaml)
+  silently downgraded the live tenant's feature set. End state: LAB5
+  apply + diff clean across 24 files, all distribution/transaction
+  entities answer 200.
 - [2026-07-12](2026-07-12.md) — T59 live probe: the GL201100 org-scoped
   views (CompanyPeriod / CompanyCalendar, B22's class) have no
   accessible org-context handle over the contract API. Against the
