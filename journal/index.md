@@ -15,7 +15,14 @@ and status below.
 
 Newest first.
 
-- [2026-07-13](2026-07-13.md) — T61 build: Bootstrap/1.5.0 grew to
+- [2026-07-13](2026-07-13.md) — T63 build: e2e tier rewritten
+  single-org self-contained — conftest scaffolds a synthetic data repo
+  from the packaged config-init templates into a tmp dir and runs `acu`
+  from it (the tier had died on the gone repo-root symlinks, the same
+  cwd hazard class as T61's feature downgrade); multi-org test deleted
+  (out of demo scope), dataset tenants gone from tests, GL batch probe
+  retargeted off LAB5-only account 10200. Live tier green: 14 passed in
+  19:12. Earlier the same day, T61: Bootstrap/1.5.0 grew to
   eighteen entities (five module-prefs singletons, availability rule,
   posting class, cash account — plus ReasonCode and CAPreferences the
   live tenant demanded mid-build). Live iterations corrected the plan
