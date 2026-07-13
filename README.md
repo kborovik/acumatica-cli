@@ -1,20 +1,24 @@
-# Acumatica Config-as-Code
+# Acumatica GitOps (Config-as-Code)
 
-**`acu`** configures Acumatica ERP from YAML files in a git repo. 
+**`acu`** configures Acumatica ERP from YAML files in a git repo (GitOps). 
 
 **No UI clicks, no Configuration Wizard.**
 
 ## How it works
 
-1. **Read** the target Acumatica deployment and translate its configuration into YAML — config as code.
+1. **Extract** the target Acumatica deployment with `acu extract` — its configuration becomes YAML, config as code.
 2. **Develop** changes in the YAML, in git: edit, review, version.
 3. **Re-deploy** with `acu apply`, then prove the live tenant matches the code with `acu diff`.
 
-Three commands do the work, and every one is safe to re-run:
+Four commands do the work, and every one is safe to re-run:
 
-- **`acu tenant create`** — creates a tenant and bootstraps it in one step, ready for `apply`. Re-running it against an existing tenant republishes the bootstrap package instead of failing.
-- **`acu apply`** — pushes your YAML into the tenant as keyed upserts. Running it twice changes nothing.
+- **`acu tenant create`** — creates a tenant and bootstraps it in one step, ready for `apply`.
+  Re-running it against an existing tenant republishes the bootstrap package instead of failing.
+- **`acu apply`** — pushes your YAML into the tenant as keyed upserts.
+  Running it twice changes nothing.
 - **`acu diff`** — compares your YAML against the live tenant and exits with code 2 on drift.
+- **`acu extract`** — reads a configured tenant and writes the YAML file set back out, the inverse of `apply`.
+  Existing files are skipped unless `--force`.
 
 > **Tested against** Acumatica ERP **26.101.0225** on Windows Server 2025,
 > contract REST endpoint **25.200.001**. Other versions will likely work,
@@ -44,16 +48,18 @@ acu --tenant DEV diff                    # prove zero drift (exit 2 on drift)
 
 ```text
 acu [--tenant NAME] [--url URL] [--ssh USER@HOST] [--api-version V]
-    [--username U] [--password P]
+    [--username U] [--password P] [--version] [--completion [SHELL]]
 │
 ├── tenant                            tenant CRUD (ac.exe over SSH — control plane)
 │   ├── list                          CompanyID, sign-in name, internal CD, type
 │   ├── create --id N --login NAME    create + bootstrap; re-run to republish
-│   │          [--type SalesDemo] [--parent N] [--hidden] [--no-init]
+│   │          [--type SalesDemo|T100|U100] [--parent N] [--hidden] [--no-init]
 │   └── delete --id N [--yes]         delete the tenant and its data, recycle app pool
 │
 ├── apply [--dry-run] [FILES...]      push YAML via REST (idempotent PUT upserts)
 ├── diff  [FILES...]                  drift check vs the live tenant (exit 2 on drift)
+├── extract [--out DIR] [--only NAME]... [--force] [--dry-run]
+│                                     dump live tenant state as seed YAML (inverse of apply)
 ├── schema [--out DIR]                dump the endpoint's OpenAPI schema (swagger.json)
 │
 └── config                            configuration ops
@@ -62,7 +68,9 @@ acu [--tenant NAME] [--url URL] [--ssh USER@HOST] [--api-version V]
     └── check                         read-only preflight: discovery, secrets, REST, SSH
 ```
 
-`apply` and `diff` called without FILES default to the scaffolded directories, in order: `bootstrap/`, then `baseline/`, then `setup/`. Run `acu <command> --help` for details on any command.
+`apply` and `diff` called without FILES default to the scaffolded directories, in order: `bootstrap/`, then `baseline/`, then `setup/`.
+`acu --completion` emits a completion script for bash, zsh, or fish — source it from your shell profile.
+Run `acu <command> --help` for details on any command.
 
 ## The data repo
 
@@ -168,4 +176,33 @@ Then verify from your workstation — this one test proves both requirements at 
 
 ```sh
 ssh -o BatchMode=yes Administrator@acu-dev1.vm.internal '$PSVersionTable.PSVersion'
+```
+
+## Development
+
+```sh
+git clone https://github.com/kborovik/acumatica-cli.git
+cd acumatica-cli
+make install    # editable install as a global uv tool
+make check      # offline gate: ruff, basedpyright strict, pytest
+```
+
+The default test suite is fully offline.
+REST is faked with `httpx.MockTransport`, SSH with a monkeypatched `subprocess.run` — no live instance is needed.
+`make check` must pass before every commit.
+
+### Live end-to-end tier
+
+`make e2e` runs the opt-in live tier against a real Acumatica instance (pytest marker `e2e`, deselected by the default suite).
+
+Configuration is one file: a decrypted `.env` at the repo root names the instance — `ACU_BASE_URL`, `ACU_SSH`, `ACU_TENANT`, `ACU_PASSWORD`.
+`make e2e` refuses to start without it.
+
+The tier is self-contained.
+Each run scaffolds a synthetic single-org company from the packaged `acu config init` templates into a temporary directory, copies the real `.env` into it, and runs the installed `acu` binary from there — no data repo, no pre-existing fixtures on the instance.
+Scratch tenants (`E2E`, `E2EA`, `E2EB`) are created on the way in and always deleted on the way out, so nothing persists.
+
+```sh
+make e2e                                # whole tier, about 20 minutes
+make e2e FILE=test_provision_lifecycle  # one file, by stem or path
 ```
