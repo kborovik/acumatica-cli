@@ -22,7 +22,7 @@
 # consumes the periods generation creates.
 action: ProcessAll
 entity: ManagePeriods
-endpoint: Bootstrap/1.6.0
+endpoint: Bootstrap/1.7.0
 record:
   Action: Open
   FromYear: "2026"
