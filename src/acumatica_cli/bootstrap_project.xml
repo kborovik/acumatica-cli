@@ -157,7 +157,12 @@
                 fields with no server default (read off the LAB5 PUT
                 2026-07-13): INProgressAcctID/INProgressSubID (the WIP
                 account) + the four reason codes (Issues/Receipt/
-                Adjustment/PI) - all exposed; HoldEntry = the echo flag.
+                Adjustment/PI) - all exposed; HoldEntry = the echo flag;
+                INTransitAcctID/INTransitSubID join once the Warehouse
+                feature is on (update 500s "'In-Transit Account' cannot
+                be empty", P5 probe); UpdateGL defaults OFF - released
+                IN documents move quantities but post no GL (COGS and
+                PO accrual sat at zero while revenue moved, P5 probe).
   - ReasonCode  CS211000 -> ReasonCodeMaint, PrimaryView reasoncode
                 (PX.Objects.CS.ReasonCode) - no Default-endpoint entity,
                 and the INSetup reason-code fields above hard-require
@@ -169,11 +174,18 @@
                 (ARSetup); HoldEntry echo field.
   - SOPreferences SO101000 -> SOSetupMaint, PrimaryView sosetup (SOSetup);
                 DefaultOrderType doubles as the echo field and the R1
-                probe (does order type SO pre-exist on an empty tenant).
+                probe (does order type SO pre-exist on an empty tenant);
+                HoldShipments/RequireShipmentTotal off + AutoReleaseIN on
+                keep the shipment->invoice chain scriptable (template
+                defaults park shipments On Hold and refuse confirmation
+                without a control total - P5 probes).
   - POPreferences PO101000 -> POSetupMaint, PrimaryView Setup (POSetup);
                 HoldReceipts echo field + RCReturnReasonCodeID (the one
                 POSetup field the live insert named as required - a
-                Vendor Return usage reason code, 2026-07-13).
+                Vendor Return usage reason code, 2026-07-13) +
+                AutoReleaseIN (default off: a released PO receipt leaves
+                its IN document Balanced and qty never lands on hand -
+                P5 probe).
   - AvailabilityCalculationRule IN201500 -> INAvailabilitySchemeMaint,
                 PrimaryView Schemes (INAvailabilityScheme) - an empty
                 tenant has zero scheme rows and ItemClass 422s
@@ -209,6 +221,23 @@
                 fixed-day-of-month choice; the AgeDays00-02 aging bounds
                 default inconsistently at raw insert ("end day earlier
                 than its start day" 422) so the seed supplies them.
+  - Warehouse   IN204000 -> INSiteMaint, PrimaryView site (DAC
+                PX.Objects.IN.INSite) - the Default Warehouse entity has
+                no address surface, and the auto-created warehouse
+                Address 422s "'Country' cannot be empty" at insert (P5
+                probe 2026-07-13; the T65 vendor class, but Default has
+                no path). SiteCD/Descr/Active on the primary view,
+                CountryID through the Address view.
+  - OrderType   SO201000 -> SOOrderTypeMaint, PrimaryView soordertype
+                (DAC PX.Objects.SO.SOOrderType) - no Default-endpoint
+                entity, and a fresh tenant has ZERO order-type rows
+                (they live in the template company, CompanyID 1,
+                Active=0 - sqlcmd-verified 2026-07-13): a SalesOrder
+                PUT answers 200 with an UNSAVED row (OrderNbr stays
+                <SELECT>, CustomerID silently empty) because numbering
+                never resolves. Keyed PUT on OrderType materializes the
+                template row into the tenant; Active activates it; the
+                freight pair is required at persist (422, no default).
   - CashAccount CA202000 -> CashAccountMaint, PrimaryView CashAccount
                 (PX.Objects.CA.CashAccount) - Default endpoint answers
                 404. CuryID stays out (derived from the GL account,
@@ -218,9 +247,9 @@
   Features (CS100000) stays OUT of the endpoint - writes through any
   contract endpoint do not persist (T3 verdict); the plugin owns features.
 -->
-<Customization level="" description="acu bootstrap: CustomizationPlugin enables features on publish; Bootstrap endpoint exposes company + credit terms + financial currency + GL preferences + ledger-company link + financial year + calendars + period activation + module preferences (IN/AP/AR/SO/PO) + availability rule + posting class + cash account + vendor class + statement cycle" product-version="26.101">
+<Customization level="" description="acu bootstrap: CustomizationPlugin enables features on publish; Bootstrap endpoint exposes company + credit terms + financial currency + GL preferences + ledger-company link + financial year + calendars + period activation + module preferences (IN/AP/AR/SO/PO) + availability rule + posting class + cash account + vendor class + statement cycle + warehouse + order type" product-version="26.101">
   <EntityEndpoint>
-    <Endpoint xmlns="http://www.acumatica.com/entity/maintenance/5.31" name="Bootstrap" version="1.6.0" systemContractVersion="4">
+    <Endpoint xmlns="http://www.acumatica.com/entity/maintenance/5.31" name="Bootstrap" version="1.7.0" systemContractVersion="4">
       <TopLevelEntity name="Company" screen="CS101500">
         <Fields>
           <Field name="AcctCD" type="StringValue" />
@@ -532,6 +561,9 @@
           <Field name="ReceiptReasonCode" type="StringValue" />
           <Field name="AdjustmentReasonCode" type="StringValue" />
           <Field name="PIReasonCode" type="StringValue" />
+          <Field name="INTransitAcctID" type="StringValue" />
+          <Field name="INTransitSubID" type="StringValue" />
+          <Field name="UpdateGL" type="BooleanValue" />
         </Fields>
         <Mappings>
           <Mapping field="HoldEntry">
@@ -554,6 +586,15 @@
           </Mapping>
           <Mapping field="PIReasonCode">
             <To object="setup" field="PIReasonCode" />
+          </Mapping>
+          <Mapping field="INTransitAcctID">
+            <To object="setup" field="INTransitAcctID" />
+          </Mapping>
+          <Mapping field="INTransitSubID">
+            <To object="setup" field="INTransitSubID" />
+          </Mapping>
+          <Mapping field="UpdateGL">
+            <To object="setup" field="UpdateGL" />
           </Mapping>
         </Mappings>
       </TopLevelEntity>
@@ -606,10 +647,22 @@
       <TopLevelEntity name="SOPreferences" screen="SO101000">
         <Fields>
           <Field name="DefaultOrderType" type="StringValue" />
+          <Field name="HoldShipments" type="BooleanValue" />
+          <Field name="RequireShipmentTotal" type="BooleanValue" />
+          <Field name="AutoReleaseIN" type="BooleanValue" />
         </Fields>
         <Mappings>
           <Mapping field="DefaultOrderType">
             <To object="sosetup" field="DefaultOrderType" />
+          </Mapping>
+          <Mapping field="HoldShipments">
+            <To object="sosetup" field="HoldShipments" />
+          </Mapping>
+          <Mapping field="RequireShipmentTotal">
+            <To object="sosetup" field="RequireShipmentTotal" />
+          </Mapping>
+          <Mapping field="AutoReleaseIN">
+            <To object="sosetup" field="AutoReleaseIN" />
           </Mapping>
         </Mappings>
       </TopLevelEntity>
@@ -617,10 +670,14 @@
         <Fields>
           <Field name="HoldReceipts" type="BooleanValue" />
           <Field name="RCReturnReasonCodeID" type="StringValue" />
+          <Field name="AutoReleaseIN" type="BooleanValue" />
         </Fields>
         <Mappings>
           <Mapping field="HoldReceipts">
             <To object="Setup" field="HoldReceipts" />
+          </Mapping>
+          <Mapping field="AutoReleaseIN">
+            <To object="Setup" field="AutoReleaseIN" />
           </Mapping>
           <Mapping field="RCReturnReasonCodeID">
             <To object="Setup" field="RCReturnReasonCodeID" />
@@ -858,6 +915,50 @@
           </Mapping>
           <Mapping field="AgeDays02">
             <To object="ARStatementCycleRecord" field="AgeDays02" />
+          </Mapping>
+        </Mappings>
+      </TopLevelEntity>
+      <TopLevelEntity name="Warehouse" screen="IN204000">
+        <Fields>
+          <Field name="SiteCD" type="StringValue" />
+          <Field name="Descr" type="StringValue" />
+          <Field name="Active" type="BooleanValue" />
+          <Field name="CountryID" type="StringValue" />
+        </Fields>
+        <Mappings>
+          <Mapping field="SiteCD">
+            <To object="site" field="SiteCD" />
+          </Mapping>
+          <Mapping field="Descr">
+            <To object="site" field="Descr" />
+          </Mapping>
+          <Mapping field="Active">
+            <To object="site" field="Active" />
+          </Mapping>
+          <Mapping field="CountryID">
+            <To object="Address" field="CountryID" />
+          </Mapping>
+        </Mappings>
+      </TopLevelEntity>
+      <TopLevelEntity name="OrderType" screen="SO201000">
+        <Fields>
+          <Field name="OrderType" type="StringValue" />
+          <Field name="Active" type="BooleanValue" />
+          <Field name="FreightAcctID" type="StringValue" />
+          <Field name="FreightSubID" type="StringValue" />
+        </Fields>
+        <Mappings>
+          <Mapping field="OrderType">
+            <To object="soordertype" field="OrderType" />
+          </Mapping>
+          <Mapping field="Active">
+            <To object="soordertype" field="Active" />
+          </Mapping>
+          <Mapping field="FreightAcctID">
+            <To object="soordertype" field="FreightAcctID" />
+          </Mapping>
+          <Mapping field="FreightSubID">
+            <To object="soordertype" field="FreightSubID" />
           </Mapping>
         </Mappings>
       </TopLevelEntity>

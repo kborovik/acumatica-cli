@@ -56,6 +56,7 @@ from .models import Model, validation_summary
 from .seed import _norm  # pyright: ignore[reportPrivateUsage]
 
 _VAR = re.compile(r"\$\{([A-Za-z0-9_]+)\}")
+_PATH = re.compile(r"([A-Za-z0-9_]+)(?:\[(\d+)\])?")
 
 
 class ActionSpec(Model):
@@ -75,31 +76,41 @@ class WaitSpec(Model):
     endpoint: str | None = None
 
 
+class GetOp(Model):
+    """Key-URL fetch a get step performs; expand pulls detail arrays."""
+
+    entity: str
+    keys: list[Any]
+    expand: list[str] | None = None
+    endpoint: str | None = None
+
+
 class Step(Model):
-    """One scenario step: exactly one op (put | action | wait-only)."""
+    """One scenario step: exactly one op (put | action | get | wait-only)."""
 
     id: str
     put: str | None = None
     action: ActionSpec | None = None
+    get: GetOp | None = None
     record: dict[str, Any] | None = None
     parameters: dict[str, Any] | None = None
-    capture: dict[str, str] | None = None  # {Field: var_name}
+    capture: dict[str, str] | None = None  # {Field-or-path: var_name}
     wait: WaitSpec | None = None
     endpoint: str | None = None
 
     @model_validator(mode="after")
     def _one_op(self) -> "Step":
-        ops = [op for op in (self.put, self.action) if op is not None]
+        ops = [op for op in (self.put, self.action, self.get) if op is not None]
         if len(ops) > 1:
-            raise ValueError(f"step '{self.id}': put and action are exclusive")
+            raise ValueError(f"step '{self.id}': put, action, get are exclusive")
         if not ops and self.wait is None:
-            raise ValueError(f"step '{self.id}': needs one of put, action, wait")
+            raise ValueError(f"step '{self.id}': needs one of put, action, get, wait")
         if self.put is not None and self.record is None:
             raise ValueError(f"step '{self.id}': put needs a record")
         if self.action is not None and self.record is None:
             raise ValueError(f"step '{self.id}': action needs a record")
-        if self.capture is not None and self.put is None:
-            raise ValueError(f"step '{self.id}': capture rides a put step")
+        if self.capture is not None and self.put is None and self.get is None:
+            raise ValueError(f"step '{self.id}': capture rides a put or get step")
         return self
 
 
@@ -200,6 +211,34 @@ def _subst(value: Any, variables: dict[str, Any]) -> Any:
     return value
 
 
+def _resolve_path(record: dict[str, Any], path: str) -> Any:
+    """Resolve a dotted/indexed capture path (`Shipments[0].ShipmentNbr`).
+
+    Action-created documents (T66) assign numbers readable only off the
+    parent's expanded detail rows - the path walks unwrapped nesting:
+    a bare segment reads a field, `Seg[i]` indexes a detail array.
+    Missing segments raise with the path named.
+    """
+    value: Any = record
+    for segment in path.split("."):
+        m = _PATH.fullmatch(segment)
+        if m is None:
+            raise RuntimeError(f"capture path {path!r}: bad segment {segment!r}")
+        field, index = m.group(1), m.group(2)
+        if not isinstance(value, dict) or field not in value:
+            raise RuntimeError(
+                f"capture path {path!r}: field {field!r} not in the record"
+            )
+        value = value[field]
+        if index is not None:
+            if not isinstance(value, list) or int(index) >= len(value):
+                raise RuntimeError(
+                    f"capture path {path!r}: index [{index}] out of range"
+                )
+            value = value[int(index)]
+    return value
+
+
 def _inquire(client: AcumaticaClient, expect: Expect) -> dict[str, float]:
     """Probe a contract inquiry; sum each delta field over matching rows."""
     assert expect.inquire is not None
@@ -258,6 +297,8 @@ def _dry_run(scenario: Scenario) -> None:
             if step.put
             else f"invoke {step.action.entity}/{step.action.name}"
             if step.action
+            else f"get {step.get.entity}"
+            if step.get
             else f"wait {step.wait.entity}"  # pyright: ignore[reportOptionalMemberAccess]
         )
         output.data(f"  would {op} [{step.id}]")
@@ -290,6 +331,18 @@ def _run_step(client: AcumaticaClient, step: Step, variables: dict[str, Any]) ->
             step.endpoint,
         )
         output.data(f"  invoke {step.action.name} [{step.id}]")
+    elif step.get is not None:
+        keys = _subst(step.get.keys, variables)
+        params = (
+            {"$expand": ",".join(sorted(step.get.expand))} if step.get.expand else None
+        )
+        record = client.get_record(step.get.entity, keys, step.get.endpoint, params)
+        if record is None:
+            raise RuntimeError(f"step '{step.id}': {step.get.entity} {keys} not found")
+        fetched = unwrap(record)
+        output.data(f"  get {step.get.entity} [{step.id}]")
+        for path, var in (step.capture or {}).items():
+            variables[var] = _resolve_path(fetched, path)
     if step.wait is not None:
         _wait(client, step.wait, variables)
         output.data(f"  wait ok [{step.id}]")

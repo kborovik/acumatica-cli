@@ -155,7 +155,7 @@ def test_package_zip_carries_the_bootstrap_endpoint() -> None:
     (item,) = root.findall("EntityEndpoint")
     (endpoint,) = item.findall(f"{ns}Endpoint")
     assert endpoint.get("name") == "Bootstrap"
-    assert endpoint.get("version") == "1.6.0"
+    assert endpoint.get("version") == "1.7.0"
     # SystemContracts.V4 is the build's only IsCurrent implementation
     assert endpoint.get("systemContractVersion") == "4"
     entities = {e.get("name"): e for e in endpoint.findall(f"{ns}TopLevelEntity")}
@@ -182,6 +182,8 @@ def test_package_zip_carries_the_bootstrap_endpoint() -> None:
         "ReasonCode",
         "VendorClass",
         "StatementCycle",
+        "Warehouse",
+        "OrderType",
     }
     # features stay OUT: contract-endpoint writes to CS100000 do not
     # persist (T3 verdict) - the CustomizationPlugin owns features
@@ -316,14 +318,25 @@ def test_package_zip_carries_the_bootstrap_endpoint() -> None:
                 "ReceiptReasonCode",
                 "AdjustmentReasonCode",
                 "PIReasonCode",
+                "INTransitAcctID",
+                "INTransitSubID",
+                "UpdateGL",
             ),
             "setup",
         ),
         "APPreferences": {"HoldEntry": "Setup"},
         "ARPreferences": {"HoldEntry": "ARSetupRecord"},
-        "SOPreferences": {"DefaultOrderType": "sosetup"},
+        "SOPreferences": dict.fromkeys(
+            (
+                "DefaultOrderType",
+                "HoldShipments",
+                "RequireShipmentTotal",
+                "AutoReleaseIN",
+            ),
+            "sosetup",
+        ),
         "POPreferences": dict.fromkeys(
-            ("HoldReceipts", "RCReturnReasonCodeID"),
+            ("HoldReceipts", "RCReturnReasonCodeID", "AutoReleaseIN"),
             "Setup",
         ),
         # reason codes (T61): the INSetup reason-code fields hard-require
@@ -399,6 +412,20 @@ def test_package_zip_carries_the_bootstrap_endpoint() -> None:
                 "AgeDays02",
             ),
             "ARStatementCycleRecord",
+        ),
+        # warehouse (P5): Default Warehouse has no address surface and
+        # the auto-created Address requires Country - SiteCD idiom
+        "Warehouse": {
+            "SiteCD": "site",
+            "Descr": "site",
+            "Active": "site",
+            "CountryID": "Address",
+        },
+        # order type (P5/R1): zero rows on a fresh tenant - SalesOrder
+        # PUTs answer 200 with an unsaved row until SO is materialized
+        "OrderType": dict.fromkeys(
+            ("OrderType", "Active", "FreightAcctID", "FreightSubID"),
+            "soordertype",
         ),
         # cash account (T61): CuryID stays out - derived from the GL
         # account (B11 server-derived class); payment-method links are
@@ -488,6 +515,8 @@ def test_bootstrap_endpoint_carries_the_t61_distribution_entities() -> None:
         "ReasonCode": "CS211000",
         "VendorClass": "AP201000",
         "StatementCycle": "AR202800",
+        "Warehouse": "IN204000",
+        "OrderType": "SO201000",
     }
     for entity, screen in screens.items():
         assert entities[entity].get("screen") == screen
@@ -505,7 +534,7 @@ def test_bootstrap_endpoint_carries_the_t61_distribution_entities() -> None:
             if f.get("name") == field
         )
         assert boolean_field.get("type") == "BooleanValue"
-    for entity in ("SOPreferences", "PostingClass", "AvailabilityCalculationRule"):
+    for entity in ("PostingClass", "AvailabilityCalculationRule"):
         non_bool = {
             f.get("type") for f in entities[entity].findall(f"{ns}Fields/{ns}Field")
         }

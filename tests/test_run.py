@@ -66,7 +66,7 @@ def test_load_scenario_rejects_two_ops(tmp_path: Path) -> None:
         "    put: X\n"
         "    action: { entity: JournalTransaction, name: ReleaseJournalTransaction }",
     )
-    with pytest.raises(SystemExit, match="put and action are exclusive"):
+    with pytest.raises(SystemExit, match="put, action, get are exclusive"):
         run.load_scenario(_write(tmp_path, text))
 
 
@@ -211,3 +211,90 @@ def test_run_capture_missing_field_is_error(tmp_path: Path, instance: Instance) 
     scenario = run.load_scenario(_write(tmp_path, text))
     with pytest.raises(RuntimeError, match="capture field 'NoSuchField'"):
         run.run(_client(instance, Server()), scenario)
+
+
+GET_SCENARIO = """\
+scenario: get-capture
+steps:
+  - id: batch
+    put: JournalTransaction
+    record: { Module: GL, Hold: false }
+    capture: { BatchNbr: batch_nbr }
+  - id: read
+    get:
+      entity: JournalTransaction
+      keys: [GL, "${batch_nbr}"]
+      expand: [Details]
+    capture:
+      Status: batch_status
+      Details[0].Account: first_account
+"""
+
+
+def test_get_step_captures_paths(tmp_path: Path, instance: Instance) -> None:
+    """T66: get fetches under $expand and capture walks dotted/indexed paths."""
+
+    def server(request: httpx.Request) -> httpx.Response:
+        if request.url.path.endswith("/JournalTransaction") and request.method == "PUT":
+            return httpx.Response(
+                200, json=wrap({"Module": "GL", "BatchNbr": "000042"})
+            )
+        if request.url.path.endswith("/JournalTransaction/GL/000042"):
+            assert request.url.params["$expand"] == "Details"
+            return httpx.Response(
+                200,
+                json={
+                    "BatchNbr": {"value": "000042"},
+                    "Status": {"value": "Posted"},
+                    "Details": [
+                        {"Account": {"value": "10100"}, "id": "g1"},
+                        {"Account": {"value": "30000"}, "id": "g2"},
+                    ],
+                },
+            )
+        return httpx.Response(200, json={})
+
+    scenario = run.load_scenario(_write(tmp_path, GET_SCENARIO))
+    client = AcumaticaClient(instance, transport=httpx.MockTransport(server))
+    client.poll_interval = 0.0
+    # reach into the engine: run the steps and inspect the variable set
+    variables: dict[str, object] = {}
+    for step in scenario.steps:
+        run._run_step(client, step, variables)  # pyright: ignore[reportPrivateUsage]
+    assert variables == {
+        "batch_nbr": "000042",
+        "batch_status": "Posted",
+        "first_account": "10100",
+    }
+
+
+def test_get_step_capture_path_errors_name_the_path(
+    tmp_path: Path, instance: Instance
+) -> None:
+    text = GET_SCENARIO.replace("Details[0].Account", "Details[9].Account")
+    scenario = run.load_scenario(_write(tmp_path, text))
+
+    def server(request: httpx.Request) -> httpx.Response:
+        if request.method == "PUT":
+            return httpx.Response(200, json=wrap({"BatchNbr": "000042"}))
+        return httpx.Response(
+            200,
+            json={
+                "Status": {"value": "Posted"},
+                "Details": [{"Account": {"value": "10100"}, "id": "g1"}],
+            },
+        )
+
+    client = AcumaticaClient(instance, transport=httpx.MockTransport(server))
+    variables: dict[str, object] = {}
+    run._run_step(client, scenario.steps[0], variables)  # pyright: ignore[reportPrivateUsage]
+    with pytest.raises(RuntimeError, match=r"Details\[9\]\.Account.*out of range"):
+        run._run_step(client, scenario.steps[1], variables)  # pyright: ignore[reportPrivateUsage]
+
+
+def test_step_rejects_two_ops_with_get(tmp_path: Path) -> None:
+    text = GET_SCENARIO.replace(
+        "    get:", "    put: X\n    record: { A: 1 }\n    get:"
+    )
+    with pytest.raises(SystemExit, match="exclusive"):
+        run.load_scenario(_write(tmp_path, text))
