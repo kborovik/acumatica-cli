@@ -4,22 +4,6 @@
 
 **No UI clicks, no Configuration Wizard.**
 
-## How it works
-
-1. **Extract** the target Acumatica deployment with `acu extract` — its configuration becomes YAML, config as code.
-2. **Develop** changes in the YAML, in git: edit, review, version.
-3. **Re-deploy** with `acu apply`, then prove the live tenant matches the code with `acu diff`.
-
-Four commands do the work, and every one is safe to re-run:
-
-- **`acu tenant create`** — creates a tenant and bootstraps it in one step, ready for `apply`.
-  Re-running it against an existing tenant republishes the bootstrap package instead of failing.
-- **`acu apply`** — pushes your YAML into the tenant as keyed upserts.
-  Running it twice changes nothing.
-- **`acu diff`** — compares your YAML against the live tenant and exits with code 2 on drift.
-- **`acu extract`** — reads a configured tenant and writes the YAML file set back out, the inverse of `apply`.
-  Existing files are skipped unless `--force`.
-
 > **Tested against** Acumatica ERP **26.101.0225** on Windows Server 2025,
 > contract REST endpoint **25.200.001**. Other versions will likely work,
 > but only this combination is verified.
@@ -58,6 +42,7 @@ acu [--tenant NAME] [--url URL] [--ssh USER@HOST] [--api-version V]
 │
 ├── apply [--dry-run] [FILES...]      push YAML via REST (idempotent PUT upserts)
 ├── diff  [FILES...]                  drift check vs the live tenant (exit 2 on drift)
+├── run   [--dry-run] [FILES...]      execute transaction scenario YAML (exit 1 on any miss)
 ├── extract [--out DIR] [--only NAME]... [--force] [--dry-run]
 │                                     dump live tenant state as seed YAML (inverse of apply)
 ├── schema [--out DIR]                dump the endpoint's OpenAPI schema (swagger.json)
@@ -69,21 +54,27 @@ acu [--tenant NAME] [--url URL] [--ssh USER@HOST] [--api-version V]
 ```
 
 `apply` and `diff` called without FILES default to the scaffolded directories, in order: `bootstrap/`, then `baseline/`, then `setup/`.
+`run` called without FILES defaults to `scenario/`.
 `acu --completion` emits a completion script for bash, zsh, or fish — source it from your shell profile.
 Run `acu <command> --help` for details on any command.
 
 ## The data repo
 
-Your configuration lives in its own git repo, which `acu config init` scaffolds:
+Your configuration lives in its own git repo. `acu config init` scaffolds everything except `scenario/`, which you author by hand:
 
 | Path         | What it holds                                                              |
 | ------------ | -------------------------------------------------------------------------- |
 | `bootstrap/` | what makes a virgin tenant configurable: features, company, credit terms   |
 | `baseline/`  | reference data: subaccounts, chart of accounts, ledger, units of measure   |
 | `setup/`     | one-time actions: financial year, master calendar, open periods            |
+| `scenario/`  | transaction scenarios for `acu run`: purchase, build, sell flows            |
 | `.env`       | where to apply and who signs in, every key an `ACU_*` variable             |
 
 Files in each directory apply alphabetically; the numbered prefixes (`10-`, `20-`, and so on) encode dependency order. The scaffolded `.gitignore` keeps `.env` out of git — store it encrypted (for example as `.env.gpg`) and decrypt once per clone.
+
+Seed YAML in `bootstrap/`, `baseline/`, and `setup/` is state: `apply` upserts it, `diff` proves it.
+Scenario YAML is different — it describes transactions that flow forward.
+`acu run` executes each step in order (`put`, `action`, `wait`, `get`), captures server-assigned document numbers into `${var}` references for later steps, and checks `expect:` assertions as deltas against a pre-run snapshot, so a scenario re-runs safely on a warm tenant.
 
 ## Installation
 
@@ -131,9 +122,9 @@ acu apply --dry-run    # show what would be written, write nothing
 `acu` talks to an instance over two independent channels:
 
 - **Control plane (SSH):** `acu tenant` runs `ac.exe -cm:CompanyConfig` and `sqlcmd` on the Windows guest — see [`docs/ac-exe.md`](docs/ac-exe.md).
-- **Data plane (REST):** `acu apply`, `diff`, and `schema` use the contract-based API (`/entity/Default/25.200.001/`), where `PUT` is a keyed upsert — see [`docs/rest-api.md`](docs/rest-api.md).
+- **Data plane (REST):** `acu apply`, `diff`, `run`, `extract`, and `schema` use the contract-based API (`/entity/Default/25.200.001/`), where `PUT` is a keyed upsert — see [`docs/rest-api.md`](docs/rest-api.md).
 
-If you only apply and diff YAML, you never need SSH. SSH setup is required only for `acu tenant`.
+If you never touch `acu tenant`, you never need SSH — every other command is pure REST.
 
 ## SSH setup (control plane)
 
