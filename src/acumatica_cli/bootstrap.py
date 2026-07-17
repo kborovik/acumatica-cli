@@ -150,7 +150,7 @@ def _published_description(client: AcumaticaClient) -> str | None:
     try:
         with zipfile.ZipFile(io.BytesIO(content)) as zf:
             root = ET.fromstring(zf.read("project.xml"))
-    except (zipfile.BadZipFile, KeyError, ET.ParseError):
+    except zipfile.BadZipFile, KeyError, ET.ParseError:
         return None
     return root.get("description")
 

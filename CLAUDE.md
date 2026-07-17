@@ -1,5 +1,7 @@
 # CLAUDE.md
 
+<!-- sdd:direct-instruction:begin -->
+
 `SPEC.md` at repo root is the authoritative spec — goal, constraints, interfaces, invariants, tasks, bug ledger.
 Read it before working.
 Amend it via /sdd:spec, never by hand.
@@ -13,3 +15,5 @@ Amend it via /sdd:spec, never by hand.
 - Friction: file a GitHub issue on this repo for any major friction with the Acumatica API —
   wrong or missing vendor docs, silent no-op writes, reads that 500 or return empty without cause, feature gates.
   State the symptom first, then the live evidence, then the workaround or fix.
+
+<!-- sdd:direct-instruction:end -->

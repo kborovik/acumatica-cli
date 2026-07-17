@@ -109,7 +109,7 @@ class BaselineFile(Model):
         return v if isinstance(v, list) else [v]
 
     @model_validator(mode="after")
-    def _keys_identify_records(self) -> "BaselineFile":
+    def _keys_identify_records(self) -> BaselineFile:
         # V25: the declared key tuple must uniquely identify records - a
         # dup-keyed file diffs as permanent false drift and apply collapses
         # the dup records into one PUT target (B21)

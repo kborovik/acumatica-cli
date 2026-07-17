@@ -59,7 +59,7 @@ class DummyClient:
     def swagger(self) -> bytes:
         return SWAGGER
 
-    def __enter__(self) -> "DummyClient":
+    def __enter__(self) -> DummyClient:
         return self
 
     def __exit__(
@@ -726,7 +726,7 @@ def test_config_check_all_probes_ok(
     calls: list[str] = []
 
     class RecordingClient(DummyClient):
-        def __enter__(self) -> "RecordingClient":
+        def __enter__(self) -> RecordingClient:
             calls.append("enter")
             return self
 
@@ -838,7 +838,7 @@ def test_config_check_rest_fail_still_probes_ssh(
     # T27 verify: wrong password -> REST fail while ssh still reports, exit 1;
     # a tenant-guard refusal (V5) surfaces the same way - __enter__ raises
     class RefusingClient(DummyClient):
-        def __enter__(self) -> "RefusingClient":
+        def __enter__(self) -> RefusingClient:
             raise RuntimeError("login failed (401)")
 
     monkeypatch.setattr(cli, "AcumaticaClient", RefusingClient)

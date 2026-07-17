@@ -665,7 +665,7 @@ def test_load_action_file_requires_done_when(tmp_path: Path) -> None:
         seed.load_baseline(_write(tmp_path, text))
 
 
-def _action(tmp_path: Path, text: str = ACTION_YAML) -> "seed.ActionFile":
+def _action(tmp_path: Path, text: str = ACTION_YAML) -> seed.ActionFile:
     parsed = seed.load_baseline(_write(tmp_path, text))
     assert isinstance(parsed, seed.ActionFile)
     return parsed

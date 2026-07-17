@@ -66,7 +66,7 @@ class EntitySpec(Model):
         return BOOTSTRAP_ENDPOINT if v == "bootstrap" else v
 
     @model_validator(mode="after")
-    def _strip_include_exclusive(self) -> "EntitySpec":
+    def _strip_include_exclusive(self) -> EntitySpec:
         if self.strip and self.include:
             raise ValueError("strip and include are mutually exclusive")
         return self
@@ -96,7 +96,7 @@ class Manifest(Model):
     setup: list[SetupSynth] = Field(default_factory=list)
 
     @model_validator(mode="after")
-    def _self_consistent(self) -> "Manifest":
+    def _self_consistent(self) -> Manifest:
         # V20 by construction: an emitted file for an entity both endpoints
         # serve must carry an endpoint, or load_baseline rejects it
         for spec in self.entities:

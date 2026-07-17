@@ -94,7 +94,7 @@ class AcumaticaClient:
             base_url=instance.base_url, timeout=timeout, transport=transport
         )
 
-    def __enter__(self) -> "AcumaticaClient":
+    def __enter__(self) -> AcumaticaClient:
         # tenant guard (V5, docs/rest-api.md): an omitted or empty tenant is
         # the one login the server still routes silently — to the default
         # tenant. Defense-in-depth vs wrong-tenant writes: every data-plane

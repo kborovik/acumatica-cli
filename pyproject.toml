@@ -4,7 +4,7 @@ version = "0.8.0"
 description = "Acumatica ERP Config-as-Code: tenant provisioning, baseline config, and reference data"
 authors = [{ name = "Konstantin Borovik", email = "kb@lab5.ca" }]
 readme = "README.md"
-requires-python = ">=3.12"
+requires-python = ">=3.14"
 dependencies = [
     "click>=8.1",
     "httpx>=0.27",
@@ -41,7 +41,7 @@ markers = [
 
 [tool.basedpyright]
 typeCheckingMode = "strict"
-pythonVersion = "3.12"
+pythonVersion = "3.14"
 include = ["src/acumatica_cli/", "tests/"]
 reportMissingTypeStubs = false
 reportUnknownVariableType = false
@@ -52,7 +52,7 @@ reportUnknownLambdaType = false
 reportUnusedFunction = "warning"
 
 [tool.ruff]
-target-version = "py312"
+target-version = "py314"
 src = ["src"]
 
 [tool.ruff.format]

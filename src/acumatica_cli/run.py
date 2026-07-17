@@ -99,7 +99,7 @@ class Step(Model):
     endpoint: str | None = None
 
     @model_validator(mode="after")
-    def _one_op(self) -> "Step":
+    def _one_op(self) -> Step:
         ops = [op for op in (self.put, self.action, self.get) if op is not None]
         if len(ops) > 1:
             raise ValueError(f"step '{self.id}': put, action, get are exclusive")
@@ -134,7 +134,7 @@ class Expect(Model):
     endpoint: str | None = None
 
     @model_validator(mode="after")
-    def _one_kind(self) -> "Expect":
+    def _one_kind(self) -> Expect:
         if (self.get is None) == (self.inquire is None):
             raise ValueError("expect: exactly one of get, inquire")
         if self.get is not None and self.fields is None:
@@ -164,7 +164,7 @@ class Scenario(Model):
     expect: list[Expect] = Field(default_factory=list)
 
     @model_validator(mode="after")
-    def _unique_step_ids(self) -> "Scenario":
+    def _unique_step_ids(self) -> Scenario:
         seen: set[str] = set()
         for step in self.steps:
             if step.id in seen:

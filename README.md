@@ -78,7 +78,7 @@ Scenario YAML is different — it describes transactions that flow forward.
 
 ## Installation
 
-Requires Python 3.12 or newer.
+Requires Python 3.14 or newer.
 
 ```sh
 uv tool install acumatica-cli

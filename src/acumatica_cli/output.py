@@ -6,6 +6,7 @@ and spinners on a TTY and degrades to plain deterministic text when piped
 stderr carries status, warnings, and errors.
 """
 
+import os
 from collections.abc import Generator, Iterable
 from contextlib import contextmanager
 
@@ -13,8 +14,30 @@ from rich import box
 from rich.console import Console
 from rich.table import Table
 
-out = Console(markup=False, emoji=False, highlight=False)
-err = Console(stderr=True, markup=False, emoji=False, highlight=False)
+
+def _force_terminal() -> bool | None:
+    """Map NO_COLOR / FORCE_COLOR to rich's force_terminal flag.
+
+    None leaves auto-detect (isatty). False forces plain/piped rendering.
+    True forces TTY chrome even when piped.
+
+    Rich treats any non-empty FORCE_COLOR as "on", so FORCE_COLOR=0 would
+    otherwise enable color. We treat empty and "0" as off (force-color.org).
+    NO_COLOR (any value) always wins and forces plain output (no-color.org).
+    """
+    if "NO_COLOR" in os.environ:
+        return False
+    force = os.environ.get("FORCE_COLOR")
+    if force is not None:
+        return force not in ("", "0")
+    return None
+
+
+_force = _force_terminal()
+out = Console(markup=False, emoji=False, highlight=False, force_terminal=_force)
+err = Console(
+    stderr=True, markup=False, emoji=False, highlight=False, force_terminal=_force
+)
 
 
 def data(msg: str) -> None:
