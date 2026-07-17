@@ -963,10 +963,16 @@ def test_apply_dry_run_summary(wired: Instance, tmp_path: Path) -> None:
 def test_diff_clean_exits_zero(
     wired: Instance, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
+    path = _baseline(tmp_path)
     monkeypatch.setattr(cli.seed, "diff", lambda client, baseline: [])
-    result = CliRunner().invoke(cli.cli, ["diff", str(_baseline(tmp_path))])
+    result = CliRunner().invoke(cli.cli, ["diff", str(path)])
 
     assert result.exit_code == 0
+    assert (
+        f"{path} -> T1 on http://acu.test/AcumaticaERP (UnitsOfMeasure)"
+        in result.output
+    )
+    assert "1 record(s) ok" in result.output
     assert "+ no drift on T1 (http://acu.test/AcumaticaERP, 1 file(s))" in result.stderr
 
 
@@ -1094,12 +1100,18 @@ def test_bare_apply_matches_explicit_dirs(
 def test_diff_drift_exits_two_with_lines_on_stdout(
     wired: Instance, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
+    path = _baseline(tmp_path)
     drift = "UnitsOfMeasure [KG].Description: source='Kilogram' live='kg'"
     monkeypatch.setattr(cli.seed, "diff", lambda client, baseline: [drift])
-    result = CliRunner().invoke(cli.cli, ["diff", str(_baseline(tmp_path))])
+    result = CliRunner().invoke(cli.cli, ["diff", str(path)])
 
     # the load-bearing contract (V9): exit 0 ok, 1 error, 2 drift
     assert result.exit_code == 2
+    assert (
+        f"{path} -> T1 on http://acu.test/AcumaticaERP (UnitsOfMeasure)"
+        in result.output
+    )
+    assert "1 record(s), 1 drift(s)" in result.output
     assert "x DRIFT on T1 (http://acu.test/AcumaticaERP):" in result.stderr
     assert drift in result.output
 

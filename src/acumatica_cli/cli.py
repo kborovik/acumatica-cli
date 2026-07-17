@@ -558,7 +558,18 @@ def diff_cmd(inst: Instance, files: tuple[Path, ...]) -> None:
     with AcumaticaClient(inst) as client:
         for path in paths:
             baseline = seed.load_baseline(path)
-            drifts += seed.diff(client, baseline)
+            # same file banner as apply so a long multi-file diff shows
+            # progress instead of silence until the final status line
+            output.data(
+                f"{path} -> {inst.tenant} on {inst.base_url} ({baseline.entity})"
+            )
+            file_drifts = seed.diff(client, baseline)
+            drifts += file_drifts
+            n = 1 if isinstance(baseline, seed.ActionFile) else len(baseline.records)
+            if file_drifts:
+                output.data(f"  {n} record(s), {len(file_drifts)} drift(s)")
+            else:
+                output.data(f"  {n} record(s) ok")
     _exit_on_drift(inst, drifts, len(paths))
 
 
