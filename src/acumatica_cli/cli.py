@@ -379,12 +379,13 @@ def config_check(ctx: click.Context) -> None:
 
     Dependency order: discovery (.env walk-up + parse + ACU_BASE_URL), then
     secrets (ACU_PASSWORD resolved), then REST (login, landed-tenant verify,
-    logout) and ssh (trivial remote command) probed independently - a
-    discovery or secrets failure stops, a REST failure still probes ssh and
+    logout) and ssh probed independently - ssh set → trivial remote; ssh
+    unset → skip (ACU_SSH optional, V3 hosted path), never fail. A discovery
+    or secrets failure stops; a REST failure still probes ssh when set and
     vice versa. Discovery is lax (V3): no .env passes when --url covers
     base_url, and flags-only runs (no .env anywhere) are valid. Writes
-    nothing: no PUTs, no tenant CRUD. Exit 0 when every probe passes, 1 on
-    any failure.
+    nothing: no PUTs, no tenant CRUD. Exit 0 when every non-skipped probe
+    passes, 1 on any failure.
     """
     overrides: dict[str, str] = ctx.obj or {}
     # discovery (V3): lax walk-up + parse; base_url (the primary identity
@@ -432,12 +433,16 @@ def config_check(ctx: click.Context) -> None:
     except (RuntimeError, httpx.HTTPError) as exc:
         output.data(f"fail rest: {exc}")
         failed = True
-    try:
-        TenantManager(inst).ping()
-        output.data(f"ok ssh ({inst.ssh})")
-    except RuntimeError as exc:
-        output.data(f"fail ssh: {exc}")
-        failed = True
+    if not inst.ssh:
+        # V3/I.cmd: ACU_SSH optional — hosted data-plane path skips, never fails
+        output.data("skip ssh (ACU_SSH not set)")
+    else:
+        try:
+            TenantManager(inst).ping()
+            output.data(f"ok ssh ({inst.ssh})")
+        except RuntimeError as exc:
+            output.data(f"fail ssh: {exc}")
+            failed = True
     if failed:
         raise SystemExit(1)
 

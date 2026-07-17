@@ -44,6 +44,19 @@ def run(monkeypatch: pytest.MonkeyPatch) -> FakeRun:
     return fake
 
 
+def test_manager_requires_ssh(run: FakeRun) -> None:
+    # T67/I.cmd: tenant CRUD hard-errors naming ACU_SSH before any remote
+    # when the control-plane address is unresolved (hosted data-plane path)
+    inst = Instance(
+        base_url="http://acu.test/AcumaticaERP",
+        ssh="",
+        password="secret",
+    )
+    with pytest.raises(SystemExit, match="ACU_SSH not set"):
+        TenantManager(inst)
+    assert run.commands == []
+
+
 def test_list_parses_sqlcmd_rows_and_skips_noise(
     instance: Instance, run: FakeRun
 ) -> None:

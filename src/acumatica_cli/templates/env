@@ -1,8 +1,9 @@
 # scaffolded by `acu config init` - the sole config file: where + secrets,
 # every key an ACU_* var; print the fully resolved document with:
 #   acu config show
-# ACU_BASE_URL (REST root) and ACU_SSH (control-plane user@host) are the
-# required addresses; the rest are code defaults you can override here.
+# ACU_BASE_URL (REST root) is required; ACU_SSH (control-plane user@host)
+# is optional - leave blank for hosted / data-plane-only (tenant CRUD still
+# needs it). The rest are code defaults you can override here.
 # Keep this file out of git (the scaffolded .gitignore already lists it;
 # encrypt at rest, e.g. .env.gpg).
 ACU_BASE_URL=http://erp.example.com/AcumaticaERP

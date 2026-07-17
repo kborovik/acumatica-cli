@@ -5,9 +5,10 @@ env prefix ``ACU_``, and the sole config file is ``.env`` (found by walking
 up from cwd) carrying where + secrets as ``ACU_*`` vars. The file is
 optional - flags plus the process environment can supply the full config.
 Per key the first set value wins: flag, ``ACU_*`` var (process environment
-over a found ``.env``), code default. ``base_url`` and ``ssh`` are the only
-required address values - one explicit address per plane (V1), never
-derived; the password must resolve via ``--password`` or ``ACU_PASSWORD``.
+over a found ``.env``), code default. ``base_url`` is the only required
+address (REST data plane); ``ssh`` is optional control-plane address
+(empty = data-plane only; tenant cmds hard-error when unresolved — V1/V3).
+The password must resolve via ``--password`` or ``ACU_PASSWORD``.
 """
 
 from collections.abc import Iterator, Mapping
@@ -51,11 +52,12 @@ INIT_TEMPLATES = (
 class Instance(BaseSettings):
     """The resolved target: flags over ACU_* vars (.env or process) over defaults.
 
-    One explicit address per plane (V1), no derivation: ``base_url`` is the
-    REST root (scheme + host + site path), ``ssh`` the control-plane
-    ``user@host``. Install-layout values are module constants, not fields.
-    Unknown ``ACU_*`` vars are ignored, never errors - the environment and
-    ``.env`` legitimately carry non-config vars (``ACU_DEBUG``).
+    Explicit addresses, no derivation (V1): ``base_url`` is the REST root
+    (scheme + host + site path); ``ssh`` is the optional control-plane
+    ``user@host`` (empty = data-plane only). Install-layout values are
+    module constants, not fields. Unknown ``ACU_*`` vars are ignored,
+    never errors - the environment and ``.env`` legitimately carry
+    non-config vars (``ACU_DEBUG``).
     """
 
     model_config = SettingsConfigDict(
@@ -65,7 +67,7 @@ class Instance(BaseSettings):
     )
 
     base_url: str  # REST root: scheme + host + site path
-    ssh: str  # control plane: full user@host
+    ssh: str = ""  # control plane: full user@host; empty = data-plane only
     tenant: str = ""
     api_version: str = "25.200.001"  # V11: /entity/Default/<api_version>/
     user: str = "admin"  # ACU_USER; the --username flag maps here
@@ -76,8 +78,8 @@ class Instance(BaseSettings):
     @model_validator(mode="before")
     @classmethod
     def _blank_required_is_unset(cls, data: Any) -> Any:
-        # a blank ACU_BASE_URL= / ACU_SSH= line reads as missing, not as an
-        # empty address - the hard error names the unresolved key (V3)
+        # blank ACU_BASE_URL= / ACU_SSH= reads as unset (V3): base_url then
+        # fails required; ssh falls through to the empty default (optional)
         if isinstance(data, dict):
             for key in ("base_url", "ssh"):
                 if data.get(key) == "":
@@ -161,8 +163,9 @@ def load_instance(overrides: Mapping[str, str | None] | None = None) -> Instance
     ``overrides`` carries the global flags keyed by Instance field name;
     per key the first set value wins (flag, ACU_* var - process environment
     over a found .env - code default). No .env is fine (V3): the hard error
-    comes only when a required value (base_url, ssh, password) is still
-    unresolved after the merge, naming the missing key.
+    comes only when a required value (base_url, password) is still
+    unresolved after the merge, naming the missing key. ``ssh`` is optional
+    (hosted / data-plane-only path); tenant cmds hard-error when it is empty.
     """
     flags = {k: v for k, v in dict(overrides or {}).items() if v is not None}
     root = find_data_root()

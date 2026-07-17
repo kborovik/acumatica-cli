@@ -28,6 +28,14 @@ class TenantManager:
     """Tenant CRUD via SSH to the Windows guest."""
 
     def __init__(self, instance: Instance):
+        # control-plane address is optional on Instance (hosted path, V3);
+        # tenant CRUD still needs it - hard-error naming the key before any
+        # remote (I.cmd), never an empty ssh argv
+        if not instance.ssh:
+            raise SystemExit(
+                "ACU_SSH not set (pass --ssh, "
+                "or put ACU_SSH in .env or the environment)"
+            )
         self.instance = instance
 
     def _ssh(self, command: str) -> str:

@@ -868,6 +868,47 @@ def test_config_check_ssh_fail_still_probes_rest(
     assert "fail ssh: remote command failed (255)" in result.output
 
 
+def test_config_check_skips_ssh_when_unset(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # T67/I.cmd: ACU_SSH optional — unset → skip ssh line, never fail; REST
+    # still probed; exit 0 when non-skipped probes pass
+    (tmp_path / ".env").write_text(
+        "ACU_BASE_URL=http://acu.test/AcumaticaERP\n"
+        "ACU_TENANT=T1\n"
+        "ACU_PASSWORD=secret\n"
+    )
+    monkeypatch.chdir(tmp_path)
+    probes: list[str] = []
+    monkeypatch.setattr(cli, "AcumaticaClient", DummyClient)
+    monkeypatch.setattr(TenantManager, "ping", lambda self: probes.append("ping"))
+
+    result = CliRunner().invoke(cli.cli, ["config", "check"])
+
+    assert result.exit_code == 0
+    lines = result.output.splitlines()
+    assert lines[0].startswith("ok discovery (")
+    assert lines[1] == "ok secrets (ACU_PASSWORD set)"
+    assert lines[2] == "ok rest (http://acu.test/AcumaticaERP, tenant T1)"
+    assert lines[3] == "skip ssh (ACU_SSH not set)"
+    assert probes == []
+
+
+def test_tenant_list_fails_without_ssh(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # T67/I.cmd: tenant cmds hard-error naming ACU_SSH before any remote
+    (tmp_path / ".env").write_text(
+        "ACU_BASE_URL=http://acu.test/AcumaticaERP\nACU_PASSWORD=secret\n"
+    )
+    monkeypatch.chdir(tmp_path)
+
+    result = CliRunner().invoke(cli.cli, ["tenant", "list"])
+
+    assert result.exit_code != 0
+    assert "ACU_SSH not set" in result.output
+
+
 def test_config_check_discovery_fails_without_base_url(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
