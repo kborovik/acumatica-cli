@@ -76,21 +76,23 @@ install: .venv ## Install acu globally as an editable uv tool
 # give the part words no-op recipes so make does not try to build them.
 part := $(word 1,$(filter major minor patch,$(MAKECMDGOALS)))
 
+# Each recipe line is a fresh shell (Apple make ignores .ONESHELL). Re-read
+# the version from pyproject via `uv version --short` on every line that
+# needs it — a shell `version=...` assignment does not survive the next line.
 release: ## Bump version, commit, tag, and publish a GitHub release (make release major|minor|patch)
 	test -n "$(part)" || { echo "usage: make release major|minor|patch"; exit 1; }
 	git diff --quiet && git diff --cached --quiet \
 		|| { echo "working tree not clean — commit or stash first"; exit 1; }
 	$(call header,Bumping $(part) version)
 	uv version --bump $(part)
-	version=$$(uv version --short)
 	git add pyproject.toml uv.lock
-	git commit -m "Release v$$version"
-	git tag "v$$version"
+	git commit -m "Release v$$(uv version --short)"
+	git tag "v$$(uv version --short)"
 	$(MAKE) build
-	$(call header,Publishing v$$version to GitHub)
+	$(call header,Publishing v$$(uv version --short) to GitHub)
 	git push && git push --tags
-	gh release create "v$$version" --title "v$$version" --generate-notes
-	echo "$(green)Released v$$version$(reset)"
+	gh release create "v$$(uv version --short)" --title "v$$(uv version --short)" --generate-notes
+	echo "$(green)Released v$$(uv version --short)$(reset)"
 
 major minor patch:
 	@:
