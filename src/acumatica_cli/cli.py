@@ -282,32 +282,102 @@ def _init_tenant(inst: Instance, mgr: TenantManager, login_name: str) -> None:
     output.success(f"admin {result}; tenant {login_name} is ready")
 
 
+def _bootstrap_features() -> list[str] | None:
+    """Feature list from the data repo, or None → package-built-in six.
+
+    features.yaml is package-build config (V2), not a seed file: both the
+    live publish path and --export read it the same way.
+    """
+    root = find_data_root()
+    return bootstrap.load_features(root) if root is not None else None
+
+
+def _publish_bootstrap_package(inst: Instance, features: list[str] | None) -> str:
+    """Import + publish AcuBootstrap into inst.tenant (data plane only)."""
+    with (
+        output.step(f"publishing {bootstrap.PACKAGE_NAME} to {inst.tenant}"),
+        AcumaticaClient(inst) as client,
+    ):
+        return bootstrap.publish(client, features=features)
+
+
+def _recycle_after_bootstrap(inst: Instance, mgr: TenantManager | None) -> None:
+    """Post-publish app-pool recycle when the control plane is available.
+
+    The publish restarts the site BEFORE its DB transaction commits, so the
+    restarted domain caches the feature slot pre-plugin (verified live:
+    gated screens stay 403 until one more recycle). On the skip path a
+    recycle is the cheap way to make a resumed run sound too. Hosted
+    (no ACU_SSH): warn and continue — the customer must restart the site
+    another way before feature-gated apply can succeed.
+    """
+    if mgr is None and not inst.ssh:
+        output.warn(
+            "ACU_SSH not set: skipped app-pool recycle; "
+            "feature-gated screens may stay 403 until the site restarts"
+        )
+        return
+    if mgr is None:
+        mgr = TenantManager(inst)
+    with output.step("recycling app pool (feature set loads at app start)"):
+        mgr.recycle_app_pool()
+    with output.step("waiting for the site to come back"):
+        firstlogin.initialize_admin_password(inst, tenant=inst.tenant)
+
+
 def _bootstrap_tenant(inst: Instance, mgr: TenantManager, login_name: str) -> None:
     """Publish the bootstrap package into the fresh tenant (data plane).
 
     Idempotent on content, not existence (V4): publish() skips only when the
     published package carries the digest of the package built now. The
     session targets the new tenant explicitly (V5), never a config default.
-    The feature set is data (V2): bootstrap/features.yaml in the data repo,
-    no data repo or no file -> the built-in six.
+    Tenant create always has SSH (TenantManager already constructed), so
+    the post-publish recycle always runs on this path.
     """
     inst = inst.model_copy(update={"tenant": login_name})
-    root = find_data_root()
-    features = bootstrap.load_features(root) if root is not None else None
-    with (
-        output.step(f"publishing {bootstrap.PACKAGE_NAME} to {inst.tenant}"),
-        AcumaticaClient(inst) as client,
-    ):
-        result = bootstrap.publish(client, features=features)
+    features = _bootstrap_features()
+    result = _publish_bootstrap_package(inst, features)
     output.success(f"{bootstrap.PACKAGE_NAME} {result}")
-    # unconditional: the publish restarts the site BEFORE its DB transaction
-    # commits, so the restarted domain caches the feature slot pre-plugin
-    # (verified live: gated screens stay 403 until one more recycle); on the
-    # skip path a recycle is the cheap way to make a resumed run sound too
-    with output.step("recycling app pool (feature set loads at app start)"):
-        mgr.recycle_app_pool()
-    with output.step("waiting for the site to come back"):
-        firstlogin.initialize_admin_password(inst, tenant=login_name)
+    _recycle_after_bootstrap(inst, mgr)
+
+
+@cli.command("bootstrap")
+@click.option(
+    "--export",
+    "export_path",
+    type=click.Path(path_type=Path, dir_okay=False),
+    default=None,
+    help="Write the package zip to PATH (offline; no REST, no SSH) "
+    "for Customization Projects UI import",
+)
+@click.pass_context
+def bootstrap_cmd(ctx: click.Context, export_path: Path | None) -> None:
+    """Publish AcuBootstrap into the session tenant (or export the package zip).
+
+    Hosted / no-SSH path: CustomizationApi publish is pure REST, so this
+    command never requires ACU_SSH. When SSH is set, an app-pool recycle
+    follows publish so feature-gated screens load; when unset, a warning
+    notes that the site may need another restart before apply.
+
+    --export writes the same feature-spliced package that publish would
+    import, with no HTTP and no password — the SM204505 UI-import fallback.
+    """
+    features = _bootstrap_features()
+    if export_path is not None:
+        if not export_path.parent.exists():
+            raise SystemExit(f"{export_path.parent}: directory does not exist")
+        export_path.write_bytes(bootstrap.package_zip(features))
+        output.success(f"wrote {export_path}")
+        return
+    inst = _resolve_instance(ctx)
+    if not inst.tenant:
+        raise SystemExit(
+            "tenant not set (pass --tenant, "
+            "or put ACU_TENANT in .env or the environment)"
+        )
+    result = _publish_bootstrap_package(inst, features)
+    output.success(f"{bootstrap.PACKAGE_NAME} {result}")
+    _recycle_after_bootstrap(inst, mgr=None)
 
 
 @tenant_group.command("delete")

@@ -23,9 +23,22 @@ acu config init --host erp.example.com my-erp
 cd my-erp                                # edit .env: set ACU_PASSWORD
 
 acu config check                         # read-only preflight
-acu tenant create --id 3 --login DEV     # create the tenant + bootstrap it
+acu tenant create --id 3 --login DEV     # create the tenant + bootstrap it (needs SSH)
 acu --tenant DEV apply                   # seed bootstrap/, baseline/, setup/
 acu --tenant DEV diff                    # prove zero drift (exit 2 on drift)
+```
+
+**Hosted Acumatica (no SSH):** the tenant already exists; leave `ACU_SSH` blank.
+
+```sh
+acu config init --host customer.acumatica.com my-erp
+cd my-erp                                # edit .env: ACU_TENANT, ACU_PASSWORD; ACU_SSH=
+acu config check                         # REST preflight; ssh probe is skipped
+acu --tenant DEV bootstrap               # publish AcuBootstrap via REST only
+acu --tenant DEV apply
+acu --tenant DEV diff
+# offline UI fallback when REST publish is blocked:
+acu bootstrap --export AcuBootstrap.zip  # import + publish on SM204505
 ```
 
 ## CLI map
@@ -36,10 +49,11 @@ acu [--tenant NAME] [--url URL] [--ssh USER@HOST] [--api-version V]
 │
 ├── tenant                            tenant CRUD (ac.exe over SSH — control plane)
 │   ├── list                          CompanyID, sign-in name, internal CD, type
-│   ├── create --id N --login NAME    create + bootstrap; re-run to republish
+│   ├── create --id N --login NAME    create + bootstrap; re-run to republish (SSH)
 │   │          [--type SalesDemo|T100|U100] [--parent N] [--hidden] [--no-init]
 │   └── delete --id N [--yes]         delete the tenant and its data, recycle app pool
 │
+├── bootstrap [--export PATH]         publish AcuBootstrap (REST); --export = offline zip
 ├── apply [--dry-run] [FILES...]      push YAML via REST (idempotent PUT upserts)
 ├── diff  [FILES...]                  drift check vs the live tenant (exit 2 on drift)
 ├── run   [--dry-run] [FILES...]      execute transaction scenario YAML (exit 1 on any miss)
@@ -99,16 +113,20 @@ Everything lives in one `.env` file: *where* to apply and *who* signs in. Three 
 ```sh
 ACU_BASE_URL=http://acu-dev1.vm.internal/AcumaticaERP  # required: REST root
 ACU_TENANT=LAB5                                        # sign-in name of the tenant API sessions use
-ACU_SSH=Administrator@acu-dev1.vm.internal             # required: control-plane user@host
+ACU_SSH=Administrator@acu-dev1.vm.internal             # optional: control-plane user@host (tenant CRUD)
 ACU_USER=admin                                         # optional, defaults to admin
-ACU_PASSWORD=...                                       # required
+ACU_PASSWORD=...                                       # required for live commands
 ```
 
 Worth knowing:
 
-- The file is found by walking up from the current directory, so any subdirectory of the data repo works. Without a `.env`, global flags plus the process environment supply the full configuration.
-- Nothing is derived: split-horizon DNS, port forwards, and jump hosts are all handled by writing the address you actually want into the two address keys.
-- `acu config show` prints the fully resolved configuration as a complete, valid `.env` — every knob visible, the password excluded. Redirect it to turn resolved state into a working config: `acu config show > .env`.
+- The file is found by walking up from the current directory, so any subdirectory of the data repo works.
+- Without a `.env`, global flags plus the process environment supply the full configuration.
+- `ACU_SSH` is optional.
+- Leave it blank on hosted instances; only `acu tenant` needs it.
+- Nothing is derived: split-horizon DNS, port forwards, and jump hosts are all handled by writing the address you actually want into the address keys.
+- `acu config show` prints the fully resolved configuration as a complete, valid `.env` — every knob visible, the password excluded.
+- Redirect it to turn resolved state into a working config: `acu config show > .env`.
 
 Verify before touching anything live:
 
@@ -122,9 +140,11 @@ acu apply --dry-run    # show what would be written, write nothing
 `acu` talks to an instance over two independent channels:
 
 - **Control plane (SSH):** `acu tenant` runs `ac.exe -cm:CompanyConfig` and `sqlcmd` on the Windows guest — see [`docs/ac-exe.md`](docs/ac-exe.md).
-- **Data plane (REST):** `acu apply`, `diff`, `run`, `extract`, and `schema` use the contract-based API (`/entity/Default/25.200.001/`), where `PUT` is a keyed upsert — see [`docs/rest-api.md`](docs/rest-api.md).
+- **Data plane (REST):** `acu bootstrap`, `apply`, `diff`, `run`, `extract`, and `schema` use the contract-based API and CustomizationApi — see [`docs/rest-api.md`](docs/rest-api.md).
 
-If you never touch `acu tenant`, you never need SSH — every other command is pure REST.
+If you never touch `acu tenant`, you never need SSH.
+On a hosted instance, publish AcuBootstrap with `acu bootstrap`, then seed with `apply`.
+`acu bootstrap --export PATH` writes the package zip for manual import on the Customization Projects screen (SM204505) when you cannot call the API.
 
 ## SSH setup (control plane)
 

@@ -405,14 +405,136 @@ def test_provision_cmd_is_gone(wired: Instance) -> None:
     assert "No such command" in result.output
 
 
-def test_bootstrap_cmd_is_gone(wired: Instance) -> None:
-    # T8: bootstrap.publish() stays a module; re-running tenant create (its
-    # digest-gated publish chain) is the recovery route — the standalone
-    # command must not exist
+def test_bootstrap_publishes_without_ssh(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # T68/I.cmd: hosted path — ACU_SSH unset; publish is pure REST; recycle
+    # is skipped with a warning (feature slot may stay stale until restart)
+    (tmp_path / ".env").write_text(
+        "ACU_BASE_URL=http://acu.test/AcumaticaERP\n"
+        "ACU_TENANT=Hosted\n"
+        "ACU_PASSWORD=secret\n"
+    )
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr(cli, "AcumaticaClient", DummyClient)
+    calls: list[str] = []
+    monkeypatch.setattr(
+        cli.bootstrap,
+        "publish",
+        lambda client, **k: (
+            calls.append(f"publish:{client.instance.tenant}") or "published"
+        ),
+    )
+    monkeypatch.setattr(
+        TenantManager,
+        "recycle_app_pool",
+        lambda self: calls.append("recycle"),
+    )
+
+    result = CliRunner().invoke(cli.cli, ["bootstrap"])
+
+    assert result.exit_code == 0, result.output
+    assert calls == ["publish:Hosted"]
+    assert "AcuBootstrap published" in result.stderr
+    assert "skipped app-pool recycle" in result.stderr
+
+
+def test_bootstrap_recycles_when_ssh_set(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # T68: control plane present → post-publish recycle + wait (same as
+    # tenant create's feature-slot fix)
+    (tmp_path / ".env").write_text(
+        "ACU_BASE_URL=http://acu.test/AcumaticaERP\n"
+        "ACU_SSH=user@acu.test\n"
+        "ACU_TENANT=DEV\n"
+        "ACU_PASSWORD=secret\n"
+    )
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr(cli, "AcumaticaClient", DummyClient)
+    calls: list[str] = []
+    monkeypatch.setattr(
+        cli.bootstrap,
+        "publish",
+        lambda client, **k: calls.append("publish") or "already published",
+    )
+    monkeypatch.setattr(
+        TenantManager,
+        "recycle_app_pool",
+        lambda self: calls.append("recycle"),
+    )
+    monkeypatch.setattr(
+        cli.firstlogin,
+        "initialize_admin_password",
+        lambda inst, tenant: calls.append(f"wait:{tenant}") or "already initialized",
+    )
+
+    result = CliRunner().invoke(cli.cli, ["bootstrap"])
+
+    assert result.exit_code == 0, result.output
+    assert calls == ["publish", "recycle", "wait:DEV"]
+    assert "AcuBootstrap already published" in result.stderr
+
+
+def test_bootstrap_requires_tenant(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # V5: session tenant must be explicit — empty ACU_TENANT is refuse
+    (tmp_path / ".env").write_text(
+        "ACU_BASE_URL=http://acu.test/AcumaticaERP\nACU_PASSWORD=secret\n"
+    )
+    monkeypatch.chdir(tmp_path)
+
     result = CliRunner().invoke(cli.cli, ["bootstrap"])
 
     assert result.exit_code != 0
-    assert "No such command" in result.output
+    assert "tenant not set" in result.output
+
+
+def test_bootstrap_export_writes_zip_offline(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # T68 --export: local-only zip write; no password, no HTTP, no SSH;
+    # features.yaml from data repo is spliced the same as live publish
+    (tmp_path / ".env").write_text("# data-repo sentinel for find_data_root\n")
+    (tmp_path / "bootstrap").mkdir()
+    (tmp_path / "bootstrap" / "features.yaml").write_text(FEATURES_YAML)
+    monkeypatch.chdir(tmp_path)
+    out = tmp_path / "AcuBootstrap.zip"
+    http_calls: list[str] = []
+    monkeypatch.setattr(
+        cli,
+        "AcumaticaClient",
+        lambda *a, **k: http_calls.append("client") or None,
+    )
+
+    result = CliRunner().invoke(cli.cli, ["bootstrap", "--export", str(out)])
+
+    assert result.exit_code == 0, result.output
+    assert out.is_file()
+    assert out.stat().st_size > 0
+    assert http_calls == []
+    # rich may soft-wrap long paths across lines on a narrow console
+    assert "wrote" in result.stderr
+    assert out.name in result.stderr
+    # content parity with publish: digest project.xml (zip container
+    # bytes are non-deterministic — bootstrap.content_digest)
+    expected = cli.bootstrap.package_zip(["MultiCompany", "Multicurrency"])
+    assert cli.bootstrap.content_digest(out.read_bytes()) == (
+        cli.bootstrap.content_digest(expected)
+    )
+
+
+def test_bootstrap_export_missing_parent_errors(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.chdir(tmp_path)
+    missing = tmp_path / "no-such-dir" / "AcuBootstrap.zip"
+
+    result = CliRunner().invoke(cli.cli, ["bootstrap", "--export", str(missing)])
+
+    assert result.exit_code != 0
+    assert "directory does not exist" in result.output
 
 
 def test_config_show_emits_env_without_password(wired: Instance) -> None:
