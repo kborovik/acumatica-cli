@@ -171,29 +171,33 @@ ssh -o BatchMode=yes Administrator@acu-dev1.vm.internal '$PSVersionTable.PSVersi
 
 ## Development
 
+Requires **GNU Make at least 3.82** — the Makefile uses `.ONESHELL`.
+On macOS use Homebrew's `gmake` (`brew install make`); `/usr/bin/make` is 3.81 and fails the guard.
+Elsewhere plain `make` is fine when it is GNU Make.
+
 ```sh
 git clone https://github.com/kborovik/acumatica-cli.git
 cd acumatica-cli
-make install    # editable install as a global uv tool
-make check      # offline gate: ruff, basedpyright strict, pytest
+gmake install    # editable install as a global uv tool
+gmake check      # offline gate: ruff, basedpyright strict, pytest
 ```
 
 The default test suite is fully offline.
 REST is faked with `httpx.MockTransport`, SSH with a monkeypatched `subprocess.run` — no live instance is needed.
-`make check` must pass before every commit.
+`gmake check` must pass before every commit.
 
 ### Live end-to-end tier
 
-`make e2e` runs the opt-in live tier against a real Acumatica instance (pytest marker `e2e`, deselected by the default suite).
+`gmake e2e` runs the opt-in live tier against a real Acumatica instance (pytest marker `e2e`, deselected by the default suite).
 
 Configuration is one file: a decrypted `.env` at the repo root names the instance — `ACU_BASE_URL`, `ACU_SSH`, `ACU_TENANT`, `ACU_PASSWORD`.
-`make e2e` refuses to start without it.
+`gmake e2e` refuses to start without it.
 
 The tier is self-contained.
 Each run scaffolds a synthetic single-org company from the packaged `acu config init` templates into a temporary directory, copies the real `.env` into it, and runs the installed `acu` binary from there — no data repo, no pre-existing fixtures on the instance.
 Scratch tenants (`E2E`, `E2EA`, `E2EB`) are created on the way in and always deleted on the way out, so nothing persists.
 
 ```sh
-make e2e                                # whole tier, about 20 minutes
-make e2e FILE=test_provision_lifecycle  # one file, by stem or path
+gmake e2e                                # whole tier, about 20 minutes
+gmake e2e FILE=test_provision_lifecycle  # one file, by stem or path
 ```

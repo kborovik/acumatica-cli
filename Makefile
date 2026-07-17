@@ -1,3 +1,11 @@
+# .ONESHELL needs GNU Make ≥ 3.82. macOS ships 3.81 (/usr/bin/make); without
+# oneshell each recipe line is a separate shell and multi-line recipes lose
+# state (e.g. release version assignment). On macOS use Homebrew's gmake:
+# brew install make && gmake <target>
+ifeq ($(filter oneshell,$(.FEATURES)),)
+$(error GNU Make ≥ 3.82 required (this is $(MAKE_VERSION) from $(MAKE)). On macOS: brew install make && gmake <target>)
+endif
+
 .EXPORT_ALL_VARIABLES:
 .ONESHELL:
 .SILENT:
@@ -16,7 +24,7 @@ default: .venv help
 # Python dev (lint / format / types)
 ###############################################################################
 
-check: .venv lint test ## Run all checks (lint + offline tests; live verification = make e2e)
+check: .venv lint test ## Run all checks (lint + offline tests; live verification = gmake e2e)
 
 lint: .venv py-format py-lint py-types ## Lint Python code
 
@@ -24,7 +32,7 @@ test: .venv ## Run the test suite (pytest, offline — no live instance needed)
 	$(call header,Running pytest)
 	uv run pytest
 
-# `make e2e FILE=<path-or-stem>` scopes the run to one e2e file (tried as a
+# `gmake e2e FILE=<path-or-stem>` scopes the run to one e2e file (tried as a
 # path, then tests/e2e/<FILE>, then tests/e2e/<FILE>.py); unset = whole tier.
 e2e_target := $(if $(FILE),$(firstword $(wildcard $(FILE) tests/e2e/$(FILE) tests/e2e/$(FILE).py)),tests/e2e)
 
@@ -72,27 +80,25 @@ install: .venv ## Install acu globally as an editable uv tool
 # Release
 ###############################################################################
 
-# `make release <part>` passes the part as an extra goal; pick it out and
+# `gmake release <part>` passes the part as an extra goal; pick it out and
 # give the part words no-op recipes so make does not try to build them.
 part := $(word 1,$(filter major minor patch,$(MAKECMDGOALS)))
 
-# Each recipe line is a fresh shell (Apple make ignores .ONESHELL). Re-read
-# the version from pyproject via `uv version --short` on every line that
-# needs it — a shell `version=...` assignment does not survive the next line.
-release: ## Bump version, commit, tag, and publish a GitHub release (make release major|minor|patch)
-	test -n "$(part)" || { echo "usage: make release major|minor|patch"; exit 1; }
+release: ## Bump version, commit, tag, and publish a GitHub release (gmake release major|minor|patch)
+	test -n "$(part)" || { echo "usage: gmake release major|minor|patch"; exit 1; }
 	git diff --quiet && git diff --cached --quiet \
 		|| { echo "working tree not clean — commit or stash first"; exit 1; }
 	$(call header,Bumping $(part) version)
 	uv version --bump $(part)
+	version=$$(uv version --short)
 	git add pyproject.toml uv.lock
-	git commit -m "Release v$$(uv version --short)"
-	git tag "v$$(uv version --short)"
+	git commit -m "Release v$$version"
+	git tag "v$$version"
 	$(MAKE) build
-	$(call header,Publishing v$$(uv version --short) to GitHub)
+	$(call header,Publishing v$$version to GitHub)
 	git push && git push --tags
-	gh release create "v$$(uv version --short)" --title "v$$(uv version --short)" --generate-notes
-	echo "$(green)Released v$$(uv version --short)$(reset)"
+	gh release create "v$$version" --title "v$$version" --generate-notes
+	echo "$(green)Released v$$version$(reset)"
 
 major minor patch:
 	@:
@@ -113,7 +119,7 @@ echo "$(blue)==> $(1) <==$(reset)"
 endef
 
 help:
-	echo "$(blue)Usage: $(green)make [recipe]$(reset)"
+	echo "$(blue)Usage: $(green)gmake [recipe]$(reset)"
 	echo "$(blue)Recipes:$(reset)"
 	awk 'BEGIN {FS = ":.*?## "; sort_cmd = "sort"} /^[a-zA-Z0-9_-]+:.*?## / \
 	{ printf "  \033[33m%-10s\033[0m %s\n", $$1, $$2 | sort_cmd; } \
