@@ -7,8 +7,8 @@ Baseline file format:
 
     entity: Currency          # entity name in the contract endpoint
     key: CurrencyID           # key field(s), string or list
-    endpoint: Bootstrap/1.7.0 # optional: override the instance endpoint
-    records:
+    endpoint: bootstrap       # optional: literal Bootstrap/<ver> or symbolic
+    records:                  # bootstrap -> active package version (V20)
       - CurrencyID: "CAD"
         Description: Canadian Dollar
 
@@ -34,7 +34,7 @@ cannot express (calendar generation and the like):
 
     action: GenerateCalendar          # action name on the endpoint entity
     entity: MasterCalendar            # entity the action hangs off
-    endpoint: Bootstrap/1.7.0         # optional: override the instance endpoint
+    endpoint: bootstrap               # optional: literal or symbolic (V20)
     record:     { FinancialYear: 2026 }
     parameters: { FromYear: 2026, ToYear: 2026 }   # optional
     done_when:  { filter: "FinancialYear eq '2026'" }
@@ -52,45 +52,45 @@ Default Currency = CM201000 list), so an ambiguous file is a hard error,
 never a silent Default-endpoint PUT.
 """
 
-import xml.etree.ElementTree as ET
-from importlib import resources
 from pathlib import Path
 from typing import Any
 
 import yaml
 from pydantic import Field, ValidationError, field_validator, model_validator
 
-from . import output
+from . import bootstrap, output
 from .client import OPTIMIZATION_500, AcumaticaClient, unwrap
-from .config import Instance
+from .config import Instance, find_data_root
 from .models import Model, validation_summary
 
-
-def _bootstrap_endpoint() -> tuple[str, frozenset[str]]:
-    """Endpoint name/version + entity names from the packaged template.
-
-    Parsed from bootstrap_project.xml rather than hand-listed (V2): the
-    template is the single source of truth for what the Bootstrap endpoint
-    serves, and the set tracks entity additions and version bumps for free.
-    """
-    root = ET.fromstring(
-        (resources.files("acumatica_cli") / "bootstrap_project.xml").read_bytes()
-    )
-    ns = "{http://www.acumatica.com/entity/maintenance/5.31}"
-    endpoint = root.find(f"EntityEndpoint/{ns}Endpoint")
-    if endpoint is None:
-        raise RuntimeError("bootstrap_project.xml: no EntityEndpoint/Endpoint item")
-    name = f"{endpoint.get('name')}/{endpoint.get('version')}"
-    entities = frozenset(
-        e.get("name", "") for e in endpoint.findall(f"{ns}TopLevelEntity")
-    )
-    return name, entities
-
-
-BOOTSTRAP_ENDPOINT, BOOTSTRAP_ENTITIES = _bootstrap_endpoint()
+# Packaged-fallback defaults (no data-repo contract). Prefer active_bootstrap()
+# at call sites so a data-repo bootstrap/project.xml wins (V2/V20).
+BOOTSTRAP_ENDPOINT, BOOTSTRAP_ENTITIES = bootstrap.parse_endpoint(
+    bootstrap.packaged_contract_xml()
+)
 # The code-default instance endpoint, for the V20 error message - read off
 # the Instance field default rather than hand-synced (V11: one spelling).
 _DEFAULT_ENDPOINT: str = f"Default/{Instance.model_fields['api_version'].default}"
+_SYMBOLIC_BOOTSTRAP = "bootstrap"
+
+
+def active_bootstrap(root: Path | None = None) -> tuple[str, frozenset[str]]:
+    """Active Bootstrap endpoint name/version + entity set (V2/V20).
+
+    Prefers data-repo ``bootstrap/project.xml`` when present; else the
+    packaged minimal contract. ``root`` defaults to the cwd walk-up
+    discovery root (same as features.yaml).
+    """
+    if root is None:
+        root = find_data_root()
+    return bootstrap.parse_endpoint(bootstrap.load_contract_xml(root))
+
+
+def resolve_endpoint(endpoint: str | None, root: Path | None = None) -> str | None:
+    """Map symbolic ``bootstrap`` to the active ``Bootstrap/<ver>`` (V20)."""
+    if endpoint == _SYMBOLIC_BOOTSTRAP:
+        return active_bootstrap(root)[0]
+    return endpoint
 
 
 class BaselineFile(Model):
@@ -182,7 +182,14 @@ class ActionFile(Model):
 
 
 def load_baseline(path: Path) -> BaselineFile | ActionFile:
-    """Parse and validate one seed YAML file, dispatching on the action: key."""
+    """Parse and validate one seed YAML file, dispatching on the action: key.
+
+    Symbolic ``endpoint: bootstrap`` resolves to the active package version
+    at load (data-repo contract when present, else packaged minimal — V20).
+    An entity the active Bootstrap contract serves still needs an explicit
+    endpoint (literal or symbolic); silent Default-endpoint PUTs are the
+    B8 class.
+    """
     with open(path) as f:
         data = yaml.safe_load(f)
     if not isinstance(data, dict):
@@ -192,11 +199,15 @@ def load_baseline(path: Path) -> BaselineFile | ActionFile:
         parsed = kind.model_validate({"path": path, **data})
     except ValidationError as exc:
         raise SystemExit(f"{path}: {validation_summary(exc)}") from exc
-    if parsed.endpoint is None and parsed.entity in BOOTSTRAP_ENTITIES:
+    name, entities = active_bootstrap()
+    if parsed.endpoint == _SYMBOLIC_BOOTSTRAP:
+        parsed = parsed.model_copy(update={"endpoint": name})
+    elif parsed.endpoint is None and parsed.entity in entities:
         raise SystemExit(
             f"{path}: entity '{parsed.entity}' is served by both the instance "
-            f"default endpoint ({_DEFAULT_ENDPOINT}) and the packaged "
-            f"{BOOTSTRAP_ENDPOINT} - add an explicit 'endpoint:' line to pick one"
+            f"default endpoint ({_DEFAULT_ENDPOINT}) and the active "
+            f"{name} - add an explicit 'endpoint:' line to pick one "
+            f"(literal or symbolic 'bootstrap')"
         )
     return parsed
 

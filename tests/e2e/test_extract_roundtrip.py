@@ -115,26 +115,26 @@ def test_apply_configures_tenant_a(acu: RunAcu, scratch_pair: ScratchPair) -> No
 def test_extract_dumps_tenant_a(
     acu: RunAcu, scratch_pair: ScratchPair, out_dirs: tuple[Path, Path]
 ) -> None:
-    """Extract --out a/ emits the full manifest set off the configured A.
+    """Extract --out a/ emits the config-init set off the configured A.
 
-    Every manifest row must produce a file (a "(no records)" skip here
-    means A's configuration is incomplete - fail loud before the
-    byte-compare would); every entity/action file must parse back
+    Every in-contract manifest row must produce a file (a "(no records)"
+    skip here means A's configuration is incomplete - fail loud before
+    the byte-compare would); every entity/action file must parse back
     through load_baseline (I.cmd: emitted files are seed files by
-    construction). Currency arriving at all is the live B9-dodge proof:
-    its only working read is the $select-narrowed fallback.
+    construction). Currency is on the full data-repo contract only (T69)
+    - under the packaged minimal surface it skips clean as not-in-contract.
     """
     dir_a, _ = out_dirs
     manifest = load_manifest()
     proc = acu("--tenant", LOGIN_A, "extract", "--out", str(dir_a))
     assert proc.returncode == 0, _combined(proc)
-    # per-file skip lines only (stdout = data): the run summary always
-    # carries "N skipped" since T57, so a whole-stream substring probe
-    # would trip on a fully-written extract
+    # Currency (and only Currency) is expected to skip under minimal package
     skips = [ln for ln in proc.stdout.splitlines() if ln.startswith("skip ")]
-    assert not skips, _combined(proc)
+    assert len(skips) == 1, _combined(proc)
+    assert "30-currencies" in skips[0]
+    assert "entity not in active Bootstrap contract" in skips[0]
     expected = (
-        {spec.file for spec in manifest.entities}
+        {spec.file for spec in manifest.entities if spec.entity != "Currency"}
         | {synth.file for synth in manifest.setup}
         | {FEATURES_FILE}
     )

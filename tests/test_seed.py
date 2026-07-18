@@ -68,14 +68,14 @@ def test_load_baseline_rejects_record_without_key(tmp_path: Path) -> None:
 
 
 def test_load_baseline_parses_endpoint_override(tmp_path: Path) -> None:
-    text = BASELINE + "endpoint: Bootstrap/1.7.0\n"
-    assert seed.load_baseline(_write(tmp_path, text)).endpoint == "Bootstrap/1.7.0"
+    text = BASELINE + "endpoint: Bootstrap/1.9.0\n"
+    assert seed.load_baseline(_write(tmp_path, text)).endpoint == "Bootstrap/1.9.0"
 
 
 LEDGER_LINK_YAML = """\
 entity: LedgerCompany
 key: [LedgerCD, OrganizationID]
-endpoint: Bootstrap/1.7.0
+endpoint: Bootstrap/1.9.0
 records:
   - LedgerCD: ACTUAL
     OrganizationID: PRODUCTS
@@ -116,21 +116,22 @@ def test_load_baseline_rejects_duplicate_single_key(tmp_path: Path) -> None:
 
 
 AMBIGUOUS_YAML = """\
-entity: Currency
-key: CuryID
+entity: Company
+key: AcctCD
 records:
-  - CuryID: EUR
+  - AcctCD: COMPANY
 """
 
 
 def test_bootstrap_entities_parsed_from_packaged_template() -> None:
-    # V2: the ambiguous set comes from bootstrap_project.xml, never a
-    # hand-list - parity pinned here so a template edit surfaces offline
-    assert seed.BOOTSTRAP_ENDPOINT == "Bootstrap/1.7.0"
+    # V2: the ambiguous set comes from the active contract (packaged
+    # minimal fallback), never a hand-list - parity pinned so a template
+    # edit surfaces offline. Full company surface lives in data-repo
+    # bootstrap/project.xml (T69).
+    assert seed.BOOTSTRAP_ENDPOINT == "Bootstrap/1.9.0"
     assert {
         "Company",
         "CreditTerms",
-        "Currency",
         "GLPreferences",
         "LedgerCompany",
         "FinancialYearSettings",
@@ -138,33 +139,18 @@ def test_bootstrap_entities_parsed_from_packaged_template() -> None:
         "CompanyCalendar",
         "CompanyPeriod",
         "ManagePeriods",
-        "INPreferences",
-        "APPreferences",
-        "ARPreferences",
-        "SOPreferences",
-        "POPreferences",
-        "AvailabilityCalculationRule",
-        "PostingClass",
-        "CashAccount",
-        "CAPreferences",
-        "ReasonCode",
-        "VendorClass",
-        "StatementCycle",
-        "Warehouse",
-        "OrderType",
     } == seed.BOOTSTRAP_ENTITIES
 
 
 def test_load_baseline_rejects_bootstrap_entity_without_endpoint(
     tmp_path: Path,
 ) -> None:
-    """V20/B8: an entity both endpoints serve + no endpoint: = hard error.
+    """V20: entity the active Bootstrap contract serves + no endpoint: = hard error.
 
     The error names both endpoints; a silent Default-endpoint PUT would hit
-    a different screen than the author meant (Bootstrap Currency = CM202000,
-    Default Currency = CM201000 list).
+    a different screen than the author meant (B8 class).
     """
-    with pytest.raises(SystemExit, match=r"Default/25\.200\.001.*Bootstrap/1\.7\.0"):
+    with pytest.raises(SystemExit, match=r"Default/25\.200\.001.*Bootstrap/1\.9\.0"):
         seed.load_baseline(_write(tmp_path, AMBIGUOUS_YAML))
 
 
@@ -172,15 +158,60 @@ def test_load_baseline_bootstrap_entity_explicit_endpoint_passes(
     tmp_path: Path,
 ) -> None:
     # V20: explicit endpoint: disambiguates - either target is legitimate
-    for endpoint in ("Bootstrap/1.7.0", "Default/25.200.001"):
+    for endpoint in ("Bootstrap/1.9.0", "Default/25.200.001"):
         text = AMBIGUOUS_YAML + f"endpoint: {endpoint}\n"
         assert seed.load_baseline(_write(tmp_path, text)).endpoint == endpoint
+
+
+def test_load_baseline_resolves_symbolic_bootstrap(tmp_path: Path) -> None:
+    """Symbolic endpoint: bootstrap resolves to the active package version."""
+    text = AMBIGUOUS_YAML + "endpoint: bootstrap\n"
+    assert seed.load_baseline(_write(tmp_path, text)).endpoint == "Bootstrap/1.9.0"
+
+
+def test_active_bootstrap_prefers_data_repo_contract(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Data-repo bootstrap/project.xml wins over the packaged minimal (V2)."""
+    (tmp_path / "bootstrap").mkdir()
+    (tmp_path / ".env").write_text("ACU_BASE_URL=https://example.com\n")
+    # version stays at the packaged number so parity (V21) greps stay clean;
+    # the distinguishing signal is the extra Currency entity the packaged
+    # minimal surface does not serve
+    (tmp_path / "bootstrap" / "project.xml").write_text(
+        """\
+<Customization level="" description="data-repo contract" product-version="26.101">
+  <EntityEndpoint>
+    <Endpoint xmlns="http://www.acumatica.com/entity/maintenance/5.31"
+              name="Bootstrap" version="1.9.0" systemContractVersion="4">
+      <TopLevelEntity name="Company" screen="CS101500">
+        <Fields><Field name="AcctCD" type="StringValue" /></Fields>
+      </TopLevelEntity>
+      <TopLevelEntity name="Currency" screen="CM202000">
+        <Fields><Field name="CuryID" type="StringValue" /></Fields>
+      </TopLevelEntity>
+    </Endpoint>
+  </EntityEndpoint>
+</Customization>
+""",
+        encoding="utf-8",
+    )
+    monkeypatch.chdir(tmp_path)
+    name, entities = seed.active_bootstrap()
+    assert name == "Bootstrap/1.9.0"
+    assert "Currency" in entities
+    assert "Currency" not in seed.BOOTSTRAP_ENTITIES  # packaged minimal
+    text = (
+        "entity: Currency\nkey: CuryID\nendpoint: bootstrap\n"
+        "records:\n  - CuryID: EUR\n"
+    )
+    assert seed.load_baseline(_write(tmp_path, text)).endpoint == "Bootstrap/1.9.0"
 
 
 def test_apply_and_diff_target_endpoint_override(
     tmp_path: Path, instance: Instance
 ) -> None:
-    text = BASELINE + "endpoint: Bootstrap/1.7.0\n"
+    text = BASELINE + "endpoint: Bootstrap/1.9.0\n"
     baseline = seed.load_baseline(_write(tmp_path, text))
     recorder = Recorder({"/UnitsOfMeasure": _live({"UOM": "KG"})})
 
@@ -188,7 +219,7 @@ def test_apply_and_diff_target_endpoint_override(
     seed.diff(_client(instance, recorder), baseline)
 
     paths = {r.url.path for r in recorder.requests}
-    assert paths == {"/AcumaticaERP/entity/Bootstrap/1.7.0/UnitsOfMeasure"}
+    assert paths == {"/AcumaticaERP/entity/Bootstrap/1.9.0/UnitsOfMeasure"}
 
 
 def test_norm_folds_booleans_and_strips() -> None:
@@ -534,7 +565,7 @@ def test_diff_multi_key_single_org_no_phantom_drift(
     text = """\
 entity: LedgerCompany
 key: [LedgerCD, OrganizationID]
-endpoint: Bootstrap/1.7.0
+endpoint: Bootstrap/1.9.0
 records:
   - LedgerCD: ACTUAL
     OrganizationID: COMPANY
@@ -570,7 +601,7 @@ NO_ENTITY_500 = httpx.Response(
 CURRENCY_YAML = """\
 entity: Currency
 key: CuryID
-endpoint: Bootstrap/1.7.0
+endpoint: Bootstrap/1.9.0
 records:
   - CuryID: EUR
     Description: Euro
@@ -598,8 +629,8 @@ def test_diff_falls_back_to_key_url_on_optimization_500(
     assert seed.diff(_client(instance, recorder), baseline) == []
     paths = [r.url.path for r in recorder.requests]
     assert [p.split("/entity/", 1)[1] for p in paths] == [
-        "Bootstrap/1.7.0/Currency",
-        "Bootstrap/1.7.0/Currency/EUR",
+        "Bootstrap/1.9.0/Currency",
+        "Bootstrap/1.9.0/Currency/EUR",
     ]
 
 
@@ -629,7 +660,7 @@ def test_diff_non_optimization_500_still_raises(
 ACTION_YAML = """\
 action: GenerateCalendar
 entity: MasterCalendar
-endpoint: Bootstrap/1.7.0
+endpoint: Bootstrap/1.9.0
 record:
   FinancialYear: 2026
 parameters:
@@ -703,8 +734,8 @@ def test_apply_action_invokes_on_204_never_following_location(
     assert [
         (r.method, r.url.path.split("/entity/", 1)[1]) for r in recorder.requests
     ] == [
-        ("GET", "Bootstrap/1.7.0/MasterCalendar"),
-        ("POST", "Bootstrap/1.7.0/MasterCalendar/GenerateCalendar"),
+        ("GET", "Bootstrap/1.9.0/MasterCalendar"),
+        ("POST", "Bootstrap/1.9.0/MasterCalendar/GenerateCalendar"),
     ]
     assert "invoke GenerateCalendar [MasterCalendar]" in capsys.readouterr().out
 
@@ -733,7 +764,7 @@ def test_apply_action_polls_202_location_to_completion(
     """202 = long-running: poll the Location status URL until it answers 204."""
     action = _action(tmp_path)
     status_path = (
-        "/AcumaticaERP/entity/Bootstrap/1.7.0/MasterCalendar"
+        "/AcumaticaERP/entity/Bootstrap/1.9.0/MasterCalendar"
         "/GenerateCalendar/status/abc"
     )
     polls: list[str] = []
@@ -801,7 +832,7 @@ def test_probe_routes_filter_and_defaults(tmp_path: Path, instance: Instance) ->
     seed.diff(_client(instance, recorder), action)
 
     (request,) = recorder.requests
-    assert request.url.path.endswith("/Bootstrap/1.7.0/MasterCalendar")
+    assert request.url.path.endswith("/Bootstrap/1.9.0/MasterCalendar")
     assert request.url.params["$filter"] == "FinancialYear eq '2026'"
 
 

@@ -40,10 +40,11 @@ from .client import (
     unwrap,
 )
 from .models import Model, validation_summary
-from .seed import BOOTSTRAP_ENDPOINT, BOOTSTRAP_ENTITIES
+from .seed import active_bootstrap, resolve_endpoint
 
 # The one non-manifest destination: the feature-closure file (V22/B15).
 FEATURES_FILE = "bootstrap/features.yaml"
+_SYMBOLIC_BOOTSTRAP = "bootstrap"
 
 
 class EntitySpec(Model):
@@ -52,18 +53,14 @@ class EntitySpec(Model):
     entity: str
     keys: list[str] = Field(min_length=1)
     file: str
+    # Symbolic `bootstrap` stays symbolic until HTTP time (V20/V21): the
+    # emitted file carries the symbol so a version bump never rewrites
+    # extract output; resolve_endpoint maps it to Bootstrap/<ver>.
     endpoint: str | None = None
     filter: str | None = None
     strip: list[str] = Field(default_factory=list)
     include: list[str] = Field(default_factory=list)
     features: list[str] = Field(default_factory=list)
-
-    @field_validator("endpoint")
-    @classmethod
-    def _resolve_symbolic(cls, v: str | None) -> str | None:
-        # `bootstrap` resolves to the packaged endpoint at load, so the
-        # manifest never carries a literal version to go stale (V21)
-        return BOOTSTRAP_ENDPOINT if v == "bootstrap" else v
 
     @model_validator(mode="after")
     def _strip_include_exclusive(self) -> EntitySpec:
@@ -97,13 +94,15 @@ class Manifest(Model):
 
     @model_validator(mode="after")
     def _self_consistent(self) -> Manifest:
-        # V20 by construction: an emitted file for an entity both endpoints
-        # serve must carry an endpoint, or load_baseline rejects it
+        # V20 by construction: an emitted file for an entity the active
+        # Bootstrap contract serves must carry an endpoint (literal or
+        # symbolic bootstrap), or load_baseline rejects it
+        _name, entities = active_bootstrap()
         for spec in self.entities:
-            if spec.entity in BOOTSTRAP_ENTITIES and spec.endpoint is None:
+            if spec.entity in entities and spec.endpoint is None:
                 raise ValueError(
-                    f"entity '{spec.entity}' is served by the packaged "
-                    f"{BOOTSTRAP_ENDPOINT} and must carry an endpoint"
+                    f"entity '{spec.entity}' is served by the active "
+                    f"{_name} and must carry an endpoint"
                 )
         # FEATURES_FILE is claimed by the feature-closure render, never a row
         files = (
@@ -142,24 +141,23 @@ def _fetch(client: AcumaticaClient, spec: EntitySpec) -> list[dict[str, Any]]:
     A manifest filter rides both list reads, so the two paths serve the
     same record set and the per-key walk only visits filtered keys.
     """
+    endpoint = resolve_endpoint(spec.endpoint)
     narrowed = {"$filter": spec.filter} if spec.filter else {}
     try:
-        return client.get_list(
-            spec.entity, params=narrowed or None, endpoint=spec.endpoint
-        )
+        return client.get_list(spec.entity, params=narrowed or None, endpoint=endpoint)
     except RuntimeError as err:
         if OPTIMIZATION_500 not in str(err):
             raise
     key_rows = client.get_list(
         spec.entity,
         params={"$select": ",".join(spec.keys)} | narrowed,
-        endpoint=spec.endpoint,
+        endpoint=endpoint,
     )
     records: list[dict[str, Any]] = []
     for row in key_rows:
         values = unwrap(row)
         record = client.get_record(
-            spec.entity, [values[k] for k in spec.keys], spec.endpoint
+            spec.entity, [values[k] for k in spec.keys], endpoint
         )
         if record is not None:
             records.append(record)
@@ -234,14 +232,15 @@ def _years(rows: list[dict[str, Any]]) -> list[str]:
 
 def _synth_financial_year(client: AcumaticaClient) -> dict[str, Any] | None:
     """The FinYearSetup singleton back as its GeneratePeriods action file."""
-    live = client.get_list("FinancialYearSettings", endpoint=BOOTSTRAP_ENDPOINT)
+    ep = resolve_endpoint(_SYMBOLIC_BOOTSTRAP)
+    live = client.get_list("FinancialYearSettings", endpoint=ep)
     if not live:
         return None
     settings = unwrap(live[0])
     return {
         "action": "GeneratePeriods",
         "entity": "FinancialYearSettings",
-        "endpoint": BOOTSTRAP_ENDPOINT,
+        "endpoint": _SYMBOLIC_BOOTSTRAP,
         "record": {
             # DateTimeValue comes back as a full ISO datetime; the action
             # record wants the date, quoted (the seed pipeline ships YAML
@@ -257,14 +256,15 @@ def _synth_financial_year(client: AcumaticaClient) -> dict[str, Any] | None:
 
 def _synth_master_calendar(client: AcumaticaClient) -> dict[str, Any] | None:
     """The master-calendar year range back as its GenerateCalendar action file."""
-    live = client.get_list("MasterCalendar", endpoint=BOOTSTRAP_ENDPOINT)
+    ep = resolve_endpoint(_SYMBOLIC_BOOTSTRAP)
+    live = client.get_list("MasterCalendar", endpoint=ep)
     if not live:
         return None
     years = _years(live)
     return {
         "action": "GenerateCalendar",
         "entity": "MasterCalendar",
-        "endpoint": BOOTSTRAP_ENDPOINT,
+        "endpoint": _SYMBOLIC_BOOTSTRAP,
         "record": {"FinancialYear": years[0]},
         "parameters": {"FromYear": years[0], "ToYear": years[-1]},
         # the company calendar derives from the master, so it is the
@@ -279,10 +279,11 @@ def _synth_master_calendar(client: AcumaticaClient) -> dict[str, Any] | None:
 
 def _synth_open_periods(client: AcumaticaClient) -> dict[str, Any] | None:
     """The open-period range back as its GL503000 ProcessAll action file."""
+    ep = resolve_endpoint(_SYMBOLIC_BOOTSTRAP)
     live = client.get_list(
         "CompanyPeriod",
         params={"$filter": "Status eq 'Open'"},
-        endpoint=BOOTSTRAP_ENDPOINT,
+        endpoint=ep,
     )
     if not live:
         return None
@@ -290,14 +291,14 @@ def _synth_open_periods(client: AcumaticaClient) -> dict[str, Any] | None:
     # OrganizationID = the extracted Company's AcctCD: the reference
     # resolves inside the emitted set (V22 - bootstrap/company.yaml
     # creates the organization the action names)
-    companies = client.get_list("Company", endpoint=BOOTSTRAP_ENDPOINT)
+    companies = client.get_list("Company", endpoint=ep)
     if not companies:
         raise RuntimeError("open-periods: no Company on tenant")
     org = sorted(str(unwrap(c)["AcctCD"]) for c in companies)[0]
     return {
         "action": "ProcessAll",
         "entity": "ManagePeriods",
-        "endpoint": BOOTSTRAP_ENDPOINT,
+        "endpoint": _SYMBOLIC_BOOTSTRAP,
         "record": {
             "Action": "Open",
             "FromYear": years[0],
@@ -406,11 +407,20 @@ class _Extraction:
     def entities(self) -> set[str]:
         """The entity pass; returns destination files written (or would be)."""
         produced: set[str] = set()
+        active_name, active_entities = active_bootstrap()
         for spec in self.manifest.entities:
             if not self._selected(spec.entity, spec.file):
                 continue
             target = self.out_dir / spec.file
             if self._skip_existing(target):
+                continue
+            # Hybrid contract (T69): a bootstrap-endpoint row for an entity
+            # the active package does not serve cannot be read - skip clean
+            # rather than 404 (full company surface lives in the data-repo
+            # contract; minimal packaged fallback has config-init only).
+            resolved = resolve_endpoint(spec.endpoint)
+            if resolved == active_name and spec.entity not in active_entities:
+                self._skip(target, "entity not in active Bootstrap contract")
                 continue
             try:
                 live = _fetch(self.client, spec)

@@ -116,38 +116,13 @@ def test_load_features_rejects_bad_files(tmp_path: Path, body: str) -> None:
 
 
 def test_package_zip_carries_the_bootstrap_endpoint() -> None:
-    """Pin the <EntityEndpoint> serialization discovered in T12.
+    """Pin the packaged-minimal <EntityEndpoint> serialization (T12 + T69).
 
     Verified vs 26.101.0225 by live import round-trip: the <Endpoint> child
     is the XmlSerializer form of Model.Endpoint in the entity/maintenance/5.31
-    namespace (the entity/data-model guess was the "Unknown root node"
-    rejection); no .endpoint file is involved. View/DAC names read off the
-    live box: CS101500 -> OrganizationMaint (mappings follow the screen's
-    own bindings, T13 - AcctCD/AcctName on the primary BAccount view,
-    OrganizationType/BaseCuryID on OrganizationView, CountryID on
-    AddressDummy), CS206500 -> TermsMaint view TermsDef, CM202000 ->
-    CurrencyMaint (T29 - general info on the primary CuryListRecords view
-    of CurrencyList, the GL Accounts tab on CuryRecords of CM.Currency;
-    every gain/loss Acct/Sub pair is required at persist, so all ten pairs
-    ship), GL102000 -> GLSetupMaint view GLSetupRecord (T34 - the GL setup
-    singleton; the two account fields are the only ones without a PXDefault
-    value, and this build has no RetEarnSubID/YtdNetIncSubID), and the T36
-    GL setup chain: GL201500 -> GeneralLedgerMaint (the org-ledger link
-    writes through the OrganizationLedgerLinkWithOrganizationSelect view of
-    the nested OrganizationLedgerLinkMaint extension - the Default
-    endpoint's Ledger.Companies detail is write-tolerated then silently
-    dropped, B12), GL101000 -> FiscalYearSetupMaint view FiscalYearSetup
-    (GeneratePeriods -> the graph's AutoFill action), GL201000 ->
-    MasterFinPeriodMaint view FiscalYear (GenerateCalendar -> GenerateYears
-    with FromYear/ToYear through the GenerateParams dialog view, both on
-    GenerateCalendarExtensionBase), GL201100 -> OrganizationFinPeriodMaint
-    view OrgFinYear (the company-period read surface), and the T37 period
-    activation: CompanyPeriod rides GL201100's OrgFinPeriods view (the
-    per-period Status words; single-view on purpose - a filter conjunction
-    spanning views answers 200 [], B14), ManagePeriods rides GL503000 ->
-    FinPeriodStatusProcess PrimaryView Filter (the processing screen the
-    GL201100 Open flow redirects to, B13 - driven directly instead, so the
-    1.3.0 CompanyCalendar OpenPeriods action is gone in 1.4.0).
+    namespace; no .endpoint file is involved. The packaged contract is the
+    config-init surface only (Company, CreditTerms, GLPreferences, the GL
+    setup chain); full company entities live in data-repo bootstrap/project.xml.
     """
     ns = "{http://www.acumatica.com/entity/maintenance/5.31}"
     with zipfile.ZipFile(io.BytesIO(bootstrap.package_zip())) as zf:
@@ -155,14 +130,16 @@ def test_package_zip_carries_the_bootstrap_endpoint() -> None:
     (item,) = root.findall("EntityEndpoint")
     (endpoint,) = item.findall(f"{ns}Endpoint")
     assert endpoint.get("name") == "Bootstrap"
-    assert endpoint.get("version") == "1.7.0"
+    assert endpoint.get("version") == "1.9.0"
     # SystemContracts.V4 is the build's only IsCurrent implementation
     assert endpoint.get("systemContractVersion") == "4"
     entities = {e.get("name"): e for e in endpoint.findall(f"{ns}TopLevelEntity")}
+    # T69: packaged contract is the config-init surface only; full company
+    # entities (Currency, VendorClass, distro prefs, ...) live in the
+    # data-repo bootstrap/project.xml override
     assert set(entities) == {
         "Company",
         "CreditTerms",
-        "Currency",
         "GLPreferences",
         "LedgerCompany",
         "FinancialYearSettings",
@@ -170,26 +147,11 @@ def test_package_zip_carries_the_bootstrap_endpoint() -> None:
         "CompanyCalendar",
         "CompanyPeriod",
         "ManagePeriods",
-        "INPreferences",
-        "APPreferences",
-        "ARPreferences",
-        "SOPreferences",
-        "POPreferences",
-        "AvailabilityCalculationRule",
-        "PostingClass",
-        "CashAccount",
-        "CAPreferences",
-        "ReasonCode",
-        "VendorClass",
-        "StatementCycle",
-        "Warehouse",
-        "OrderType",
     }
     # features stay OUT: contract-endpoint writes to CS100000 do not
     # persist (T3 verdict) - the CustomizationPlugin owns features
     assert entities["Company"].get("screen") == "CS101500"
     assert entities["CreditTerms"].get("screen") == "CS206500"
-    assert entities["Currency"].get("screen") == "CM202000"
     # GL preferences = GL102000 on this build - GL105000 has no site-map
     # row at all (T34, verified vs the live SiteMap table)
     assert entities["GLPreferences"].get("screen") == "GL102000"
@@ -228,40 +190,6 @@ def test_package_zip_carries_the_bootstrap_endpoint() -> None:
             ),
             "TermsDef",
         ),
-        "Currency": {
-            # general info -> the primary CurrencyList view; IsFinancial is
-            # what makes the currency financial (B8: the Default endpoint
-            # cannot reach it as a CM.Currency-creating write)
-            **dict.fromkeys(
-                (
-                    "CuryID",
-                    "Description",
-                    "CurySymbol",
-                    "DecimalPlaces",
-                    "IsActive",
-                    "IsFinancial",
-                ),
-                "CuryListRecords",
-            ),
-            # GL Accounts tab -> CuryRecords (CM.Currency): all ten
-            # gain/loss Acct/Sub pairs carry PXDefault(PersistingCheck.Null)
-            # with no setup default - required at persist
-            **dict.fromkeys(
-                (
-                    f"{kind}{side}{part}ID"
-                    for kind in (
-                        "Real",
-                        "Reval",
-                        "Translation",
-                        "Unrealized",
-                        "Rounding",
-                    )
-                    for side in ("Gain", "Loss")
-                    for part in ("Acct", "Sub")
-                ),
-                "CuryRecords",
-            ),
-        },
         # GL setup singleton (T34): both accounts sit directly on the
         # primary GLSetupRecord view, PXDefault with no default value -
         # required at persist; segment-mask CD strings -> StringValue
@@ -305,135 +233,6 @@ def test_package_zip_carries_the_bootstrap_endpoint() -> None:
             ("Action", "FromYear", "ToYear", "OrganizationID"),
             "Filter",
         ),
-        # T61 module-prefs singletons: every field carries a PXDefault,
-        # the singleton just has to exist - one echo field each, bound
-        # to the screen's own primary view (aspx-verified 2026-07-13);
-        # SOPreferences' echo field doubles as the R1 order-type probe
-        "INPreferences": dict.fromkeys(
-            (
-                "HoldEntry",
-                "INProgressAcctID",
-                "INProgressSubID",
-                "IssuesReasonCode",
-                "ReceiptReasonCode",
-                "AdjustmentReasonCode",
-                "PIReasonCode",
-                "INTransitAcctID",
-                "INTransitSubID",
-                "UpdateGL",
-            ),
-            "setup",
-        ),
-        "APPreferences": {"HoldEntry": "Setup"},
-        "ARPreferences": {"HoldEntry": "ARSetupRecord"},
-        "SOPreferences": dict.fromkeys(
-            (
-                "DefaultOrderType",
-                "HoldShipments",
-                "RequireShipmentTotal",
-                "AutoReleaseIN",
-            ),
-            "sosetup",
-        ),
-        "POPreferences": dict.fromkeys(
-            ("HoldReceipts", "RCReturnReasonCodeID", "AutoReleaseIN"),
-            "Setup",
-        ),
-        # reason codes (T61): the INSetup reason-code fields hard-require
-        # rows and CS211000 has no Default-endpoint entity
-        "ReasonCode": dict.fromkeys(
-            ("ReasonCodeID", "Descr", "Usage", "AccountID", "SubID"),
-            "reasoncode",
-        ),
-        # empty tenant has zero INAvailabilityScheme rows and ItemClass
-        # hard-requires one (T61); the Incl* booleans all default
-        "AvailabilityCalculationRule": dict.fromkeys(
-            ("AvailabilitySchemeID", "Description"),
-            "Schemes",
-        ),
-        # posting class (T61): id + descr + acct-source combos + acct/sub
-        # segment masks + sub masks, all on the primary postclass view
-        "PostingClass": dict.fromkeys(
-            (
-                "PostClassID",
-                "Descr",
-                *(
-                    f"{kind}{part}"
-                    for kind in (
-                        "Invt",
-                        "Sales",
-                        "COGS",
-                        "POAccrual",
-                        "PPV",
-                        "LCVariance",
-                    )
-                    for part in ("AcctDefault", "SubMask", "AcctID", "SubID")
-                ),
-            ),
-            "postclass",
-        ),
-        # CA setup singleton (T61): CashAccount 500s until it exists;
-        # TransitAcctId spelling = the DAC prop off the live aspx
-        "CAPreferences": dict.fromkeys(
-            ("HoldEntry", "TransitAcctId", "TransitSubID"),
-            "CASetupRecord",
-        ),
-        # vendor class (T64): the Default contract is skeletal and Vendor
-        # has no discount fields - the GL-accounts tab rides Bootstrap
-        "VendorClass": dict.fromkeys(
-            (
-                "VendorClassID",
-                "Descr",
-                "TermsID",
-                *(
-                    f"{kind}{part}"
-                    for kind in (
-                        "AP",
-                        "Expense",
-                        "DiscTaken",
-                        "POAccrual",
-                        "Prepayment",
-                    )
-                    for part in ("AcctID", "SubID")
-                ),
-            ),
-            "VendorClassRecord",
-        ),
-        # statement cycle (T64 follow-up): Customer inserts hard-require
-        # one via the class default; AR202800 has no Default entity
-        "StatementCycle": dict.fromkeys(
-            (
-                "StatementCycleId",
-                "Descr",
-                "PrepareOn",
-                "Day00",
-                "AgeDays00",
-                "AgeDays01",
-                "AgeDays02",
-            ),
-            "ARStatementCycleRecord",
-        ),
-        # warehouse (P5): Default Warehouse has no address surface and
-        # the auto-created Address requires Country - SiteCD idiom
-        "Warehouse": {
-            "SiteCD": "site",
-            "Descr": "site",
-            "Active": "site",
-            "CountryID": "Address",
-        },
-        # order type (P5/R1): zero rows on a fresh tenant - SalesOrder
-        # PUTs answer 200 with an unsaved row until SO is materialized
-        "OrderType": dict.fromkeys(
-            ("OrderType", "Active", "FreightAcctID", "FreightSubID"),
-            "soordertype",
-        ),
-        # cash account (T61): CuryID stays out - derived from the GL
-        # account (B11 server-derived class); payment-method links are
-        # the conditional PaymentMethodAccount follow-up, not here
-        "CashAccount": dict.fromkeys(
-            ("CashAccountCD", "Descr", "AccountID", "SubID", "BranchID", "Active"),
-            "CashAccount",
-        ),
     }
     for entity, expected in views.items():
         fields = {
@@ -455,18 +254,6 @@ def test_package_zip_carries_the_bootstrap_endpoint() -> None:
         entities["Company"].findall(f"{ns}Fields/{ns}Field")[0].get("type")
         == "StringValue"
     )
-    # Currency value types (T29): DecimalPlaces is Nullable<Int16> ->
-    # ShortValue, the two flags -> BooleanValue, everything else (keys,
-    # text, segment-mask CD strings) -> StringValue
-    currency_types = {
-        f.get("name"): f.get("type")
-        for f in entities["Currency"].findall(f"{ns}Fields/{ns}Field")
-    }
-    assert currency_types["DecimalPlaces"] == "ShortValue"
-    assert currency_types["IsActive"] == "BooleanValue"
-    assert currency_types["IsFinancial"] == "BooleanValue"
-    assert currency_types["CuryID"] == "StringValue"
-    assert currency_types["RealGainAcctID"] == "StringValue"
     # GLPreferences value types (T34): segment-mask CD strings
     assert {
         f.get("type")
@@ -485,60 +272,36 @@ def test_package_zip_carries_the_bootstrap_endpoint() -> None:
     }
 
 
-def test_bootstrap_endpoint_carries_the_t61_distribution_entities() -> None:
-    """Pin the T61 distribution setup chain screens and value types.
-
-    Screens verified vs the live aspx files (2026-07-13): the five
-    module-prefs singletons whose absence 500s every distribution entity
-    (gh issue #10 probe evidence), plus the availability rule ItemClass
-    hard-requires, the posting class, and the cash account. The prefs
-    echo flags and CashAccount Active are booleans; everything else
-    (keys, text, stored-word combos, segment masks, selector CD strings)
-    travels as StringValue.
-    """
+def test_package_zip_prefers_data_repo_contract(tmp_path: Path) -> None:
+    """Data-repo bootstrap/project.xml is the package endpoint when present (V2)."""
+    (tmp_path / "bootstrap").mkdir()
+    # keep Bootstrap/<packaged-ver> so V21 parity greps stay clean; the
+    # distinguishing signal is the extra Currency entity
+    contract = b"""\
+<Customization level="" description="data-repo full" product-version="26.101">
+  <EntityEndpoint>
+    <Endpoint xmlns="http://www.acumatica.com/entity/maintenance/5.31"
+              name="Bootstrap" version="1.9.0" systemContractVersion="4">
+      <TopLevelEntity name="Company" screen="CS101500">
+        <Fields><Field name="AcctCD" type="StringValue" /></Fields>
+      </TopLevelEntity>
+      <TopLevelEntity name="Currency" screen="CM202000">
+        <Fields><Field name="CuryID" type="StringValue" /></Fields>
+      </TopLevelEntity>
+    </Endpoint>
+  </EntityEndpoint>
+</Customization>
+"""
+    (tmp_path / "bootstrap" / "project.xml").write_bytes(contract)
     ns = "{http://www.acumatica.com/entity/maintenance/5.31}"
-    with zipfile.ZipFile(io.BytesIO(bootstrap.package_zip())) as zf:
+    with zipfile.ZipFile(io.BytesIO(bootstrap.package_zip(root=tmp_path))) as zf:
         root = ET.fromstring(zf.read("project.xml"))
-    (item,) = root.findall("EntityEndpoint")
-    (endpoint,) = item.findall(f"{ns}Endpoint")
-    entities = {e.get("name"): e for e in endpoint.findall(f"{ns}TopLevelEntity")}
-    screens = {
-        "INPreferences": "IN101000",
-        "APPreferences": "AP101000",
-        "ARPreferences": "AR101000",
-        "SOPreferences": "SO101000",
-        "POPreferences": "PO101000",
-        "AvailabilityCalculationRule": "IN201500",
-        "PostingClass": "IN206000",
-        "CashAccount": "CA202000",
-        "CAPreferences": "CA101000",
-        "ReasonCode": "CS211000",
-        "VendorClass": "AP201000",
-        "StatementCycle": "AR202800",
-        "Warehouse": "IN204000",
-        "OrderType": "SO201000",
-    }
-    for entity, screen in screens.items():
-        assert entities[entity].get("screen") == screen
-    for entity, field in (
-        ("INPreferences", "HoldEntry"),
-        ("APPreferences", "HoldEntry"),
-        ("ARPreferences", "HoldEntry"),
-        ("POPreferences", "HoldReceipts"),
-        ("CAPreferences", "HoldEntry"),
-        ("CashAccount", "Active"),
-    ):
-        (boolean_field,) = (
-            f
-            for f in entities[entity].findall(f"{ns}Fields/{ns}Field")
-            if f.get("name") == field
-        )
-        assert boolean_field.get("type") == "BooleanValue"
-    for entity in ("PostingClass", "AvailabilityCalculationRule"):
-        non_bool = {
-            f.get("type") for f in entities[entity].findall(f"{ns}Fields/{ns}Field")
-        }
-        assert non_bool == {"StringValue"}
+    (endpoint,) = root.findall(f"EntityEndpoint/{ns}Endpoint")
+    names = {e.get("name") for e in endpoint.findall(f"{ns}TopLevelEntity")}
+    assert names == {"Company", "Currency"}
+    assert root.get("description") == "data-repo full"
+    # Graph plugin still spliced in
+    assert root.find("Graph") is not None
 
 
 def test_bootstrap_endpoint_carries_the_gl_setup_actions() -> None:

@@ -4,9 +4,10 @@
 # Per entity row:
 #   entity    contract entity name (the GET source and the emitted `entity:`)
 #   endpoint  omitted = the instance Default endpoint; the symbolic name
-#             `bootstrap` resolves to the packaged Bootstrap endpoint at
-#             load (seed.BOOTSTRAP_ENDPOINT), so a version bump never
-#             leaves a stale ref here (V21)
+#             `bootstrap` stays symbolic in emitted files and resolves to
+#             the active Bootstrap package version at HTTP/load time
+#             (data-repo bootstrap/project.xml when present, else
+#             packaged minimal - V20/V21)
 #   keys      key fields: the emitted `key:`, the record sort order, and
 #             the B9 fallback's $select projection; the tuple must
 #             identify each record (V25 - a dup tuple is a row failure)

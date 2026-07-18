@@ -1,6 +1,6 @@
-# General Ledger preferences (GL102000) via the custom Bootstrap/1.7.0
-# endpoint (the per-file endpoint: override) - the Default endpoint has
-# no GL-setup entity, and every Finance screen throws
+# General Ledger preferences (GL102000) via the custom Bootstrap endpoint
+# (symbolic endpoint: bootstrap - V20). The Default endpoint has no
+# GL-setup entity, and every Finance screen throws
 # PXSetupNotEnteredException until the GLSetup singleton row exists. The
 # two accounts are the only GLSetup fields without a server default, so
 # this record is the complete required set; everything else (BATCH
@@ -12,7 +12,7 @@
 # referenced here must exist.
 entity: GLPreferences
 key: RetEarnAccountID
-endpoint: Bootstrap/1.7.0
+endpoint: bootstrap
 records:
 - RetEarnAccountID: '32000'
   YtdNetIncAccountID: '33000'

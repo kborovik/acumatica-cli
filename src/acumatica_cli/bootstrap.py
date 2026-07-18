@@ -6,10 +6,12 @@ docs/rest-api.md). The CustomizationApi is the one door that works on a
 virgin tenant, so bootstrap = publish a package whose CustomizationPlugin
 (`bootstrap_plugin.cs`) enables features on publish — the contract API
 cannot write CS100000 at all (T3 verdict) — and whose Bootstrap contract
-endpoint exposes CS101500 company + CS206500 credit terms + CM202000
-financial currency for seeding (`bootstrap_project.xml`, serialization
-verified T12; the Default endpoint's Currency entity is the CM201000 list
-only — B8).
+endpoint exposes the seeding surface (serialization verified T12).
+
+Contract ownership is hybrid (T69/V2): the data repo's
+``bootstrap/project.xml`` is preferred when present (full company surface);
+else the packaged minimal ``bootstrap_project.xml`` covers config-init +
+the GL chain so PyPI-only and offline virgin paths still bootstrap.
 
 Customization publishes are tenant-scoped, so the package must be published
 per tenant; publish() is idempotent on content — the skip gate compares the
@@ -38,13 +40,8 @@ from .client import AcumaticaClient
 # Alphanumeric only: CstDbStorage.ValidatePackageName rejects '-' and '_'
 # (verified vs 26.101.0225 — "Invalid project name")
 PACKAGE_NAME = "AcuBootstrap"
-# Authored once, in the template's root description attribute — read it
-# here rather than hand-syncing a second copy: the XML is digest input,
-# so a divergent XML-only edit would fire a spurious republish (V4).
-PACKAGE_DESCRIPTION = ET.fromstring(
-    (resources.files("acumatica_cli") / "bootstrap_project.xml").read_bytes()
-).get("description", "")
 PLUGIN_CLASS = "AcuBootstrapPlugin"
+_ENDPOINT_NS = "{http://www.acumatica.com/entity/maintenance/5.31}"
 
 # Code default when the data repo carries no bootstrap/features.yaml
 # (SPEC I.data) — the minimum for company/branch + baseline seeding.
@@ -60,6 +57,43 @@ DEFAULT_FEATURES = (
     "MultiCompany",
 )
 FEATURES_SENTINEL = "/*ACU_FEATURES*/"
+
+
+def packaged_contract_xml() -> bytes:
+    """The CLI-shipped minimal Bootstrap contract (config-init surface)."""
+    return (resources.files("acumatica_cli") / "bootstrap_project.xml").read_bytes()
+
+
+def load_contract_xml(root: Path | None = None) -> bytes:
+    """Active contract bytes: data-repo override when present, else packaged.
+
+    ``root`` is the data-repo discovery root (the dir holding ``.env``).
+    Absent root or absent ``bootstrap/project.xml`` falls back to the
+    packaged minimal contract (V2, same absence pattern as features.yaml).
+    """
+    if root is not None:
+        path = root / "bootstrap" / "project.xml"
+        if path.is_file():
+            return path.read_bytes()
+    return packaged_contract_xml()
+
+
+def parse_endpoint(xml: bytes) -> tuple[str, frozenset[str]]:
+    """Endpoint ``Name/version`` + entity names from a contract project.xml."""
+    root = ET.fromstring(xml)
+    endpoint = root.find(f"EntityEndpoint/{_ENDPOINT_NS}Endpoint")
+    if endpoint is None:
+        raise RuntimeError("bootstrap contract: no EntityEndpoint/Endpoint item")
+    name = f"{endpoint.get('name')}/{endpoint.get('version')}"
+    entities = frozenset(
+        e.get("name", "") for e in endpoint.findall(f"{_ENDPOINT_NS}TopLevelEntity")
+    )
+    return name, entities
+
+
+# Authored once on the packaged template's root description — kept for
+# tests that pin a pre-digest stale description (V4 republish path).
+PACKAGE_DESCRIPTION = ET.fromstring(packaged_contract_xml()).get("description", "")
 
 
 def load_features(root: Path) -> list[str]:
@@ -85,7 +119,12 @@ def load_features(root: Path) -> list[str]:
     return list(data)
 
 
-def package_zip(features: Sequence[str] | None = None) -> bytes:
+def package_zip(
+    features: Sequence[str] | None = None,
+    *,
+    root: Path | None = None,
+    contract: bytes | None = None,
+) -> bytes:
     """Build the customization package: a zip holding project.xml.
 
     The C# plugin travels as a <Graph> item whose Source ATTRIBUTE holds the
@@ -96,9 +135,21 @@ def package_zip(features: Sequence[str] | None = None) -> bytes:
     ``features`` (default: the built-in six) is spliced into the plugin's
     ``Enabled`` set at the ACU_FEATURES sentinel — the one point where the
     data repo's feature list enters the package (V2).
+
+    Contract XML (V2/T69): ``contract`` when given; else
+    ``bootstrap/project.xml`` under ``root`` when present; else the
+    packaged minimal template.
     """
     pkg = resources.files("acumatica_cli")
-    root = ET.fromstring((pkg / "bootstrap_project.xml").read_bytes())
+    if contract is None:
+        if root is None:
+            from .config import find_data_root
+
+            root = find_data_root()
+        xml = load_contract_xml(root)
+    else:
+        xml = contract
+    root_el = ET.fromstring(xml)
     source = (pkg / "bootstrap_plugin.cs").read_text(encoding="utf-8")
     if FEATURES_SENTINEL not in source:
         raise RuntimeError(f"bootstrap_plugin.cs: {FEATURES_SENTINEL} sentinel missing")
@@ -106,13 +157,13 @@ def package_zip(features: Sequence[str] | None = None) -> bytes:
     source = source.replace(
         FEATURES_SENTINEL, ", ".join(f'"{name}"' for name in enabled)
     )
-    graph = ET.SubElement(root, "Graph")
+    graph = ET.SubElement(root_el, "Graph")
     graph.set("ClassName", PLUGIN_CLASS)
     graph.set("FileType", "NewFile")
     graph.set("Source", source)
     buf = io.BytesIO()
     with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as zf:
-        zf.writestr("project.xml", ET.tostring(root, encoding="utf-8"))
+        zf.writestr("project.xml", ET.tostring(root_el, encoding="utf-8"))
     return buf.getvalue()
 
 
@@ -134,8 +185,12 @@ def package_description(zip_bytes: bytes) -> str:
     offers (verified live vs 26.101.0225): the import's projectDescription
     comes back only in the root description attribute of getProject's
     re-serialized project.xml — getPublished rows hold names alone.
+    Root description is read from the package's own project.xml so a
+    data-repo contract carries its own prose (V2).
     """
-    return f"{PACKAGE_DESCRIPTION} [sha256:{content_digest(zip_bytes)}]"
+    with zipfile.ZipFile(io.BytesIO(zip_bytes)) as zf:
+        desc = ET.fromstring(zf.read("project.xml")).get("description", "")
+    return f"{desc} [sha256:{content_digest(zip_bytes)}]"
 
 
 def _published_description(client: AcumaticaClient) -> str | None:
@@ -169,6 +224,8 @@ def _log_tail(status: dict[str, object], limit: int = 5) -> str:
 def publish(
     client: AcumaticaClient,
     features: Sequence[str] | None = None,
+    *,
+    root: Path | None = None,
     timeout: float = 600.0,
     poll: float = 5.0,
 ) -> str:
@@ -187,7 +244,7 @@ def publish(
     site may briefly drop connections mid-publish. Raises RuntimeError on a
     failed publish or on timeout.
     """
-    zip_bytes = package_zip(features)
+    zip_bytes = package_zip(features, root=root)
     description = package_description(zip_bytes)
     if PACKAGE_NAME in client.customization_published() and (
         _published_description(client) == description
