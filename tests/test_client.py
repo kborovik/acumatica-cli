@@ -217,6 +217,38 @@ def test_login_failure_surfaces_acumatica_message(instance: Instance) -> None:
         pytest.fail("login should have raised")
 
 
+def test_relogin_logout_login_probe_without_closing(instance: Instance) -> None:
+    """V5/B24 seam: mid-session re-login keeps the httpx client open (V6)."""
+    recorder = Recorder({"/UnitsOfMeasure": httpx.Response(200, json={})})
+    with _client(instance, recorder) as client:
+        n_after_enter = len(recorder.requests)
+        client.relogin()
+        mid = recorder.requests[n_after_enter:]
+        assert [r.url.path.split("/")[-1] for r in mid] == [
+            "logout",
+            "login",
+            "Login.aspx",
+        ]
+        assert mid[0].headers["Content-Length"] == "0"
+        creds = json.loads(mid[1].content)
+        assert creds == {"name": "admin", "password": "pw", "tenant": "T1"}
+        # transport still live - another PUT reaches the mock
+        client.put("UnitsOfMeasure", {"FromUOM": "KG"})
+        assert recorder.requests[-1].method == "PUT"
+    # outer __exit__ still logs out once at the end
+    assert recorder.requests[-1].url.path.endswith("/entity/auth/logout")
+
+
+def test_refresh_after_company_once_per_session(instance: Instance) -> None:
+    """V5: first Company boundary re-logins once; second call is a no-op."""
+    recorder = Recorder({})
+    with _client(instance, recorder) as client:
+        client.refresh_after_company()
+        n_after_first = len(recorder.requests)
+        client.refresh_after_company()
+        assert len(recorder.requests) == n_after_first  # no second bounce
+
+
 def test_put_wraps_record_and_targets_endpoint(instance: Instance) -> None:
     recorder = Recorder({"/UnitsOfMeasure": httpx.Response(200, json={})})
     _client(instance, recorder).put("UnitsOfMeasure", {"FromUOM": "KG"})

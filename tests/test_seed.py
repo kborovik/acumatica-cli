@@ -466,6 +466,154 @@ def test_apply_dry_run_makes_no_calls(
     assert "would PUT UnitsOfMeasure [KG]" in capsys.readouterr().out
 
 
+class SessionRecorder:
+    """MockTransport that serves auth + canned entity responses for re-login tests.
+
+    Auth paths (login/logout/landed-tenant probe) always 204/200 so
+    ``AcumaticaClient`` can open and bounce sessions; entity paths use
+    ``respond`` like the plain Recorder.
+    """
+
+    def __init__(
+        self,
+        respond: dict[str, httpx.Response] | None = None,
+        landed: str = "T1",
+    ):
+        self.requests: list[httpx.Request] = []
+        self.respond = respond or {}
+        self.landed = landed
+
+    def __call__(self, request: httpx.Request) -> httpx.Response:
+        self.requests.append(request)
+        path = request.url.path
+        if path.endswith("/auth/login") or path.endswith("/auth/logout"):
+            return httpx.Response(204)
+        if path.endswith("/Frames/Login.aspx"):
+            # attribute order matches live probe regex (id then value)
+            return httpx.Response(
+                200,
+                text=(
+                    '<input name="ctl00$phUser$txtSingleCompany" type="hidden" '
+                    f'id="txtSingleCompany" value="{self.landed}" />'
+                ),
+            )
+        for suffix, response in self.respond.items():
+            if path.endswith(suffix):
+                return response
+        return httpx.Response(200, json={})
+
+
+def _session_client(instance: Instance, recorder: SessionRecorder) -> AcumaticaClient:
+    return AcumaticaClient(instance, transport=httpx.MockTransport(recorder))
+
+
+COMPANY_YAML = """\
+entity: Company
+key: AcctCD
+endpoint: Bootstrap/1.9.0
+records:
+  - AcctCD: LAB5
+    OrganizationName: Lab Five
+"""
+
+
+def test_apply_company_relogins_once_per_session(
+    tmp_path: Path, instance: Instance
+) -> None:
+    """V5/B24: first successful Company PUT → one logout+login; warm re-PUT skips."""
+    baseline = seed.load_baseline(_write(tmp_path, COMPANY_YAML))
+    recorder = SessionRecorder()
+    with _session_client(instance, recorder) as client:
+        seed.apply(client, baseline)
+        seed.apply(client, baseline)  # warm re-apply: Company already exists
+
+    methods_paths = [(r.method, r.url.path) for r in recorder.requests]
+    # enter: login + probe; first Company PUT + relogin (logout+login+probe);
+    # second apply: PUT only (refresh_after_company no-op); exit: logout
+    assert methods_paths == [
+        ("POST", "/AcumaticaERP/entity/auth/login"),
+        ("GET", "/AcumaticaERP/Frames/Login.aspx"),
+        ("PUT", "/AcumaticaERP/entity/Bootstrap/1.9.0/Company"),
+        ("POST", "/AcumaticaERP/entity/auth/logout"),
+        ("POST", "/AcumaticaERP/entity/auth/login"),
+        ("GET", "/AcumaticaERP/Frames/Login.aspx"),
+        ("PUT", "/AcumaticaERP/entity/Bootstrap/1.9.0/Company"),
+        ("POST", "/AcumaticaERP/entity/auth/logout"),
+    ]
+
+
+def test_apply_company_dry_run_skips_relogin(
+    tmp_path: Path, instance: Instance
+) -> None:
+    baseline = seed.load_baseline(_write(tmp_path, COMPANY_YAML))
+    recorder = SessionRecorder()
+    with _session_client(instance, recorder) as client:
+        seed.apply(client, baseline, dry_run=True)
+    # enter login+probe, exit logout — no Company PUT, no mid-session bounce
+    assert [r.method for r in recorder.requests] == ["POST", "GET", "POST"]
+
+
+def test_apply_retries_once_on_branch_empty(
+    tmp_path: Path, instance: Instance, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """V5/B24: optional hardening — one re-login + retry on branch-empty 500."""
+    text = """\
+entity: INPreferences
+key: HoldEntry
+endpoint: Bootstrap/1.9.0
+records:
+  - HoldEntry: false
+    TransitBranchID: LAB5
+"""
+    baseline = seed.load_baseline(_write(tmp_path, text))
+    branch_empty = httpx.Response(
+        500,
+        json={
+            "exceptionMessage": (
+                "Error: An error occurred during processing of the field "
+                "Transit Branch value LAB5 TransitBranchID: 'Branch' cannot be empty."
+            )
+        },
+    )
+    ok = httpx.Response(200, json={})
+    puts: list[httpx.Response] = [branch_empty, ok]
+
+    class RetryRecorder(SessionRecorder):
+        def __call__(self, request: httpx.Request) -> httpx.Response:
+            if request.method == "PUT" and request.url.path.endswith("/INPreferences"):
+                self.requests.append(request)
+                return puts.pop(0)
+            return super().__call__(request)
+
+    recorder = RetryRecorder()
+    with _session_client(instance, recorder) as client:
+        seed.apply(client, baseline)
+
+    put_count = sum(1 for r in recorder.requests if r.method == "PUT")
+    logout_count = sum(
+        1 for r in recorder.requests if r.url.path.endswith("/auth/logout")
+    )
+    assert put_count == 2
+    # enter login, mid-retry relogin (logout+login), exit logout
+    assert logout_count == 2
+    assert "re-login and retry INPreferences" in capsys.readouterr().err
+
+
+def test_apply_non_company_no_relogin(tmp_path: Path, instance: Instance) -> None:
+    baseline = seed.load_baseline(_write(tmp_path, BASELINE))
+    recorder = SessionRecorder()
+    with _session_client(instance, recorder) as client:
+        seed.apply(client, baseline)
+    # enter login+probe, two PUTs, exit logout — no mid-session bounce
+    assert [r.method for r in recorder.requests] == [
+        "POST",
+        "GET",
+        "PUT",
+        "PUT",
+        "POST",
+    ]
+
+
 def test_diff_clean_when_live_matches(tmp_path: Path, instance: Instance) -> None:
     baseline = seed.load_baseline(_write(tmp_path, BASELINE))
     recorder = Recorder()

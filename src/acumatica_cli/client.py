@@ -93,6 +93,9 @@ class AcumaticaClient:
         self._http = httpx.Client(
             base_url=instance.base_url, timeout=timeout, transport=transport
         )
+        # V5/B24: first successful Company PUT this session → one re-login
+        # so later branch selectors resolve; warm re-PUT is re-login-safe
+        self._refreshed_after_company = False
 
     def __enter__(self) -> AcumaticaClient:
         # tenant guard (V5, docs/rest-api.md): an omitted or empty tenant is
@@ -105,27 +108,10 @@ class AcumaticaClient:
                 "an explicit tenant silently lands on the default tenant; "
                 "set ACU_TENANT in .env or pass --tenant"
             )
-        creds: dict[str, str] = {
-            "name": self.instance.user,
-            "password": self.instance.password,
-            "tenant": self.instance.tenant,
-        }
-        self._checked(self._http.post("/entity/auth/login", json=creds))
-        # tenant guard, landed side (V5, B5): login accepting the name proves
-        # nothing - a stale tenant map reroutes named logins to the default
-        # tenant, and a single-tenant instance accepts ANY name (both verified
-        # live, docs/rest-api.md). Verify where the session actually landed
-        # and refuse on mismatch; logout first, since __exit__ never runs
-        # when __enter__ raises (V6 - sessions count against the license).
+        # logout first on failure: __exit__ never runs when __enter__ raises
+        # (V6 - sessions count against the license)
         try:
-            landed = self._landed_tenant()
-            if landed.casefold() != self.instance.tenant.casefold():
-                raise RuntimeError(
-                    f"tenant guard: asked for tenant {self.instance.tenant!r} "
-                    f"but the session landed on {landed!r} - the instance "
-                    "tenant map is stale or the tenant does not exist; check "
-                    "acu tenant list and recycle the app pool"
-                )
+            self._login()
         except BaseException:
             self.__exit__()
             raise
@@ -137,6 +123,50 @@ class AcumaticaClient:
             self._http.post("/entity/auth/logout", content=b"")
         finally:
             self._http.close()
+
+    def _login(self) -> None:
+        """POST login + refuse on landed-tenant mismatch (V5, B5).
+
+        Login accepting the name proves nothing - a stale tenant map
+        reroutes named logins to the default tenant, and a single-tenant
+        instance accepts ANY name (both verified live, docs/rest-api.md).
+        """
+        creds: dict[str, str] = {
+            "name": self.instance.user,
+            "password": self.instance.password,
+            "tenant": self.instance.tenant,
+        }
+        self._checked(self._http.post("/entity/auth/login", json=creds))
+        landed = self._landed_tenant()
+        if landed.casefold() != self.instance.tenant.casefold():
+            raise RuntimeError(
+                f"tenant guard: asked for tenant {self.instance.tenant!r} "
+                f"but the session landed on {landed!r} - the instance "
+                "tenant map is stale or the tenant does not exist; check "
+                "acu tenant list and recycle the app pool"
+            )
+
+    def relogin(self) -> None:
+        """Drop the cookie session and open a new one without closing transport.
+
+        Mid-session Company create leaves branch selectors empty until a
+        fresh login (V5, B24). Unlike ``__exit__``, the httpx client stays
+        open so the outer context manager still owns the session lifecycle.
+        """
+        # empty body → Content-Length: 0 (V6 / IIS 411)
+        self._http.post("/entity/auth/logout", content=b"")
+        self._login()
+
+    def refresh_after_company(self) -> None:
+        """Re-login once after the first successful Company PUT this session.
+
+        Warm-tenant Company re-PUT is re-login-safe (V5); further Company
+        records in the same run skip the second bounce.
+        """
+        if self._refreshed_after_company:
+            return
+        self.relogin()
+        self._refreshed_after_company = True
 
     def _landed_tenant(self) -> str:
         """The tenant this session actually landed on (login name).

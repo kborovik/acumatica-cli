@@ -72,6 +72,10 @@ BOOTSTRAP_ENDPOINT, BOOTSTRAP_ENTITIES = bootstrap.parse_endpoint(
 # the Instance field default rather than hand-synced (V11: one spelling).
 _DEFAULT_ENDPOINT: str = f"Default/{Instance.model_fields['api_version'].default}"
 _SYMBOLIC_BOOTSTRAP = "bootstrap"
+# Mid-session branch-selector failure (V5/B24): virgin-tenant apply opens
+# the REST session pre-Company; INPreferences TransitBranchID (and kin)
+# 500 with this message until a fresh login sees the new branch.
+_BRANCH_EMPTY = "'Branch' cannot be empty"
 
 
 def active_bootstrap(root: Path | None = None) -> tuple[str, frozenset[str]]:
@@ -303,6 +307,10 @@ def apply(
 ) -> int:
     """PUT every record (upsert by key); an action file invokes its action.
 
+    After the first successful Company PUT this session, re-login once so
+    branch selectors resolve for later files (V5/B24). A PUT that still
+    500s with ``'Branch' cannot be empty`` gets one re-login + retry.
+
     Returns the record count.
     """
     if isinstance(baseline, ActionFile):
@@ -315,9 +323,28 @@ def apply(
             body = record
             if any(isinstance(v, list) for v in record.values()):
                 body = _with_detail_ids(client, baseline, record)
-            client.put(baseline.entity, body, endpoint=baseline.endpoint)
+            _put(client, baseline.entity, body, baseline.endpoint)
+            if baseline.entity == "Company":
+                client.refresh_after_company()
             output.data(f"  PUT {baseline.entity} [{label}]")
     return len(baseline.records)
+
+
+def _put(
+    client: AcumaticaClient,
+    entity: str,
+    body: dict[str, Any],
+    endpoint: str | None,
+) -> None:
+    """PUT one record; one re-login + retry on branch-empty 500 (V5/B24)."""
+    try:
+        client.put(entity, body, endpoint=endpoint)
+    except RuntimeError as err:
+        if _BRANCH_EMPTY not in str(err):
+            raise
+        output.info(f"re-login and retry {entity} (branch empty)")
+        client.relogin()
+        client.put(entity, body, endpoint=endpoint)
 
 
 def _with_detail_ids(
