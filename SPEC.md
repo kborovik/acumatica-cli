@@ -103,7 +103,7 @@ T72|x|`ACU_API_VERSION` version-half only validator — hard error on `/` or `De
 T73|x|`target.yaml` dataset matrix — model + loader + `config init` template (14→15) + local gate on allowlisted data-plane cmds + `config check` `ok|fail|warn|skip` + `--strict` (gh #17)|V2,V10,V27,I.cmd,I.data
 T74|x|`config check` endpoints probe — spike-gate: V12 capture `GET /entity` shape → fail-closed Default presence check|V12,V27,I.cmd
 T75|x|docs: symbolic default + `target.yaml` operator guide (README + rest-api)|V12,V20,V27
-T76|.|optional live ERP build probe in `config check` (HTTP only; major.minor match when method known)|V12,V27,I.cmd
+T76|x|optional live ERP build probe in `config check` (HTTP only; major.minor match when method known)|V12,V27,I.cmd
 
 ## §B BUGS
 

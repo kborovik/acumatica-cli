@@ -60,7 +60,7 @@ from pydantic import Field, ValidationError, field_validator, model_validator
 
 from . import bootstrap, output
 from .client import OPTIMIZATION_500, AcumaticaClient, unwrap
-from .config import Instance, find_data_root
+from .config import find_data_root
 from .models import Model, validation_summary
 
 # Packaged-fallback defaults (no data-repo contract). Prefer active_bootstrap()
@@ -232,7 +232,7 @@ def load_baseline(path: Path) -> BaselineFile | ActionFile:
     elif parsed.endpoint is None and parsed.entity in entities:
         raise SystemExit(
             f"{path}: entity '{parsed.entity}' is served by both "
-            f"Default (use endpoint: default → Default/<ACU_API_VERSION>) "
+            f"Default (use endpoint: default -> Default/<ACU_API_VERSION>) "
             f"and the active {name} - add an explicit 'endpoint:' line to "
             f"pick one (literal or symbolic 'bootstrap' | 'default')"
         )

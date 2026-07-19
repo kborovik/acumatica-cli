@@ -37,6 +37,20 @@ Parse shape (vendor contract + offline fixtures; re-verify on upgrade, V12):
 `Instance.api_version` (exact string). Unparseable body → fail-closed
 with status, content-type, and a short raw hint — never silent skip.
 
+### Live ERP build probe (not available)
+
+`target.yaml` field `erp` is **claimed only**.
+No stable HTTP surface is verified for the ERP product build id
+(e.g. `26.101.0225`) that is safe for `config check` without SSH.
+Until such a probe is re-verified (V12), check emits:
+
+```text
+skip erp (live probe not available; claimed …)
+```
+
+Do not add an SSH/sqlcmd path for this — control plane stays tenant CRUD
+only (V1). Full build detail may still appear in README prose.
+
 The instance's own OpenAPI 3.0.1 schema is the authoritative field-level
 reference — dump it with `acu schema`
 into `schemas/` (gitignored; ~3 MB, regenerate rather than version).

@@ -74,18 +74,14 @@ def test_load_target_rejects_default_path(data_root: Path) -> None:
 
 
 def test_assert_target_compatible_mismatch(data_root: Path) -> None:
-    (data_root / "target.yaml").write_text(
-        'erp: "26.101"\ndefault_api: "24.200.001"\n'
-    )
+    (data_root / "target.yaml").write_text('erp: "26.101"\ndefault_api: "24.200.001"\n')
     inst = load_instance()
     with pytest.raises(SystemExit, match=r"Default API version mismatch"):
         assert_target_compatible(inst)
 
 
 def test_assert_target_compatible_match(data_root: Path) -> None:
-    (data_root / "target.yaml").write_text(
-        'erp: "26.101"\ndefault_api: "25.200.001"\n'
-    )
+    (data_root / "target.yaml").write_text('erp: "26.101"\ndefault_api: "25.200.001"\n')
     assert_target_compatible(load_instance())
 
 
@@ -106,9 +102,9 @@ def test_config_check_ok_target(
 
     assert result.exit_code == 0
     assert (
-        "ok target (default_api=25.200.001 matches configured; "
-        "erp=26.101.0225 claimed)"
+        "ok target (default_api=25.200.001 matches configured; erp=26.101.0225 claimed)"
     ) in result.output
+    assert "skip erp (live probe not available; claimed 26.101.0225)" in result.output
 
 
 def test_config_check_strict_missing_target(
@@ -126,9 +122,7 @@ def test_config_check_strict_missing_target(
 def test_config_check_mismatch_fails(
     data_root: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    (data_root / "target.yaml").write_text(
-        'erp: "26.101"\ndefault_api: "24.200.001"\n'
-    )
+    (data_root / "target.yaml").write_text('erp: "26.101"\ndefault_api: "24.200.001"\n')
     monkeypatch.setattr(cli, "AcumaticaClient", DummyClient)
     monkeypatch.setattr(TenantManager, "ping", lambda self: None)
 
@@ -141,9 +135,7 @@ def test_config_check_mismatch_fails(
 def test_apply_gates_on_target_mismatch(
     data_root: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    (data_root / "target.yaml").write_text(
-        'erp: "26.101"\ndefault_api: "24.200.001"\n'
-    )
+    (data_root / "target.yaml").write_text('erp: "26.101"\ndefault_api: "24.200.001"\n')
     (data_root / "baseline").mkdir()
     (data_root / "baseline" / "uom.yaml").write_text(
         "entity: UnitsOfMeasure\nkey: UOM\nrecords:\n  - UOM: KG\n"
@@ -175,9 +167,7 @@ def test_config_show_surfaces_target(data_root: Path) -> None:
 
 
 def test_config_show_notes_mismatch_still_ok(data_root: Path) -> None:
-    (data_root / "target.yaml").write_text(
-        'erp: "26.101"\ndefault_api: "24.200.001"\n'
-    )
+    (data_root / "target.yaml").write_text('erp: "26.101"\ndefault_api: "24.200.001"\n')
     result = CliRunner().invoke(cli.cli, ["config", "show"])
 
     assert result.exit_code == 0

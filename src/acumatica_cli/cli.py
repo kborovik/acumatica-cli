@@ -446,9 +446,7 @@ def config_show(inst: Instance) -> None:
         output.data(f"ACU_{field.upper()}={value}")
     target = load_target()
     if target is not None:
-        output.data(
-            f"# target.yaml: erp={target.erp} default_api={target.default_api}"
-        )
+        output.data(f"# target.yaml: erp={target.erp} default_api={target.default_api}")
         if target.default_api != inst.api_version:
             output.data(
                 f"# warn: default_api={target.default_api} != "
@@ -571,6 +569,9 @@ def _probe_target(root: Path | None, inst: Instance, *, strict: bool) -> bool:
         f"ok target (default_api={target.default_api} matches configured; "
         f"erp={target.erp} claimed)"
     )
+    # T76: no stable HTTP ERP-build discovery (V12) — keep erp claimed-only;
+    # skip rather than invent SSH/sqlcmd (control-plane exclusion, V1)
+    output.data(f"skip erp (live probe not available; claimed {target.erp})")
     return False
 
 
