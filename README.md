@@ -21,8 +21,9 @@ uv tool install acumatica-cli
 
 acu config init --host erp.example.com my-erp
 cd my-erp                                # edit .env: set ACU_PASSWORD
+                                         # keep ACU_API_VERSION in sync with target.yaml
 
-acu config check                         # read-only preflight
+acu config check                         # read-only preflight (incl. target.yaml)
 acu tenant create --id 3 --login DEV     # create the tenant + bootstrap it (needs SSH)
 acu --tenant DEV apply                   # seed bootstrap/, baseline/, setup/
 acu --tenant DEV diff                    # prove zero drift (exit 2 on drift)
@@ -62,9 +63,9 @@ acu [--tenant NAME] [--url URL] [--ssh USER@HOST] [--api-version V]
 ├── schema [--out DIR]                dump the endpoint's OpenAPI schema (swagger.json)
 │
 └── config                            configuration ops
-    ├── init [--host HOST] [DIR]      scaffold a data repo (.env plus example YAML)
+    ├── init [--host HOST] [DIR]      scaffold a data repo (.env, target.yaml, example YAML)
     ├── show                          print the resolved config as a complete .env
-    └── check                         read-only preflight: discovery, secrets, REST, SSH
+    └── check [--strict]              preflight: discovery, secrets, target, REST, endpoints, SSH
 ```
 
 `apply` and `diff` called without FILES default to the scaffolded directories, in order: `bootstrap/`, then `baseline/`, then `setup/`.
@@ -76,19 +77,35 @@ Run `acu <command> --help` for details on any command.
 
 Your configuration lives in its own git repo. `acu config init` scaffolds everything except `scenario/`, which you author by hand:
 
-| Path         | What it holds                                                              |
-| ------------ | -------------------------------------------------------------------------- |
-| `bootstrap/` | what makes a virgin tenant configurable: features, company, credit terms   |
-| `baseline/`  | reference data: subaccounts, chart of accounts, ledger, units of measure   |
-| `setup/`     | one-time actions: financial year, master calendar, open periods            |
-| `scenario/`  | transaction scenarios for `acu run`: purchase, build, sell flows            |
-| `.env`       | where to apply and who signs in, every key an `ACU_*` variable             |
+| Path          | What it holds                                                              |
+| ------------- | -------------------------------------------------------------------------- |
+| `bootstrap/`  | what makes a virgin tenant configurable: features, company, credit terms   |
+| `baseline/`   | reference data: subaccounts, chart of accounts, ledger, units of measure   |
+| `setup/`      | one-time actions: financial year, master calendar, open periods            |
+| `scenario/`   | transaction scenarios for `acu run`: purchase, build, sell flows            |
+| `target.yaml` | committed verified matrix: `erp` + `default_api` (what, not where)         |
+| `.env`        | where to apply and who signs in, every key an `ACU_*` variable             |
 
-Files in each directory apply alphabetically; the numbered prefixes (`10-`, `20-`, and so on) encode dependency order. The scaffolded `.gitignore` keeps `.env` out of git — store it encrypted (for example as `.env.gpg`) and decrypt once per clone.
+Files in each directory apply alphabetically; the numbered prefixes (`10-`, `20-`, and so on) encode dependency order.
+The scaffolded `.gitignore` keeps `.env` out of git — store it encrypted (for example as `.env.gpg`) and decrypt once per clone.
+Commit `target.yaml` with the seeds so every clone knows the verified ERP line and Default API generation.
 
 Seed YAML in `bootstrap/`, `baseline/`, and `setup/` is state: `apply` upserts it, `diff` proves it.
 Scenario YAML is different — it describes transactions that flow forward.
 `acu run` executes each step in order (`put`, `action`, `wait`, `get`), captures server-assigned document numbers into `${var}` references for later steps, and checks `expect:` assertions as deltas against a pre-run snapshot, so a scenario re-runs safely on a warm tenant.
+
+### Seed `endpoint:` symbols
+
+Dual-served entities (on both Bootstrap and Default) need an explicit `endpoint:` line.
+
+| Value | Resolves to |
+| ----- | ----------- |
+| omitted | `Default/<ACU_API_VERSION>` for Default-only entities |
+| `bootstrap` | active `Bootstrap/<ver>` from `bootstrap/project.xml` or the packaged contract |
+| `default` | `Default/<ACU_API_VERSION>` — tracks the operator API version |
+| `Bootstrap/1.9.0` or `Default/25.200.001` | literal pin (ignores `ACU_API_VERSION` for Default) |
+
+Prefer symbolic `default` over a pinned `Default/25.200.001` so the seed tree travels with the configured API generation.
 
 ## Installation
 
@@ -108,15 +125,31 @@ Verify with `acu --version`.
 
 ## Configuration
 
-Everything lives in one `.env` file: *where* to apply and *who* signs in. Three values are required; everything else has a code default matching a stock Acumatica install:
+Everything lives in one `.env` file: *where* to apply and *who* signs in.
+Three values are required; everything else has a code default matching a stock Acumatica install:
 
 ```sh
 ACU_BASE_URL=http://acu-dev1.vm.internal/AcumaticaERP  # required: REST root
 ACU_TENANT=LAB5                                        # sign-in name of the tenant API sessions use
 ACU_SSH=Administrator@acu-dev1.vm.internal             # optional: control-plane user@host (tenant CRUD)
+ACU_API_VERSION=25.200.001                             # Default contract version half only
 ACU_USER=admin                                         # optional, defaults to admin
 ACU_PASSWORD=...                                       # required for live commands
 ```
+
+`ACU_API_VERSION` is the version half only (`25.200.001`), never `Default/25.200.001`.
+A full path would nest as `/entity/Default/Default/...`.
+
+The committed `target.yaml` next to `.env` declares the verified matrix (what, not where):
+
+```yaml
+erp: "26.101.0225"           # claimed product line/build (README-level detail)
+default_api: "25.200.001"    # must match ACU_API_VERSION
+```
+
+When `target.yaml` is present, `apply` / `diff` / `run` / `extract` / `schema` / `bootstrap` hard-fail if `default_api` does not match the configured API version.
+`acu config check` reports the same match as a probe line.
+Missing `target.yaml` only warns on check unless you pass `--strict`.
 
 Worth knowing:
 
@@ -126,13 +159,15 @@ Worth knowing:
 - Leave it blank on hosted instances; only `acu tenant` needs it.
 - Nothing is derived: split-horizon DNS, port forwards, and jump hosts are all handled by writing the address you actually want into the address keys.
 - `acu config show` prints the fully resolved configuration as a complete, valid `.env` — every knob visible, the password excluded.
+- When `target.yaml` is present, `config show` also comments `erp` / `default_api`.
 - Redirect it to turn resolved state into a working config: `acu config show > .env`.
 
 Verify before touching anything live:
 
 ```sh
-acu config check       # read-only preflight: discovery, secrets, REST, SSH
-acu apply --dry-run    # show what would be written, write nothing
+acu config check           # discovery, secrets, target, REST, endpoints, SSH
+acu config check --strict  # missing target.yaml becomes fail
+acu apply --dry-run        # show what would be written, write nothing
 ```
 
 ## Control and Data Planes
