@@ -76,3 +76,41 @@ for granular /sdd:check runs.
 - extract-derived files strip server-derived fields — PUT-tolerated, server keeps own derivation, sourced value = permanent drift (ChartOfAccountsOrder/CashAccount class, Translation* sibling)
 - shipped init template set self-closing: templates' `features.yaml` enables every feature the shipped baseline templates require (closes §B.15)
 - template set ships every recorded dependency-chain link its own verify chain needs — GL-posting chain = ledger + org-ledger link + GL prefs + calendar + open periods (closes §B.16)
+
+## §V.2 — bootstrap source closure (extracted from SPEC.md §V.2)
+
+- package-embedded config = what — never company surface hardcoded in plugin source
+- bootstrap feature set sources from data-repo `bootstrap/features.yaml` (absent → built-in six)
+- bootstrap endpoint contract sources from data-repo `bootstrap/project.xml` when present (absent → packaged minimal contract)
+
+## §V.3 — discovery resolution matrix (extracted from SPEC.md §V.3)
+
+- required keys post-merge: `ACU_BASE_URL`, `ACU_PASSWORD` — unresolved → hard error naming key(s)
+- `ACU_SSH` ? — control plane; absent fine for data-plane cmds (apply/diff/run/extract/schema/config show|init)
+- tenant CRUD hard-errors when `ACU_SSH` unresolved, names key
+
+## §V.20 — seed endpoint resolution (extracted from SPEC.md §V.20)
+
+- literal forms: `Bootstrap/<ver>` | `Default/<ver>`; symbolic: `bootstrap` | `default`
+- symbolic `bootstrap` → active package version @ load (data-repo `bootstrap/project.xml` when present, else packaged contract)
+- symbolic `default` → `Default/<Instance.api_version>` @ HTTP via `client._url` (never load-rewritten)
+- §B.8 class — Bootstrap `Currency` vs Default CM201000 list; symptom returns behind clean apply
+
+## §V.24 — extract exit/msg matrix (extracted from SPEC.md §V.24)
+
+- row failure (fetch or synth) → `x <name>: <reason>`, run continues to next manifest row
+- `PXSetupNotEnteredException` 500 = empty-state class → `skip <path> (screen setup not entered)`, not failure
+- run ends w/ summary; exit 0 all rows wrote or skipped clean, 1 any row failed; never 2
+
+## §V.26 — org-scoped view audit (extracted from SPEC.md §V.26)
+
+- contract entity over org-scoped screen (GL201100 class) answers 200 [] on multi-org tenant w/o org parameter
+- multi-org verify gate applies only when multi-org surface in scope (single-org demo strategy, multi-org = paid engagement)
+
+## §V.27 — dataset-target gate (extracted from SPEC.md §V.27)
+
+- allowlisted data-plane cmds: `apply`/`diff`/`run`/`extract`/`schema`/`bootstrap` + `config check`
+- present target → match `default_api` vs `Instance.api_version` else hard error naming dataset vs configured
+- missing → warn on `config check` unless `--strict`; invalid → hard fail any loader
+- gate ! inside bare `_resolve_instance`/`pass_instance` (tenant cmds + `config show` ungated)
+- `erp` claimed-only until live probe
