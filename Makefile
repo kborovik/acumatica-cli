@@ -24,11 +24,11 @@ default: .venv help
 # Python dev (lint / format / types)
 ###############################################################################
 
-check: .venv lint test ## Run all checks (lint + offline tests; live verification = gmake e2e)
+check: .venv lint test ## Run all checks (lint + python tests)
 
-lint: .venv py-format py-lint py-types ## Lint Python code
+lint: .venv py-format py-lint py-types
 
-test: .venv ## Run the test suite (pytest, offline — no live instance needed)
+test: .venv
 	$(call header,Running pytest)
 	uv run pytest
 
@@ -36,7 +36,7 @@ test: .venv ## Run the test suite (pytest, offline — no live instance needed)
 # path, then tests/e2e/<FILE>, then tests/e2e/<FILE>.py); unset = whole tier.
 e2e_target := $(if $(FILE),$(firstword $(wildcard $(FILE) tests/e2e/$(FILE) tests/e2e/$(FILE).py)),tests/e2e)
 
-e2e: ## Live E2E, self-contained: scaffold a tmp data repo from packaged templates, create scratch tenants, apply, diff, destroy (needs tailnet + decrypted .env); FILE=<path-or-stem> scopes to one file
+e2e: ## Full E2E, against a live Acumatica instance
 	test -e .env || { echo ".env missing — decrypt .env.gpg at the repo root"; exit 1; }
 	test -n "$(e2e_target)" || { echo "no e2e file matches FILE=$(FILE) (tried it as a path, tests/e2e/$(FILE), tests/e2e/$(FILE).py)"; exit 1; }
 	$(call header,Running live E2E (creates and destroys scratch tenants))
@@ -54,7 +54,7 @@ py-types:
 	$(call header,Running basedpyright typecheck)
 	uv run basedpyright
 
-py-update: ## Recreate venv, upgrade all dependencies
+py-update:
 	uv venv --clear && hash -r && uv sync --upgrade
 
 py-reset:
@@ -84,7 +84,7 @@ install: .venv ## Install acu globally as an editable uv tool
 # give the part words no-op recipes so make does not try to build them.
 part := $(word 1,$(filter major minor patch,$(MAKECMDGOALS)))
 
-release: ## Bump version, commit, tag, and publish a GitHub release (gmake release major|minor|patch)
+release: ## Bump version, commit, tag, and publish a GitHub release
 	test -n "$(part)" || { echo "usage: gmake release major|minor|patch"; exit 1; }
 	git diff --quiet && git diff --cached --quiet \
 		|| { echo "working tree not clean — commit or stash first"; exit 1; }
