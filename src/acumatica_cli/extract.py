@@ -141,9 +141,7 @@ def _fetch(client: AcumaticaClient, spec: EntitySpec) -> list[dict[str, Any]]:
     A manifest filter rides both list reads, so the two paths serve the
     same record set and the per-key walk only visits filtered keys.
     """
-    endpoint = resolve_endpoint(
-        spec.endpoint, api_version=client.instance.api_version
-    )
+    endpoint = resolve_endpoint(spec.endpoint, api_version=client.instance.api_version)
     narrowed = {"$filter": spec.filter} if spec.filter else {}
     try:
         return client.get_list(spec.entity, params=narrowed or None, endpoint=endpoint)

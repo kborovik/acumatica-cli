@@ -284,9 +284,12 @@ def test_url_resolves_symbolic_default(instance: Instance) -> None:
     assert client._url("Warehouse", None) == (  # pyright: ignore[reportPrivateUsage]
         "/entity/Default/23.200.001/Warehouse"
     )
-    assert client._url(  # pyright: ignore[reportPrivateUsage]
-        "Warehouse", "Bootstrap/1.9.0"
-    ) == "/entity/Bootstrap/1.9.0/Warehouse"
+    assert (
+        client._url(  # pyright: ignore[reportPrivateUsage]
+            "Warehouse", "Bootstrap/1.9.0"
+        )
+        == "/entity/Bootstrap/1.9.0/Warehouse"
+    )
 
 
 def test_parse_entity_list_name_version_rows() -> None:
