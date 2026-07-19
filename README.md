@@ -256,3 +256,10 @@ Scratch tenants (`E2E`, `E2EA`, `E2EB`) are created on the way in and always del
 gmake e2e                                # whole tier, about 20 minutes
 gmake e2e FILE=test_provision_lifecycle  # one file, by stem or path
 ```
+
+## License
+
+This project is licensed under the Apache License, Version 2.0.
+See [LICENSE](LICENSE) and [NOTICE](NOTICE).
+
+Copyright 2026 Konstantin Borovik.
