@@ -93,8 +93,20 @@ class Instance(BaseSettings):
 
     @field_validator("api_version")
     @classmethod
-    def _no_surrounding_slashes(cls, v: str) -> str:
-        return v.strip("/")
+    def _api_version_half_only(cls, v: str) -> str:
+        # V11: version half only (e.g. 25.200.001). A full path like
+        # Default/25.200.001 would nest as /entity/Default/Default/...
+        v = v.strip().strip("/")
+        if not v:
+            raise ValueError(
+                "api_version must be the version half only (e.g. 25.200.001)"
+            )
+        if "/" in v or v.lower().startswith("default"):
+            raise ValueError(
+                "api_version must be the version half only "
+                f"(e.g. 25.200.001), not a path like Default/{v}"
+            )
+        return v
 
 
 def scaffold(directory: Path, host: str | None = None) -> Iterator[tuple[str, Path]]:

@@ -4,6 +4,9 @@
 # ACU_BASE_URL (REST root) is required; ACU_SSH (control-plane user@host)
 # is optional - leave blank for hosted / data-plane-only (tenant CRUD still
 # needs it). The rest are code defaults you can override here.
+# ACU_API_VERSION is the Default contract version half only (e.g. 25.200.001),
+# never "Default/25.200.001". Must match target.yaml default_api when that
+# file exists (see acu config check).
 # Keep this file out of git (the scaffolded .gitignore already lists it;
 # encrypt at rest, e.g. .env.gpg).
 ACU_BASE_URL=http://erp.example.com/AcumaticaERP

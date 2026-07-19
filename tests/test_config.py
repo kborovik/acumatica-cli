@@ -57,10 +57,25 @@ def test_env_file_values_override_defaults(data_root: Path) -> None:
     (data_root / ".env").write_text(FULL_ENV)
     inst = load_instance()
     assert inst.base_url == "https://edge.example/AcumaticaERP"  # trailing / stripped
-    assert inst.api_version == "24.200.001"  # slashes stripped
+    assert inst.api_version == "24.200.001"  # surrounding slashes stripped
     assert inst.ssh == "user@jump.example"
     assert inst.tenant == "T1"
     assert inst.user == "api"
+
+
+def test_api_version_rejects_default_path_prefix(data_root: Path) -> None:
+    # V11/T72: version half only — Default/… nests as /entity/Default/Default/…
+    (data_root / ".env").write_text(
+        MINIMAL_ENV + "ACU_API_VERSION=Default/25.200.001\n"
+    )
+    with pytest.raises(SystemExit, match=r"version half only"):
+        load_instance()
+
+
+def test_api_version_rejects_embedded_slash(data_root: Path) -> None:
+    (data_root / ".env").write_text(MINIMAL_ENV + "ACU_API_VERSION=25/200/001\n")
+    with pytest.raises(SystemExit, match=r"version half only"):
+        load_instance()
 
 
 def test_install_layout_values_are_constants(data_root: Path) -> None:
