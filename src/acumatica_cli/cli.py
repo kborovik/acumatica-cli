@@ -22,6 +22,7 @@ from .config import (
     read_env_values,
     scaffold,
 )
+from .target import assert_target_compatible, load_target
 from .tenant import TenantManager
 
 
@@ -370,6 +371,7 @@ def bootstrap_cmd(ctx: click.Context, export_path: Path | None) -> None:
         output.success(f"wrote {export_path}")
         return
     inst = _resolve_instance(ctx)
+    assert_target_compatible(inst)
     if not inst.tenant:
         raise SystemExit(
             "tenant not set (pass --tenant, "
@@ -433,29 +435,47 @@ def config_show(inst: Instance) -> None:
     so the printed values are exactly what a live command would trust -
     global flag overrides (--url, --ssh, ...) included. The password is
     never emitted in any form (V2): no ACU_PASSWORD key, no value.
-    Redirect to a file and edit: the output loads back through
-    load_instance unchanged, the password supplied out of band.
+    When target.yaml is present, surfaces erp/default_api as comments
+    (mismatch noted, still exit 0 — no hard gate). Redirect to a file and
+    edit: the output loads back through load_instance unchanged, the
+    password supplied out of band.
     """
     output.data("# resolved by `acu config show` - a complete .env")
     output.data("# ACU_PASSWORD comes from .env or the environment, never from here")
     for field, value in inst.model_dump(exclude={"password"}).items():
         output.data(f"ACU_{field.upper()}={value}")
+    target = load_target()
+    if target is not None:
+        output.data(
+            f"# target.yaml: erp={target.erp} default_api={target.default_api}"
+        )
+        if target.default_api != inst.api_version:
+            output.data(
+                f"# warn: default_api={target.default_api} != "
+                f"ACU_API_VERSION={inst.api_version}"
+            )
 
 
 @config_group.command("check")
+@click.option(
+    "--strict",
+    is_flag=True,
+    help="Promote warn classes (missing target.yaml) to fail",
+)
 @click.pass_context
-def config_check(ctx: click.Context) -> None:
-    """Read-only preflight of the resolved target, one ok/fail line per probe.
+def config_check(ctx: click.Context, strict: bool) -> None:
+    """Read-only preflight of the resolved target, one ok/fail/warn/skip line.
 
     Dependency order: discovery (.env walk-up + parse + ACU_BASE_URL), then
-    secrets (ACU_PASSWORD resolved), then REST (login, landed-tenant verify,
-    logout) and ssh probed independently - ssh set → trivial remote; ssh
-    unset → skip (ACU_SSH optional, V3 hosted path), never fail. A discovery
-    or secrets failure stops; a REST failure still probes ssh when set and
-    vice versa. Discovery is lax (V3): no .env passes when --url covers
-    base_url, and flags-only runs (no .env anywhere) are valid. Writes
-    nothing: no PUTs, no tenant CRUD. Exit 0 when every non-skipped probe
-    passes, 1 on any failure.
+    secrets (ACU_PASSWORD resolved), then local target.yaml probe, then REST
+    (login, landed-tenant verify, logout) and ssh probed independently -
+    ssh set → trivial remote; ssh unset → skip (ACU_SSH optional, V3 hosted
+    path), never fail. A discovery or secrets failure stops; a REST failure
+    still probes ssh when set and vice versa. Discovery is lax (V3): no
+    .env passes when --url covers base_url, and flags-only runs (no .env
+    anywhere) are valid. Writes nothing: no PUTs, no tenant CRUD. Exit 0
+    when no fail line (warns allowed); --strict promotes missing target to
+    fail; exit 1 on any failure.
     """
     overrides: dict[str, str] = ctx.obj or {}
     # discovery (V3): lax walk-up + parse; base_url (the primary identity
@@ -493,7 +513,7 @@ def config_check(ctx: click.Context) -> None:
     # both live probes run through the exact objects live commands use, so
     # a pass here proves the real code path, not a parallel one
     inst = _resolve_instance(ctx)
-    failed = False
+    failed = _probe_target(root, inst, strict=strict)
     try:
         # entering the client is the whole probe: login + landed-tenant
         # verify (V5), and the context manager guarantees logout (V6)
@@ -515,6 +535,41 @@ def config_check(ctx: click.Context) -> None:
             failed = True
     if failed:
         raise SystemExit(1)
+
+
+def _probe_target(root: Path | None, inst: Instance, *, strict: bool) -> bool:
+    """Emit the local target probe line; return True when it failed (V27).
+
+    Invalid target hard-exits (any loader). Missing under data root warns
+    unless --strict. No data root → skip. Match → ok (erp claimed-only).
+    """
+    try:
+        target = load_target(root)
+    except SystemExit as exc:
+        output.data(f"fail target: {exc}")
+        raise SystemExit(1) from exc
+    if root is None:
+        output.data("skip target (no data root)")
+        return False
+    if target is None:
+        msg = (
+            f"target: no target.yaml under {root} - dataset verified matrix "
+            "unknown; add target.yaml (see acu config init) or pass --strict "
+            "to require it"
+        )
+        output.data(f"{'fail' if strict else 'warn'} {msg}")
+        return strict
+    if target.default_api != inst.api_version:
+        output.data(
+            f"fail target: dataset default_api={target.default_api} vs "
+            f"configured {inst.api_version}"
+        )
+        return True
+    output.data(
+        f"ok target (default_api={target.default_api} matches configured; "
+        f"erp={target.erp} claimed)"
+    )
+    return False
 
 
 SEED_DIRS = ("bootstrap", "baseline", "setup")
@@ -571,6 +626,7 @@ def apply_cmd(inst: Instance, files: tuple[Path, ...], dry_run: bool) -> None:
     they default to the data repo's existing init-scaffolded directories in
     fixed order: bootstrap/, baseline/, setup/.
     """
+    assert_target_compatible(inst)
     with AcumaticaClient(inst) as client:
         for path in expand_files(files or default_seed_dirs()):
             baseline = seed.load_baseline(path)
@@ -596,6 +652,7 @@ def schema_cmd(inst: Instance, out_dir: Path | None) -> None:
     The schema is the authoritative field-level reference for the exact
     build - regenerate rather than version (the file is ~3 MB).
     """
+    assert_target_compatible(inst)
     if out_dir is None:
         out_dir = data_root() / "schemas"
     out_file = out_dir / f"swagger-Default-{inst.api_version}.json"
@@ -623,6 +680,7 @@ def diff_cmd(inst: Instance, files: tuple[Path, ...]) -> None:
     they default to the data repo's existing init-scaffolded directories in
     fixed order: bootstrap/, baseline/, setup/.
     """
+    assert_target_compatible(inst)
     paths = expand_files(files or default_seed_dirs())
     drifts: list[str] = []
     with AcumaticaClient(inst) as client:
@@ -659,6 +717,7 @@ def run_cmd(inst: Instance, files: tuple[Path, ...], dry_run: bool) -> None:
     last, so a scenario re-runs safely on a warm tenant. Exit 0 when every
     expectation holds, 1 on any step error or expectation miss.
     """
+    assert_target_compatible(inst)
     if not files:
         default = data_root() / "scenario"
         if not default.is_dir():
@@ -731,6 +790,7 @@ def extract_cmd(
     when every row wrote or skipped clean, 1 when any row failed - drift
     detection stays with diff.
     """
+    assert_target_compatible(inst)
     with AcumaticaClient(inst) as client:
         failed = extract.run(
             client,

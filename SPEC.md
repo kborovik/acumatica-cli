@@ -100,7 +100,7 @@ T69|x|bootstrap contract ownership (hybrid A) — data-repo `bootstrap/project.x
 T70|x|apply re-login after first Company — logout+login mid-run; one retry on `'Branch' cannot be empty` (gh #16, closes §B.24)|V5,V6,I.cmd,B24
 T71|x|symbolic `endpoint: default` — resolve @ `client._url` to `Default/<Instance.api_version>`; dual-serve names both symbols; never load-rewrite `default` (gh #17)|V11,V20,I.data
 T72|x|`ACU_API_VERSION` version-half only validator — hard error on `/` or `Default/` prefix; fix env template comments|V11,I.cfg
-T73|.|`target.yaml` dataset matrix — model + loader + `config init` template (14→15) + local gate on allowlisted data-plane cmds + `config check` `ok|fail|warn|skip` + `--strict` (gh #17)|V2,V10,V27,I.cmd,I.data
+T73|x|`target.yaml` dataset matrix — model + loader + `config init` template (14→15) + local gate on allowlisted data-plane cmds + `config check` `ok|fail|warn|skip` + `--strict` (gh #17)|V2,V10,V27,I.cmd,I.data
 T74|.|`config check` endpoints probe — spike-gate: V12 capture `GET /entity` shape → fail-closed Default presence check|V12,V27,I.cmd
 T75|.|docs: symbolic default + `target.yaml` operator guide (README + rest-api)|V12,V20,V27
 T76|.|optional live ERP build probe in `config check` (HTTP only; major.minor match when method known)|V12,V27,I.cmd

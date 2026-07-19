@@ -653,7 +653,7 @@ def test_url_flag_rejected_after_subcommand(wired: Instance) -> None:
 
 
 def test_config_init_scaffolds_data_repo(tmp_path: Path) -> None:
-    # I.cmd config init: 14-file template set into a created-if-absent dir;
+    # I.cmd config init: 15-file template set into a created-if-absent dir;
     # runs where V3 discovery finds no .env (tmp_path has none up-tree)
     repo = tmp_path / "repo"
     result = CliRunner().invoke(
@@ -664,6 +664,7 @@ def test_config_init_scaffolds_data_repo(tmp_path: Path) -> None:
     expected = [
         ".env",
         ".gitignore",
+        "target.yaml",
         "baseline/10-subaccounts.yaml",
         "baseline/20-accounts.yaml",
         "baseline/40-ledger.yaml",
@@ -680,8 +681,11 @@ def test_config_init_scaffolds_data_repo(tmp_path: Path) -> None:
     for rel in expected:
         assert (repo / rel).is_file(), rel
     assert (
-        len([ln for ln in result.output.splitlines() if ln.startswith("write ")]) == 14
+        len([ln for ln in result.output.splitlines() if ln.startswith("write ")]) == 15
     )
+    target = (repo / "target.yaml").read_text()
+    assert "default_api:" in target
+    assert "erp:" in target
     # --host substitutes into both scaffolded address values (I.cmd config init)
     env = (repo / ".env").read_text()
     assert "ACU_BASE_URL=http://erp.test/AcumaticaERP" in env
@@ -712,7 +716,7 @@ def test_config_init_rerun_skips_and_never_overwrites(tmp_path: Path) -> None:
 
     assert result.exit_code == 0
     lines = result.output.splitlines()
-    assert len(lines) == 14
+    assert len(lines) == 15
     assert all(ln.startswith("skip ") and ln.endswith(" (exists)") for ln in lines)
     assert (tmp_path / ".env").read_text() == "ACU_BASE_URL=http://hand.edited/X\n"
 
@@ -870,8 +874,9 @@ def test_config_check_all_probes_ok(
     assert lines[0].startswith("ok discovery (")
     assert lines[0].endswith(".env)")
     assert lines[1] == "ok secrets (ACU_PASSWORD set)"
-    assert lines[2] == "ok rest (http://acu.test/AcumaticaERP, tenant T1)"
-    assert lines[3] == "ok ssh (Administrator@acu.test)"
+    assert lines[2].startswith("warn target: no target.yaml under ")
+    assert lines[3] == "ok rest (http://acu.test/AcumaticaERP, tenant T1)"
+    assert lines[4] == "ok ssh (Administrator@acu.test)"
     assert calls == ["enter", "exit", "ping"]
 
 
@@ -925,8 +930,9 @@ def test_config_check_flags_only_passes(
     lines = result.output.splitlines()
     assert lines[0] == "ok discovery (no .env - flags only)"
     assert lines[1] == "ok secrets (--password)"
-    assert lines[2] == "ok rest (http://acu.test/AcumaticaERP, tenant T1)"
-    assert lines[3] == "ok ssh (user@acu.test)"
+    assert lines[2] == "skip target (no data root)"
+    assert lines[3] == "ok rest (http://acu.test/AcumaticaERP, tenant T1)"
+    assert lines[4] == "ok ssh (user@acu.test)"
     assert "pw" not in result.output  # the secret value is never printed (V2)
 
 
@@ -1011,8 +1017,9 @@ def test_config_check_skips_ssh_when_unset(
     lines = result.output.splitlines()
     assert lines[0].startswith("ok discovery (")
     assert lines[1] == "ok secrets (ACU_PASSWORD set)"
-    assert lines[2] == "ok rest (http://acu.test/AcumaticaERP, tenant T1)"
-    assert lines[3] == "skip ssh (ACU_SSH not set)"
+    assert lines[2].startswith("warn target: no target.yaml under ")
+    assert lines[3] == "ok rest (http://acu.test/AcumaticaERP, tenant T1)"
+    assert lines[4] == "skip ssh (ACU_SSH not set)"
     assert probes == []
 
 

@@ -34,6 +34,7 @@ DB_NAME = "AcumaticaDB"
 INIT_TEMPLATES = (
     ("env", ".env"),
     ("gitignore", ".gitignore"),
+    ("target", "target.yaml"),
     ("baseline/10-subaccounts.yaml", "baseline/10-subaccounts.yaml"),
     ("baseline/20-accounts.yaml", "baseline/20-accounts.yaml"),
     ("baseline/40-ledger.yaml", "baseline/40-ledger.yaml"),
