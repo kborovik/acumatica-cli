@@ -274,6 +274,21 @@ def test_api_version_override_reaches_url(instance: Instance) -> None:
     )
 
 
+def test_url_resolves_symbolic_default(instance: Instance) -> None:
+    """V20: endpoint='default' is Default/<api_version> at the client choke point."""
+    versioned = instance.model_copy(update={"api_version": "23.200.001"})
+    client = _client(versioned, Recorder({}))
+    assert client._url("Warehouse", "default") == (  # pyright: ignore[reportPrivateUsage]
+        "/entity/Default/23.200.001/Warehouse"
+    )
+    assert client._url("Warehouse", None) == (  # pyright: ignore[reportPrivateUsage]
+        "/entity/Default/23.200.001/Warehouse"
+    )
+    assert client._url(  # pyright: ignore[reportPrivateUsage]
+        "Warehouse", "Bootstrap/1.9.0"
+    ) == "/entity/Bootstrap/1.9.0/Warehouse"
+
+
 def test_swagger_returns_raw_bytes_from_endpoint(instance: Instance) -> None:
     schema = b'{"openapi": "3.0.1"}'
     recorder = Recorder({"/swagger.json": httpx.Response(200, content=schema)})

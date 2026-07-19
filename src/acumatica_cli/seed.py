@@ -68,10 +68,11 @@ from .models import Model, validation_summary
 BOOTSTRAP_ENDPOINT, BOOTSTRAP_ENTITIES = bootstrap.parse_endpoint(
     bootstrap.packaged_contract_xml()
 )
-# The code-default instance endpoint, for the V20 error message - read off
-# the Instance field default rather than hand-synced (V11: one spelling).
-_DEFAULT_ENDPOINT: str = f"Default/{Instance.model_fields['api_version'].default}"
+# Dual-serve error text prefers the symbolic Default form (V20) so operators
+# do not read the code-default version as their configured ACU_API_VERSION.
+_DEFAULT_ENDPOINT_NAME = "Default"
 _SYMBOLIC_BOOTSTRAP = "bootstrap"
+_SYMBOLIC_DEFAULT = "default"
 # Mid-session branch-selector failure (V5/B24): virgin-tenant apply opens
 # the REST session pre-Company; INPreferences TransitBranchID (and kin)
 # 500 with this message until a fresh login sees the new branch.
@@ -90,10 +91,30 @@ def active_bootstrap(root: Path | None = None) -> tuple[str, frozenset[str]]:
     return bootstrap.parse_endpoint(bootstrap.load_contract_xml(root))
 
 
-def resolve_endpoint(endpoint: str | None, root: Path | None = None) -> str | None:
-    """Map symbolic ``bootstrap`` to the active ``Bootstrap/<ver>`` (V20)."""
+def resolve_endpoint(
+    endpoint: str | None,
+    root: Path | None = None,
+    *,
+    api_version: str | None = None,
+) -> str | None:
+    """Map symbolic endpoint names to versioned paths (V20).
+
+    ``bootstrap`` → active ``Bootstrap/<ver>`` from contract XML (load-time
+    what). ``default`` → ``Default/<api_version>``; ``api_version`` required
+    when endpoint is default. Other values pass through (literals or None).
+
+    Apply/diff primarily resolve symbolic default in ``client._url``; this
+    helper serves extract pre-HTTP path building and offline unit tests.
+    """
     if endpoint == _SYMBOLIC_BOOTSTRAP:
         return active_bootstrap(root)[0]
+    if endpoint == _SYMBOLIC_DEFAULT:
+        if not api_version:
+            raise SystemExit(
+                "endpoint: default requires a configured api_version "
+                "(ACU_API_VERSION or --api-version)"
+            )
+        return f"{_DEFAULT_ENDPOINT_NAME}/{api_version}"
     return endpoint
 
 
@@ -190,6 +211,8 @@ def load_baseline(path: Path) -> BaselineFile | ActionFile:
 
     Symbolic ``endpoint: bootstrap`` resolves to the active package version
     at load (data-repo contract when present, else packaged minimal — V20).
+    Symbolic ``endpoint: default`` stays on the model and resolves at HTTP
+    time via ``client._url`` (never load-rewritten — version is where).
     An entity the active Bootstrap contract serves still needs an explicit
     endpoint (literal or symbolic); silent Default-endpoint PUTs are the
     B8 class.
@@ -208,10 +231,10 @@ def load_baseline(path: Path) -> BaselineFile | ActionFile:
         parsed = parsed.model_copy(update={"endpoint": name})
     elif parsed.endpoint is None and parsed.entity in entities:
         raise SystemExit(
-            f"{path}: entity '{parsed.entity}' is served by both the instance "
-            f"default endpoint ({_DEFAULT_ENDPOINT}) and the active "
-            f"{name} - add an explicit 'endpoint:' line to pick one "
-            f"(literal or symbolic 'bootstrap')"
+            f"{path}: entity '{parsed.entity}' is served by both "
+            f"Default (use endpoint: default → Default/<ACU_API_VERSION>) "
+            f"and the active {name} - add an explicit 'endpoint:' line to "
+            f"pick one (literal or symbolic 'bootstrap' | 'default')"
         )
     return parsed
 

@@ -141,7 +141,9 @@ def _fetch(client: AcumaticaClient, spec: EntitySpec) -> list[dict[str, Any]]:
     A manifest filter rides both list reads, so the two paths serve the
     same record set and the per-key walk only visits filtered keys.
     """
-    endpoint = resolve_endpoint(spec.endpoint)
+    endpoint = resolve_endpoint(
+        spec.endpoint, api_version=client.instance.api_version
+    )
     narrowed = {"$filter": spec.filter} if spec.filter else {}
     try:
         return client.get_list(spec.entity, params=narrowed or None, endpoint=endpoint)
@@ -418,7 +420,9 @@ class _Extraction:
             # the active package does not serve cannot be read - skip clean
             # rather than 404 (full company surface lives in the data-repo
             # contract; minimal packaged fallback has config-init only).
-            resolved = resolve_endpoint(spec.endpoint)
+            resolved = resolve_endpoint(
+                spec.endpoint, api_version=self.client.instance.api_version
+            )
             if resolved == active_name and spec.entity not in active_entities:
                 self._skip(target, "entity not in active Bootstrap contract")
                 continue

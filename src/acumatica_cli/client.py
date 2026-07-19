@@ -190,9 +190,12 @@ class AcumaticaClient:
         return html.unescape(m.group(1))
 
     def _url(self, entity: str, endpoint: str | None = None) -> str:
-        # V11: versioned path only; the endpoint-name half is hardcoded
-        # Default - custom endpoints arrive per call (seed `endpoint:`)
-        return f"/entity/{endpoint or f'Default/{self.instance.api_version}'}/{entity}"
+        # V11: versioned path only. Omitted or symbolic "default" (V20) →
+        # Default/<Instance.api_version> so dual-serve seeds track the
+        # configured API generation; literals pass through unchanged.
+        if endpoint is None or endpoint == "default":
+            endpoint = f"Default/{self.instance.api_version}"
+        return f"/entity/{endpoint}/{entity}"
 
     @staticmethod
     def _checked(r: httpx.Response) -> httpx.Response:

@@ -150,7 +150,10 @@ def test_load_baseline_rejects_bootstrap_entity_without_endpoint(
     The error names both endpoints; a silent Default-endpoint PUT would hit
     a different screen than the author meant (B8 class).
     """
-    with pytest.raises(SystemExit, match=r"Default/25\.200\.001.*Bootstrap/1\.9\.0"):
+    with pytest.raises(
+        SystemExit,
+        match=r"endpoint: default.*Bootstrap/1\.9\.0.*'bootstrap' \| 'default'",
+    ):
         seed.load_baseline(_write(tmp_path, AMBIGUOUS_YAML))
 
 
@@ -158,7 +161,7 @@ def test_load_baseline_bootstrap_entity_explicit_endpoint_passes(
     tmp_path: Path,
 ) -> None:
     # V20: explicit endpoint: disambiguates - either target is legitimate
-    for endpoint in ("Bootstrap/1.9.0", "Default/25.200.001"):
+    for endpoint in ("Bootstrap/1.9.0", "Default/25.200.001", "default"):
         text = AMBIGUOUS_YAML + f"endpoint: {endpoint}\n"
         assert seed.load_baseline(_write(tmp_path, text)).endpoint == endpoint
 
@@ -167,6 +170,35 @@ def test_load_baseline_resolves_symbolic_bootstrap(tmp_path: Path) -> None:
     """Symbolic endpoint: bootstrap resolves to the active package version."""
     text = AMBIGUOUS_YAML + "endpoint: bootstrap\n"
     assert seed.load_baseline(_write(tmp_path, text)).endpoint == "Bootstrap/1.9.0"
+
+
+def test_load_baseline_keeps_symbolic_default(tmp_path: Path) -> None:
+    """V20: endpoint: default stays symbolic at load (resolved at HTTP time)."""
+    text = AMBIGUOUS_YAML + "endpoint: default\n"
+    assert seed.load_baseline(_write(tmp_path, text)).endpoint == "default"
+
+
+def test_resolve_endpoint_default_needs_api_version() -> None:
+    with pytest.raises(SystemExit, match=r"endpoint: default requires"):
+        seed.resolve_endpoint("default")
+    assert seed.resolve_endpoint("default", api_version="24.200.001") == (
+        "Default/24.200.001"
+    )
+
+
+def test_apply_symbolic_default_tracks_configured_api_version(
+    tmp_path: Path, instance: Instance
+) -> None:
+    """V20: symbolic default hits Default/<Instance.api_version>, not a pin."""
+    text = BASELINE + "endpoint: default\n"
+    baseline = seed.load_baseline(_write(tmp_path, text))
+    versioned = instance.model_copy(update={"api_version": "24.200.001"})
+    recorder = Recorder({"/UnitsOfMeasure": _live({"UOM": "KG"})})
+
+    seed.apply(_client(versioned, recorder), baseline)
+
+    paths = {r.url.path for r in recorder.requests}
+    assert paths == {"/AcumaticaERP/entity/Default/24.200.001/UnitsOfMeasure"}
 
 
 def test_active_bootstrap_prefers_data_repo_contract(
