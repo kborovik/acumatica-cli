@@ -10,7 +10,7 @@ from typing import Any
 import httpx
 import pytest
 
-from acumatica_cli.client import AcumaticaClient, unwrap, wrap
+from acumatica_cli.client import AcumaticaClient, parse_entity_list, unwrap, wrap
 from acumatica_cli.config import Instance
 
 
@@ -287,6 +287,39 @@ def test_url_resolves_symbolic_default(instance: Instance) -> None:
     assert client._url(  # pyright: ignore[reportPrivateUsage]
         "Warehouse", "Bootstrap/1.9.0"
     ) == "/entity/Bootstrap/1.9.0/Warehouse"
+
+
+def test_parse_entity_list_name_version_rows() -> None:
+    # T74/V12: official GET /entity shape — [{name, version, ...}, ...]
+    body = [
+        {"name": "Default", "version": "25.200.001", "href": "/entity/Default/..."},
+        {"name": "Bootstrap", "version": "1.9.0"},
+    ]
+    r = httpx.Response(200, json=body)
+    assert parse_entity_list(r) == [
+        ("Default", "25.200.001"),
+        ("Bootstrap", "1.9.0"),
+    ]
+
+
+def test_parse_entity_list_fail_closed_on_object() -> None:
+    r = httpx.Response(200, json={"Default": ["25.200.001"]})
+    with pytest.raises(RuntimeError, match=r"not parseable as endpoint list"):
+        parse_entity_list(r)
+
+
+def test_list_endpoints_hits_entity_root(instance: Instance) -> None:
+    recorder = Recorder(
+        {
+            "/entity": httpx.Response(
+                200,
+                json=[{"name": "Default", "version": "25.200.001"}],
+            )
+        }
+    )
+    client = _client(instance, recorder)
+    assert client.list_endpoints() == [("Default", "25.200.001")]
+    assert any(r.url.path.rstrip("/").endswith("/entity") for r in recorder.requests)
 
 
 def test_swagger_returns_raw_bytes_from_endpoint(instance: Instance) -> None:

@@ -62,6 +62,49 @@ def unwrap(entity: dict[str, Any]) -> dict[str, Any]:
     return out
 
 
+def parse_entity_list(response: httpx.Response) -> list[tuple[str, str]]:
+    """Parse ``GET /entity`` into ``[(name, version), ...]`` (fail-closed).
+
+    Vendor contract shape (Acumatica help + docs/rest-api.md): a JSON array
+    of objects with ``name`` and ``version`` strings. Unparseable body →
+    RuntimeError with status, content-type, and a short raw hint so a
+    shape change is re-verified (V12) rather than silently skipped.
+    """
+    try:
+        body = response.json()
+    except Exception as exc:
+        hint = response.text[:200].replace("\n", " ")
+        raise RuntimeError(
+            "GET /entity response not parseable as endpoint list "
+            f"(status {response.status_code}; "
+            f"content-type {response.headers.get('content-type', '?')}; "
+            f"first 200 chars: {hint})"
+        ) from exc
+    if not isinstance(body, list) or not body:
+        hint = str(body)[:200]
+        raise RuntimeError(
+            "GET /entity response not parseable as endpoint list "
+            f"(status {response.status_code}; expected non-empty JSON array; "
+            f"first 200 chars: {hint})"
+        )
+    out: list[tuple[str, str]] = []
+    for item in body:
+        if not isinstance(item, dict):
+            raise RuntimeError(
+                "GET /entity response not parseable as endpoint list "
+                f"(row is not an object: {item!r})"
+            )
+        name = item.get("name")
+        version = item.get("version")
+        if not isinstance(name, str) or not isinstance(version, str):
+            raise RuntimeError(
+                "GET /entity response not parseable as endpoint list "
+                f"(row missing string name/version: {item!r})"
+            )
+        out.append((name, version))
+    return out
+
+
 # The list GET's optimized-export failure (B9): the contract API's list GET
 # 500s with this marker when any field in scope maps to a BQL-delegate view.
 # The one error read paths retry around (seed.diff via the key-URL GET,
@@ -196,6 +239,14 @@ class AcumaticaClient:
         if endpoint is None or endpoint == "default":
             endpoint = f"Default/{self.instance.api_version}"
         return f"/entity/{endpoint}/{entity}"
+
+    def list_endpoints(self) -> list[tuple[str, str]]:
+        """Authenticated ``GET /entity`` → ``[(name, version), ...]`` (V12).
+
+        Fail-closed on unparseable body — see ``parse_entity_list``.
+        """
+        r = self._checked(self._http.get("/entity"))
+        return parse_entity_list(r)
 
     @staticmethod
     def _checked(r: httpx.Response) -> httpx.Response:

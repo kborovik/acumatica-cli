@@ -13,6 +13,30 @@ Newest Default contract endpoint on this build (from `GET /entity`):
 /AcumaticaERP/entity/Default/25.200.001/
 ```
 
+### `GET /entity` — endpoint list (config check probe)
+
+Authenticated `GET /entity` returns the published contract endpoints.
+Parse shape (vendor contract + offline fixtures; re-verify on upgrade, V12):
+
+```json
+[
+  {
+    "name": "Default",
+    "version": "25.200.001",
+    "href": "http://…/entity/Default/25.200.001/"
+  },
+  {
+    "name": "Bootstrap",
+    "version": "1.9.0",
+    "href": "http://…/entity/Bootstrap/1.9.0/"
+  }
+]
+```
+
+`acu config check` requires a `Default` row whose `version` equals
+`Instance.api_version` (exact string). Unparseable body → fail-closed
+with status, content-type, and a short raw hint — never silent skip.
+
 The instance's own OpenAPI 3.0.1 schema is the authoritative field-level
 reference — dump it with `acu schema`
 into `schemas/` (gitignored; ~3 MB, regenerate rather than version).

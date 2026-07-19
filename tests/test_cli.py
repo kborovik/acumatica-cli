@@ -59,6 +59,10 @@ class DummyClient:
     def swagger(self) -> bytes:
         return SWAGGER
 
+    def list_endpoints(self) -> list[tuple[str, str]]:
+        # T74: config check endpoints probe after REST login
+        return [("Default", self.instance.api_version)]
+
     def __enter__(self) -> DummyClient:
         return self
 
@@ -876,7 +880,8 @@ def test_config_check_all_probes_ok(
     assert lines[1] == "ok secrets (ACU_PASSWORD set)"
     assert lines[2].startswith("warn target: no target.yaml under ")
     assert lines[3] == "ok rest (http://acu.test/AcumaticaERP, tenant T1)"
-    assert lines[4] == "ok ssh (Administrator@acu.test)"
+    assert lines[4] == "ok endpoints (Default/25.200.001 present)"
+    assert lines[5] == "ok ssh (Administrator@acu.test)"
     assert calls == ["enter", "exit", "ping"]
 
 
@@ -932,7 +937,8 @@ def test_config_check_flags_only_passes(
     assert lines[1] == "ok secrets (--password)"
     assert lines[2] == "skip target (no data root)"
     assert lines[3] == "ok rest (http://acu.test/AcumaticaERP, tenant T1)"
-    assert lines[4] == "ok ssh (user@acu.test)"
+    assert lines[4] == "ok endpoints (Default/25.200.001 present)"
+    assert lines[5] == "ok ssh (user@acu.test)"
     assert "pw" not in result.output  # the secret value is never printed (V2)
 
 
@@ -1019,7 +1025,8 @@ def test_config_check_skips_ssh_when_unset(
     assert lines[1] == "ok secrets (ACU_PASSWORD set)"
     assert lines[2].startswith("warn target: no target.yaml under ")
     assert lines[3] == "ok rest (http://acu.test/AcumaticaERP, tenant T1)"
-    assert lines[4] == "skip ssh (ACU_SSH not set)"
+    assert lines[4] == "ok endpoints (Default/25.200.001 present)"
+    assert lines[5] == "skip ssh (ACU_SSH not set)"
     assert probes == []
 
 

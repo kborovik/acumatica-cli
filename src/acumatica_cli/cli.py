@@ -516,10 +516,12 @@ def config_check(ctx: click.Context, strict: bool) -> None:
     failed = _probe_target(root, inst, strict=strict)
     try:
         # entering the client is the whole probe: login + landed-tenant
-        # verify (V5), and the context manager guarantees logout (V6)
-        with AcumaticaClient(inst):
-            pass
-        output.data(f"ok rest ({inst.base_url}, tenant {inst.tenant})")
+        # verify (V5), and the context manager guarantees logout (V6);
+        # endpoints probe (T74) reuses the same session when login succeeds
+        with AcumaticaClient(inst) as client:
+            output.data(f"ok rest ({inst.base_url}, tenant {inst.tenant})")
+            if not _probe_endpoints(client, inst):
+                failed = True
     except (RuntimeError, httpx.HTTPError) as exc:
         output.data(f"fail rest: {exc}")
         failed = True
@@ -568,6 +570,30 @@ def _probe_target(root: Path | None, inst: Instance, *, strict: bool) -> bool:
     output.data(
         f"ok target (default_api={target.default_api} matches configured; "
         f"erp={target.erp} claimed)"
+    )
+    return False
+
+
+def _probe_endpoints(client: AcumaticaClient, inst: Instance) -> bool:
+    """Emit endpoints probe; return True on pass, False on fail (V12/V27).
+
+    Exact match: a Default entry whose version half equals
+    ``Instance.api_version``. Fail-closed when GET /entity is unparseable.
+    """
+    want = f"Default/{inst.api_version}"
+    try:
+        endpoints = client.list_endpoints()
+    except (RuntimeError, httpx.HTTPError) as exc:
+        output.data(f"fail endpoints: {exc}")
+        return False
+    defaults = [v for name, v in endpoints if name == "Default"]
+    if inst.api_version in defaults:
+        output.data(f"ok endpoints ({want} present)")
+        return True
+    present = ", ".join(f"Default/{v}" for v in defaults) or "(none)"
+    output.data(
+        f"fail endpoints: configured {want} not listed; "
+        f"present Default versions: {present}"
     )
     return False
 

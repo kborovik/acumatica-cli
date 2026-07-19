@@ -14,7 +14,11 @@ from acumatica_cli.tenant import TenantManager
 
 class DummyClient:
     def __init__(self, *args: object, **kwargs: object) -> None:
-        pass
+        self.instance = args[0] if args else None
+
+    def list_endpoints(self) -> list[tuple[str, str]]:
+        ver = getattr(self.instance, "api_version", "25.200.001")
+        return [("Default", ver)]
 
     def __enter__(self) -> DummyClient:
         return self
