@@ -259,7 +259,10 @@ gmake e2e FILE=test_provision_lifecycle  # one file, by stem or path
 
 ## License
 
-This project is licensed under the Apache License, Version 2.0.
+This project is licensed under the PolyForm Noncommercial License 1.0.0.
+Noncommercial use is free under that license.
+Commercial use requires a separate license — contact [lab5.ca](https://lab5.ca).
+
 See [LICENSE](LICENSE) and [NOTICE](NOTICE).
 
 Copyright 2026 Konstantin Borovik.
