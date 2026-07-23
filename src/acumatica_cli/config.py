@@ -30,26 +30,34 @@ DB_NAME = "AcumaticaDB"
 
 # `acu config init` template set: (package resource, destination) pairs.
 # Dotfiles are stored dotless (wheel tooling tends to drop dotfiles) and
-# mapped to their real names on write. Finance-minimal default (V28).
+# mapped to their real names on write.
+#
+# Layout under templates/ (symmetric flavors):
+#   finance/       — default finance-minimal package set (V28)
+#   distribution/  — overlays + master/scenario extras
+# bootstrap/project.xml is not a templates/ file: scaffold copies the
+# packaged full company contract (bootstrap_project.xml) so both flavors
+# share Bootstrap/1.0.0 (T81/T82).
 INIT_TEMPLATES = (
-    ("env", ".env"),
-    ("gitignore", ".gitignore"),
-    ("target", "target.yaml"),
-    ("baseline/10-subaccounts.yaml", "baseline/10-subaccounts.yaml"),
-    ("baseline/20-accounts.yaml", "baseline/20-accounts.yaml"),
-    ("baseline/40-ledger.yaml", "baseline/40-ledger.yaml"),
-    ("baseline/50-gl-preferences.yaml", "baseline/50-gl-preferences.yaml"),
-    ("baseline/60-ledger-company.yaml", "baseline/60-ledger-company.yaml"),
-    ("baseline/90-uoms.yaml", "baseline/90-uoms.yaml"),
-    ("bootstrap/company.yaml", "bootstrap/company.yaml"),
-    ("bootstrap/credit-terms.yaml", "bootstrap/credit-terms.yaml"),
-    ("bootstrap/features.yaml", "bootstrap/features.yaml"),
-    # T82: full company contract from packaged bootstrap_project.xml (not a
-    # templates/ copy) so both flavors share Bootstrap/1.0.0 identity.
-    ("bootstrap/project.xml", "bootstrap/project.xml"),
-    ("setup/10-financial-year.yaml", "setup/10-financial-year.yaml"),
-    ("setup/20-master-calendar.yaml", "setup/20-master-calendar.yaml"),
-    ("setup/30-open-periods.yaml", "setup/30-open-periods.yaml"),
+    ("finance/env", ".env"),
+    ("finance/gitignore", ".gitignore"),
+    ("finance/target", "target.yaml"),
+    ("finance/baseline/10-subaccounts.yaml", "baseline/10-subaccounts.yaml"),
+    ("finance/baseline/20-accounts.yaml", "baseline/20-accounts.yaml"),
+    ("finance/baseline/40-ledger.yaml", "baseline/40-ledger.yaml"),
+    ("finance/baseline/50-gl-preferences.yaml", "baseline/50-gl-preferences.yaml"),
+    ("finance/baseline/60-ledger-company.yaml", "baseline/60-ledger-company.yaml"),
+    ("finance/baseline/90-uoms.yaml", "baseline/90-uoms.yaml"),
+    ("finance/bootstrap/company.yaml", "bootstrap/company.yaml"),
+    ("finance/bootstrap/credit-terms.yaml", "bootstrap/credit-terms.yaml"),
+    ("finance/bootstrap/features.yaml", "bootstrap/features.yaml"),
+    (
+        "finance/bootstrap/project.xml",
+        "bootstrap/project.xml",
+    ),  # sentinel; see scaffold
+    ("finance/setup/10-financial-year.yaml", "setup/10-financial-year.yaml"),
+    ("finance/setup/20-master-calendar.yaml", "setup/20-master-calendar.yaml"),
+    ("finance/setup/30-open-periods.yaml", "setup/30-open-periods.yaml"),
 )
 
 # Opt-in `--flavor distribution` overlays + extras (V28/V29). Resource paths

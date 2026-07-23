@@ -46,4 +46,4 @@ Org CD is the single placeholder **LAB5** across company, ledger-company, open p
 
 ## Default flavor
 
-`acu config init` without `--flavor` scaffolds finance-minimal (same Bootstrap `project.xml`, no `master/`, no scenario). That path stays offline-e2e green.
+`acu config init` without `--flavor` scaffolds the `finance/` package set (same Bootstrap `project.xml`, no `master/`, no scenario). That path stays offline-e2e green.
