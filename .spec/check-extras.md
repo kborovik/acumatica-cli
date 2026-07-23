@@ -81,7 +81,7 @@ for granular /sdd:check runs.
 
 - package-embedded config = what — never company surface hardcoded in plugin source
 - bootstrap feature set sources from data-repo `bootstrap/features.yaml` (absent → built-in six)
-- bootstrap endpoint contract sources from data-repo `bootstrap/project.xml` when present (absent → packaged minimal contract)
+- bootstrap endpoint contract sources from data-repo `bootstrap/project.xml` when present (absent → packaged full company contract `Bootstrap/1.0.0`)
 
 ## §V.3 — discovery resolution matrix (extracted from SPEC.md §V.3)
 
@@ -92,7 +92,7 @@ for granular /sdd:check runs.
 ## §V.20 — seed endpoint resolution (extracted from SPEC.md §V.20)
 
 - literal forms: `Bootstrap/<ver>` | `Default/<ver>`; symbolic: `bootstrap` | `default`
-- symbolic `bootstrap` → active package version @ load (data-repo `bootstrap/project.xml` when present, else packaged contract)
+- symbolic `bootstrap` → active package version @ load (data-repo `bootstrap/project.xml` when present, else packaged full company contract)
 - symbolic `default` → `Default/<Instance.api_version>` @ HTTP via `client._url` (never load-rewritten)
 - §B.8 class — Bootstrap `Currency` vs Default CM201000 list; symptom returns behind clean apply
 
