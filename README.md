@@ -25,9 +25,19 @@ cd my-erp                                # edit .env: set ACU_PASSWORD
 
 acu config check                         # read-only preflight (incl. target.yaml)
 acu tenant create --id 3 --login DEV     # create the tenant + bootstrap it (needs SSH)
-acu --tenant DEV apply                   # seed bootstrap/, baseline/, setup/
+acu --tenant DEV apply                   # seed bootstrap/, baseline/, setup/ (, master/)
 acu --tenant DEV diff                    # prove zero drift (exit 2 on drift)
 ```
+
+**Distribution demo seed** (inventory, warehouse, items, vendors/customers, golden scenario):
+
+```sh
+acu config init --flavor distribution --host erp.example.com my-dist
+cd my-dist                               # edit .env; start from an empty tenant
+acu config check && acu bootstrap && acu apply && acu run scenario/ && acu diff
+```
+
+See [docs/distribution.md](docs/distribution.md) for the entity map and apply-order notes.
 
 **Hosted Acumatica (no SSH):** the tenant already exists; leave `ACU_SSH` blank.
 
@@ -63,25 +73,29 @@ acu [--tenant NAME] [--url URL] [--ssh USER@HOST] [--api-version V]
 ├── schema [--out DIR]                dump the endpoint's OpenAPI schema (swagger.json)
 │
 └── config                            configuration ops
-    ├── init [--host HOST] [DIR]      scaffold a data repo (.env, target.yaml, example YAML)
+    ├── init [--host HOST] [--flavor distribution] [DIR]
+    │                                 scaffold a data repo (.env, target.yaml, example YAML)
     ├── show                          print the resolved config as a complete .env
     └── check [--strict]              preflight: discovery, secrets, target, REST, endpoints, SSH
 ```
 
-`apply` and `diff` called without FILES default to the scaffolded directories, in order: `bootstrap/`, then `baseline/`, then `setup/`.
+`apply` and `diff` called without FILES default to existing scaffolded directories, in order: `bootstrap/`, `baseline/`, `setup/`, then `master/` when present.
 `run` called without FILES defaults to `scenario/`.
 `acu --completion` emits a completion script for bash, zsh, or fish — source it from your shell profile.
 Run `acu <command> --help` for details on any command.
 
 ## The data repo
 
-Your configuration lives in its own git repo. `acu config init` scaffolds everything except `scenario/`, which you author by hand:
+Your configuration lives in its own git repo.
+`acu config init` scaffolds finance-minimal seeds (no `master/`, no Bootstrap `project.xml`).
+`acu config init --flavor distribution` adds the full demo set (`project.xml`, expanded COA, `master/`, golden `scenario/`, README).
 
 | Path          | What it holds                                                              |
 | ------------- | -------------------------------------------------------------------------- |
 | `bootstrap/`  | what makes a virgin tenant configurable: features, company, credit terms   |
 | `baseline/`   | reference data: subaccounts, chart of accounts, ledger, units of measure   |
 | `setup/`      | one-time actions: financial year, master calendar, open periods            |
+| `master/`     | distribution masters (prefs, warehouse, items, vendors, customers); flavor only |
 | `scenario/`   | transaction scenarios for `acu run`: purchase, build, sell flows            |
 | `target.yaml` | committed verified matrix: `erp` + `default_api` (what, not where)         |
 | `.env`        | where to apply and who signs in, every key an `ACU_*` variable             |
