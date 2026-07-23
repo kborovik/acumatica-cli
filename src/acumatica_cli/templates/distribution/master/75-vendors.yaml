@@ -1,7 +1,7 @@
 # Vendors (AP303000) via the Default endpoint - reachable once AP
 # preferences exist (61-ap-preferences.yaml; P1 probe 500'd before it).
 # Four component suppliers + two service vendors (AP variety for later
-# scenario legs; buy-build-sell v1 bills only component vendors). Terms
+# scenario legs; buy-sell v1 purchases finished goods from SHENZHEN). Terms
 # ride each vendor: the Default VendorClass contract is skeletal
 # (ClassID/Description only - P1 schema read), so terms stay per vendor
 # while GL accounts default from the Bootstrap VendorClass (T64). The

@@ -116,7 +116,7 @@ def test_distribution_scaffold_layout(dist_repo: Path) -> None:
     """T80/V28: packaged flavor ships contract, master, scenario, README."""
     assert (dist_repo / "bootstrap" / "project.xml").is_file()
     assert (dist_repo / "master").is_dir()
-    assert (dist_repo / "scenario" / "buy-build-sell.yaml").is_file()
+    assert (dist_repo / "scenario" / "buy-sell.yaml").is_file()
     assert (dist_repo / "README.md").is_file()
     assert list((dist_repo / "master").glob("*.yaml"))
 

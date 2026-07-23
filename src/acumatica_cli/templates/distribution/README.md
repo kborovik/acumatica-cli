@@ -33,7 +33,7 @@ Or explicit paths: `acu apply bootstrap/ baseline/ setup/ master/` then `acu dif
 | `baseline/` | GL foundation (COA, ledger, subaccounts, UOMs) |
 | `setup/` | Financial year, master calendar, open periods |
 | `master/` | Inventory, warehouse, items, vendors, customers, module prefs |
-| `scenario/` | Golden path (buy/receive → sell/ship/invoice/pay; kits) |
+| `scenario/` | Golden path (buy/receive → sell/ship/invoice/pay) |
 | `target.yaml` | Verified ERP / Default API matrix |
 
 Org CD is the single placeholder **LAB5** across company, ledger-company, open periods, inventory transit branch, and cash account.

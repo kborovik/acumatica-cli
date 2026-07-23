@@ -8,16 +8,16 @@ scenario generator: declarative steps, checkable expectations.
 
 Scenario file format (SPEC I.data):
 
-    scenario: buy-build-sell
-    description: Buy parts -> assemble kits -> sell -> collect
+    scenario: buy-sell
+    description: Buy finished goods -> sell -> collect
     steps:
-      - id: po-shenzhen
+      - id: po-gateways
         put: PurchaseOrder
         record:
           VendorID: SHENZHEN
           Details:
-            - { InventoryID: MB-CM4, OrderQty: 25 }
-        capture: { OrderNbr: po_shenzhen }     # server-assigned -> ${var}
+            - { InventoryID: GW-EDGE, OrderQty: 10 }
+        capture: { OrderNbr: po_gateways }     # server-assigned -> ${var}
       - id: release
         action: { entity: PurchaseReceipt, name: ReleasePurchaseReceipt }
         record: { ReceiptNbr: "${rcpt}" }

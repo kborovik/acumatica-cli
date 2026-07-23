@@ -1,5 +1,5 @@
 # Chart of accounts (GL202500), designed for LAB5 Distribution (lab5.ca demo tenant seed) - 23 accounts covering GL foundation plus the
-# AP/AR/IN/SO/PO posting resolution the buy-build-sell scenario needs.
+# AP/AR/IN/SO/PO posting resolution the buy-sell scenario needs.
 # Field shape live-verified on 26.101.0225 by the earlier SalesDemo
 # replay (T24). Stripped per that work: internal AccountID, AccountClass
 # (no Default-endpoint entity), AccountGroup (PM - absent on a fresh

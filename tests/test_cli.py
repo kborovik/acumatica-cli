@@ -881,7 +881,7 @@ def test_config_init_flavor_distribution_scaffolds_demo_seed(tmp_path: Path) -> 
         in (tmp_path / "bootstrap" / "project.xml").read_text()
     )
     assert (tmp_path / "master" / "20-in-preferences.yaml").is_file()
-    assert (tmp_path / "scenario" / "buy-build-sell.yaml").is_file()
+    assert (tmp_path / "scenario" / "buy-sell.yaml").is_file()
     assert (tmp_path / "README.md").is_file()
     assert "acu run scenario/" in result.output
     writes = [ln for ln in result.output.splitlines() if ln.startswith("write ")]

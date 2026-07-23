@@ -18,7 +18,7 @@ cd my-dist
 acu config check
 acu bootstrap                 # publishes Bootstrap + features from bootstrap/
 acu apply                     # bootstrap/ → baseline/ → setup/ → master/
-acu run scenario/             # golden buy/receive → sell/ship/invoice/pay (kits)
+acu run scenario/             # golden buy/receive → sell/ship/invoice/pay
 acu diff                      # expect exit 0 (no drift)
 ```
 
@@ -85,7 +85,7 @@ Reference closure: every foreign key must resolve to a tenant-native row or an e
 | `master/80-stock-items-parts.yaml` | StockItem | default | IN202500 |
 | `master/82-stock-items-kits.yaml` | StockItem | default | IN202500 |
 | `master/85-kit-specifications.yaml` | KitSpecification | default | IN209500 |
-| `scenario/buy-build-sell.yaml` | (transactions via `acu run`) | mixed | SO/PO/IN/AR |
+| `scenario/buy-sell.yaml` | (transactions via `acu run`) | mixed | SO/PO/IN/AR |
 
 `endpoint: bootstrap` resolves to the active Bootstrap package version from `bootstrap/project.xml`.
 

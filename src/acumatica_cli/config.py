@@ -112,7 +112,7 @@ DISTRIBUTION_TEMPLATES = (
         "distribution/master/85-kit-specifications.yaml",
         "master/85-kit-specifications.yaml",
     ),
-    ("distribution/scenario/buy-build-sell.yaml", "scenario/buy-build-sell.yaml"),
+    ("distribution/scenario/buy-sell.yaml", "scenario/buy-sell.yaml"),
     ("distribution/README.md", "README.md"),
 )
 
