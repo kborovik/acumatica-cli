@@ -1,4 +1,4 @@
-# Acumatica GitOps (Config-as-Code)
+# Acumatica ERP - GitOps CLI
 
 **`acu`** configures Acumatica ERP from YAML files in a git repo (GitOps). 
 
