@@ -111,7 +111,7 @@ T76|x|optional live ERP build probe in `config check` (HTTP only; major.minor ma
 T77|x|`config init --flavor distribution` CLI + default apply/diff order includes `master/` when present + post-scaffold next-step cmds; default (no flavor) path unchanged|V28,I.cmd
 T78|x|package distribution templates: bootstrap `project.xml` + features + expanded COA + `master/*` + golden `scenario/` + README (rebuild order, empty-tenant !); org-CD token per V29; feature+ref closure per V22|V21,V22,V28,V29,I.data,T77
 T79|x|docs: distribution entity map (entity, endpoint bootstrap or default, screen, seed file) + apply-order/deps notes + changelog/release note for `--flavor distribution` + any apply-dir default change|V12,V28,T77,T78
-T80|.|live verify acceptance: virgin empty tenant matching `target.yaml` → `bootstrap` → `apply` → `run scenario/` expects hold → `diff` clean; default no-flavor init offline e2e still green|V4,V12,V22,V28,V29,T77,T78
+T80|x|live verify acceptance: virgin empty tenant matching `target.yaml` → `bootstrap` → `apply` → `run scenario/` expects hold → `diff` clean; default no-flavor init offline e2e still green|V4,V12,V22,V28,V29,T77,T78
 
 ## §B BUGS
 

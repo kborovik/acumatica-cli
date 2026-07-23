@@ -97,7 +97,9 @@ def test_checked_surfaces_exception_message() -> None:
 def test_checked_tolerates_non_json_error_body() -> None:
     request = httpx.Request("GET", "http://acu.test/AcumaticaERP/entity/x")
     r = httpx.Response(502, request=request, text="<html>bad gateway</html>")
-    with pytest.raises(RuntimeError, match=r"GET /AcumaticaERP/entity/x -> 502$"):
+    with pytest.raises(RuntimeError, match=r"GET /AcumaticaERP/entity/x -> 502"):
+        AcumaticaClient._checked(r)  # pyright: ignore[reportPrivateUsage]
+    with pytest.raises(RuntimeError, match="bad gateway"):
         AcumaticaClient._checked(r)  # pyright: ignore[reportPrivateUsage]
 
 

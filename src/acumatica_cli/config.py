@@ -73,7 +73,11 @@ DISTRIBUTION_TEMPLATES = (
         "distribution/master/51-warehouse-locations.yaml",
         "master/51-warehouse-locations.yaml",
     ),
-    ("distribution/master/52-tax-categories.yaml", "master/52-tax-categories.yaml"),
+    (
+        "distribution/master/52-warehouse-defaults.yaml",
+        "master/52-warehouse-defaults.yaml",
+    ),
+    ("distribution/master/53-tax-categories.yaml", "master/53-tax-categories.yaml"),
     ("distribution/master/54-item-classes.yaml", "master/54-item-classes.yaml"),
     ("distribution/master/56-so-preferences.yaml", "master/56-so-preferences.yaml"),
     ("distribution/master/57-po-preferences.yaml", "master/57-po-preferences.yaml"),

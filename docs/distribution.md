@@ -66,7 +66,8 @@ Reference closure: every foreign key must resolve to a tenant-native row or an e
 | `master/40-posting-classes.yaml` | PostingClass | bootstrap | IN206000 |
 | `master/50-warehouse.yaml` | Warehouse | bootstrap | IN204000 |
 | `master/51-warehouse-locations.yaml` | Warehouse (locations) | default | IN204000 |
-| `master/52-tax-categories.yaml` | TaxCategory | default | TX205500 |
+| `master/52-warehouse-defaults.yaml` | Warehouse (receive/ship/RMA bins) | default | IN204000 |
+| `master/53-tax-categories.yaml` | TaxCategory | default | TX205500 |
 | `master/54-item-classes.yaml` | ItemClass | default | IN201000 |
 | `master/56-so-preferences.yaml` | SOPreferences | bootstrap | SO101000 |
 | `master/57-po-preferences.yaml` | POPreferences | bootstrap | PO101000 |

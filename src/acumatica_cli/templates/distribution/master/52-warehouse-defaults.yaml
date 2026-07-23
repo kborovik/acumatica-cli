@@ -1,0 +1,13 @@
+# Warehouse default locations (IN204000) via Default endpoint — second
+# phase after 51-warehouse-locations.yaml creates bin MAIN. Sets receive /
+# ship / RMA defaults required for PO receipts and kit assembly when the
+# WarehouseLocation feature is on. Same-record PUT with Locations leaves
+# these empty (live 26.101.0225 probe 2026-07-23).
+entity: Warehouse
+key: WarehouseID
+endpoint: default
+records:
+- WarehouseID: WH01
+  ReceivingLocationID: MAIN
+  ShippingLocationID: MAIN
+  RMALocationID: MAIN

@@ -255,9 +255,30 @@ class AcumaticaClient:
             detail = ""
             try:
                 body = r.json()
-                detail = body.get("exceptionMessage") or body.get("message") or ""
+                if isinstance(body, dict):
+                    detail = (
+                        body.get("exceptionMessage")
+                        or body.get("message")
+                        or body.get("error")
+                        or ""
+                    )
+                    # nested contract-API validation often rides here
+                    if not detail and isinstance(body.get("innerException"), dict):
+                        inner = body["innerException"]
+                        detail = (
+                            inner.get("exceptionMessage")
+                            or inner.get("message")
+                            or ""
+                        )
+                    if not detail:
+                        # last resort: compact JSON (422 bodies are small)
+                        import json
+
+                        detail = json.dumps(body, separators=(",", ":"))[:500]
+                elif isinstance(body, list) and body:
+                    detail = str(body[0])[:500]
             except Exception:
-                pass
+                detail = (r.text or "")[:500]
             raise RuntimeError(
                 f"{r.request.method} {r.request.url.path} -> {r.status_code}"
                 + (f": {detail}" if detail else "")
