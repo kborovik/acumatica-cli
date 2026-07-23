@@ -1,11 +1,11 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!--
-  acu bootstrap customization package template - minimal config-init surface
-  (SPEC T69 hybrid A).
+  acu bootstrap customization package template - full company contract
+  (SPEC T81: single Bootstrap/1.0.0 line both flavors).
 
   package_zip() (bootstrap.py) prefers data-repo bootstrap/project.xml when
   present; otherwise this packaged template is the fallback so config init,
-  offline tests, and PyPI-only installs still bootstrap.
+  offline tests, and PyPI-only installs still bootstrap the full surface.
 
   package_zip() injects a
   <Graph ClassName="AcuBootstrapPlugin" FileType="NewFile" Source="..."/>
@@ -24,23 +24,20 @@
   PX.Api.ContractBased.Common.Model.Endpoint - namespace
   http://www.acumatica.com/entity/maintenance/5.31, systemContractVersion 4.
 
-  Minimal entity payload (config-init + GL chain only; full company surface
-  lives in the data repo's bootstrap/project.xml per T69):
-  - Company    CS101500 -> OrganizationMaint, PrimaryView BAccount
-  - CreditTerms CS206500 -> TermsMaint, PrimaryView TermsDef
-  - LedgerCompany GL201500 -> GeneralLedgerMaint (org-ledger link, B12)
-  - FinancialYearSettings GL101000 + GeneratePeriods (AutoFill)
-  - MasterCalendar GL201000 + GenerateCalendar (GenerateYears)
-  - CompanyCalendar / CompanyPeriod GL201100 (done_when probes)
-  - ManagePeriods GL503000 + ProcessAll (period activation, B13)
-  - GLPreferences GL102000 (YtdNetIncAccountID + RetEarnAccountID)
+  Full company entity payload (finance + distribution setup surface):
+  Company, CreditTerms, Currency, LedgerCompany, FinancialYearSettings,
+  MasterCalendar, CompanyCalendar, CompanyPeriod, ManagePeriods,
+  GLPreferences, INPreferences, ReasonCode, AP/AR/SO/PO/CA Preferences,
+  AvailabilityCalculationRule, PostingClass, VendorClass, StatementCycle,
+  Warehouse, OrderType, CashAccount.
 
   Contract field names = DAC property names verbatim (no rename layer).
   Features (CS100000) stays OUT of the endpoint - the plugin owns features.
+  Shape change requires a version bump (V21).
 -->
-<Customization level="" description="acu bootstrap: CustomizationPlugin enables features on publish; Bootstrap endpoint exposes company + credit terms + GL preferences + ledger-company link + financial year + calendars + period activation (config-init surface; full company contract lives in data-repo bootstrap/project.xml)" product-version="26.101">
+<Customization level="" description="acu bootstrap: CustomizationPlugin enables features on publish; Bootstrap endpoint exposes full company surface (company + credit terms + financial currency + GL chain + module preferences + vendor class + statement cycle + warehouse + order type + cash account)" product-version="26.101">
   <EntityEndpoint>
-    <Endpoint xmlns="http://www.acumatica.com/entity/maintenance/5.31" name="Bootstrap" version="1.9.0" systemContractVersion="4">
+    <Endpoint xmlns="http://www.acumatica.com/entity/maintenance/5.31" name="Bootstrap" version="1.0.0" systemContractVersion="4">
       <TopLevelEntity name="Company" screen="CS101500">
         <Fields>
           <Field name="AcctCD" type="StringValue" />
@@ -98,6 +95,116 @@
           </Mapping>
           <Mapping field="DiscPercent">
             <To object="TermsDef" field="DiscPercent" />
+          </Mapping>
+        </Mappings>
+      </TopLevelEntity>
+      <TopLevelEntity name="Currency" screen="CM202000">
+        <Fields>
+          <Field name="CuryID" type="StringValue" />
+          <Field name="Description" type="StringValue" />
+          <Field name="CurySymbol" type="StringValue" />
+          <Field name="DecimalPlaces" type="ShortValue" />
+          <Field name="IsActive" type="BooleanValue" />
+          <Field name="IsFinancial" type="BooleanValue" />
+          <Field name="RealGainAcctID" type="StringValue" />
+          <Field name="RealGainSubID" type="StringValue" />
+          <Field name="RealLossAcctID" type="StringValue" />
+          <Field name="RealLossSubID" type="StringValue" />
+          <Field name="RevalGainAcctID" type="StringValue" />
+          <Field name="RevalGainSubID" type="StringValue" />
+          <Field name="RevalLossAcctID" type="StringValue" />
+          <Field name="RevalLossSubID" type="StringValue" />
+          <Field name="TranslationGainAcctID" type="StringValue" />
+          <Field name="TranslationGainSubID" type="StringValue" />
+          <Field name="TranslationLossAcctID" type="StringValue" />
+          <Field name="TranslationLossSubID" type="StringValue" />
+          <Field name="UnrealizedGainAcctID" type="StringValue" />
+          <Field name="UnrealizedGainSubID" type="StringValue" />
+          <Field name="UnrealizedLossAcctID" type="StringValue" />
+          <Field name="UnrealizedLossSubID" type="StringValue" />
+          <Field name="RoundingGainAcctID" type="StringValue" />
+          <Field name="RoundingGainSubID" type="StringValue" />
+          <Field name="RoundingLossAcctID" type="StringValue" />
+          <Field name="RoundingLossSubID" type="StringValue" />
+        </Fields>
+        <Mappings>
+          <Mapping field="CuryID">
+            <To object="CuryListRecords" field="CuryID" />
+          </Mapping>
+          <Mapping field="Description">
+            <To object="CuryListRecords" field="Description" />
+          </Mapping>
+          <Mapping field="CurySymbol">
+            <To object="CuryListRecords" field="CurySymbol" />
+          </Mapping>
+          <Mapping field="DecimalPlaces">
+            <To object="CuryListRecords" field="DecimalPlaces" />
+          </Mapping>
+          <Mapping field="IsActive">
+            <To object="CuryListRecords" field="IsActive" />
+          </Mapping>
+          <Mapping field="IsFinancial">
+            <To object="CuryListRecords" field="IsFinancial" />
+          </Mapping>
+          <Mapping field="RealGainAcctID">
+            <To object="CuryRecords" field="RealGainAcctID" />
+          </Mapping>
+          <Mapping field="RealGainSubID">
+            <To object="CuryRecords" field="RealGainSubID" />
+          </Mapping>
+          <Mapping field="RealLossAcctID">
+            <To object="CuryRecords" field="RealLossAcctID" />
+          </Mapping>
+          <Mapping field="RealLossSubID">
+            <To object="CuryRecords" field="RealLossSubID" />
+          </Mapping>
+          <Mapping field="RevalGainAcctID">
+            <To object="CuryRecords" field="RevalGainAcctID" />
+          </Mapping>
+          <Mapping field="RevalGainSubID">
+            <To object="CuryRecords" field="RevalGainSubID" />
+          </Mapping>
+          <Mapping field="RevalLossAcctID">
+            <To object="CuryRecords" field="RevalLossAcctID" />
+          </Mapping>
+          <Mapping field="RevalLossSubID">
+            <To object="CuryRecords" field="RevalLossSubID" />
+          </Mapping>
+          <Mapping field="TranslationGainAcctID">
+            <To object="CuryRecords" field="TranslationGainAcctID" />
+          </Mapping>
+          <Mapping field="TranslationGainSubID">
+            <To object="CuryRecords" field="TranslationGainSubID" />
+          </Mapping>
+          <Mapping field="TranslationLossAcctID">
+            <To object="CuryRecords" field="TranslationLossAcctID" />
+          </Mapping>
+          <Mapping field="TranslationLossSubID">
+            <To object="CuryRecords" field="TranslationLossSubID" />
+          </Mapping>
+          <Mapping field="UnrealizedGainAcctID">
+            <To object="CuryRecords" field="UnrealizedGainAcctID" />
+          </Mapping>
+          <Mapping field="UnrealizedGainSubID">
+            <To object="CuryRecords" field="UnrealizedGainSubID" />
+          </Mapping>
+          <Mapping field="UnrealizedLossAcctID">
+            <To object="CuryRecords" field="UnrealizedLossAcctID" />
+          </Mapping>
+          <Mapping field="UnrealizedLossSubID">
+            <To object="CuryRecords" field="UnrealizedLossSubID" />
+          </Mapping>
+          <Mapping field="RoundingGainAcctID">
+            <To object="CuryRecords" field="RoundingGainAcctID" />
+          </Mapping>
+          <Mapping field="RoundingGainSubID">
+            <To object="CuryRecords" field="RoundingGainSubID" />
+          </Mapping>
+          <Mapping field="RoundingLossAcctID">
+            <To object="CuryRecords" field="RoundingLossAcctID" />
+          </Mapping>
+          <Mapping field="RoundingLossSubID">
+            <To object="CuryRecords" field="RoundingLossSubID" />
           </Mapping>
         </Mappings>
       </TopLevelEntity>
@@ -230,6 +337,450 @@
           </Mapping>
           <Mapping field="RetEarnAccountID">
             <To object="GLSetupRecord" field="RetEarnAccountID" />
+          </Mapping>
+        </Mappings>
+      </TopLevelEntity>
+      <TopLevelEntity name="INPreferences" screen="IN101000">
+        <Fields>
+          <Field name="HoldEntry" type="BooleanValue" />
+          <Field name="INProgressAcctID" type="StringValue" />
+          <Field name="INProgressSubID" type="StringValue" />
+          <Field name="IssuesReasonCode" type="StringValue" />
+          <Field name="ReceiptReasonCode" type="StringValue" />
+          <Field name="AdjustmentReasonCode" type="StringValue" />
+          <Field name="PIReasonCode" type="StringValue" />
+          <Field name="INTransitAcctID" type="StringValue" />
+          <Field name="INTransitSubID" type="StringValue" />
+          <Field name="TransitBranchID" type="StringValue" />
+          <Field name="UpdateGL" type="BooleanValue" />
+        </Fields>
+        <Mappings>
+          <Mapping field="HoldEntry">
+            <To object="setup" field="HoldEntry" />
+          </Mapping>
+          <Mapping field="INProgressAcctID">
+            <To object="setup" field="INProgressAcctID" />
+          </Mapping>
+          <Mapping field="INProgressSubID">
+            <To object="setup" field="INProgressSubID" />
+          </Mapping>
+          <Mapping field="IssuesReasonCode">
+            <To object="setup" field="IssuesReasonCode" />
+          </Mapping>
+          <Mapping field="ReceiptReasonCode">
+            <To object="setup" field="ReceiptReasonCode" />
+          </Mapping>
+          <Mapping field="AdjustmentReasonCode">
+            <To object="setup" field="AdjustmentReasonCode" />
+          </Mapping>
+          <Mapping field="PIReasonCode">
+            <To object="setup" field="PIReasonCode" />
+          </Mapping>
+          <Mapping field="INTransitAcctID">
+            <To object="setup" field="INTransitAcctID" />
+          </Mapping>
+          <Mapping field="INTransitSubID">
+            <To object="setup" field="INTransitSubID" />
+          </Mapping>
+          <Mapping field="TransitBranchID">
+            <To object="setup" field="TransitBranchID" />
+          </Mapping>
+          <Mapping field="UpdateGL">
+            <To object="setup" field="UpdateGL" />
+          </Mapping>
+        </Mappings>
+      </TopLevelEntity>
+      <TopLevelEntity name="ReasonCode" screen="CS211000">
+        <Fields>
+          <Field name="ReasonCodeID" type="StringValue" />
+          <Field name="Descr" type="StringValue" />
+          <Field name="Usage" type="StringValue" />
+          <Field name="AccountID" type="StringValue" />
+          <Field name="SubID" type="StringValue" />
+        </Fields>
+        <Mappings>
+          <Mapping field="ReasonCodeID">
+            <To object="reasoncode" field="ReasonCodeID" />
+          </Mapping>
+          <Mapping field="Descr">
+            <To object="reasoncode" field="Descr" />
+          </Mapping>
+          <Mapping field="Usage">
+            <To object="reasoncode" field="Usage" />
+          </Mapping>
+          <Mapping field="AccountID">
+            <To object="reasoncode" field="AccountID" />
+          </Mapping>
+          <Mapping field="SubID">
+            <To object="reasoncode" field="SubID" />
+          </Mapping>
+        </Mappings>
+      </TopLevelEntity>
+      <TopLevelEntity name="APPreferences" screen="AP101000">
+        <Fields>
+          <Field name="HoldEntry" type="BooleanValue" />
+        </Fields>
+        <Mappings>
+          <Mapping field="HoldEntry">
+            <To object="Setup" field="HoldEntry" />
+          </Mapping>
+        </Mappings>
+      </TopLevelEntity>
+      <TopLevelEntity name="ARPreferences" screen="AR101000">
+        <Fields>
+          <Field name="HoldEntry" type="BooleanValue" />
+        </Fields>
+        <Mappings>
+          <Mapping field="HoldEntry">
+            <To object="ARSetupRecord" field="HoldEntry" />
+          </Mapping>
+        </Mappings>
+      </TopLevelEntity>
+      <TopLevelEntity name="SOPreferences" screen="SO101000">
+        <Fields>
+          <Field name="DefaultOrderType" type="StringValue" />
+          <Field name="HoldShipments" type="BooleanValue" />
+          <Field name="RequireShipmentTotal" type="BooleanValue" />
+          <Field name="AutoReleaseIN" type="BooleanValue" />
+        </Fields>
+        <Mappings>
+          <Mapping field="DefaultOrderType">
+            <To object="sosetup" field="DefaultOrderType" />
+          </Mapping>
+          <Mapping field="HoldShipments">
+            <To object="sosetup" field="HoldShipments" />
+          </Mapping>
+          <Mapping field="RequireShipmentTotal">
+            <To object="sosetup" field="RequireShipmentTotal" />
+          </Mapping>
+          <Mapping field="AutoReleaseIN">
+            <To object="sosetup" field="AutoReleaseIN" />
+          </Mapping>
+        </Mappings>
+      </TopLevelEntity>
+      <TopLevelEntity name="POPreferences" screen="PO101000">
+        <Fields>
+          <Field name="HoldReceipts" type="BooleanValue" />
+          <Field name="RCReturnReasonCodeID" type="StringValue" />
+          <Field name="AutoReleaseIN" type="BooleanValue" />
+        </Fields>
+        <Mappings>
+          <Mapping field="HoldReceipts">
+            <To object="Setup" field="HoldReceipts" />
+          </Mapping>
+          <Mapping field="AutoReleaseIN">
+            <To object="Setup" field="AutoReleaseIN" />
+          </Mapping>
+          <Mapping field="RCReturnReasonCodeID">
+            <To object="Setup" field="RCReturnReasonCodeID" />
+          </Mapping>
+        </Mappings>
+      </TopLevelEntity>
+      <TopLevelEntity name="AvailabilityCalculationRule" screen="IN201500">
+        <Fields>
+          <Field name="AvailabilitySchemeID" type="StringValue" />
+          <Field name="Description" type="StringValue" />
+        </Fields>
+        <Mappings>
+          <Mapping field="AvailabilitySchemeID">
+            <To object="Schemes" field="AvailabilitySchemeID" />
+          </Mapping>
+          <Mapping field="Description">
+            <To object="Schemes" field="Description" />
+          </Mapping>
+        </Mappings>
+      </TopLevelEntity>
+      <TopLevelEntity name="PostingClass" screen="IN206000">
+        <Fields>
+          <Field name="PostClassID" type="StringValue" />
+          <Field name="Descr" type="StringValue" />
+          <Field name="InvtAcctDefault" type="StringValue" />
+          <Field name="SalesAcctDefault" type="StringValue" />
+          <Field name="COGSAcctDefault" type="StringValue" />
+          <Field name="POAccrualAcctDefault" type="StringValue" />
+          <Field name="PPVAcctDefault" type="StringValue" />
+          <Field name="LCVarianceAcctDefault" type="StringValue" />
+          <Field name="InvtSubMask" type="StringValue" />
+          <Field name="SalesSubMask" type="StringValue" />
+          <Field name="COGSSubMask" type="StringValue" />
+          <Field name="POAccrualSubMask" type="StringValue" />
+          <Field name="PPVSubMask" type="StringValue" />
+          <Field name="LCVarianceSubMask" type="StringValue" />
+          <Field name="InvtAcctID" type="StringValue" />
+          <Field name="InvtSubID" type="StringValue" />
+          <Field name="SalesAcctID" type="StringValue" />
+          <Field name="SalesSubID" type="StringValue" />
+          <Field name="COGSAcctID" type="StringValue" />
+          <Field name="COGSSubID" type="StringValue" />
+          <Field name="POAccrualAcctID" type="StringValue" />
+          <Field name="POAccrualSubID" type="StringValue" />
+          <Field name="PPVAcctID" type="StringValue" />
+          <Field name="PPVSubID" type="StringValue" />
+          <Field name="LCVarianceAcctID" type="StringValue" />
+          <Field name="LCVarianceSubID" type="StringValue" />
+        </Fields>
+        <Mappings>
+          <Mapping field="PostClassID">
+            <To object="postclass" field="PostClassID" />
+          </Mapping>
+          <Mapping field="Descr">
+            <To object="postclass" field="Descr" />
+          </Mapping>
+          <Mapping field="InvtAcctDefault">
+            <To object="postclass" field="InvtAcctDefault" />
+          </Mapping>
+          <Mapping field="SalesAcctDefault">
+            <To object="postclass" field="SalesAcctDefault" />
+          </Mapping>
+          <Mapping field="COGSAcctDefault">
+            <To object="postclass" field="COGSAcctDefault" />
+          </Mapping>
+          <Mapping field="POAccrualAcctDefault">
+            <To object="postclass" field="POAccrualAcctDefault" />
+          </Mapping>
+          <Mapping field="PPVAcctDefault">
+            <To object="postclass" field="PPVAcctDefault" />
+          </Mapping>
+          <Mapping field="LCVarianceAcctDefault">
+            <To object="postclass" field="LCVarianceAcctDefault" />
+          </Mapping>
+          <Mapping field="InvtSubMask">
+            <To object="postclass" field="InvtSubMask" />
+          </Mapping>
+          <Mapping field="SalesSubMask">
+            <To object="postclass" field="SalesSubMask" />
+          </Mapping>
+          <Mapping field="COGSSubMask">
+            <To object="postclass" field="COGSSubMask" />
+          </Mapping>
+          <Mapping field="POAccrualSubMask">
+            <To object="postclass" field="POAccrualSubMask" />
+          </Mapping>
+          <Mapping field="PPVSubMask">
+            <To object="postclass" field="PPVSubMask" />
+          </Mapping>
+          <Mapping field="LCVarianceSubMask">
+            <To object="postclass" field="LCVarianceSubMask" />
+          </Mapping>
+          <Mapping field="InvtAcctID">
+            <To object="postclass" field="InvtAcctID" />
+          </Mapping>
+          <Mapping field="InvtSubID">
+            <To object="postclass" field="InvtSubID" />
+          </Mapping>
+          <Mapping field="SalesAcctID">
+            <To object="postclass" field="SalesAcctID" />
+          </Mapping>
+          <Mapping field="SalesSubID">
+            <To object="postclass" field="SalesSubID" />
+          </Mapping>
+          <Mapping field="COGSAcctID">
+            <To object="postclass" field="COGSAcctID" />
+          </Mapping>
+          <Mapping field="COGSSubID">
+            <To object="postclass" field="COGSSubID" />
+          </Mapping>
+          <Mapping field="POAccrualAcctID">
+            <To object="postclass" field="POAccrualAcctID" />
+          </Mapping>
+          <Mapping field="POAccrualSubID">
+            <To object="postclass" field="POAccrualSubID" />
+          </Mapping>
+          <Mapping field="PPVAcctID">
+            <To object="postclass" field="PPVAcctID" />
+          </Mapping>
+          <Mapping field="PPVSubID">
+            <To object="postclass" field="PPVSubID" />
+          </Mapping>
+          <Mapping field="LCVarianceAcctID">
+            <To object="postclass" field="LCVarianceAcctID" />
+          </Mapping>
+          <Mapping field="LCVarianceSubID">
+            <To object="postclass" field="LCVarianceSubID" />
+          </Mapping>
+        </Mappings>
+      </TopLevelEntity>
+      <TopLevelEntity name="CAPreferences" screen="CA101000">
+        <Fields>
+          <Field name="HoldEntry" type="BooleanValue" />
+          <Field name="TransitAcctId" type="StringValue" />
+          <Field name="TransitSubID" type="StringValue" />
+        </Fields>
+        <Mappings>
+          <Mapping field="HoldEntry">
+            <To object="CASetupRecord" field="HoldEntry" />
+          </Mapping>
+          <Mapping field="TransitAcctId">
+            <To object="CASetupRecord" field="TransitAcctId" />
+          </Mapping>
+          <Mapping field="TransitSubID">
+            <To object="CASetupRecord" field="TransitSubID" />
+          </Mapping>
+        </Mappings>
+      </TopLevelEntity>
+      <TopLevelEntity name="VendorClass" screen="AP201000">
+        <Fields>
+          <Field name="VendorClassID" type="StringValue" />
+          <Field name="Descr" type="StringValue" />
+          <Field name="TermsID" type="StringValue" />
+          <Field name="APAcctID" type="StringValue" />
+          <Field name="APSubID" type="StringValue" />
+          <Field name="ExpenseAcctID" type="StringValue" />
+          <Field name="ExpenseSubID" type="StringValue" />
+          <Field name="DiscTakenAcctID" type="StringValue" />
+          <Field name="DiscTakenSubID" type="StringValue" />
+          <Field name="POAccrualAcctID" type="StringValue" />
+          <Field name="POAccrualSubID" type="StringValue" />
+          <Field name="PrepaymentAcctID" type="StringValue" />
+          <Field name="PrepaymentSubID" type="StringValue" />
+        </Fields>
+        <Mappings>
+          <Mapping field="VendorClassID">
+            <To object="VendorClassRecord" field="VendorClassID" />
+          </Mapping>
+          <Mapping field="Descr">
+            <To object="VendorClassRecord" field="Descr" />
+          </Mapping>
+          <Mapping field="TermsID">
+            <To object="VendorClassRecord" field="TermsID" />
+          </Mapping>
+          <Mapping field="APAcctID">
+            <To object="VendorClassRecord" field="APAcctID" />
+          </Mapping>
+          <Mapping field="APSubID">
+            <To object="VendorClassRecord" field="APSubID" />
+          </Mapping>
+          <Mapping field="ExpenseAcctID">
+            <To object="VendorClassRecord" field="ExpenseAcctID" />
+          </Mapping>
+          <Mapping field="ExpenseSubID">
+            <To object="VendorClassRecord" field="ExpenseSubID" />
+          </Mapping>
+          <Mapping field="DiscTakenAcctID">
+            <To object="VendorClassRecord" field="DiscTakenAcctID" />
+          </Mapping>
+          <Mapping field="DiscTakenSubID">
+            <To object="VendorClassRecord" field="DiscTakenSubID" />
+          </Mapping>
+          <Mapping field="POAccrualAcctID">
+            <To object="VendorClassRecord" field="POAccrualAcctID" />
+          </Mapping>
+          <Mapping field="POAccrualSubID">
+            <To object="VendorClassRecord" field="POAccrualSubID" />
+          </Mapping>
+          <Mapping field="PrepaymentAcctID">
+            <To object="VendorClassRecord" field="PrepaymentAcctID" />
+          </Mapping>
+          <Mapping field="PrepaymentSubID">
+            <To object="VendorClassRecord" field="PrepaymentSubID" />
+          </Mapping>
+        </Mappings>
+      </TopLevelEntity>
+      <TopLevelEntity name="StatementCycle" screen="AR202800">
+        <Fields>
+          <Field name="StatementCycleId" type="StringValue" />
+          <Field name="Descr" type="StringValue" />
+          <Field name="PrepareOn" type="StringValue" />
+          <Field name="Day00" type="ShortValue" />
+          <Field name="AgeDays00" type="ShortValue" />
+          <Field name="AgeDays01" type="ShortValue" />
+          <Field name="AgeDays02" type="ShortValue" />
+        </Fields>
+        <Mappings>
+          <Mapping field="StatementCycleId">
+            <To object="ARStatementCycleRecord" field="StatementCycleId" />
+          </Mapping>
+          <Mapping field="Descr">
+            <To object="ARStatementCycleRecord" field="Descr" />
+          </Mapping>
+          <Mapping field="PrepareOn">
+            <To object="ARStatementCycleRecord" field="PrepareOn" />
+          </Mapping>
+          <Mapping field="Day00">
+            <To object="ARStatementCycleRecord" field="Day00" />
+          </Mapping>
+          <Mapping field="AgeDays00">
+            <To object="ARStatementCycleRecord" field="AgeDays00" />
+          </Mapping>
+          <Mapping field="AgeDays01">
+            <To object="ARStatementCycleRecord" field="AgeDays01" />
+          </Mapping>
+          <Mapping field="AgeDays02">
+            <To object="ARStatementCycleRecord" field="AgeDays02" />
+          </Mapping>
+        </Mappings>
+      </TopLevelEntity>
+      <TopLevelEntity name="Warehouse" screen="IN204000">
+        <Fields>
+          <Field name="SiteCD" type="StringValue" />
+          <Field name="Descr" type="StringValue" />
+          <Field name="Active" type="BooleanValue" />
+          <Field name="CountryID" type="StringValue" />
+        </Fields>
+        <Mappings>
+          <Mapping field="SiteCD">
+            <To object="site" field="SiteCD" />
+          </Mapping>
+          <Mapping field="Descr">
+            <To object="site" field="Descr" />
+          </Mapping>
+          <Mapping field="Active">
+            <To object="site" field="Active" />
+          </Mapping>
+          <Mapping field="CountryID">
+            <To object="Address" field="CountryID" />
+          </Mapping>
+        </Mappings>
+      </TopLevelEntity>
+      <TopLevelEntity name="OrderType" screen="SO201000">
+        <Fields>
+          <Field name="OrderType" type="StringValue" />
+          <Field name="Active" type="BooleanValue" />
+          <Field name="FreightAcctID" type="StringValue" />
+          <Field name="FreightSubID" type="StringValue" />
+        </Fields>
+        <Mappings>
+          <Mapping field="OrderType">
+            <To object="soordertype" field="OrderType" />
+          </Mapping>
+          <Mapping field="Active">
+            <To object="soordertype" field="Active" />
+          </Mapping>
+          <Mapping field="FreightAcctID">
+            <To object="soordertype" field="FreightAcctID" />
+          </Mapping>
+          <Mapping field="FreightSubID">
+            <To object="soordertype" field="FreightSubID" />
+          </Mapping>
+        </Mappings>
+      </TopLevelEntity>
+      <TopLevelEntity name="CashAccount" screen="CA202000">
+        <Fields>
+          <Field name="CashAccountCD" type="StringValue" />
+          <Field name="Descr" type="StringValue" />
+          <Field name="AccountID" type="StringValue" />
+          <Field name="SubID" type="StringValue" />
+          <Field name="BranchID" type="StringValue" />
+          <Field name="Active" type="BooleanValue" />
+        </Fields>
+        <Mappings>
+          <Mapping field="CashAccountCD">
+            <To object="CashAccount" field="CashAccountCD" />
+          </Mapping>
+          <Mapping field="Descr">
+            <To object="CashAccount" field="Descr" />
+          </Mapping>
+          <Mapping field="AccountID">
+            <To object="CashAccount" field="AccountID" />
+          </Mapping>
+          <Mapping field="SubID">
+            <To object="CashAccount" field="SubID" />
+          </Mapping>
+          <Mapping field="BranchID">
+            <To object="CashAccount" field="BranchID" />
+          </Mapping>
+          <Mapping field="Active">
+            <To object="CashAccount" field="Active" />
           </Mapping>
         </Mappings>
       </TopLevelEntity>

@@ -8,10 +8,10 @@ virgin tenant, so bootstrap = publish a package whose CustomizationPlugin
 cannot write CS100000 at all (T3 verdict) — and whose Bootstrap contract
 endpoint exposes the seeding surface (serialization verified T12).
 
-Contract ownership is hybrid (T69/V2): the data repo's
-``bootstrap/project.xml`` is preferred when present (full company surface);
-else the packaged minimal ``bootstrap_project.xml`` covers config-init +
-the GL chain so PyPI-only and offline virgin paths still bootstrap.
+Contract ownership is hybrid (T69/V2/T81): the data repo's
+``bootstrap/project.xml`` is preferred when present; else the packaged
+full company ``bootstrap_project.xml`` (``Bootstrap/1.0.0``) so PyPI-only
+and offline virgin paths still bootstrap the full surface.
 
 Customization publishes are tenant-scoped, so the package must be published
 per tenant; publish() is idempotent on content — the skip gate compares the
@@ -60,7 +60,7 @@ FEATURES_SENTINEL = "/*ACU_FEATURES*/"
 
 
 def packaged_contract_xml() -> bytes:
-    """The CLI-shipped minimal Bootstrap contract (config-init surface)."""
+    """The CLI-shipped full company Bootstrap contract (``Bootstrap/1.0.0``)."""
     return (resources.files("acumatica_cli") / "bootstrap_project.xml").read_bytes()
 
 
@@ -69,7 +69,7 @@ def load_contract_xml(root: Path | None = None) -> bytes:
 
     ``root`` is the data-repo discovery root (the dir holding ``.env``).
     Absent root or absent ``bootstrap/project.xml`` falls back to the
-    packaged minimal contract (V2, same absence pattern as features.yaml).
+    packaged full company contract (V2/T81, same absence pattern as features.yaml).
     """
     if root is not None:
         path = root / "bootstrap" / "project.xml"
@@ -136,9 +136,9 @@ def package_zip(
     ``Enabled`` set at the ACU_FEATURES sentinel — the one point where the
     data repo's feature list enters the package (V2).
 
-    Contract XML (V2/T69): ``contract`` when given; else
+    Contract XML (V2/T69/T81): ``contract`` when given; else
     ``bootstrap/project.xml`` under ``root`` when present; else the
-    packaged minimal template.
+    packaged full company template.
     """
     pkg = resources.files("acumatica_cli")
     if contract is None:

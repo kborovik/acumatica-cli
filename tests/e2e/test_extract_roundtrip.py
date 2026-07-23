@@ -121,23 +121,27 @@ def test_extract_dumps_tenant_a(
     skip here means A's configuration is incomplete - fail loud before
     the byte-compare would); every entity/action file must parse back
     through load_baseline (I.cmd: emitted files are seed files by
-    construction). Currency is on the full data-repo contract only (T69)
-    - under the packaged minimal surface it skips clean as not-in-contract.
+    construction). Currency is on the packaged full company contract
+    (T81); finance-minimal apply may leave zero financial currencies, so
+    that row may skip clean as (no records) but never as not-in-contract.
     """
     dir_a, _ = out_dirs
     manifest = load_manifest()
     proc = acu("--tenant", LOGIN_A, "extract", "--out", str(dir_a))
     assert proc.returncode == 0, _combined(proc)
-    # Currency (and only Currency) is expected to skip under minimal package
     skips = [ln for ln in proc.stdout.splitlines() if ln.startswith("skip ")]
-    assert len(skips) == 1, _combined(proc)
-    assert "30-currencies" in skips[0]
-    assert "entity not in active Bootstrap contract" in skips[0]
+    assert not any("entity not in active Bootstrap contract" in ln for ln in skips), (
+        _combined(proc)
+    )
+    currency_skips = [ln for ln in skips if "30-currencies" in ln]
+    assert all("(no records)" in ln for ln in currency_skips), _combined(proc)
     expected = (
         {spec.file for spec in manifest.entities if spec.entity != "Currency"}
         | {synth.file for synth in manifest.setup}
         | {FEATURES_FILE}
     )
+    if not currency_skips:
+        expected.add("baseline/30-currencies.yaml")
     assert _yaml_set(dir_a) == expected
     for rel in expected - {FEATURES_FILE}:
         load_baseline(dir_a / rel)

@@ -112,7 +112,7 @@ T77|x|`config init --flavor distribution` CLI + default apply/diff order include
 T78|x|package distribution templates: bootstrap `project.xml` + features + expanded COA + `master/*` + golden `scenario/` + README (rebuild order, empty-tenant !); org-CD token per V29; feature+ref closure per V22|V21,V22,V28,V29,I.data,T77
 T79|x|docs: distribution entity map (entity, endpoint bootstrap or default, screen, seed file) + apply-order/deps notes + changelog/release note for `--flavor distribution` + any apply-dir default change|V12,V28,T77,T78
 T80|x|live verify acceptance: virgin empty tenant matching `target.yaml` → `bootstrap` → `apply` → `run scenario/` expects hold → `diff` clean; default no-flavor init offline e2e still green|V4,V12,V22,V28,V29,T77,T78
-T81|.|single full Bootstrap contract Bootstrap/1.0.0 — swap packaged minimal bootstrap_project.xml for full company entity set; version 1.0.0; data-repo override still preferred|V2,V21,I.data,I.cmd,T69
+T81|x|single full Bootstrap contract Bootstrap/1.0.0 — swap packaged minimal bootstrap_project.xml for full company entity set; version 1.0.0; data-repo override still preferred|V2,V21,I.data,I.cmd,T69
 T82|.|config init always scaffolds bootstrap/project.xml from full contract; distribution drops divergent 1.8.0 project.xml identity; features/COA/master/scenario stay flavor-only|V28,I.cmd,T81
 T83|.|sweep Bootstrap/1.9.0 + 1.8.0 pins → 1.0.0 (tests, docs, README, parity); offline e2e + distribution scaffold green|V13,V21,T81,T82
 

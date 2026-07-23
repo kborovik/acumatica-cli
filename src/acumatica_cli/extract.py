@@ -414,10 +414,10 @@ class _Extraction:
             target = self.out_dir / spec.file
             if self._skip_existing(target):
                 continue
-            # Hybrid contract (T69): a bootstrap-endpoint row for an entity
-            # the active package does not serve cannot be read - skip clean
-            # rather than 404 (full company surface lives in the data-repo
-            # contract; minimal packaged fallback has config-init only).
+            # Hybrid contract (T69/T81): a bootstrap-endpoint row for an
+            # entity the active package does not serve cannot be read -
+            # skip clean rather than 404 (data-repo override may trim the
+            # packaged full company surface).
             resolved = resolve_endpoint(
                 spec.endpoint, api_version=self.client.instance.api_version
             )

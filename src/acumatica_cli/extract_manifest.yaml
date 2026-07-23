@@ -7,7 +7,7 @@
 #             `bootstrap` stays symbolic in emitted files and resolves to
 #             the active Bootstrap package version at HTTP/load time
 #             (data-repo bootstrap/project.xml when present, else
-#             packaged minimal - V20/V21)
+#             packaged full company Bootstrap/1.0.0 - V20/V21/T81)
 #   keys      key fields: the emitted `key:`, the record sort order, and
 #             the B9 fallback's $select projection; the tuple must
 #             identify each record (V25 - a dup tuple is a row failure)

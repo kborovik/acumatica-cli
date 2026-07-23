@@ -116,13 +116,13 @@ def test_load_features_rejects_bad_files(tmp_path: Path, body: str) -> None:
 
 
 def test_package_zip_carries_the_bootstrap_endpoint() -> None:
-    """Pin the packaged-minimal <EntityEndpoint> serialization (T12 + T69).
+    """Pin the packaged full company <EntityEndpoint> serialization (T12 + T81).
 
     Verified vs 26.101.0225 by live import round-trip: the <Endpoint> child
     is the XmlSerializer form of Model.Endpoint in the entity/maintenance/5.31
-    namespace; no .endpoint file is involved. The packaged contract is the
-    config-init surface only (Company, CreditTerms, GLPreferences, the GL
-    setup chain); full company entities live in data-repo bootstrap/project.xml.
+    namespace; no .endpoint file is involved. Packaged contract is the single
+    full company surface (Bootstrap/1.0.0); data-repo bootstrap/project.xml
+    may still override when present (V2).
     """
     ns = "{http://www.acumatica.com/entity/maintenance/5.31}"
     with zipfile.ZipFile(io.BytesIO(bootstrap.package_zip())) as zf:
@@ -130,23 +130,36 @@ def test_package_zip_carries_the_bootstrap_endpoint() -> None:
     (item,) = root.findall("EntityEndpoint")
     (endpoint,) = item.findall(f"{ns}Endpoint")
     assert endpoint.get("name") == "Bootstrap"
-    assert endpoint.get("version") == "1.9.0"
+    assert endpoint.get("version") == "1.0.0"
     # SystemContracts.V4 is the build's only IsCurrent implementation
     assert endpoint.get("systemContractVersion") == "4"
     entities = {e.get("name"): e for e in endpoint.findall(f"{ns}TopLevelEntity")}
-    # T69: packaged contract is the config-init surface only; full company
-    # entities (Currency, VendorClass, distro prefs, ...) live in the
-    # data-repo bootstrap/project.xml override
+    # T81: packaged contract is the full company surface (finance + distro)
     assert set(entities) == {
         "Company",
         "CreditTerms",
-        "GLPreferences",
+        "Currency",
         "LedgerCompany",
         "FinancialYearSettings",
         "MasterCalendar",
         "CompanyCalendar",
         "CompanyPeriod",
         "ManagePeriods",
+        "GLPreferences",
+        "INPreferences",
+        "ReasonCode",
+        "APPreferences",
+        "ARPreferences",
+        "SOPreferences",
+        "POPreferences",
+        "AvailabilityCalculationRule",
+        "PostingClass",
+        "CAPreferences",
+        "VendorClass",
+        "StatementCycle",
+        "Warehouse",
+        "OrderType",
+        "CashAccount",
     }
     # features stay OUT: contract-endpoint writes to CS100000 do not
     # persist (T3 verdict) - the CustomizationPlugin owns features
@@ -276,17 +289,18 @@ def test_package_zip_prefers_data_repo_contract(tmp_path: Path) -> None:
     """Data-repo bootstrap/project.xml is the package endpoint when present (V2)."""
     (tmp_path / "bootstrap").mkdir()
     # keep Bootstrap/<packaged-ver> so V21 parity greps stay clean; the
-    # distinguishing signal is the extra Currency entity
+    # distinguishing signal is a trimmed entity set (override wins over
+    # the packaged full company surface)
     contract = b"""\
 <Customization level="" description="data-repo full" product-version="26.101">
   <EntityEndpoint>
     <Endpoint xmlns="http://www.acumatica.com/entity/maintenance/5.31"
-              name="Bootstrap" version="1.9.0" systemContractVersion="4">
+              name="Bootstrap" version="1.0.0" systemContractVersion="4">
       <TopLevelEntity name="Company" screen="CS101500">
         <Fields><Field name="AcctCD" type="StringValue" /></Fields>
       </TopLevelEntity>
-      <TopLevelEntity name="Currency" screen="CM202000">
-        <Fields><Field name="CuryID" type="StringValue" /></Fields>
+      <TopLevelEntity name="OnlyInDataRepo" screen="CS000000">
+        <Fields><Field name="ID" type="StringValue" /></Fields>
       </TopLevelEntity>
     </Endpoint>
   </EntityEndpoint>
@@ -298,7 +312,7 @@ def test_package_zip_prefers_data_repo_contract(tmp_path: Path) -> None:
         root = ET.fromstring(zf.read("project.xml"))
     (endpoint,) = root.findall(f"EntityEndpoint/{ns}Endpoint")
     names = {e.get("name") for e in endpoint.findall(f"{ns}TopLevelEntity")}
-    assert names == {"Company", "Currency"}
+    assert names == {"Company", "OnlyInDataRepo"}
     assert root.get("description") == "data-repo full"
     # Graph plugin still spliced in
     assert root.find("Graph") is not None

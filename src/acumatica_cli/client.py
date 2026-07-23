@@ -266,9 +266,7 @@ class AcumaticaClient:
                     if not detail and isinstance(body.get("innerException"), dict):
                         inner = body["innerException"]
                         detail = (
-                            inner.get("exceptionMessage")
-                            or inner.get("message")
-                            or ""
+                            inner.get("exceptionMessage") or inner.get("message") or ""
                         )
                     if not detail:
                         # last resort: compact JSON (422 bodies are small)

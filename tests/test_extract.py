@@ -430,17 +430,9 @@ def test_run_writes_files_and_reports(
     _run(instance, server, tmp_path)
     out = capsys.readouterr().out
     for spec in extract.load_manifest().entities:
-        # Currency lives on the full data-repo contract only (T69): the
-        # packaged minimal surface skips it clean rather than 404
-        if spec.entity == "Currency":
-            assert (
-                f"skip {tmp_path / spec.file} (entity not in active Bootstrap contract)"
-                in out
-            )
-            assert not (tmp_path / spec.file).exists()
-            continue
         assert (tmp_path / spec.file).is_file()
-        n = len(TABLES[spec.entity])
+        # Currency filter keeps only IsFinancial rows (T52)
+        n = 1 if spec.entity == "Currency" else len(TABLES[spec.entity])
         assert f"write {tmp_path / spec.file} ({n} records)" in out
 
 
@@ -489,9 +481,9 @@ def test_run_dry_run_writes_nothing(
         f"would write {tmp_path / 'setup' / '10-financial-year.yaml'} (1 records)"
         in out
     )
-    # 7 = the built-in six + SubAccount: Currency (and its Multicurrency
-    # gate) is skipped under the packaged minimal contract (T69)
-    assert f"would write {tmp_path / 'bootstrap' / 'features.yaml'} (7 records)" in out
+    # 8 = the built-in six + SubAccount + Multicurrency (Currency produces
+    # records under the packaged full company contract — T81)
+    assert f"would write {tmp_path / 'bootstrap' / 'features.yaml'} (8 records)" in out
     assert list(tmp_path.iterdir()) == []
 
 
@@ -506,20 +498,15 @@ def test_rerun_skips_every_emitted_file(
     capsys.readouterr()
     _run(instance, server, tmp_path)
     lines = [ln for ln in capsys.readouterr().out.splitlines() if ln]
-    # 12 produced + Currency still skipped as not-in-contract
-    assert len(lines) == 13  # 8 entities + Currency skip + 3 setup + features
+    # 9 entities + 3 setup + features = 13 (T81: Currency included)
+    assert len(lines) == 13
     assert all(ln.startswith("skip ") for ln in lines)
-    currency_skips = [ln for ln in lines if "30-currencies" in ln]
-    assert currency_skips == [
-        f"skip {tmp_path / 'baseline' / '30-currencies.yaml'} "
-        "(entity not in active Bootstrap contract)"
-    ]
-    assert all(ln.endswith("(exists)") for ln in lines if "30-currencies" not in ln)
+    assert all(ln.endswith("(exists)") for ln in lines)
     _run(instance, server, tmp_path, force=True)
     lines = [ln for ln in capsys.readouterr().out.splitlines() if ln]
     assert len(lines) == 13
-    assert sum(1 for ln in lines if ln.startswith("write ")) == 12
-    assert any("30-currencies" in ln and "entity not in active" in ln for ln in lines)
+    assert sum(1 for ln in lines if ln.startswith("write ")) == 13
+    assert any("30-currencies" in ln and ln.startswith("write ") for ln in lines)
 
 
 def test_run_only_filters_entity_name_or_file_stem(
@@ -537,50 +524,19 @@ def test_run_only_filters_entity_name_or_file_stem(
 # -- B9: the delegate-view fallback --
 
 
-def _install_currency_contract(
-    data_root: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    """Data-repo contract that serves Currency so B9 extract tests can run.
-
-    Currency is not on the packaged minimal surface (T69); the B9 path
-    still needs a contract that exposes it.
-    """
-    (data_root / "bootstrap").mkdir(exist_ok=True)
-    (data_root / ".env").write_text("ACU_BASE_URL=https://example.com\n")
-    (data_root / "bootstrap" / "project.xml").write_text(
-        """\
-<Customization level="" description="test contract" product-version="26.101">
-  <EntityEndpoint>
-    <Endpoint xmlns="http://www.acumatica.com/entity/maintenance/5.31"
-              name="Bootstrap" version="1.9.0" systemContractVersion="4">
-      <TopLevelEntity name="Currency" screen="CM202000">
-        <Fields><Field name="CuryID" type="StringValue" /></Fields>
-      </TopLevelEntity>
-    </Endpoint>
-  </EntityEndpoint>
-</Customization>
-""",
-        encoding="utf-8",
-    )
-    monkeypatch.chdir(data_root)
-
-
 def test_b9_fallback_selects_keys_then_key_urls(
     instance: Instance,
     server: FakeServer,
     tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """The optimization 500 reroutes: $select key list, then per-key GETs.
 
     The manifest filter rides both list reads (T52): the fallback's key
     list is already narrowed, so the non-financial JPY row never gets a
-    key-URL walk and never reaches the emitted file.
+    key-URL walk and never reaches the emitted file. Currency is on the
+    packaged full company contract (T81), so no data-repo override needed.
     """
-    data = tmp_path / "data"
-    data.mkdir()
     out = tmp_path / "out"
-    _install_currency_contract(data, monkeypatch)
     _run(instance, server, out, only=frozenset({"Currency"}))
     currency_requests = [
         (r.url.path.split("/entity/", 1)[1], dict(r.url.params))
@@ -588,12 +544,12 @@ def test_b9_fallback_selects_keys_then_key_urls(
     ]
     assert currency_requests == [
         # plain list GET -> 500, filter riding
-        ("Bootstrap/1.9.0/Currency", {"$filter": "IsFinancial eq true"}),
+        ("Bootstrap/1.0.0/Currency", {"$filter": "IsFinancial eq true"}),
         (
-            "Bootstrap/1.9.0/Currency",
+            "Bootstrap/1.0.0/Currency",
             {"$select": "CuryID", "$filter": "IsFinancial eq true"},
         ),
-        ("Bootstrap/1.9.0/Currency/EUR", {}),
+        ("Bootstrap/1.0.0/Currency/EUR", {}),
     ]
     text = (out / "baseline" / "30-currencies.yaml").read_text()
     assert "RealGainAcctID" in text  # the key-URL GET returned full records
@@ -624,17 +580,13 @@ def test_b9_non_optimization_500_never_takes_fallback(
     instance: Instance,
     tmp_path: Path,
     capsys: pytest.CaptureFixture[str],
-    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """Only the optimization 500 reroutes; any other 500 is a row failure.
 
     Pre-V24 this aborted the run; now the row reports and the run goes on,
     but the B9 fallback ($select key list) still never fires for it.
     """
-    data = tmp_path / "data"
-    data.mkdir()
     out = tmp_path / "out"
-    _install_currency_contract(data, monkeypatch)
     server = FakeServer({}, {})  # unknown entity -> non-optimization 500
     failed = _run(instance, server, out, only=frozenset({"Currency"}))
     assert failed == 1
@@ -729,13 +681,13 @@ def test_features_closure_unions_gates_of_record_producing_entities(
 ) -> None:
     """features.yaml = the built-in six + gates, and load_features parses it.
 
-    Multicurrency rides the Currency row, which the packaged minimal
-    contract does not serve (T69) - so only SubAccount gates under
-    offline extract with the fallback package.
+    Multicurrency rides Currency (packaged full company — T81); SubAccount
+    rides Subaccount. Both produce records under the default FakeServer.
     """
     _run(instance, server, tmp_path)
     assert bootstrap.load_features(tmp_path) == [
         *bootstrap.DEFAULT_FEATURES,
+        "Multicurrency",
         "SubAccount",
     ]
 
@@ -743,10 +695,11 @@ def test_features_closure_unions_gates_of_record_producing_entities(
 def test_features_closure_drops_gate_when_no_records(
     instance: Instance, server: FakeServer, tmp_path: Path
 ) -> None:
-    server.tables = server.tables | {"Subaccount": []}
+    server.tables = server.tables | {"Subaccount": [], "Currency": []}
     _run(instance, server, tmp_path)
     names = bootstrap.load_features(tmp_path)
     assert "SubAccount" not in names
+    assert "Multicurrency" not in names
     assert names == list(bootstrap.DEFAULT_FEATURES)
 
 
@@ -779,10 +732,7 @@ def test_round_trip_every_file_parses_and_diffs_clean(
     manifest = extract.load_manifest()
     for spec in manifest.entities:
         path = tmp_path / spec.file
-        if not path.exists():
-            # Currency under packaged minimal (T69)
-            assert spec.entity == "Currency"
-            continue
+        assert path.exists(), spec.entity
         parsed = seed.load_baseline(path)
         assert isinstance(parsed, seed.BaselineFile)
         assert seed.diff(diff_client, parsed) == [], spec.entity
@@ -804,8 +754,8 @@ def test_round_trip_is_byte_stable_under_permuted_server_order(
     _run(instance, FakeServer(permuted, KEYS, DELEGATE_VIEW), b)
     files = sorted(p.relative_to(a) for p in a.rglob("*.yaml"))
     assert files == sorted(p.relative_to(b) for p in b.rglob("*.yaml"))
-    # 8 entities (Currency skipped) + 3 setup + features
-    assert len(files) == 12
+    # 9 entities + 3 setup + features (T81: Currency included)
+    assert len(files) == 13
     for rel in files:
         assert (a / rel).read_bytes() == (b / rel).read_bytes(), str(rel)
 
@@ -831,9 +781,9 @@ def test_row_failure_reported_and_run_continues(
     assert (tmp_path / "baseline" / "20-accounts.yaml").is_file()
     assert (tmp_path / "setup" / "30-open-periods.yaml").is_file()
     assert (tmp_path / "bootstrap" / "features.yaml").is_file()
-    # 7 surviving entities + Currency contract-skip + 3 synths + features;
-    # Subaccount failed, Currency skipped as not-in-contract
-    assert "x 11 written, 1 skipped, 1 failed" in captured.err
+    # 8 surviving entities + 3 synths + features; Subaccount failed (T81:
+    # Currency writes under packaged full company)
+    assert "x 12 written, 0 skipped, 1 failed" in captured.err
 
 
 def test_setup_not_entered_500_skips_clean(
@@ -874,8 +824,8 @@ def test_duplicate_key_tuple_is_row_failure_and_run_continues(
     # rows past the failure all ran; the failed file never gates them
     assert (tmp_path / "baseline" / "20-accounts.yaml").is_file()
     assert (tmp_path / "bootstrap" / "features.yaml").is_file()
-    # Currency also skipped (not in packaged contract); Subaccount failed
-    assert "x 11 written, 1 skipped, 1 failed" in captured.err
+    # Currency writes; Subaccount failed (T81)
+    assert "x 12 written, 0 skipped, 1 failed" in captured.err
 
 
 def test_setup_synth_failure_isolated(
@@ -933,12 +883,11 @@ def test_virgin_tenant_dry_run_walks_full_manifest_exit_0(
         cli.cli, ["extract", "--out", str(tmp_path), "--dry-run"]
     )
     assert result.exit_code == 0, result.output
-    # every manifest row answered: 2 empty entities + 1 empty synth,
-    # 7 setup-not-entered (Currency is not-in-contract under minimal
-    # package - T69), Currency contract skip, the writable entity, features
+    # 2 empty entities + 8 setup-not-entered (Currency in package — T81) +
+    # financial-year empty + UoM write + features write
     assert result.output.count("(no records)") == 2
-    assert result.output.count("(screen setup not entered)") == 7
-    assert result.output.count("(entity not in active Bootstrap contract)") == 1
+    assert result.output.count("(screen setup not entered)") == 8
+    assert result.output.count("(entity not in active Bootstrap contract)") == 0
     assert result.output.count("(no financial year setup)") == 1
     assert (
         f"would write {tmp_path / 'baseline' / '90-uoms.yaml'} (2 records)"
