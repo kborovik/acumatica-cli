@@ -288,9 +288,9 @@ def test_url_resolves_symbolic_default(instance: Instance) -> None:
     )
     assert (
         client._url(  # pyright: ignore[reportPrivateUsage]
-            "Warehouse", "Bootstrap/1.9.0"
+            "Warehouse", "Bootstrap/1.0.0"
         )
-        == "/entity/Bootstrap/1.9.0/Warehouse"
+        == "/entity/Bootstrap/1.0.0/Warehouse"
     )
 
 
@@ -298,12 +298,12 @@ def test_parse_entity_list_name_version_rows() -> None:
     # T74/V12: official GET /entity shape — [{name, version, ...}, ...]
     body = [
         {"name": "Default", "version": "25.200.001", "href": "/entity/Default/..."},
-        {"name": "Bootstrap", "version": "1.9.0"},
+        {"name": "Bootstrap", "version": "1.0.0"},
     ]
     r = httpx.Response(200, json=body)
     assert parse_entity_list(r) == [
         ("Default", "25.200.001"),
-        ("Bootstrap", "1.9.0"),
+        ("Bootstrap", "1.0.0"),
     ]
 
 

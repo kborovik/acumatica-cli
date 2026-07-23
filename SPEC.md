@@ -114,7 +114,7 @@ T79|x|docs: distribution entity map (entity, endpoint bootstrap or default, scre
 T80|x|live verify acceptance: virgin empty tenant matching `target.yaml` → `bootstrap` → `apply` → `run scenario/` expects hold → `diff` clean; default no-flavor init offline e2e still green|V4,V12,V22,V28,V29,T77,T78
 T81|x|single full Bootstrap contract Bootstrap/1.0.0 — swap packaged minimal bootstrap_project.xml for full company entity set; version 1.0.0; data-repo override still preferred|V2,V21,I.data,I.cmd,T69
 T82|x|config init always scaffolds bootstrap/project.xml from full contract; distribution drops divergent 1.8.0 project.xml identity; features/COA/master/scenario stay flavor-only|V28,I.cmd,T81
-T83|.|sweep Bootstrap/1.9.0 + 1.8.0 pins → 1.0.0 (tests, docs, README, parity); offline e2e + distribution scaffold green|V13,V21,T81,T82
+T83|x|sweep Bootstrap/1.9.0 + 1.8.0 pins → 1.0.0 (tests, docs, README, parity); offline e2e + distribution scaffold green|V13,V21,T81,T82
 
 ## §B BUGS
 

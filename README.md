@@ -87,8 +87,8 @@ Run `acu <command> --help` for details on any command.
 ## The data repo
 
 Your configuration lives in its own git repo.
-`acu config init` scaffolds finance-minimal seeds (no `master/`, no Bootstrap `project.xml`).
-`acu config init --flavor distribution` adds the full demo set (`project.xml`, expanded COA, `master/`, golden `scenario/`, README).
+`acu config init` scaffolds finance-minimal seeds (Bootstrap `project.xml` at `Bootstrap/1.0.0`, no `master/`).
+`acu config init --flavor distribution` adds the full demo set (same contract identity, expanded COA, `master/`, golden `scenario/`, README).
 
 | Path          | What it holds                                                              |
 | ------------- | -------------------------------------------------------------------------- |
@@ -117,7 +117,7 @@ Dual-served entities (on both Bootstrap and Default) need an explicit `endpoint:
 | omitted | `Default/<ACU_API_VERSION>` for Default-only entities |
 | `bootstrap` | active `Bootstrap/<ver>` from `bootstrap/project.xml` or the packaged contract |
 | `default` | `Default/<ACU_API_VERSION>` — tracks the operator API version |
-| `Bootstrap/1.9.0` or `Default/25.200.001` | literal pin (ignores `ACU_API_VERSION` for Default) |
+| `Bootstrap/1.0.0` or `Default/25.200.001` | literal pin (ignores `ACU_API_VERSION` for Default) |
 
 Prefer symbolic `default` over a pinned `Default/25.200.001` so the seed tree travels with the configured API generation.
 

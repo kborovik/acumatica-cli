@@ -27,8 +27,8 @@ Parse shape (vendor contract + offline fixtures; re-verify on upgrade, V12):
   },
   {
     "name": "Bootstrap",
-    "version": "1.9.0",
-    "href": "http://…/entity/Bootstrap/1.9.0/"
+    "version": "1.0.0",
+    "href": "http://…/entity/Bootstrap/1.0.0/"
   }
 ]
 ```
