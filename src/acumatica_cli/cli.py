@@ -417,7 +417,7 @@ def config_group() -> None:
     default=None,
     help="Template set: omit for finance-minimal (default, offline e2e); "
     "distribution = full virgin-tenant demo seed (master/, scenario/, "
-    "bootstrap/project.xml)",
+    "expanded COA/features)",
 )
 @click.argument(
     "directory", required=False, type=click.Path(file_okay=False, path_type=Path)
@@ -426,8 +426,9 @@ def config_init(host: str | None, flavor: str | None, directory: Path | None) ->
     """Scaffold a data repo: .env, .gitignore, bootstrap/, baseline/, setup/.
 
     Templates ship with the package; every value is a placeholder or a
-    verified minimal example - no secrets. ``--flavor distribution`` adds
-    Bootstrap contract, expanded COA, master/, scenario/, and README (V28).
+    verified minimal example - no secrets. Both flavors scaffold the full
+    company ``bootstrap/project.xml`` (Bootstrap/1.0.0). ``--flavor
+    distribution`` adds expanded COA, master/, scenario/, and README (V28).
     Existing files are never overwritten (reported as skipped). DIRECTORY
     defaults to the current directory and is created if absent. No git
     init, no gpg.

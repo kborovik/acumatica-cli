@@ -29,7 +29,7 @@ Or explicit paths: `acu apply bootstrap/ baseline/ setup/ master/` then `acu dif
 
 | Path | Role |
 |------|------|
-| `bootstrap/` | Company, features, credit terms, Bootstrap `project.xml` |
+| `bootstrap/` | Company, features, credit terms, Bootstrap `project.xml` (shared Bootstrap/1.0.0) |
 | `baseline/` | GL foundation (COA, ledger, subaccounts, UOMs) |
 | `setup/` | Financial year, master calendar, open periods |
 | `master/` | Inventory, warehouse, items, vendors, customers, module prefs |
@@ -46,4 +46,4 @@ Org CD is the single placeholder **LAB5** across company, ledger-company, open p
 
 ## Default flavor
 
-`acu config init` without `--flavor` scaffolds finance-minimal only (no `master/`, no `project.xml`, no scenario). That path stays offline-e2e green.
+`acu config init` without `--flavor` scaffolds finance-minimal (same Bootstrap `project.xml`, no `master/`, no scenario). That path stays offline-e2e green.

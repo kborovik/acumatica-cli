@@ -27,7 +27,7 @@ records:
 
 BOOTSTRAP_YAML = """\
 entity: CreditTerms
-endpoint: Bootstrap/1.9.0
+endpoint: Bootstrap/1.0.0
 key: TermsID
 records:
   - TermsID: NET30
@@ -36,7 +36,7 @@ records:
 SETUP_YAML = """\
 action: GenerateCalendar
 entity: MasterCalendar
-endpoint: Bootstrap/1.9.0
+endpoint: Bootstrap/1.0.0
 record:
   FinancialYear: 2026
 done_when:
@@ -657,8 +657,9 @@ def test_url_flag_rejected_after_subcommand(wired: Instance) -> None:
 
 
 def test_config_init_scaffolds_data_repo(tmp_path: Path) -> None:
-    # I.cmd config init: 15-file template set into a created-if-absent dir;
-    # runs where V3 discovery finds no .env (tmp_path has none up-tree)
+    # I.cmd config init: 16-file template set into a created-if-absent dir
+    # (T82: bootstrap/project.xml always scaffolded); runs where V3
+    # discovery finds no .env (tmp_path has none up-tree)
     repo = tmp_path / "repo"
     result = CliRunner().invoke(
         cli.cli, ["config", "init", "--host", "erp.test", str(repo)]
@@ -678,6 +679,7 @@ def test_config_init_scaffolds_data_repo(tmp_path: Path) -> None:
         "bootstrap/company.yaml",
         "bootstrap/credit-terms.yaml",
         "bootstrap/features.yaml",
+        "bootstrap/project.xml",
         "setup/10-financial-year.yaml",
         "setup/20-master-calendar.yaml",
         "setup/30-open-periods.yaml",
@@ -685,7 +687,12 @@ def test_config_init_scaffolds_data_repo(tmp_path: Path) -> None:
     for rel in expected:
         assert (repo / rel).is_file(), rel
     assert (
-        len([ln for ln in result.output.splitlines() if ln.startswith("write ")]) == 15
+        len([ln for ln in result.output.splitlines() if ln.startswith("write ")]) == 16
+    )
+    # T81/T82: scaffolded contract is Bootstrap/1.0.0 full company
+    assert (
+        'name="Bootstrap" version="1.0.0"'
+        in (repo / "bootstrap" / "project.xml").read_text()
     )
     target = (repo / "target.yaml").read_text()
     assert "default_api:" in target
@@ -720,7 +727,7 @@ def test_config_init_rerun_skips_and_never_overwrites(tmp_path: Path) -> None:
 
     assert result.exit_code == 0
     skip_lines = [ln for ln in result.output.splitlines() if ln.startswith("skip ")]
-    assert len(skip_lines) == 15
+    assert len(skip_lines) == 16
     assert all(ln.endswith(" (exists)") for ln in skip_lines)
     assert "next:" in result.output
     assert (tmp_path / ".env").read_text() == "ACU_BASE_URL=http://hand.edited/X\n"
@@ -852,8 +859,8 @@ def test_config_init_unknown_flavor_rejected(tmp_path: Path) -> None:
 
 
 def test_config_init_flavor_distribution_scaffolds_demo_seed(tmp_path: Path) -> None:
-    # T77/T78 V28: --flavor distribution ships bootstrap contract + master +
-    # scenario + README; default path still 15 finance-minimal files only
+    # T77/T78/T82 V28: --flavor distribution ships master + scenario + README;
+    # both flavors share Bootstrap/1.0.0 project.xml (not a second identity)
     result = CliRunner().invoke(
         cli.cli,
         [
@@ -869,17 +876,25 @@ def test_config_init_flavor_distribution_scaffolds_demo_seed(tmp_path: Path) -> 
 
     assert result.exit_code == 0
     assert (tmp_path / "bootstrap" / "project.xml").is_file()
+    assert (
+        'name="Bootstrap" version="1.0.0"'
+        in (tmp_path / "bootstrap" / "project.xml").read_text()
+    )
     assert (tmp_path / "master" / "20-in-preferences.yaml").is_file()
     assert (tmp_path / "scenario" / "buy-build-sell.yaml").is_file()
     assert (tmp_path / "README.md").is_file()
     assert "acu run scenario/" in result.output
     writes = [ln for ln in result.output.splitlines() if ln.startswith("write ")]
-    assert len(writes) > 15
-    # finance-minimal never gains master/ or project.xml
+    assert len(writes) > 16
+    # finance-minimal shares project.xml; never gains master/ or scenario/
     bare = tmp_path / "bare"
     CliRunner().invoke(cli.cli, ["config", "init", str(bare)])
     assert not (bare / "master").exists()
-    assert not (bare / "bootstrap" / "project.xml").exists()
+    assert (bare / "bootstrap" / "project.xml").is_file()
+    assert (
+        'name="Bootstrap" version="1.0.0"'
+        in (bare / "bootstrap" / "project.xml").read_text()
+    )
     assert not (bare / "scenario").exists()
 
 

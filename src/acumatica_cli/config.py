@@ -44,6 +44,9 @@ INIT_TEMPLATES = (
     ("bootstrap/company.yaml", "bootstrap/company.yaml"),
     ("bootstrap/credit-terms.yaml", "bootstrap/credit-terms.yaml"),
     ("bootstrap/features.yaml", "bootstrap/features.yaml"),
+    # T82: full company contract from packaged bootstrap_project.xml (not a
+    # templates/ copy) so both flavors share Bootstrap/1.0.0 identity.
+    ("bootstrap/project.xml", "bootstrap/project.xml"),
     ("setup/10-financial-year.yaml", "setup/10-financial-year.yaml"),
     ("setup/20-master-calendar.yaml", "setup/20-master-calendar.yaml"),
     ("setup/30-open-periods.yaml", "setup/30-open-periods.yaml"),
@@ -52,11 +55,11 @@ INIT_TEMPLATES = (
 # Opt-in `--flavor distribution` overlays + extras (V28/V29). Resource paths
 # live under templates/distribution/; dest paths are data-repo relative.
 # Same dest as INIT_TEMPLATES replaces the finance-minimal file (company
-# LAB5, expanded COA, features, open-periods, uoms).
+# LAB5, expanded COA, features, open-periods, uoms). Contract identity is
+# shared (T82) — no distribution-only project.xml.
 DISTRIBUTION_TEMPLATES = (
     ("distribution/bootstrap/company.yaml", "bootstrap/company.yaml"),
     ("distribution/bootstrap/features.yaml", "bootstrap/features.yaml"),
-    ("distribution/bootstrap/project.xml", "bootstrap/project.xml"),
     ("distribution/baseline/20-accounts.yaml", "baseline/20-accounts.yaml"),
     ("distribution/baseline/60-ledger-company.yaml", "baseline/60-ledger-company.yaml"),
     ("distribution/baseline/90-uoms.yaml", "baseline/90-uoms.yaml"),
@@ -211,7 +214,14 @@ def scaffold(
         if target.exists():
             yield "skip", target
             continue
-        content = (pkg / resource).read_text(encoding="utf-8")
+        # Single full contract (T81/T82): scaffold from the packaged
+        # bootstrap_project.xml so init cannot diverge from the fallback.
+        if dest == "bootstrap/project.xml":
+            content = (
+                resources.files("acumatica_cli") / "bootstrap_project.xml"
+            ).read_text(encoding="utf-8")
+        else:
+            content = (pkg / resource).read_text(encoding="utf-8")
         if host and dest == ".env":
             content = content.replace(PLACEHOLDER_HOST, host)
         target.parent.mkdir(parents=True, exist_ok=True)
