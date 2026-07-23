@@ -18,7 +18,7 @@ export PATH := $(abspath .venv)/bin:$(PATH)
 default: .venv help
 
 .PHONY: help check e2e lint test py-format py-lint py-types py-update py-reset \
-	install build release major minor patch
+	install release major minor patch
 
 ###############################################################################
 # Python dev (lint / format / types)
@@ -84,7 +84,7 @@ install: .venv ## Install acu globally as an editable uv tool
 # give the part words no-op recipes so make does not try to build them.
 part := $(word 1,$(filter major minor patch,$(MAKECMDGOALS)))
 
-release: ## Bump version, commit, tag, and publish a GitHub release
+release: check ## Bump version, commit, tag, and push; GitHub Actions re-checks then publishes GH release + PyPI
 	test -n "$(part)" || { echo "usage: gmake release major|minor|patch"; exit 1; }
 	git diff --quiet && git diff --cached --quiet \
 		|| { echo "working tree not clean — commit or stash first"; exit 1; }
@@ -92,13 +92,11 @@ release: ## Bump version, commit, tag, and publish a GitHub release
 	uv version --bump $(part)
 	version=$$(uv version --short)
 	git add pyproject.toml uv.lock
-	git commit -m "Release v$$version"
+	git commit -m "chore: release v$$version"
 	git tag "v$$version"
-	$(MAKE) build
-	$(call header,Publishing v$$version to GitHub)
+	$(call header,Pushing v$$version tag (CI will check, then publish GH release + PyPI))
 	git push && git push --tags
-	gh release create "v$$version" --title "v$$version" --generate-notes
-	echo "$(green)Released v$$version$(reset)"
+	echo "$(green)Tagged v$$version — GitHub Actions runs check, then publishes release + PyPI$(reset)"
 
 major minor patch:
 	@:

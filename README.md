@@ -240,6 +240,16 @@ gmake check      # offline gate: ruff, basedpyright strict, pytest
 The default test suite is fully offline.
 REST is faked with `httpx.MockTransport`, SSH with a monkeypatched `subprocess.run` — no live instance is needed.
 `gmake check` must pass before every commit.
+GitHub Actions runs the same gate on every push and pull request to `main`.
+
+### Release
+
+```sh
+gmake release patch   # or minor | major
+```
+
+Local release runs `gmake check`, bumps the version, commits, tags `v<version>`, and pushes.
+GitHub Actions re-runs the check on the tag, then publishes the GitHub release and PyPI package only if that check passes.
 
 ### Live end-to-end tier
 
