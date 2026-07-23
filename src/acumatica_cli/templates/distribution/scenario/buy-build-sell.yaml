@@ -1,0 +1,379 @@
+# The first transaction scenario (lab5-gtm service 1): buy parts from
+# vendors -> receive -> assemble gateway kits -> sell to customers ->
+# invoice -> collect one payment, then verify inventory and GL deltas.
+# Every step shape was live-pinned on LAB5 (P5 probes 2026-07-13); this
+# file is the contract example for the future AI scenario generator.
+#
+# Expected math (deltas, so the scenario re-runs clean on a warm tenant):
+#   purchases: SHENZHEN 2395 + ENCLOTEC 348 + WAVELINK 291 + MEMSTOR 825
+#     = 3859 -> PO accrual 20200 +3859 (bills are a later leg)
+#   assembly draw: 10x GW-EDGE(139) + 5x GW-CELL(195) + 5x GW-RAIL(145)
+#     = 3090 component cost -> finished goods
+#   sales: ACMEMFG 4x EDGE 1196 + NORTHGRID 3x CELL + 2x RAIL 2045
+#     + AGRISENSE 3x EDGE 897 = 4138 revenue; COGS 7x139 + 3x195 + 2x145
+#     = 1848; ACMEMFG pays in full -> AR 11000 +2942, cash 10100 +1196
+#   inventory: MB-CM4 +5 (25 bought - 20 consumed); kits EDGE +3
+#     (10-7), CELL +2 (5-3), RAIL +3 (5-2) - made minus sold
+scenario: buy-build-sell
+description: Buy parts -> assemble kits -> sell -> invoice -> collect
+steps:
+# ---- buy -------------------------------------------------------------
+- id: po-shenzhen
+  put: PurchaseOrder
+  record:
+    VendorID: SHENZHEN
+    Hold: false
+    Details:
+    - {InventoryID: MB-CM4, OrderQty: 25, UnitCost: 85.00}
+    - {InventoryID: MOD-LTE, OrderQty: 6, UnitCost: 45.00}
+  capture: {OrderNbr: po_shenzhen}
+- id: rcpt-shenzhen
+  put: PurchaseReceipt
+  record:
+    Type: Receipt
+    VendorID: SHENZHEN
+    Hold: false
+    Details:
+    - {POOrderType: Normal, POOrderNbr: "${po_shenzhen}", POLineNbr: 1, ReceiptQty: 25}
+    - {POOrderType: Normal, POOrderNbr: "${po_shenzhen}", POLineNbr: 2, ReceiptQty: 6}
+  capture: {ReceiptNbr: rcpt_shenzhen}
+- id: release-shenzhen
+  action: {entity: PurchaseReceipt, name: ReleasePurchaseReceipt}
+  record: {Type: Receipt, ReceiptNbr: "${rcpt_shenzhen}"}
+  wait:
+    entity: PurchaseReceipt
+    keys: [Receipt, "${rcpt_shenzhen}"]
+    until: {Status: Released}
+- id: po-enclotec
+  put: PurchaseOrder
+  record:
+    VendorID: ENCLOTEC
+    Hold: false
+    Details:
+    - {InventoryID: ENCL-STD, OrderQty: 20, UnitCost: 12.00}
+    - {InventoryID: ENCL-DIN, OrderQty: 6, UnitCost: 18.00}
+  capture: {OrderNbr: po_enclotec}
+- id: rcpt-enclotec
+  put: PurchaseReceipt
+  record:
+    Type: Receipt
+    VendorID: ENCLOTEC
+    Hold: false
+    Details:
+    - {POOrderType: Normal, POOrderNbr: "${po_enclotec}", POLineNbr: 1, ReceiptQty: 20}
+    - {POOrderType: Normal, POOrderNbr: "${po_enclotec}", POLineNbr: 2, ReceiptQty: 6}
+  capture: {ReceiptNbr: rcpt_enclotec}
+- id: release-enclotec
+  action: {entity: PurchaseReceipt, name: ReleasePurchaseReceipt}
+  record: {Type: Receipt, ReceiptNbr: "${rcpt_enclotec}"}
+  wait:
+    entity: PurchaseReceipt
+    keys: [Receipt, "${rcpt_enclotec}"]
+    until: {Status: Released}
+- id: po-wavelink
+  put: PurchaseOrder
+  record:
+    VendorID: WAVELINK
+    Hold: false
+    Details:
+    - {InventoryID: ANT-LORA, OrderQty: 25, UnitCost: 9.00}
+    - {InventoryID: ANT-LTE, OrderQty: 6, UnitCost: 11.00}
+  capture: {OrderNbr: po_wavelink}
+- id: rcpt-wavelink
+  put: PurchaseReceipt
+  record:
+    Type: Receipt
+    VendorID: WAVELINK
+    Hold: false
+    Details:
+    - {POOrderType: Normal, POOrderNbr: "${po_wavelink}", POLineNbr: 1, ReceiptQty: 25}
+    - {POOrderType: Normal, POOrderNbr: "${po_wavelink}", POLineNbr: 2, ReceiptQty: 6}
+  capture: {ReceiptNbr: rcpt_wavelink}
+- id: release-wavelink
+  action: {entity: PurchaseReceipt, name: ReleasePurchaseReceipt}
+  record: {Type: Receipt, ReceiptNbr: "${rcpt_wavelink}"}
+  wait:
+    entity: PurchaseReceipt
+    keys: [Receipt, "${rcpt_wavelink}"]
+    until: {Status: Released}
+- id: po-memstor
+  put: PurchaseOrder
+  record:
+    VendorID: MEMSTOR
+    Hold: false
+    Details:
+    - {InventoryID: PSU-12V, OrderQty: 25, UnitCost: 14.00}
+    - {InventoryID: SD-32GB, OrderQty: 25, UnitCost: 16.00}
+    - {InventoryID: CBL-PWR, OrderQty: 25, UnitCost: 3.00}
+  capture: {OrderNbr: po_memstor}
+- id: rcpt-memstor
+  put: PurchaseReceipt
+  record:
+    Type: Receipt
+    VendorID: MEMSTOR
+    Hold: false
+    Details:
+    - {POOrderType: Normal, POOrderNbr: "${po_memstor}", POLineNbr: 1, ReceiptQty: 25}
+    - {POOrderType: Normal, POOrderNbr: "${po_memstor}", POLineNbr: 2, ReceiptQty: 25}
+    - {POOrderType: Normal, POOrderNbr: "${po_memstor}", POLineNbr: 3, ReceiptQty: 25}
+  capture: {ReceiptNbr: rcpt_memstor}
+- id: release-memstor
+  action: {entity: PurchaseReceipt, name: ReleasePurchaseReceipt}
+  record: {Type: Receipt, ReceiptNbr: "${rcpt_memstor}"}
+  wait:
+    entity: PurchaseReceipt
+    keys: [Receipt, "${rcpt_memstor}"]
+    until: {Status: Released}
+# ---- build -----------------------------------------------------------
+- id: assemble-edge
+  put: KitAssembly
+  record:
+    Type: Assembly
+    KitInventoryID: GW-EDGE
+    Revision: V1
+    WarehouseID: WH01
+    Qty: 10
+    Hold: false
+  capture: {ReferenceNbr: asy_edge}
+- id: release-edge
+  action: {entity: KitAssembly, name: ReleaseKitAssembly}
+  record: {Type: Assembly, ReferenceNbr: "${asy_edge}"}
+  wait:
+    entity: KitAssembly
+    keys: [Assembly, "${asy_edge}"]
+    until: {Status: Released}
+- id: assemble-cell
+  put: KitAssembly
+  record:
+    Type: Assembly
+    KitInventoryID: GW-CELL
+    Revision: V1
+    WarehouseID: WH01
+    Qty: 5
+    Hold: false
+  capture: {ReferenceNbr: asy_cell}
+- id: release-cell
+  action: {entity: KitAssembly, name: ReleaseKitAssembly}
+  record: {Type: Assembly, ReferenceNbr: "${asy_cell}"}
+  wait:
+    entity: KitAssembly
+    keys: [Assembly, "${asy_cell}"]
+    until: {Status: Released}
+- id: assemble-rail
+  put: KitAssembly
+  record:
+    Type: Assembly
+    KitInventoryID: GW-RAIL
+    Revision: V1
+    WarehouseID: WH01
+    Qty: 5
+    Hold: false
+  capture: {ReferenceNbr: asy_rail}
+- id: release-rail
+  action: {entity: KitAssembly, name: ReleaseKitAssembly}
+  record: {Type: Assembly, ReferenceNbr: "${asy_rail}"}
+  wait:
+    entity: KitAssembly
+    keys: [Assembly, "${asy_rail}"]
+    until: {Status: Released}
+# ---- sell: ACMEMFG (pays in full) ------------------------------------
+- id: so-acme
+  put: SalesOrder
+  record:
+    OrderType: SO
+    CustomerID: ACMEMFG
+    Hold: false
+    Details:
+    - {InventoryID: GW-EDGE, OrderQty: 4, WarehouseID: WH01}
+  capture: {OrderNbr: so_acme}
+- id: ship-acme
+  action: {entity: SalesOrder, name: SalesOrderCreateShipment}
+  record: {OrderType: SO, OrderNbr: "${so_acme}"}
+  # Omit ShipmentDate: server uses business date (matches SO ShipOn default).
+  # A hardcoded past date fails: "no items planned for shipment on '<date>'".
+  parameters: {WarehouseID: WH01}
+- id: shipnbr-acme
+  get:
+    entity: SalesOrder
+    keys: [SO, "${so_acme}"]
+    expand: [Shipments]
+  capture:
+    Shipments[0].ShipmentNbr: ship_acme
+- id: confirm-acme
+  action: {entity: Shipment, name: ConfirmShipment}
+  record: {ShipmentNbr: "${ship_acme}"}
+  wait:
+    entity: Shipment
+    keys: ["${ship_acme}"]
+    until: {Status: Confirmed}
+- id: prepare-acme
+  action: {entity: Shipment, name: PrepareInvoice}
+  record: {ShipmentNbr: "${ship_acme}"}
+- id: invnbr-acme
+  get:
+    entity: SalesOrder
+    keys: [SO, "${so_acme}"]
+    expand: [Shipments]
+  capture:
+    Shipments[0].InvoiceNbr: inv_acme
+- id: release-inv-acme
+  action: {entity: SalesInvoice, name: ReleaseSalesInvoice}
+  record: {Type: Invoice, ReferenceNbr: "${inv_acme}"}
+  wait:
+    entity: SalesInvoice
+    keys: [Invoice, "${inv_acme}"]
+    until: {Status: Open}
+- id: pay-acme
+  put: Payment
+  record:
+    Type: Payment
+    CustomerID: ACMEMFG
+    PaymentMethod: WIRE
+    CashAccount: '10100'
+    PaymentAmount: 1196.00
+    PaymentRef: "WIRE-${inv_acme}"
+    Hold: false
+    DocumentsToApply:
+    - {DocType: Invoice, ReferenceNbr: "${inv_acme}", AmountPaid: 1196.00}
+  capture: {ReferenceNbr: pmt_acme}
+- id: release-pay-acme
+  action: {entity: Payment, name: ReleasePayment}
+  record: {Type: Payment, ReferenceNbr: "${pmt_acme}"}
+  wait:
+    entity: Payment
+    keys: [Payment, "${pmt_acme}"]
+    until: {Status: Closed}
+# ---- sell: NORTHGRID (invoice stays open) ----------------------------
+- id: so-northgrid
+  put: SalesOrder
+  record:
+    OrderType: SO
+    CustomerID: NORTHGRID
+    Hold: false
+    Details:
+    - {InventoryID: GW-CELL, OrderQty: 3, WarehouseID: WH01}
+    - {InventoryID: GW-RAIL, OrderQty: 2, WarehouseID: WH01}
+  capture: {OrderNbr: so_northgrid}
+- id: ship-northgrid
+  action: {entity: SalesOrder, name: SalesOrderCreateShipment}
+  record: {OrderType: SO, OrderNbr: "${so_northgrid}"}
+  parameters: {WarehouseID: WH01}
+- id: shipnbr-northgrid
+  get:
+    entity: SalesOrder
+    keys: [SO, "${so_northgrid}"]
+    expand: [Shipments]
+  capture:
+    Shipments[0].ShipmentNbr: ship_northgrid
+- id: confirm-northgrid
+  action: {entity: Shipment, name: ConfirmShipment}
+  record: {ShipmentNbr: "${ship_northgrid}"}
+  wait:
+    entity: Shipment
+    keys: ["${ship_northgrid}"]
+    until: {Status: Confirmed}
+- id: prepare-northgrid
+  action: {entity: Shipment, name: PrepareInvoice}
+  record: {ShipmentNbr: "${ship_northgrid}"}
+- id: invnbr-northgrid
+  get:
+    entity: SalesOrder
+    keys: [SO, "${so_northgrid}"]
+    expand: [Shipments]
+  capture:
+    Shipments[0].InvoiceNbr: inv_northgrid
+- id: release-inv-northgrid
+  action: {entity: SalesInvoice, name: ReleaseSalesInvoice}
+  record: {Type: Invoice, ReferenceNbr: "${inv_northgrid}"}
+  wait:
+    entity: SalesInvoice
+    keys: [Invoice, "${inv_northgrid}"]
+    until: {Status: Open}
+# ---- sell: AGRISENSE (invoice stays open) ----------------------------
+- id: so-agrisense
+  put: SalesOrder
+  record:
+    OrderType: SO
+    CustomerID: AGRISENSE
+    Hold: false
+    Details:
+    - {InventoryID: GW-EDGE, OrderQty: 3, WarehouseID: WH01}
+  capture: {OrderNbr: so_agrisense}
+- id: ship-agrisense
+  action: {entity: SalesOrder, name: SalesOrderCreateShipment}
+  record: {OrderType: SO, OrderNbr: "${so_agrisense}"}
+  parameters: {WarehouseID: WH01}
+- id: shipnbr-agrisense
+  get:
+    entity: SalesOrder
+    keys: [SO, "${so_agrisense}"]
+    expand: [Shipments]
+  capture:
+    Shipments[0].ShipmentNbr: ship_agrisense
+- id: confirm-agrisense
+  action: {entity: Shipment, name: ConfirmShipment}
+  record: {ShipmentNbr: "${ship_agrisense}"}
+  wait:
+    entity: Shipment
+    keys: ["${ship_agrisense}"]
+    until: {Status: Confirmed}
+- id: prepare-agrisense
+  action: {entity: Shipment, name: PrepareInvoice}
+  record: {ShipmentNbr: "${ship_agrisense}"}
+- id: invnbr-agrisense
+  get:
+    entity: SalesOrder
+    keys: [SO, "${so_agrisense}"]
+    expand: [Shipments]
+  capture:
+    Shipments[0].InvoiceNbr: inv_agrisense
+- id: release-inv-agrisense
+  action: {entity: SalesInvoice, name: ReleaseSalesInvoice}
+  record: {Type: Invoice, ReferenceNbr: "${inv_agrisense}"}
+  wait:
+    entity: SalesInvoice
+    keys: [Invoice, "${inv_agrisense}"]
+    until: {Status: Open}
+expect:
+- get:
+    entity: SalesInvoice
+    keys: [Invoice, "${inv_acme}"]
+  fields:
+    Status: Closed
+- get:
+    entity: Payment
+    keys: [Payment, "${pmt_acme}"]
+  fields:
+    Status: Closed
+- inquire: InventorySummaryInquiry
+  parameters: {InventoryID: MB-CM4, WarehouseID: WH01}
+  delta: {QtyOnHand: 5.0}
+- inquire: InventorySummaryInquiry
+  parameters: {InventoryID: GW-EDGE, WarehouseID: WH01}
+  delta: {QtyOnHand: 3.0}
+- inquire: InventorySummaryInquiry
+  parameters: {InventoryID: GW-CELL, WarehouseID: WH01}
+  delta: {QtyOnHand: 2.0}
+- inquire: InventorySummaryInquiry
+  parameters: {InventoryID: GW-RAIL, WarehouseID: WH01}
+  delta: {QtyOnHand: 3.0}
+- inquire: AccountSummaryInquiry
+  parameters: {Ledger: ACTUAL, Period: "072026"}
+  match: {Account: '40000'}
+  delta: {EndingBalance: 4138.00}
+- inquire: AccountSummaryInquiry
+  parameters: {Ledger: ACTUAL, Period: "072026"}
+  match: {Account: '50000'}
+  delta: {EndingBalance: 1848.00}
+- inquire: AccountSummaryInquiry
+  parameters: {Ledger: ACTUAL, Period: "072026"}
+  match: {Account: '20200'}
+  delta: {EndingBalance: 3859.00}
+- inquire: AccountSummaryInquiry
+  parameters: {Ledger: ACTUAL, Period: "072026"}
+  match: {Account: '11000'}
+  delta: {EndingBalance: 2942.00}
+- inquire: AccountSummaryInquiry
+  parameters: {Ledger: ACTUAL, Period: "072026"}
+  match: {Account: '10100'}
+  delta: {EndingBalance: 1196.00}

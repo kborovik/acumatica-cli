@@ -1,0 +1,18 @@
+# Cash management preferences (CA101000) via the custom Bootstrap (endpoint: bootstrap)
+# endpoint (acumatica-cli#10, T61) - the CASetup singleton. CashAccount
+# (CA202000) answers 500 PXSetupNotEnteredException until it exists
+# (live-read 2026-07-13). TransitAcctId/TransitSubID (the cash-in-transit
+# pair) are supplied - 10200; TransitAcctId spelling is the DAC property
+# off the live aspx (lowercase d). HoldEntry false so scenario cash
+# transactions post without a manual hold release.
+#
+# APPLY ORDER (dir expansion sorts *.yaml alphabetically; numbered
+# prefixes encode order): after 20-accounts.yaml (10200) and
+# 10-subaccounts.yaml; before 63-cash-account.yaml.
+entity: CAPreferences
+key: TransitAcctId
+endpoint: bootstrap
+records:
+- TransitAcctId: '10200'
+  TransitSubID: '000000'
+  HoldEntry: false

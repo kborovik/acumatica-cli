@@ -1,0 +1,28 @@
+# Warehouse locations (IN204000 Locations tab) via the Default endpoint
+# (symbolic endpoint: default — tracks ACU_API_VERSION / target.yaml).
+# Bootstrap creates WH01 (CountryID on Address - Default 422s at insert)
+# but has no Locations surface. With WarehouseLocation on, PO receipts and
+# kit assembly default to ReceivingLocationID / ShippingLocationID; without
+# a real location every qty sits on system <UNASSIGNED> (2026-07-19 probe).
+# MAIN is the one storage bin for Lab5 - receive, ship, RMA, assembly.
+#
+# APPLY ORDER: after 53-warehouse.yaml (WH01 must exist); before
+# 54-item-classes.yaml and every document that receives stock into WH01.
+entity: Warehouse
+key: WarehouseID
+endpoint: default
+detail_keys:
+  Locations: LocationID
+records:
+- WarehouseID: WH01
+  ReceivingLocationID: MAIN
+  ShippingLocationID: MAIN
+  RMALocationID: MAIN
+  Locations:
+  - LocationID: MAIN
+    Description: Main storage
+    Active: true
+    ReceiptsAllowed: true
+    SalesAllowed: true
+    TransfersAllowed: true
+    AssemblyAllowed: true

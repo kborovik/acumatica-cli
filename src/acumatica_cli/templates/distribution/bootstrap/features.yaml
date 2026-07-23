@@ -1,0 +1,26 @@
+# FeaturesSet property names (DAC bit flags) the bootstrap plugin enables
+# on publish. Absent file = the built-in six; this list adds SubAccount so
+# baseline/10-subaccounts.yaml applies onto a fresh tenant, and
+# KitAssemblies for the kit-assembly demo flow (without it the
+# KitSpecification IN209500 and KitAssembly IN307000 forms answer 403 -
+# P1 probe, acumatica-cli#10), and Warehouse (Multiple Warehouses) so a
+# real receiving warehouse WH01 exists - with the feature off the only
+# warehouse is the auto-created transit MAIN, PO lines default no
+# warehouse, and receipts fail "Operation failed" (P5 probe).
+# WarehouseLocation (Multiple Warehouse Locations) so receipts land on a
+# real bin (MAIN) instead of system <UNASSIGNED> - without it Inventory
+# Summary shows Location <UNASSIGNED> for every qty (2026-07-19 probe).
+# Multicurrency is deliberately NOT here:
+# Lab5 Gateway Works is USD-only (single-org, single-branch demo - see
+# README). A misspelled name enables nothing - the plugin flags it in
+# the publish log.
+- FinancialModule
+- FinancialStandard
+- DistributionModule
+- Inventory
+- Branch
+- MultiCompany
+- SubAccount
+- KitAssemblies
+- Warehouse
+- WarehouseLocation

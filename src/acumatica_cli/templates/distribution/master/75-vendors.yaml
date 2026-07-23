@@ -1,0 +1,73 @@
+# Vendors (AP303000) via the Default endpoint - reachable once AP
+# preferences exist (61-ap-preferences.yaml; P1 probe 500'd before it).
+# Four component suppliers + two service vendors (AP variety for later
+# scenario legs; buy-build-sell v1 bills only component vendors). Terms
+# ride each vendor: the Default VendorClass contract is skeletal
+# (ClassID/Description only - P1 schema read), so terms stay per vendor
+# while GL accounts default from the Bootstrap VendorClass (T64). The
+# nested MainContact/Address/Country is required at insert - the
+# vendor's auto-created Address 422s "'Country' cannot be empty"
+# (T65 linked-entity support; live-verified 2026-07-13). PrintOrders/
+# SendOrdersbyEmail false: either flag parks a PO at 'Pending Printing'
+# where receipts cannot add it (P5 probe).
+#
+# APPLY ORDER (dir expansion sorts *.yaml alphabetically; numbered
+# prefixes encode order): after 70-vendor-classes.yaml and bootstrap
+# credit terms (NET30).
+entity: Vendor
+key: VendorID
+records:
+- VendorID: SHENZHEN
+  VendorName: Shenzhen Circuit Supply
+  VendorClass: SUPPLIER
+  Terms: NET30
+  PrintOrders: false
+  SendOrdersbyEmail: false
+  MainContact:
+    Address:
+      Country: US
+- VendorID: ENCLOTEC
+  VendorName: EncloTech Industries
+  VendorClass: SUPPLIER
+  Terms: NET30
+  PrintOrders: false
+  SendOrdersbyEmail: false
+  MainContact:
+    Address:
+      Country: US
+- VendorID: WAVELINK
+  VendorName: WaveLink Antennas
+  VendorClass: SUPPLIER
+  Terms: NET30
+  PrintOrders: false
+  SendOrdersbyEmail: false
+  MainContact:
+    Address:
+      Country: US
+- VendorID: MEMSTOR
+  VendorName: MemStore Distribution
+  VendorClass: SUPPLIER
+  Terms: NET30
+  PrintOrders: false
+  SendOrdersbyEmail: false
+  MainContact:
+    Address:
+      Country: US
+- VendorID: FREIGHT
+  VendorName: FastFreight Logistics
+  VendorClass: SERVICE
+  Terms: NET30
+  PrintOrders: false
+  SendOrdersbyEmail: false
+  MainContact:
+    Address:
+      Country: US
+- VendorID: CLOUDNET
+  VendorName: CloudNet Services
+  VendorClass: SERVICE
+  Terms: NET30
+  PrintOrders: false
+  SendOrdersbyEmail: false
+  MainContact:
+    Address:
+      Country: US

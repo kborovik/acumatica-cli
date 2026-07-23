@@ -1,0 +1,94 @@
+# Kit specifications (IN209500) via the Default endpoint - the component
+# list per gateway kit, revision V1. First consumer of detail-list seed
+# support (acumatica-cli#9, T60): StockComponents is a detail array,
+# rows matched by StockInventoryID per detail_keys (the contract's row
+# key - 'ComponentID' is the screen label, not the field; live 422
+# "'Component ID' cannot be empty" until renamed), order-insensitive; an
+# extra live component row IS drift. Parts shared across kits on
+# purpose - the scenario exercises shared demand. Component costs (per
+# README): GW-EDGE 139, GW-CELL 195, GW-RAIL 145.
+#
+# APPLY ORDER (dir expansion sorts *.yaml alphabetically; numbered
+# prefixes encode order): after 80-stock-items-parts.yaml and
+# 82-stock-items-kits.yaml - every ComponentID and KitInventoryID below
+# must exist.
+entity: KitSpecification
+key: [KitInventoryID, RevisionID]
+detail_keys:
+  StockComponents: StockInventoryID
+records:
+- KitInventoryID: GW-EDGE
+  RevisionID: V1
+  Description: Edge IoT Gateway bill of components
+  Active: true
+  StockComponents:
+  - StockInventoryID: ENCL-STD
+    ComponentQty: 1
+    UOM: EA
+  - StockInventoryID: MB-CM4
+    ComponentQty: 1
+    UOM: EA
+  - StockInventoryID: ANT-LORA
+    ComponentQty: 1
+    UOM: EA
+  - StockInventoryID: PSU-12V
+    ComponentQty: 1
+    UOM: EA
+  - StockInventoryID: SD-32GB
+    ComponentQty: 1
+    UOM: EA
+  - StockInventoryID: CBL-PWR
+    ComponentQty: 1
+    UOM: EA
+- KitInventoryID: GW-CELL
+  RevisionID: V1
+  Description: Cellular IoT Gateway bill of components
+  Active: true
+  StockComponents:
+  - StockInventoryID: ENCL-STD
+    ComponentQty: 1
+    UOM: EA
+  - StockInventoryID: MB-CM4
+    ComponentQty: 1
+    UOM: EA
+  - StockInventoryID: MOD-LTE
+    ComponentQty: 1
+    UOM: EA
+  - StockInventoryID: ANT-LTE
+    ComponentQty: 1
+    UOM: EA
+  - StockInventoryID: ANT-LORA
+    ComponentQty: 1
+    UOM: EA
+  - StockInventoryID: PSU-12V
+    ComponentQty: 1
+    UOM: EA
+  - StockInventoryID: SD-32GB
+    ComponentQty: 1
+    UOM: EA
+  - StockInventoryID: CBL-PWR
+    ComponentQty: 1
+    UOM: EA
+- KitInventoryID: GW-RAIL
+  RevisionID: V1
+  Description: DIN-Rail Industrial Gateway bill of components
+  Active: true
+  StockComponents:
+  - StockInventoryID: ENCL-DIN
+    ComponentQty: 1
+    UOM: EA
+  - StockInventoryID: MB-CM4
+    ComponentQty: 1
+    UOM: EA
+  - StockInventoryID: ANT-LORA
+    ComponentQty: 1
+    UOM: EA
+  - StockInventoryID: PSU-12V
+    ComponentQty: 1
+    UOM: EA
+  - StockInventoryID: SD-32GB
+    ComponentQty: 1
+    UOM: EA
+  - StockInventoryID: CBL-PWR
+    ComponentQty: 1
+    UOM: EA

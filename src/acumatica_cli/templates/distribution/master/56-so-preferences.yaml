@@ -1,0 +1,21 @@
+# Sales order preferences (SO101000) via the custom Bootstrap (endpoint: bootstrap)
+# endpoint (acumatica-cli#10, T61) - the SOSetup singleton. SalesOrder
+# answers 500 PXSetupNotEnteredException until it exists (P1 probe).
+# DefaultOrderType SO doubles as the plan-R1 probe (resolved: order
+# types do NOT pre-exist - 58-order-types.yaml materializes SO).
+# HoldShipments/RequireShipmentTotal off + AutoReleaseIN on keep the
+# shipment -> invoice chain scriptable: template defaults park
+# shipments On Hold and refuse confirmation without a control total
+# (P5 probes 2026-07-13).
+#
+# APPLY ORDER (dir expansion sorts *.yaml alphabetically; numbered
+# prefixes encode order): after 50-in-preferences.yaml (module chain
+# convention); before any sales-order scenario work.
+entity: SOPreferences
+key: DefaultOrderType
+endpoint: bootstrap
+records:
+- DefaultOrderType: SO
+  HoldShipments: false
+  RequireShipmentTotal: false
+  AutoReleaseIN: true

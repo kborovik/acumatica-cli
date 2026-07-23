@@ -1,0 +1,15 @@
+# Accounts receivable preferences (AR101000) via the custom
+# Bootstrap endpoint (symbolic endpoint: bootstrap) (acumatica-cli#10, T61) - the ARSetup
+# singleton. Customer, SalesInvoice and Payment answer 500
+# PXSetupNotEnteredException until it exists (P1 probe). HoldEntry false
+# so scenario invoices release programmatically; every other ARSetup
+# field defaults on first save.
+#
+# APPLY ORDER (dir expansion sorts *.yaml alphabetically; numbered
+# prefixes encode order): before 71-customer-classes.yaml and
+# 76-customers.yaml.
+entity: ARPreferences
+key: HoldEntry
+endpoint: bootstrap
+records:
+- HoldEntry: false

@@ -1,0 +1,21 @@
+# Sales order types (SO201000) via the custom Bootstrap endpoint (symbolic endpoint: bootstrap)
+# (plan risk R1, proven live 2026-07-13): a fresh tenant has ZERO
+# order-type rows - the shipped types live in the template company
+# (CompanyID 1, Active=0, sqlcmd-verified), and a SalesOrder PUT
+# answers 200 with an UNSAVED row (OrderNbr stays <SELECT>, CustomerID
+# silently empty) because the order type's numbering never resolves.
+# The keyed PUT materializes the SO template row into the tenant and
+# activates it; the freight pair is required at persist (charged
+# freight = income, 40100 Sales - Services).
+#
+# APPLY ORDER (dir expansion sorts *.yaml alphabetically; numbered
+# prefixes encode order): after 56-so-preferences.yaml (SOSetup);
+# before any sales-order scenario work.
+entity: OrderType
+key: OrderType
+endpoint: bootstrap
+records:
+- OrderType: SO
+  Active: true
+  FreightAcctID: '40100'
+  FreightSubID: '000000'

@@ -1,0 +1,43 @@
+# Item classes (IN201000) via the Default endpoint. P1 probe results on
+# LAB5 (26.101.0225): GET answers 200 pre-IN-setup, but PUT 422s until an
+# AvailabilityCalculationRule row exists (51-availability-rules.yaml,
+# Bootstrap (endpoint: bootstrap) - acumatica-cli#10), and only 'Finished Good' is an
+# allowed ItemType on this feature set (the other list values are
+# Manufacturing-gated). PostingClass routes PARTS to inventory 12100 and
+# KITS to 12200 (52-posting-classes.yaml). PurchaseUOM/SalesUOM omitted:
+# equal to BaseUOM they are not returned by the endpoint (B11 phantom
+# class, live diff 2026-07-13) - the server derives them from BaseUOM.
+# DefaultWarehouseID WH01: the Warehouse feature is on and WH01 is the
+# one operating warehouse (53-warehouse.yaml, Bootstrap - the Default
+# entity has no address surface).
+#
+# APPLY ORDER (dir expansion sorts *.yaml alphabetically; numbered
+# prefixes encode order): after 40-uoms.yaml (BaseUOM EA),
+# 51-availability-rules.yaml (DEFAULT rule), 52-posting-classes.yaml and
+# 53-tax-categories.yaml (TaxCategoryID EXEMPT - StockItem insert 422s
+# without a tax category, R8);
+# before 80-stock-items-parts.yaml, whose records reference these
+# classes.
+entity: ItemClass
+key: ClassID
+records:
+- ClassID: PARTS
+  Description: Purchased components
+  StockItem: true
+  ItemType: Finished Good
+  ValuationMethod: Average
+  BaseUOM: EA
+  AvailabilityCalculationRule: DEFAULT
+  PostingClass: PARTS
+  TaxCategoryID: EXEMPT
+  DefaultWarehouseID: WH01
+- ClassID: KITS
+  Description: Assembled gateway kits
+  StockItem: true
+  ItemType: Finished Good
+  ValuationMethod: Average
+  BaseUOM: EA
+  AvailabilityCalculationRule: DEFAULT
+  PostingClass: KITS
+  TaxCategoryID: EXEMPT
+  DefaultWarehouseID: WH01

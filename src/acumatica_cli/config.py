@@ -30,7 +30,7 @@ DB_NAME = "AcumaticaDB"
 
 # `acu config init` template set: (package resource, destination) pairs.
 # Dotfiles are stored dotless (wheel tooling tends to drop dotfiles) and
-# mapped to their real names on write.
+# mapped to their real names on write. Finance-minimal default (V28).
 INIT_TEMPLATES = (
     ("env", ".env"),
     ("gitignore", ".gitignore"),
@@ -48,6 +48,60 @@ INIT_TEMPLATES = (
     ("setup/20-master-calendar.yaml", "setup/20-master-calendar.yaml"),
     ("setup/30-open-periods.yaml", "setup/30-open-periods.yaml"),
 )
+
+# Opt-in `--flavor distribution` overlays + extras (V28/V29). Resource paths
+# live under templates/distribution/; dest paths are data-repo relative.
+# Same dest as INIT_TEMPLATES replaces the finance-minimal file (company
+# LAB5, expanded COA, features, open-periods, uoms).
+DISTRIBUTION_TEMPLATES = (
+    ("distribution/bootstrap/company.yaml", "bootstrap/company.yaml"),
+    ("distribution/bootstrap/features.yaml", "bootstrap/features.yaml"),
+    ("distribution/bootstrap/project.xml", "bootstrap/project.xml"),
+    ("distribution/baseline/20-accounts.yaml", "baseline/20-accounts.yaml"),
+    ("distribution/baseline/60-ledger-company.yaml", "baseline/60-ledger-company.yaml"),
+    ("distribution/baseline/90-uoms.yaml", "baseline/90-uoms.yaml"),
+    ("distribution/setup/30-open-periods.yaml", "setup/30-open-periods.yaml"),
+    ("distribution/master/10-reason-codes.yaml", "master/10-reason-codes.yaml"),
+    ("distribution/master/20-in-preferences.yaml", "master/20-in-preferences.yaml"),
+    (
+        "distribution/master/30-availability-rules.yaml",
+        "master/30-availability-rules.yaml",
+    ),
+    ("distribution/master/40-posting-classes.yaml", "master/40-posting-classes.yaml"),
+    ("distribution/master/50-warehouse.yaml", "master/50-warehouse.yaml"),
+    (
+        "distribution/master/51-warehouse-locations.yaml",
+        "master/51-warehouse-locations.yaml",
+    ),
+    ("distribution/master/52-tax-categories.yaml", "master/52-tax-categories.yaml"),
+    ("distribution/master/54-item-classes.yaml", "master/54-item-classes.yaml"),
+    ("distribution/master/56-so-preferences.yaml", "master/56-so-preferences.yaml"),
+    ("distribution/master/57-po-preferences.yaml", "master/57-po-preferences.yaml"),
+    ("distribution/master/58-order-types.yaml", "master/58-order-types.yaml"),
+    ("distribution/master/60-ar-preferences.yaml", "master/60-ar-preferences.yaml"),
+    ("distribution/master/61-ap-preferences.yaml", "master/61-ap-preferences.yaml"),
+    ("distribution/master/62-ca-preferences.yaml", "master/62-ca-preferences.yaml"),
+    ("distribution/master/63-cash-account.yaml", "master/63-cash-account.yaml"),
+    ("distribution/master/64-payment-methods.yaml", "master/64-payment-methods.yaml"),
+    ("distribution/master/65-statement-cycles.yaml", "master/65-statement-cycles.yaml"),
+    ("distribution/master/70-vendor-classes.yaml", "master/70-vendor-classes.yaml"),
+    ("distribution/master/71-customer-classes.yaml", "master/71-customer-classes.yaml"),
+    ("distribution/master/75-vendors.yaml", "master/75-vendors.yaml"),
+    ("distribution/master/76-customers.yaml", "master/76-customers.yaml"),
+    (
+        "distribution/master/80-stock-items-parts.yaml",
+        "master/80-stock-items-parts.yaml",
+    ),
+    ("distribution/master/82-stock-items-kits.yaml", "master/82-stock-items-kits.yaml"),
+    (
+        "distribution/master/85-kit-specifications.yaml",
+        "master/85-kit-specifications.yaml",
+    ),
+    ("distribution/scenario/buy-build-sell.yaml", "scenario/buy-build-sell.yaml"),
+    ("distribution/README.md", "README.md"),
+)
+
+INIT_FLAVORS = frozenset({"distribution"})
 
 
 class Instance(BaseSettings):
@@ -110,18 +164,45 @@ class Instance(BaseSettings):
         return v
 
 
-def scaffold(directory: Path, host: str | None = None) -> Iterator[tuple[str, Path]]:
+def templates_for(flavor: str | None) -> tuple[tuple[str, str], ...]:
+    """Resolve (resource, dest) pairs for ``config init`` (V28).
+
+    Absent flavor → finance-minimal ``INIT_TEMPLATES`` only. ``distribution``
+    merges ``DISTRIBUTION_TEMPLATES`` over the same dest keys (overlay wins),
+    then appends destinations that finance-minimal does not scaffold.
+    """
+    if flavor is None:
+        return INIT_TEMPLATES
+    if flavor not in INIT_FLAVORS:
+        raise SystemExit(
+            f"unknown config init flavor {flavor!r}; "
+            f"known: {', '.join(sorted(INIT_FLAVORS))}"
+        )
+    by_dest = {dest: res for res, dest in INIT_TEMPLATES}
+    order = [dest for _, dest in INIT_TEMPLATES]
+    if flavor == "distribution":
+        for res, dest in DISTRIBUTION_TEMPLATES:
+            if dest not in by_dest:
+                order.append(dest)
+            by_dest[dest] = res
+    return tuple((by_dest[dest], dest) for dest in order)
+
+
+def scaffold(
+    directory: Path, host: str | None = None, flavor: str | None = None
+) -> Iterator[tuple[str, Path]]:
     """Write the data-repo template set into ``directory``, never overwriting.
 
     Yields ("write" | "skip", path) per template file. ``host`` replaces the
     placeholder host inside the scaffolded .env ``ACU_BASE_URL``/``ACU_SSH``
-    values; secrets stay placeholders (V2). The directory
-    is created if absent. No git init, no gpg - version control and secret
-    encryption stay the operator's call.
+    values; secrets stay placeholders (V2). ``flavor`` selects the template
+    set (V28; default finance-minimal). The directory is created if absent.
+    No git init, no gpg - version control and secret encryption stay the
+    operator's call.
     """
     pkg = resources.files("acumatica_cli") / "templates"
     directory.mkdir(parents=True, exist_ok=True)
-    for resource, dest in INIT_TEMPLATES:
+    for resource, dest in templates_for(flavor):
         target = directory / dest
         if target.exists():
             yield "skip", target

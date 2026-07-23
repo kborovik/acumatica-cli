@@ -1,0 +1,238 @@
+# Chart of accounts (GL202500), designed for LAB5 Distribution (lab5.ca demo tenant seed) - 23 accounts covering GL foundation plus the
+# AP/AR/IN/SO/PO posting resolution the buy-build-sell scenario needs.
+# Field shape live-verified on 26.101.0225 by the earlier SalesDemo
+# replay (T24). Stripped per that work: internal AccountID, AccountClass
+# (no Default-endpoint entity), AccountGroup (PM - absent on a fresh
+# tenant, PUT 422s), RevaluationRateType, and the server-derived
+# ChartOfAccountsOrder + CashAccount (PUT-tolerated but the server keeps
+# its own derivation, so any sourced value diffs dirty forever - B11).
+# CurrencyID only on denominated cash accounts (the SalesDemo extract
+# carried it on 11 cash accounts only). Equity accounts are Type:
+# Liability - the Account.Type list has no Equity value.
+#
+# APPLY ORDER (dir expansion sorts *.yaml alphabetically; numbered
+# prefixes encode order): after 10-subaccounts.yaml; before
+# 32-gl-preferences.yaml, which references 32000/33000 below. FX
+# gain/loss accounts (83xxx/84000) intentionally absent - USD-only
+# tenant; add them only if AR/AP release proves to need a financial
+# currency row (plan risk R4).
+entity: Account
+key: AccountCD
+records:
+- AccountCD: '10100'
+  Active: true
+  CurrencyID: USD
+  Description: Checking Account
+  PostOption: Detail
+  RequireUnits: false
+  Secured: false
+  Type: Asset
+  UseDefaultSubaccount: false
+- AccountCD: '10200'
+  Active: true
+  Description: Cash In Transit
+  PostOption: Detail
+  RequireUnits: false
+  Secured: false
+  Type: Asset
+  UseDefaultSubaccount: false
+- AccountCD: '11000'
+  Active: true
+  Description: Accounts Receivable
+  PostOption: Detail
+  RequireUnits: false
+  Secured: false
+  Type: Asset
+  UseDefaultSubaccount: false
+- AccountCD: '12100'
+  Active: true
+  Description: Inventory - Components
+  PostOption: Detail
+  RequireUnits: false
+  Secured: false
+  Type: Asset
+  UseDefaultSubaccount: false
+- AccountCD: '12200'
+  Active: true
+  Description: Inventory - Finished Goods
+  PostOption: Detail
+  RequireUnits: false
+  Secured: false
+  Type: Asset
+  UseDefaultSubaccount: false
+- AccountCD: '12300'
+  Active: true
+  Description: Work In Progress
+  PostOption: Detail
+  RequireUnits: false
+  Secured: false
+  Type: Asset
+  UseDefaultSubaccount: false
+- AccountCD: '12400'
+  Active: true
+  Description: Inventory In Transit
+  PostOption: Detail
+  RequireUnits: false
+  Secured: false
+  Type: Asset
+  UseDefaultSubaccount: false
+- AccountCD: '15000'
+  Active: true
+  Description: Prepaid Expenses
+  PostOption: Detail
+  RequireUnits: false
+  Secured: false
+  Type: Asset
+  UseDefaultSubaccount: false
+- AccountCD: '16000'
+  Active: true
+  Description: Office Equipment
+  PostOption: Detail
+  RequireUnits: false
+  Secured: false
+  Type: Asset
+  UseDefaultSubaccount: false
+- AccountCD: '20100'
+  Active: true
+  Description: Accounts Payable
+  PostOption: Summary
+  RequireUnits: false
+  Secured: false
+  Type: Liability
+  UseDefaultSubaccount: false
+- AccountCD: '20200'
+  Active: true
+  Description: PO Accrual
+  PostOption: Detail
+  RequireUnits: false
+  Secured: false
+  Type: Liability
+  UseDefaultSubaccount: false
+- AccountCD: '22000'
+  Active: true
+  Description: Accrued Expenses
+  PostOption: Summary
+  RequireUnits: false
+  Secured: false
+  Type: Liability
+  UseDefaultSubaccount: false
+- AccountCD: '24000'
+  Active: true
+  Description: Sales Tax Payable
+  PostOption: Summary
+  RequireUnits: false
+  Secured: false
+  Type: Liability
+  UseDefaultSubaccount: false
+- AccountCD: '30000'
+  Active: true
+  Description: Owner Capital
+  PostOption: Summary
+  RequireUnits: false
+  Secured: false
+  Type: Liability
+  UseDefaultSubaccount: false
+- AccountCD: '32000'
+  Active: true
+  Description: Retained Earnings
+  PostOption: Summary
+  RequireUnits: false
+  Secured: false
+  Type: Liability
+  UseDefaultSubaccount: false
+- AccountCD: '33000'
+  Active: true
+  Description: Net Income
+  PostOption: Summary
+  RequireUnits: false
+  Secured: false
+  Type: Liability
+  UseDefaultSubaccount: false
+- AccountCD: '40000'
+  Active: true
+  Description: Sales - Gateways
+  PostOption: Summary
+  RequireUnits: false
+  Secured: false
+  Type: Income
+  UseDefaultSubaccount: false
+- AccountCD: '40100'
+  Active: true
+  Description: Sales - Services
+  PostOption: Summary
+  RequireUnits: false
+  Secured: false
+  Type: Income
+  UseDefaultSubaccount: false
+- AccountCD: '49000'
+  Active: true
+  Description: Sales Discounts
+  PostOption: Summary
+  RequireUnits: false
+  Secured: false
+  Type: Income
+  UseDefaultSubaccount: false
+- AccountCD: '49100'
+  Active: true
+  Description: Purchase Discounts Taken
+  PostOption: Summary
+  RequireUnits: false
+  Secured: false
+  Type: Income
+  UseDefaultSubaccount: false
+- AccountCD: '50000'
+  Active: true
+  Description: COGS - Gateways
+  PostOption: Summary
+  RequireUnits: false
+  Secured: false
+  Type: Expense
+  UseDefaultSubaccount: false
+- AccountCD: '50100'
+  Active: true
+  Description: Purchase Price Variance
+  PostOption: Summary
+  RequireUnits: false
+  Secured: false
+  Type: Expense
+  UseDefaultSubaccount: false
+- AccountCD: '50200'
+  Active: true
+  Description: Landed Cost Variance
+  PostOption: Summary
+  RequireUnits: false
+  Secured: false
+  Type: Expense
+  UseDefaultSubaccount: false
+- AccountCD: '50300'
+  Active: true
+  Description: Inventory Adjustments
+  PostOption: Summary
+  RequireUnits: false
+  Secured: false
+  Type: Expense
+  UseDefaultSubaccount: false
+- AccountCD: '60000'
+  Active: true
+  Description: Freight Expense
+  PostOption: Summary
+  RequireUnits: false
+  Secured: false
+  Type: Expense
+  UseDefaultSubaccount: false
+- AccountCD: '61000'
+  Active: true
+  Description: Office Expense
+  PostOption: Summary
+  RequireUnits: false
+  Secured: false
+  Type: Expense
+  UseDefaultSubaccount: false
+- AccountCD: '62000'
+  Active: true
+  Description: Bank Charges
+  PostOption: Summary
+  RequireUnits: false
+  Secured: false
+  Type: Expense
+  UseDefaultSubaccount: false

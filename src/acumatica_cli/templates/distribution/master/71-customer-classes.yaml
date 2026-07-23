@@ -1,0 +1,28 @@
+# Customer classes (AR201000) via the Default endpoint. Live-verified on
+# LAB5 (P1 probe, 26.101.0225): PUT answers 200 with no AR-setup gate -
+# only the Customer entity itself 500s until AR Preferences exist
+# (acumatica-cli#10). Customer inserts hard-require the class defaults
+# proven live 2026-07-13: CashDiscountAccount 49000 (422 "'Cash Discount
+# Account' cannot be empty") and StatementCycleID MONTHLY (422
+# "'Statement Cycle ID' cannot be empty" - the cycle rides Bootstrap,
+# 65-statement-cycles.yaml). AR posting defaults flow from the class to
+# customers.
+#
+# APPLY ORDER (dir expansion sorts *.yaml alphabetically; numbered
+# prefixes encode order): after 20-accounts.yaml (11000/40000/49000),
+# 65-statement-cycles.yaml and bootstrap credit terms (NET30); before
+# 76-customers.yaml.
+entity: CustomerClass
+key: ClassID
+records:
+- ClassID: B2B
+  Description: B2B customers
+  Terms: NET30
+  CurrencyID: USD
+  ARAccount: '11000'
+  ARSubaccount: '000000'
+  SalesAccount: '40000'
+  SalesSubaccount: '000000'
+  CashDiscountAccount: '49000'
+  CashDiscountSubaccount: '000000'
+  StatementCycleID: MONTHLY

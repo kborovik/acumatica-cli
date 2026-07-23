@@ -1,0 +1,34 @@
+# Inventory preferences (IN101000) via the custom Bootstrap (endpoint: bootstrap)
+# endpoint (acumatica-cli#10, T61) - the INSetup singleton. Warehouse and
+# Shipment answer 500 PXSetupNotEnteredException until it exists (P1
+# probe). The live insert named the fields with no server default
+# (2026-07-13): the WIP account/sub pair and the four reason codes -
+# plus the in-transit pair 12400 once the Warehouse feature turned on
+# (update 500s "'In-Transit Account' cannot be empty", P5 probe) and
+# TransitBranchID (insert 500s "'Branch' cannot be empty" on a virgin
+# tenant with Warehouse on, 2026-07-17) - this record is the complete
+# required set; numbering (INREGISTER etc.)
+# defaults on first save. HoldEntry false so scenario inventory
+# documents post without a manual hold release; UpdateGL true - the
+# default leaves released IN documents posting NO GL (quantities move,
+# COGS and PO accrual sit at zero while AR revenue moves - P5 probe).
+#
+# APPLY ORDER (dir expansion sorts *.yaml alphabetically; numbered
+# prefixes encode order): after 20-accounts.yaml (12300),
+# 10-subaccounts.yaml and 45-reason-codes.yaml; before
+# 51-availability-rules.yaml and every other IN-module file.
+entity: INPreferences
+key: HoldEntry
+endpoint: bootstrap
+records:
+- HoldEntry: false
+  INProgressAcctID: '12300'
+  INProgressSubID: '000000'
+  INTransitAcctID: '12400'
+  INTransitSubID: '000000'
+  TransitBranchID: LAB5  # org CD; Without Branches org acts as its own branch
+  UpdateGL: true
+  IssuesReasonCode: INISSUE
+  ReceiptReasonCode: INRECEIPT
+  AdjustmentReasonCode: INADJUST
+  PIReasonCode: INPI

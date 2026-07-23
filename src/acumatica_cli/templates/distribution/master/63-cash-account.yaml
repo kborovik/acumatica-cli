@@ -1,0 +1,23 @@
+# Cash account (CA202000) via the custom Bootstrap endpoint (symbolic endpoint: bootstrap)
+# (acumatica-cli#10, T61) - the Default endpoint answers 404 for
+# CashAccount (P1 probe). Wraps GL account 10100 as the checking cash
+# account the scenario's customer payment lands in. CuryID never claimed
+# (derived from the GL account - B11 server-derived class). BranchID is
+# the org CD: LAB5 is Without Branches, the org acts as its own branch.
+# Payment-method links (CA204000 rows exist as system data, AP-only)
+# stay unclaimed until the payment leg of the scenario proves what it
+# needs (acumatica-cli#10 conditional follow-ups).
+#
+# APPLY ORDER (dir expansion sorts *.yaml alphabetically; numbered
+# prefixes encode order): after 20-accounts.yaml (10100) and
+# 10-subaccounts.yaml; company/branch LAB5 exists from bootstrap/.
+entity: CashAccount
+key: CashAccountCD
+endpoint: bootstrap
+records:
+- CashAccountCD: '10100'
+  Descr: Checking Account
+  AccountID: '10100'
+  SubID: '000000'
+  BranchID: LAB5
+  Active: true

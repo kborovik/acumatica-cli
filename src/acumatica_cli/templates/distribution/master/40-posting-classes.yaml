@@ -1,0 +1,44 @@
+# Posting classes (IN206000) via the custom Bootstrap endpoint (symbolic endpoint: bootstrap)
+# (acumatica-cli#10, T61) - no Default-endpoint entity, and StockItem
+# posting resolution needs a class. PARTS books inventory to 12100,
+# KITS to 12200; both share sales 40000, COGS 50000, PO accrual 20200,
+# PPV 50100, LCV 50200, subaccount 000000 everywhere. The *AcctDefault
+# source combos are left to their server defaults on first save - if
+# posting resolution surprises during the scenario, claim them here
+# with the live-read stored words.
+#
+# APPLY ORDER (dir expansion sorts *.yaml alphabetically; numbered
+# prefixes encode order): after 20-accounts.yaml (all six accounts) and
+# 10-subaccounts.yaml; before 54-item-classes.yaml.
+entity: PostingClass
+key: PostClassID
+endpoint: bootstrap
+records:
+- PostClassID: PARTS
+  Descr: Purchased components
+  InvtAcctID: '12100'
+  InvtSubID: '000000'
+  SalesAcctID: '40000'
+  SalesSubID: '000000'
+  COGSAcctID: '50000'
+  COGSSubID: '000000'
+  POAccrualAcctID: '20200'
+  POAccrualSubID: '000000'
+  PPVAcctID: '50100'
+  PPVSubID: '000000'
+  LCVarianceAcctID: '50200'
+  LCVarianceSubID: '000000'
+- PostClassID: KITS
+  Descr: Assembled gateway kits
+  InvtAcctID: '12200'
+  InvtSubID: '000000'
+  SalesAcctID: '40000'
+  SalesSubID: '000000'
+  COGSAcctID: '50000'
+  COGSSubID: '000000'
+  POAccrualAcctID: '20200'
+  POAccrualSubID: '000000'
+  PPVAcctID: '50100'
+  PPVSubID: '000000'
+  LCVarianceAcctID: '50200'
+  LCVarianceSubID: '000000'

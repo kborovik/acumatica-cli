@@ -1,0 +1,49 @@
+# Reason codes (CS211000) via the custom Bootstrap endpoint (symbolic endpoint: bootstrap)
+# (acumatica-cli#10, T61) - no Default-endpoint entity, and the INSetup
+# singleton hard-requires four of them (live insert 500 named
+# Issues/Receipt/Adjustment/PI reason codes, 2026-07-13). All post to
+# 50300 Inventory Adjustments / sub 000000. Usage allowed values read
+# off the live 422: Sales, Credit Write-Off, Balance Write-Off, Issue,
+# Receipt, Adjustment, Assembly/Disassembly, Vendor Return - no
+# 'Physical Inventory' on this feature set, the PI selector takes an
+# Adjustment-usage code. INASSEMBLY (Assembly/Disassembly) pre-seeds
+# the kit-assembly scenario leg.
+#
+# APPLY ORDER (dir expansion sorts *.yaml alphabetically; numbered
+# prefixes encode order): after 20-accounts.yaml (50300) and
+# 10-subaccounts.yaml; before 50-in-preferences.yaml, which references
+# the IN codes.
+entity: ReasonCode
+key: ReasonCodeID
+endpoint: bootstrap
+records:
+- ReasonCodeID: INISSUE
+  Descr: Inventory issue
+  Usage: Issue
+  AccountID: '50300'
+  SubID: '000000'
+- ReasonCodeID: INRECEIPT
+  Descr: Inventory receipt
+  Usage: Receipt
+  AccountID: '50300'
+  SubID: '000000'
+- ReasonCodeID: INADJUST
+  Descr: Inventory adjustment
+  Usage: Adjustment
+  AccountID: '50300'
+  SubID: '000000'
+- ReasonCodeID: INPI
+  Descr: Physical inventory variance
+  Usage: Adjustment
+  AccountID: '50300'
+  SubID: '000000'
+- ReasonCodeID: INASSEMBLY
+  Descr: Kit assembly
+  Usage: Assembly/Disassembly
+  AccountID: '50300'
+  SubID: '000000'
+- ReasonCodeID: PORETURN
+  Descr: Vendor return
+  Usage: Vendor Return
+  AccountID: '50300'
+  SubID: '000000'

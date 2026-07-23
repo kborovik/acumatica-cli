@@ -1,0 +1,14 @@
+# Tax categories (TX205500) via the Default endpoint. Lab5 Gateway Works
+# carries no tax configuration (plan risk R8), but StockItem insert 422s
+# "'Tax Category' cannot be empty" (live-read 2026-07-13) - the minimal
+# answer is one exempt category, defaulted onto items through the item
+# classes (54-item-classes.yaml TaxCategoryID).
+#
+# APPLY ORDER (dir expansion sorts *.yaml alphabetically; numbered
+# prefixes encode order): after 20-accounts.yaml; before
+# 54-item-classes.yaml, whose records reference EXEMPT.
+entity: TaxCategory
+key: TaxCategoryID
+records:
+- TaxCategoryID: EXEMPT
+  Description: Tax exempt

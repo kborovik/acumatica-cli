@@ -15,6 +15,7 @@ from click.shell_completion import get_completion_class
 from . import bootstrap, extract, firstlogin, output, run, seed
 from .client import AcumaticaClient
 from .config import (
+    INIT_FLAVORS,
     Instance,
     data_root,
     find_data_root,
@@ -410,20 +411,43 @@ def config_group() -> None:
     help="Hostname substituted into the scaffolded .env ACU_BASE_URL/ACU_SSH "
     "values (default: a placeholder)",
 )
+@click.option(
+    "--flavor",
+    type=click.Choice(sorted(INIT_FLAVORS), case_sensitive=True),
+    default=None,
+    help="Template set: omit for finance-minimal (default, offline e2e); "
+    "distribution = full virgin-tenant demo seed (master/, scenario/, "
+    "bootstrap/project.xml)",
+)
 @click.argument(
     "directory", required=False, type=click.Path(file_okay=False, path_type=Path)
 )
-def config_init(host: str | None, directory: Path | None) -> None:
+def config_init(host: str | None, flavor: str | None, directory: Path | None) -> None:
     """Scaffold a data repo: .env, .gitignore, bootstrap/, baseline/, setup/.
 
     Templates ship with the package; every value is a placeholder or a
-    verified minimal example - no secrets. Existing files are never
-    overwritten (reported as skipped). DIRECTORY defaults to the current
-    directory and is created if absent. No git init, no gpg.
+    verified minimal example - no secrets. ``--flavor distribution`` adds
+    Bootstrap contract, expanded COA, master/, scenario/, and README (V28).
+    Existing files are never overwritten (reported as skipped). DIRECTORY
+    defaults to the current directory and is created if absent. No git
+    init, no gpg.
     """
-    for action, path in scaffold(directory or Path.cwd(), host=host):
+    target = directory or Path.cwd()
+    for action, path in scaffold(target, host=host, flavor=flavor):
         suffix = " (exists)" if action == "skip" else ""
         output.data(f"{action} {path}{suffix}")
+    # next-step cmds (issue #18): operator rebuild order after scaffold
+    output.data("")
+    output.data("next:")
+    output.data("  1. edit .env (set ACU_PASSWORD, ACU_TENANT; keep ACU_API_VERSION)")
+    output.data("  2. acu config check")
+    output.data("  3. acu bootstrap          # or: acu tenant create ... (SSH)")
+    output.data("  4. acu apply")
+    if flavor == "distribution":
+        output.data("  5. acu run scenario/")
+        output.data("  6. acu diff")
+    else:
+        output.data("  5. acu diff")
 
 
 @config_group.command("show")
@@ -599,18 +623,19 @@ def _probe_endpoints(client: AcumaticaClient, inst: Instance) -> bool:
     return False
 
 
-SEED_DIRS = ("bootstrap", "baseline", "setup")
+SEED_DIRS = ("bootstrap", "baseline", "setup", "master")
 
 
 def default_seed_dirs() -> tuple[Path, ...]:
     """The init-scaffolded seed dirs that exist at the data-repo root.
 
     apply and diff default to these when called with no FILES, in fixed
-    order (bootstrap, baseline, setup); the data repo is the .env dir
-    (V3 walk-up). None existing is an error - an empty default would make
-    a bare run a silent no-op. Paths come back relative to cwd (the root is
-    always cwd or an ancestor), so a bare run prints exactly what naming
-    the dirs would.
+    order (bootstrap, baseline, setup, master); only dirs that exist are
+    included (finance-minimal has no master/; distribution does). The data
+    repo is the .env dir (V3 walk-up). None existing is an error - an empty
+    default would make a bare run a silent no-op. Paths come back relative
+    to cwd (the root is always cwd or an ancestor), so a bare run prints
+    exactly what naming the dirs would.
     """
     root = data_root()
     dirs = tuple(
@@ -651,7 +676,7 @@ def apply_cmd(inst: Instance, files: tuple[Path, ...], dry_run: bool) -> None:
 
     FILES are baseline YAML files or directories containing them. Omitted,
     they default to the data repo's existing init-scaffolded directories in
-    fixed order: bootstrap/, baseline/, setup/.
+    fixed order: bootstrap/, baseline/, setup/, master/ (when present).
     """
     assert_target_compatible(inst)
     with AcumaticaClient(inst) as client:
@@ -705,7 +730,7 @@ def diff_cmd(inst: Instance, files: tuple[Path, ...]) -> None:
 
     FILES are baseline YAML files or directories containing them. Omitted,
     they default to the data repo's existing init-scaffolded directories in
-    fixed order: bootstrap/, baseline/, setup/.
+    fixed order: bootstrap/, baseline/, setup/, master/ (when present).
     """
     assert_target_compatible(inst)
     paths = expand_files(files or default_seed_dirs())

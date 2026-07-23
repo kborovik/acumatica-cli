@@ -1,0 +1,27 @@
+# Org-ledger link (GL201500) via the custom Bootstrap endpoint (symbolic
+# endpoint: bootstrap - V20). The Default endpoint's Ledger.Companies
+# detail is write-tolerated then silently dropped (PUT answers 200 and
+# echoes the row, the link table stays empty), so the link writes through
+# the screen's Companies tab view instead. Without the link a GL batch
+# cannot default its LedgerID and posting 422s. This stays a keyed PUT
+# rather than a setup/ action: the link IS a keyed record, so diff reads
+# it back field by field.
+#
+# KEY = the [LedgerCD, OrganizationID] pair, one record per org-ledger
+# link: a multi-organization tenant links several organizations to one
+# ledger, so LedgerCD alone would not identify each record. The pair
+# spans two views, and a $filter that ANDs predicates across views
+# answers 200 with an empty list even though each predicate alone
+# matches - so LedgerCD (the primary-view field) stays first in the key:
+# diff filters on it alone and matches OrganizationID client-side.
+#
+# APPLY ORDER (dir expansion sorts *.yaml alphabetically; numbered
+# prefixes encode order): after 40-ledger.yaml - the ACTUAL ledger must
+# exist; the LAB5 organization exists from the bootstrap/ phase
+# (company.yaml).
+entity: LedgerCompany
+key: [LedgerCD, OrganizationID]
+endpoint: bootstrap
+records:
+- LedgerCD: ACTUAL
+  OrganizationID: LAB5

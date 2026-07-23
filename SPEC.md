@@ -108,7 +108,7 @@ T73|x|`target.yaml` dataset matrix — model + loader + `config init` template (
 T74|x|`config check` endpoints probe — spike-gate: V12 capture `GET /entity` shape → fail-closed Default presence check|V12,V27,I.cmd
 T75|x|docs: symbolic default + `target.yaml` operator guide (README + rest-api)|V12,V20,V27
 T76|x|optional live ERP build probe in `config check` (HTTP only; major.minor match when method known)|V12,V27,I.cmd
-T77|.|`config init --flavor distribution` CLI + default apply/diff order includes `master/` when present + post-scaffold next-step cmds; default (no flavor) path unchanged|V28,I.cmd
+T77|x|`config init --flavor distribution` CLI + default apply/diff order includes `master/` when present + post-scaffold next-step cmds; default (no flavor) path unchanged|V28,I.cmd
 T78|.|package distribution templates: bootstrap `project.xml` + features + expanded COA + `master/*` + golden `scenario/` + README (rebuild order, empty-tenant !); org-CD token per V29; feature+ref closure per V22|V21,V22,V28,V29,I.data,T77
 T79|.|docs: distribution entity map (entity, endpoint bootstrap or default, screen, seed file) + apply-order/deps notes + changelog/release note for `--flavor distribution` + any apply-dir default change|V12,V28,T77,T78
 T80|.|live verify acceptance: virgin empty tenant matching `target.yaml` → `bootstrap` → `apply` → `run scenario/` expects hold → `diff` clean; default no-flavor init offline e2e still green|V4,V12,V22,V28,V29,T77,T78

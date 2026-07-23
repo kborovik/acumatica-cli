@@ -1,0 +1,38 @@
+# Vendor classes (AP201000) via the custom Bootstrap endpoint (symbolic endpoint: bootstrap)
+# (acumatica-cli#13, T64) - the Default endpoint's VendorClass is
+# skeletal (ClassID/Description/Attributes) and Vendor carries no
+# discount fields, so vendor inserts 422 "'Cash Discount Account'
+# cannot be empty" until the class carries its GL accounts. Field names
+# = DAC props (VendorClassID/Descr, not ClassID/Description). Both
+# classes: AP 20100, discounts taken 49100, terms NET30; SUPPLIER adds
+# the PO accrual 20200 and books expense to COGS 50000, SERVICE books
+# expense to 61000 Office Expense.
+#
+# APPLY ORDER (dir expansion sorts *.yaml alphabetically; numbered
+# prefixes encode order): after 20-accounts.yaml (20100/20200/49100/
+# 50000/61000) and bootstrap credit terms (NET30); before
+# 75-vendors.yaml.
+entity: VendorClass
+key: VendorClassID
+endpoint: bootstrap
+records:
+- VendorClassID: SUPPLIER
+  Descr: Component suppliers
+  TermsID: NET30
+  APAcctID: '20100'
+  APSubID: '000000'
+  DiscTakenAcctID: '49100'
+  DiscTakenSubID: '000000'
+  ExpenseAcctID: '50000'
+  ExpenseSubID: '000000'
+  POAccrualAcctID: '20200'
+  POAccrualSubID: '000000'
+- VendorClassID: SERVICE
+  Descr: Service providers
+  TermsID: NET30
+  APAcctID: '20100'
+  APSubID: '000000'
+  DiscTakenAcctID: '49100'
+  DiscTakenSubID: '000000'
+  ExpenseAcctID: '61000'
+  ExpenseSubID: '000000'

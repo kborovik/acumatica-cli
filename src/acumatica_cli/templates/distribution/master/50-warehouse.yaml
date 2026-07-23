@@ -1,0 +1,23 @@
+# Warehouse (IN204000) via the custom Bootstrap endpoint (symbolic endpoint: bootstrap). The
+# Default Warehouse entity has no address surface and the auto-created
+# warehouse Address 422s "'Country' cannot be empty" at insert (P5
+# probe 2026-07-13) - SiteCD/Descr/Active ride the primary site view,
+# CountryID the Address view. WH01 is the one operating warehouse (the
+# Warehouse feature is on - with it off the only warehouse is the
+# transit-reserved MAIN, PO lines default no warehouse, receipts fail
+# "Operation failed"). Items default here via the item classes (54).
+# Storage bins and receive/ship defaults live in 53-warehouse-locations.yaml
+# (Default endpoint; needs WarehouseLocation feature).
+#
+# APPLY ORDER (dir expansion sorts *.yaml alphabetically; numbered
+# prefixes encode order): after 50-in-preferences.yaml; before
+# 53-warehouse-locations.yaml and 54-item-classes.yaml - ItemClass
+# validates DefaultWarehouseID eagerly (422 until WH01 exists, P5 probe).
+entity: Warehouse
+key: SiteCD
+endpoint: bootstrap
+records:
+- SiteCD: WH01
+  Descr: Main warehouse
+  Active: true
+  CountryID: US

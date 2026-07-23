@@ -1,0 +1,16 @@
+# Availability calculation rule (IN201500) via the custom Bootstrap (endpoint: bootstrap)
+# endpoint (acumatica-cli#10, T61). An empty tenant has zero
+# INAvailabilityScheme rows and ItemClass 422s "'Availability Calculation
+# Rule' cannot be empty" (P1 probe) - Default/25.200.001 has no entity
+# for the screen. The Incl* booleans all carry server defaults; the rule
+# just has to exist.
+#
+# APPLY ORDER (dir expansion sorts *.yaml alphabetically; numbered
+# prefixes encode order): after 50-in-preferences.yaml (IN setup);
+# before 54-item-classes.yaml, whose records reference DEFAULT.
+entity: AvailabilityCalculationRule
+key: AvailabilitySchemeID
+endpoint: bootstrap
+records:
+- AvailabilitySchemeID: DEFAULT
+  Description: Default availability calculation rule

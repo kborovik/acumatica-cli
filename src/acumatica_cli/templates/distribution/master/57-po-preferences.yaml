@@ -1,0 +1,21 @@
+# Purchase order preferences (PO101000) via the custom Bootstrap (endpoint: bootstrap)
+# endpoint (acumatica-cli#10, T61) - the POSetup singleton. PurchaseOrder
+# and PurchaseReceipt answer 500 PXSetupNotEnteredException until it
+# exists (P1 probe). The live insert named RCReturnReasonCodeID as the
+# one field with no server default (2026-07-13) - PORETURN from
+# 45-reason-codes.yaml. HoldReceipts false so scenario receipts release
+# without a manual hold step; AutoReleaseIN true so the released PO
+# receipt's IN document releases too - default off leaves it Balanced
+# and qty never lands on hand (P5 probe). Every other POSetup field
+# defaults.
+#
+# APPLY ORDER (dir expansion sorts *.yaml alphabetically; numbered
+# prefixes encode order): after 45-reason-codes.yaml; module-prefs block
+# 50-6x, before vendors and purchase scenario work.
+entity: POPreferences
+key: HoldReceipts
+endpoint: bootstrap
+records:
+- HoldReceipts: false
+  RCReturnReasonCodeID: PORETURN
+  AutoReleaseIN: true

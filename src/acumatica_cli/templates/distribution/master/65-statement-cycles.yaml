@@ -1,0 +1,23 @@
+# Statement cycles (AR202800) via the custom Bootstrap endpoint (symbolic endpoint: bootstrap)
+# (acumatica-cli#10 conditional follow-up, proven live 2026-07-13:
+# Customer inserts 422 "'Statement Cycle ID' cannot be empty" and no
+# Default-endpoint entity exists). One monthly cycle, defaulted onto
+# customers through class B2B. PrepareOn takes the external label; day 1
+# = statements as of month start; the 30/60/90 aging bounds are supplied
+# because raw insert defaults them inconsistently (422 "end day of the
+# aging period should not be earlier than its start day").
+#
+# APPLY ORDER (dir expansion sorts *.yaml alphabetically; numbered
+# prefixes encode order): before 71-customer-classes.yaml, whose
+# StatementCycleID references MONTHLY.
+entity: StatementCycle
+key: StatementCycleId
+endpoint: bootstrap
+records:
+- StatementCycleId: MONTHLY
+  Descr: Monthly statements
+  PrepareOn: Fixed Day of Month
+  Day00: 1
+  AgeDays00: 30
+  AgeDays01: 60
+  AgeDays02: 90

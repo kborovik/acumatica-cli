@@ -1,0 +1,14 @@
+# Accounts payable preferences (AP101000) via the custom Bootstrap (endpoint: bootstrap)
+# endpoint (acumatica-cli#10, T61) - the APSetup singleton. Vendor and
+# Bill answer 500 PXSetupNotEnteredException until it exists (P1 probe).
+# HoldEntry false so scenario bills release programmatically; every
+# other APSetup field defaults on first save.
+#
+# APPLY ORDER (dir expansion sorts *.yaml alphabetically; numbered
+# prefixes encode order): before 70-vendor-classes.yaml and
+# 75-vendors.yaml.
+entity: APPreferences
+key: HoldEntry
+endpoint: bootstrap
+records:
+- HoldEntry: false

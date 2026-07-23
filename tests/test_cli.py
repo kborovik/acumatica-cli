@@ -712,16 +712,17 @@ def test_config_init_defaults_to_cwd_with_placeholder_host(
 
 def test_config_init_rerun_skips_and_never_overwrites(tmp_path: Path) -> None:
     # I.cmd config init: per-file skip-if-exists - `skip <file> (exists)`,
-    # exit 0, zero mutations
+    # exit 0, zero mutations; next-step banner still prints after skips
     CliRunner().invoke(cli.cli, ["config", "init", str(tmp_path)])
     (tmp_path / ".env").write_text("ACU_BASE_URL=http://hand.edited/X\n")
 
     result = CliRunner().invoke(cli.cli, ["config", "init", str(tmp_path)])
 
     assert result.exit_code == 0
-    lines = result.output.splitlines()
-    assert len(lines) == 15
-    assert all(ln.startswith("skip ") and ln.endswith(" (exists)") for ln in lines)
+    skip_lines = [ln for ln in result.output.splitlines() if ln.startswith("skip ")]
+    assert len(skip_lines) == 15
+    assert all(ln.endswith(" (exists)") for ln in skip_lines)
+    assert "next:" in result.output
     assert (tmp_path / ".env").read_text() == "ACU_BASE_URL=http://hand.edited/X\n"
 
 
@@ -827,6 +828,160 @@ def test_config_init_template_set_is_reference_closed(tmp_path: Path) -> None:
         (tmp_path / "setup" / "30-open-periods.yaml").read_text()
     )
     assert open_periods["record"]["OrganizationID"] == acct_cd
+
+
+def test_config_init_prints_next_step_cmds(tmp_path: Path) -> None:
+    # T77/I.cmd: post-scaffold stdout names rebuild cmds (bootstrap/apply/diff)
+    result = CliRunner().invoke(cli.cli, ["config", "init", str(tmp_path)])
+
+    assert result.exit_code == 0
+    assert "next:" in result.output
+    assert "acu bootstrap" in result.output
+    assert "acu apply" in result.output
+    assert "acu diff" in result.output
+
+
+def test_config_init_unknown_flavor_rejected(tmp_path: Path) -> None:
+    # V16: flavor is click.Choice over INIT_FLAVORS — free string never accepted
+    result = CliRunner().invoke(
+        cli.cli, ["config", "init", "--flavor", "nope", str(tmp_path)]
+    )
+
+    assert result.exit_code != 0
+    assert "Invalid value for '--flavor'" in result.output
+
+
+def test_config_init_flavor_distribution_scaffolds_demo_seed(tmp_path: Path) -> None:
+    # T77/T78 V28: --flavor distribution ships bootstrap contract + master +
+    # scenario + README; default path still 15 finance-minimal files only
+    result = CliRunner().invoke(
+        cli.cli,
+        [
+            "config",
+            "init",
+            "--flavor",
+            "distribution",
+            "--host",
+            "erp.test",
+            str(tmp_path),
+        ],
+    )
+
+    assert result.exit_code == 0
+    assert (tmp_path / "bootstrap" / "project.xml").is_file()
+    assert (tmp_path / "master" / "20-in-preferences.yaml").is_file()
+    assert (tmp_path / "scenario" / "buy-build-sell.yaml").is_file()
+    assert (tmp_path / "README.md").is_file()
+    assert "acu run scenario/" in result.output
+    writes = [ln for ln in result.output.splitlines() if ln.startswith("write ")]
+    assert len(writes) > 15
+    # finance-minimal never gains master/ or project.xml
+    bare = tmp_path / "bare"
+    CliRunner().invoke(cli.cli, ["config", "init", str(bare)])
+    assert not (bare / "master").exists()
+    assert not (bare / "bootstrap" / "project.xml").exists()
+    assert not (bare / "scenario").exists()
+
+
+def test_config_init_distribution_org_cd_consistent(tmp_path: Path) -> None:
+    # V29: single org-CD placeholder across company, ledger link, periods,
+    # inventory transit branch, cash BranchID
+    CliRunner().invoke(
+        cli.cli, ["config", "init", "--flavor", "distribution", str(tmp_path)]
+    )
+
+    company = yaml.safe_load((tmp_path / "bootstrap" / "company.yaml").read_text())
+    org = company["records"][0]["AcctCD"]
+    ledger = yaml.safe_load(
+        (tmp_path / "baseline" / "60-ledger-company.yaml").read_text()
+    )
+    periods = yaml.safe_load((tmp_path / "setup" / "30-open-periods.yaml").read_text())
+    in_prefs = yaml.safe_load(
+        (tmp_path / "master" / "20-in-preferences.yaml").read_text()
+    )
+    cash = yaml.safe_load((tmp_path / "master" / "63-cash-account.yaml").read_text())
+    assert ledger["records"][0]["OrganizationID"] == org
+    assert periods["record"]["OrganizationID"] == org
+    assert in_prefs["records"][0]["TransitBranchID"] == org
+    assert cash["records"][0]["BranchID"] == org
+
+
+def test_config_init_distribution_feature_closed(tmp_path: Path) -> None:
+    # V22 feature closure for distribution masters (Warehouse, kits, …)
+    CliRunner().invoke(
+        cli.cli, ["config", "init", "--flavor", "distribution", str(tmp_path)]
+    )
+    features = yaml.safe_load((tmp_path / "bootstrap" / "features.yaml").read_text())
+    for name in [
+        "Inventory",
+        "DistributionModule",
+        "Warehouse",
+        "WarehouseLocation",
+        "KitAssemblies",
+        "SubAccount",
+    ]:
+        assert name in features
+
+
+def test_config_init_distribution_dry_run_parses(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # T78: every packaged seed file loads; bare apply default includes master/
+    CliRunner().invoke(
+        cli.cli,
+        [
+            "config",
+            "init",
+            "--flavor",
+            "distribution",
+            "--host",
+            "erp.test",
+            str(tmp_path),
+        ],
+    )
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv("ACU_PASSWORD", "secret")
+    monkeypatch.setattr(cli, "AcumaticaClient", DummyClient)
+
+    applied = CliRunner().invoke(cli.cli, ["apply", "--dry-run"])
+    assert applied.exit_code == 0, applied.output
+    assert "would PUT Company" in applied.output
+    assert "would PUT Warehouse" in applied.output or "Warehouse" in applied.output
+    assert "master/" in applied.output or any(
+        "INPreferences" in ln or "Warehouse" in ln for ln in applied.output.splitlines()
+    )
+
+
+def test_default_seed_dirs_include_master_when_present(
+    wired: Instance, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # T77: SEED_DIRS order bootstrap, baseline, setup, master — only existing
+    (tmp_path / ".env").write_text(
+        "ACU_BASE_URL=http://acu.test/AcumaticaERP\nACU_PASSWORD=x\n"
+    )
+    for name in ("bootstrap", "baseline", "setup", "master"):
+        d = tmp_path / name
+        d.mkdir()
+        (d / "x.yaml").write_text(
+            "entity: UnitsOfMeasure\nkey: UnitID\nrecords:\n- UnitID: HOUR\n"
+        )
+    monkeypatch.chdir(tmp_path)
+    seen: list[str] = []
+    monkeypatch.setattr(
+        cli.seed,
+        "diff",
+        lambda client, baseline: seen.append(str(baseline.path)) or [],
+    )
+
+    result = CliRunner().invoke(cli.cli, ["diff"])
+
+    assert result.exit_code == 0
+    assert [s.replace("\\", "/") for s in seen] == [
+        "bootstrap/x.yaml",
+        "baseline/x.yaml",
+        "setup/x.yaml",
+        "master/x.yaml",
+    ]
 
 
 @pytest.fixture
@@ -1190,7 +1345,7 @@ def test_bare_diff_without_seed_dirs_errors(
 
     assert result.exit_code == 1
     assert "none of the seed directories exist" in result.output
-    assert "bootstrap/, baseline/, setup/" in result.output
+    assert "bootstrap/, baseline/, setup/, master/" in result.output
 
 
 def test_explicit_files_override_default_dirs(
