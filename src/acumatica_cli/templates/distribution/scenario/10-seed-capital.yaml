@@ -1,0 +1,46 @@
+# once-class owner capital (V4/gh #19). once+present skips when Owner Capital
+# already funds Checking — warm re-run must not restack 30000.
+#
+# Deltas (cold once-run only; skip path runs no expects):
+#   capital: Dr 10100 / Cr 30000 = 50000
+scenario: seed-capital
+description: Once-class owner capital JE (fund Checking 10100 for AP WIRE)
+once: true
+present:
+  inquire: AccountSummaryInquiry
+  parameters: {Ledger: ACTUAL, Period: "072026"}
+  match: {Account: '30000'}
+  when:
+    EndingBalance: {gte: 50000}
+steps:
+- id: seed-capital
+  put: JournalTransaction
+  record:
+    Module: GL
+    Description: Seed capital - owner investment
+    Hold: false
+    Details:
+    - {Account: '10100', Subaccount: '000000', DebitAmount: 50000.00}
+    - {Account: '30000', Subaccount: '000000', CreditAmount: 50000.00}
+  capture: {BatchNbr: je_seed}
+- id: release-seed-capital
+  action: {entity: JournalTransaction, name: ReleaseJournalTransaction}
+  record: {Module: GL, BatchNbr: "${je_seed}"}
+  wait:
+    entity: JournalTransaction
+    keys: [GL, "${je_seed}"]
+    until: {Status: Posted}
+expect:
+- get:
+    entity: JournalTransaction
+    keys: [GL, "${je_seed}"]
+  fields:
+    Status: Posted
+- inquire: AccountSummaryInquiry
+  parameters: {Ledger: ACTUAL, Period: "072026"}
+  match: {Account: '10100'}
+  delta: {EndingBalance: 50000.00}
+- inquire: AccountSummaryInquiry
+  parameters: {Ledger: ACTUAL, Period: "072026"}
+  match: {Account: '30000'}
+  delta: {EndingBalance: 50000.00}

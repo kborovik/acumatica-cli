@@ -1,0 +1,112 @@
+# Additive buy leg: PO -> receipt (CreateBill) -> AP bill -> AP WIRE pay.
+# Warm re-runnable (document numbers change; per-leg deltas hold).
+#
+# Deltas:
+#   purchases: 10x EDGE@139 + 5x CELL@195 + 5x RAIL@145 = 3090
+#     receipt CreateBill -> AP bill; ReleaseBill; AP WIRE Check (-3090 cash)
+#     PO accrual 20200 clears on bill; AP 20100 clears on payment
+#   inventory: EDGE +10, CELL +5, RAIL +5
+#   cash 10100: -3090
+#
+# AP bill is created by PurchaseReceipt.CreateBill (multi-line Bill PUT
+# 500s on this build); VendorRef = PO-${po} keys the filter get that
+# captures the server-assigned bill number (acu run filter get).
+# Requires Checking 10100 funded (scenario/10-seed-capital.yaml).
+scenario: buy-gateways
+description: Buy finished goods (PO receipt bill+pay) so stock is on hand
+steps:
+- id: po-gateways
+  put: PurchaseOrder
+  record:
+    VendorID: SHENZHEN
+    Hold: false
+    Details:
+    - {InventoryID: GW-EDGE, OrderQty: 10, UnitCost: 139.00}
+    - {InventoryID: GW-CELL, OrderQty: 5, UnitCost: 195.00}
+    - {InventoryID: GW-RAIL, OrderQty: 5, UnitCost: 145.00}
+  capture: {OrderNbr: po_gateways}
+- id: rcpt-gateways
+  put: PurchaseReceipt
+  record:
+    Type: Receipt
+    VendorID: SHENZHEN
+    Hold: false
+    CreateBill: true
+    VendorRef: "PO-${po_gateways}"
+    Details:
+    - {POOrderType: Normal, POOrderNbr: "${po_gateways}", POLineNbr: 1, ReceiptQty: 10}
+    - {POOrderType: Normal, POOrderNbr: "${po_gateways}", POLineNbr: 2, ReceiptQty: 5}
+    - {POOrderType: Normal, POOrderNbr: "${po_gateways}", POLineNbr: 3, ReceiptQty: 5}
+  capture: {ReceiptNbr: rcpt_gateways}
+- id: release-gateways
+  action: {entity: PurchaseReceipt, name: ReleasePurchaseReceipt}
+  record: {Type: Receipt, ReceiptNbr: "${rcpt_gateways}"}
+  wait:
+    entity: PurchaseReceipt
+    keys: [Receipt, "${rcpt_gateways}"]
+    until: {Status: Released}
+- id: billnbr-gateways
+  get:
+    entity: Bill
+    filter: "VendorRef eq 'PO-${po_gateways}'"
+    top: 1
+  capture: {ReferenceNbr: bill_gateways}
+- id: release-bill-gateways
+  action: {entity: Bill, name: ReleaseBill}
+  record: {Type: Bill, ReferenceNbr: "${bill_gateways}"}
+  wait:
+    entity: Bill
+    keys: [Bill, "${bill_gateways}"]
+    until: {Status: Open}
+- id: pay-vendor-gateways
+  put: Check
+  record:
+    Type: Payment
+    Vendor: SHENZHEN
+    PaymentMethod: WIRE
+    CashAccount: '10100'
+    PaymentAmount: 3090.00
+    PaymentRef: "WIRE-AP-${bill_gateways}"
+    Hold: false
+    Details:
+    - {DocType: Bill, ReferenceNbr: "${bill_gateways}", AmountPaid: 3090.00}
+  capture: {ReferenceNbr: chk_gateways}
+- id: release-pay-vendor
+  action: {entity: Check, name: ReleaseCheck}
+  record: {Type: Payment, ReferenceNbr: "${chk_gateways}"}
+  wait:
+    entity: Check
+    keys: [Payment, "${chk_gateways}"]
+    until: {Status: Closed}
+expect:
+- get:
+    entity: Bill
+    keys: [Bill, "${bill_gateways}"]
+  fields:
+    Status: Closed
+- get:
+    entity: Check
+    keys: [Payment, "${chk_gateways}"]
+  fields:
+    Status: Closed
+- inquire: InventorySummaryInquiry
+  parameters: {InventoryID: GW-EDGE, WarehouseID: WH01}
+  delta: {QtyOnHand: 10.0}
+- inquire: InventorySummaryInquiry
+  parameters: {InventoryID: GW-CELL, WarehouseID: WH01}
+  delta: {QtyOnHand: 5.0}
+- inquire: InventorySummaryInquiry
+  parameters: {InventoryID: GW-RAIL, WarehouseID: WH01}
+  delta: {QtyOnHand: 5.0}
+- inquire: AccountSummaryInquiry
+  parameters: {Ledger: ACTUAL, Period: "072026"}
+  match: {Account: '20200'}
+  delta: {EndingBalance: 0.00}
+- inquire: AccountSummaryInquiry
+  parameters: {Ledger: ACTUAL, Period: "072026"}
+  match: {Account: '20100'}
+  delta: {EndingBalance: 0.00}
+- inquire: AccountSummaryInquiry
+  parameters: {Ledger: ACTUAL, Period: "072026"}
+  match: {Account: '10100'}
+  delta: {EndingBalance: -3090.00}

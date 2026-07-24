@@ -1,42 +1,15 @@
-# Distribution golden path: buy finished goods -> sell -> invoice -> collect.
-# Deltas (warm-tenant re-runnable):
-#   purchases: 10x EDGE@139 + 5x CELL@195 + 5x RAIL@145 = 3090 -> 20200
+# Additive sell leg: three-customer SO -> ship -> invoice -> AR WIRE pay.
+# Warm re-runnable (document numbers change; per-leg deltas hold).
+#
+# Deltas:
 #   sales: ACMEMFG 4x EDGE 1196 + NORTHGRID 3x CELL + 2x RAIL 2045
 #     + AGRISENSE 3x EDGE 897 = 4138 revenue; COGS 7x139 + 3x195 + 2x145 = 1848
-#   ACMEMFG pays in full -> AR 11000 +2942, cash 10100 +1196
-#   inventory: EDGE +3 (10-7), CELL +2 (5-3), RAIL +3 (5-2)
-scenario: buy-sell
-description: Buy finished goods -> sell -> invoice -> collect
+#   all three customers pay WIRE in full -> AR 11000 net 0; cash +4138
+#   inventory: EDGE -7, CELL -3, RAIL -2
+# Requires on-hand stock from scenario/20-buy-gateways.yaml (or equivalent).
+scenario: sell
+description: Sell pack (SO ship invoice collect) for ACMEMFG NORTHGRID AGRISENSE
 steps:
-# ---- buy -------------------------------------------------------------
-- id: po-gateways
-  put: PurchaseOrder
-  record:
-    VendorID: SHENZHEN
-    Hold: false
-    Details:
-    - {InventoryID: GW-EDGE, OrderQty: 10, UnitCost: 139.00}
-    - {InventoryID: GW-CELL, OrderQty: 5, UnitCost: 195.00}
-    - {InventoryID: GW-RAIL, OrderQty: 5, UnitCost: 145.00}
-  capture: {OrderNbr: po_gateways}
-- id: rcpt-gateways
-  put: PurchaseReceipt
-  record:
-    Type: Receipt
-    VendorID: SHENZHEN
-    Hold: false
-    Details:
-    - {POOrderType: Normal, POOrderNbr: "${po_gateways}", POLineNbr: 1, ReceiptQty: 10}
-    - {POOrderType: Normal, POOrderNbr: "${po_gateways}", POLineNbr: 2, ReceiptQty: 5}
-    - {POOrderType: Normal, POOrderNbr: "${po_gateways}", POLineNbr: 3, ReceiptQty: 5}
-  capture: {ReceiptNbr: rcpt_gateways}
-- id: release-gateways
-  action: {entity: PurchaseReceipt, name: ReleasePurchaseReceipt}
-  record: {Type: Receipt, ReceiptNbr: "${rcpt_gateways}"}
-  wait:
-    entity: PurchaseReceipt
-    keys: [Receipt, "${rcpt_gateways}"]
-    until: {Status: Released}
 # ---- sell: ACMEMFG (pays in full) ------------------------------------
 - id: so-acme
   put: SalesOrder
@@ -102,7 +75,7 @@ steps:
     entity: Payment
     keys: [Payment, "${pmt_acme}"]
     until: {Status: Closed}
-# ---- sell: NORTHGRID (invoice stays open) ----------------------------
+# ---- sell: NORTHGRID (pays in full) ----------------------------------
 - id: so-northgrid
   put: SalesOrder
   record:
@@ -148,7 +121,27 @@ steps:
     entity: SalesInvoice
     keys: [Invoice, "${inv_northgrid}"]
     until: {Status: Open}
-# ---- sell: AGRISENSE (invoice stays open) ----------------------------
+- id: pay-northgrid
+  put: Payment
+  record:
+    Type: Payment
+    CustomerID: NORTHGRID
+    PaymentMethod: WIRE
+    CashAccount: '10100'
+    PaymentAmount: 2045.00
+    PaymentRef: "WIRE-${inv_northgrid}"
+    Hold: false
+    DocumentsToApply:
+    - {DocType: Invoice, ReferenceNbr: "${inv_northgrid}", AmountPaid: 2045.00}
+  capture: {ReferenceNbr: pmt_northgrid}
+- id: release-pay-northgrid
+  action: {entity: Payment, name: ReleasePayment}
+  record: {Type: Payment, ReferenceNbr: "${pmt_northgrid}"}
+  wait:
+    entity: Payment
+    keys: [Payment, "${pmt_northgrid}"]
+    until: {Status: Closed}
+# ---- sell: AGRISENSE (pays in full) ----------------------------------
 - id: so-agrisense
   put: SalesOrder
   record:
@@ -193,6 +186,26 @@ steps:
     entity: SalesInvoice
     keys: [Invoice, "${inv_agrisense}"]
     until: {Status: Open}
+- id: pay-agrisense
+  put: Payment
+  record:
+    Type: Payment
+    CustomerID: AGRISENSE
+    PaymentMethod: WIRE
+    CashAccount: '10100'
+    PaymentAmount: 897.00
+    PaymentRef: "WIRE-${inv_agrisense}"
+    Hold: false
+    DocumentsToApply:
+    - {DocType: Invoice, ReferenceNbr: "${inv_agrisense}", AmountPaid: 897.00}
+  capture: {ReferenceNbr: pmt_agrisense}
+- id: release-pay-agrisense
+  action: {entity: Payment, name: ReleasePayment}
+  record: {Type: Payment, ReferenceNbr: "${pmt_agrisense}"}
+  wait:
+    entity: Payment
+    keys: [Payment, "${pmt_agrisense}"]
+    until: {Status: Closed}
 expect:
 - get:
     entity: SalesInvoice
@@ -204,15 +217,35 @@ expect:
     keys: [Payment, "${pmt_acme}"]
   fields:
     Status: Closed
+- get:
+    entity: SalesInvoice
+    keys: [Invoice, "${inv_northgrid}"]
+  fields:
+    Status: Closed
+- get:
+    entity: Payment
+    keys: [Payment, "${pmt_northgrid}"]
+  fields:
+    Status: Closed
+- get:
+    entity: SalesInvoice
+    keys: [Invoice, "${inv_agrisense}"]
+  fields:
+    Status: Closed
+- get:
+    entity: Payment
+    keys: [Payment, "${pmt_agrisense}"]
+  fields:
+    Status: Closed
 - inquire: InventorySummaryInquiry
   parameters: {InventoryID: GW-EDGE, WarehouseID: WH01}
-  delta: {QtyOnHand: 3.0}
+  delta: {QtyOnHand: -7.0}
 - inquire: InventorySummaryInquiry
   parameters: {InventoryID: GW-CELL, WarehouseID: WH01}
-  delta: {QtyOnHand: 2.0}
+  delta: {QtyOnHand: -3.0}
 - inquire: InventorySummaryInquiry
   parameters: {InventoryID: GW-RAIL, WarehouseID: WH01}
-  delta: {QtyOnHand: 3.0}
+  delta: {QtyOnHand: -2.0}
 - inquire: AccountSummaryInquiry
   parameters: {Ledger: ACTUAL, Period: "072026"}
   match: {Account: '40000'}
@@ -223,13 +256,9 @@ expect:
   delta: {EndingBalance: 1848.00}
 - inquire: AccountSummaryInquiry
   parameters: {Ledger: ACTUAL, Period: "072026"}
-  match: {Account: '20200'}
-  delta: {EndingBalance: 3090.00}
-- inquire: AccountSummaryInquiry
-  parameters: {Ledger: ACTUAL, Period: "072026"}
   match: {Account: '11000'}
-  delta: {EndingBalance: 2942.00}
+  delta: {EndingBalance: 0.00}
 - inquire: AccountSummaryInquiry
   parameters: {Ledger: ACTUAL, Period: "072026"}
   match: {Account: '10100'}
-  delta: {EndingBalance: 1196.00}
+  delta: {EndingBalance: 4138.00}

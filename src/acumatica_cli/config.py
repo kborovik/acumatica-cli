@@ -60,59 +60,114 @@ INIT_TEMPLATES = (
     ("finance/setup/30-open-periods.yaml", "setup/30-open-periods.yaml"),
 )
 
-# Opt-in `--flavor distribution` overlays + extras (V28/V29). Resource paths
-# live under templates/distribution/; dest paths are data-repo relative.
-# Same dest as INIT_TEMPLATES replaces the finance-minimal file (company
+# Opt-in `--flavor distribution` overlays + extras (V28/V29/T87). Resource
+# paths live under templates/distribution/; dest paths rehome seed under
+# config/ (V30). Overlays replace rehomed finance-minimal files (company
 # LAB5, expanded COA, features, open-periods, uoms). Contract identity is
-# shared (T82) — no distribution-only project.xml.
+# shared (T82) — no distribution-only project.xml. Lifecycle scenarios
+# replace monoscenario buy-sell (V28).
+_SEED_PREFIXES = ("bootstrap/", "baseline/", "setup/", "master/")
+_ROOT_META = frozenset({".env", ".gitignore", "target.yaml"})
+
 DISTRIBUTION_TEMPLATES = (
-    ("distribution/bootstrap/company.yaml", "bootstrap/company.yaml"),
-    ("distribution/bootstrap/features.yaml", "bootstrap/features.yaml"),
-    ("distribution/baseline/20-accounts.yaml", "baseline/20-accounts.yaml"),
-    ("distribution/baseline/60-ledger-company.yaml", "baseline/60-ledger-company.yaml"),
-    ("distribution/baseline/90-uoms.yaml", "baseline/90-uoms.yaml"),
-    ("distribution/setup/30-open-periods.yaml", "setup/30-open-periods.yaml"),
-    ("distribution/master/10-reason-codes.yaml", "master/10-reason-codes.yaml"),
-    ("distribution/master/20-in-preferences.yaml", "master/20-in-preferences.yaml"),
+    ("distribution/bootstrap/company.yaml", "config/bootstrap/company.yaml"),
+    ("distribution/bootstrap/features.yaml", "config/bootstrap/features.yaml"),
+    ("distribution/baseline/20-accounts.yaml", "config/baseline/20-accounts.yaml"),
+    (
+        "distribution/baseline/60-ledger-company.yaml",
+        "config/baseline/60-ledger-company.yaml",
+    ),
+    ("distribution/baseline/90-uoms.yaml", "config/baseline/90-uoms.yaml"),
+    ("distribution/setup/30-open-periods.yaml", "config/setup/30-open-periods.yaml"),
+    ("distribution/master/10-reason-codes.yaml", "config/master/10-reason-codes.yaml"),
+    (
+        "distribution/master/20-in-preferences.yaml",
+        "config/master/20-in-preferences.yaml",
+    ),
     (
         "distribution/master/30-availability-rules.yaml",
-        "master/30-availability-rules.yaml",
+        "config/master/30-availability-rules.yaml",
     ),
-    ("distribution/master/40-posting-classes.yaml", "master/40-posting-classes.yaml"),
-    ("distribution/master/50-warehouse.yaml", "master/50-warehouse.yaml"),
+    (
+        "distribution/master/40-posting-classes.yaml",
+        "config/master/40-posting-classes.yaml",
+    ),
+    ("distribution/master/50-warehouse.yaml", "config/master/50-warehouse.yaml"),
     (
         "distribution/master/51-warehouse-locations.yaml",
-        "master/51-warehouse-locations.yaml",
+        "config/master/51-warehouse-locations.yaml",
     ),
     (
         "distribution/master/52-warehouse-defaults.yaml",
-        "master/52-warehouse-defaults.yaml",
+        "config/master/52-warehouse-defaults.yaml",
     ),
-    ("distribution/master/53-tax-categories.yaml", "master/53-tax-categories.yaml"),
-    ("distribution/master/54-item-classes.yaml", "master/54-item-classes.yaml"),
-    ("distribution/master/56-so-preferences.yaml", "master/56-so-preferences.yaml"),
-    ("distribution/master/57-po-preferences.yaml", "master/57-po-preferences.yaml"),
-    ("distribution/master/58-order-types.yaml", "master/58-order-types.yaml"),
-    ("distribution/master/60-ar-preferences.yaml", "master/60-ar-preferences.yaml"),
-    ("distribution/master/61-ap-preferences.yaml", "master/61-ap-preferences.yaml"),
-    ("distribution/master/62-ca-preferences.yaml", "master/62-ca-preferences.yaml"),
-    ("distribution/master/63-cash-account.yaml", "master/63-cash-account.yaml"),
-    ("distribution/master/64-payment-methods.yaml", "master/64-payment-methods.yaml"),
-    ("distribution/master/65-statement-cycles.yaml", "master/65-statement-cycles.yaml"),
-    ("distribution/master/70-vendor-classes.yaml", "master/70-vendor-classes.yaml"),
-    ("distribution/master/71-customer-classes.yaml", "master/71-customer-classes.yaml"),
-    ("distribution/master/75-vendors.yaml", "master/75-vendors.yaml"),
-    ("distribution/master/76-customers.yaml", "master/76-customers.yaml"),
+    (
+        "distribution/master/53-tax-categories.yaml",
+        "config/master/53-tax-categories.yaml",
+    ),
+    ("distribution/master/54-item-classes.yaml", "config/master/54-item-classes.yaml"),
+    (
+        "distribution/master/56-so-preferences.yaml",
+        "config/master/56-so-preferences.yaml",
+    ),
+    (
+        "distribution/master/57-po-preferences.yaml",
+        "config/master/57-po-preferences.yaml",
+    ),
+    ("distribution/master/58-order-types.yaml", "config/master/58-order-types.yaml"),
+    (
+        "distribution/master/60-ar-preferences.yaml",
+        "config/master/60-ar-preferences.yaml",
+    ),
+    (
+        "distribution/master/61-ap-preferences.yaml",
+        "config/master/61-ap-preferences.yaml",
+    ),
+    (
+        "distribution/master/62-ca-preferences.yaml",
+        "config/master/62-ca-preferences.yaml",
+    ),
+    ("distribution/master/63-cash-account.yaml", "config/master/63-cash-account.yaml"),
+    (
+        "distribution/master/64-payment-methods.yaml",
+        "config/master/64-payment-methods.yaml",
+    ),
+    (
+        "distribution/master/65-statement-cycles.yaml",
+        "config/master/65-statement-cycles.yaml",
+    ),
+    (
+        "distribution/master/70-vendor-classes.yaml",
+        "config/master/70-vendor-classes.yaml",
+    ),
+    (
+        "distribution/master/71-customer-classes.yaml",
+        "config/master/71-customer-classes.yaml",
+    ),
+    ("distribution/master/75-vendors.yaml", "config/master/75-vendors.yaml"),
+    ("distribution/master/76-customers.yaml", "config/master/76-customers.yaml"),
     (
         "distribution/master/80-stock-items-parts.yaml",
-        "master/80-stock-items-parts.yaml",
+        "config/master/80-stock-items-parts.yaml",
     ),
-    ("distribution/master/82-stock-items-kits.yaml", "master/82-stock-items-kits.yaml"),
+    (
+        "distribution/master/82-stock-items-kits.yaml",
+        "config/master/82-stock-items-kits.yaml",
+    ),
     (
         "distribution/master/85-kit-specifications.yaml",
-        "master/85-kit-specifications.yaml",
+        "config/master/85-kit-specifications.yaml",
     ),
-    ("distribution/scenario/buy-sell.yaml", "scenario/buy-sell.yaml"),
+    (
+        "distribution/scenario/10-seed-capital.yaml",
+        "scenario/10-seed-capital.yaml",
+    ),
+    (
+        "distribution/scenario/20-buy-gateways.yaml",
+        "scenario/20-buy-gateways.yaml",
+    ),
+    ("distribution/scenario/30-build.yaml", "scenario/30-build.yaml"),
+    ("distribution/scenario/40-sell.yaml", "scenario/40-sell.yaml"),
     ("distribution/README.md", "README.md"),
 )
 
@@ -180,11 +235,12 @@ class Instance(BaseSettings):
 
 
 def templates_for(flavor: str | None) -> tuple[tuple[str, str], ...]:
-    """Resolve (resource, dest) pairs for ``config init`` (V28).
+    """Resolve (resource, dest) pairs for ``config init`` (V28/T87).
 
-    Absent flavor → finance-minimal ``INIT_TEMPLATES`` only. ``distribution``
-    merges ``DISTRIBUTION_TEMPLATES`` over the same dest keys (overlay wins),
-    then appends destinations that finance-minimal does not scaffold.
+    Absent flavor → finance-minimal ``INIT_TEMPLATES`` at root. ``distribution``
+    keeps root meta (``.env``/``.gitignore``/``target.yaml``), rehomes finance
+    seed under ``config/``, then overlays ``DISTRIBUTION_TEMPLATES`` (config/
+    seeds + lifecycle ``scenario/`` + README). Never dual root+config trees.
     """
     if flavor is None:
         return INIT_TEMPLATES
@@ -193,13 +249,22 @@ def templates_for(flavor: str | None) -> tuple[tuple[str, str], ...]:
             f"unknown config init flavor {flavor!r}; "
             f"known: {', '.join(sorted(INIT_FLAVORS))}"
         )
-    by_dest = {dest: res for res, dest in INIT_TEMPLATES}
-    order = [dest for _, dest in INIT_TEMPLATES]
-    if flavor == "distribution":
-        for res, dest in DISTRIBUTION_TEMPLATES:
-            if dest not in by_dest:
-                order.append(dest)
+    by_dest: dict[str, str] = {}
+    order: list[str] = []
+    for res, dest in INIT_TEMPLATES:
+        if dest in _ROOT_META:
             by_dest[dest] = res
+            order.append(dest)
+            continue
+        if any(dest.startswith(p) for p in _SEED_PREFIXES):
+            dest = f"config/{dest}"
+        if dest not in by_dest:
+            order.append(dest)
+        by_dest[dest] = res
+    for res, dest in DISTRIBUTION_TEMPLATES:
+        if dest not in by_dest:
+            order.append(dest)
+        by_dest[dest] = res
     return tuple((by_dest[dest], dest) for dest in order)
 
 
@@ -224,7 +289,8 @@ def scaffold(
             continue
         # Single full contract (T81/T82): scaffold from the packaged
         # bootstrap_project.xml so init cannot diverge from the fallback.
-        if dest == "bootstrap/project.xml":
+        # Finance-minimal root path; distribution rehomes under config/ (T87).
+        if dest in ("bootstrap/project.xml", "config/bootstrap/project.xml"):
             content = (
                 resources.files("acumatica_cli") / "bootstrap_project.xml"
             ).read_text(encoding="utf-8")

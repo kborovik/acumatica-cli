@@ -859,7 +859,7 @@ def test_config_init_unknown_flavor_rejected(tmp_path: Path) -> None:
 
 
 def test_config_init_flavor_distribution_scaffolds_demo_seed(tmp_path: Path) -> None:
-    # T77/T78/T82 V28: --flavor distribution ships master + scenario + README;
+    # T77/T78/T82/T87 V28: distribution under config/ + lifecycle scenario + README;
     # both flavors share Bootstrap/1.0.0 project.xml (not a second identity)
     result = CliRunner().invoke(
         cli.cli,
@@ -875,21 +875,30 @@ def test_config_init_flavor_distribution_scaffolds_demo_seed(tmp_path: Path) -> 
     )
 
     assert result.exit_code == 0
-    assert (tmp_path / "bootstrap" / "project.xml").is_file()
+    assert (tmp_path / "config" / "bootstrap" / "project.xml").is_file()
     assert (
         'name="Bootstrap" version="1.0.0"'
-        in (tmp_path / "bootstrap" / "project.xml").read_text()
+        in (tmp_path / "config" / "bootstrap" / "project.xml").read_text()
     )
-    assert (tmp_path / "master" / "20-in-preferences.yaml").is_file()
-    assert (tmp_path / "scenario" / "buy-sell.yaml").is_file()
+    assert (tmp_path / "config" / "master" / "20-in-preferences.yaml").is_file()
+    assert (tmp_path / "scenario" / "10-seed-capital.yaml").is_file()
+    assert (tmp_path / "scenario" / "20-buy-gateways.yaml").is_file()
+    assert (tmp_path / "scenario" / "30-build.yaml").is_file()
+    assert (tmp_path / "scenario" / "40-sell.yaml").is_file()
+    assert not (tmp_path / "scenario" / "buy-sell.yaml").exists()
+    assert not (tmp_path / "bootstrap").exists()
+    assert not (tmp_path / "master").exists()
     assert (tmp_path / "README.md").is_file()
+    assert "acu apply config/" in result.output
     assert "acu run scenario/" in result.output
+    assert "acu diff config/" in result.output
     writes = [ln for ln in result.output.splitlines() if ln.startswith("write ")]
     assert len(writes) > 16
-    # finance-minimal shares project.xml; never gains master/ or scenario/
+    # finance-minimal stays root; never gains config/master/ or scenario/
     bare = tmp_path / "bare"
     CliRunner().invoke(cli.cli, ["config", "init", str(bare)])
     assert not (bare / "master").exists()
+    assert not (bare / "config").exists()
     assert (bare / "bootstrap" / "project.xml").is_file()
     assert (
         'name="Bootstrap" version="1.0.0"'
@@ -900,21 +909,27 @@ def test_config_init_flavor_distribution_scaffolds_demo_seed(tmp_path: Path) -> 
 
 def test_config_init_distribution_org_cd_consistent(tmp_path: Path) -> None:
     # V29: single org-CD placeholder across company, ledger link, periods,
-    # inventory transit branch, cash BranchID
+    # inventory transit branch, cash BranchID (under config/ after T87)
     CliRunner().invoke(
         cli.cli, ["config", "init", "--flavor", "distribution", str(tmp_path)]
     )
 
-    company = yaml.safe_load((tmp_path / "bootstrap" / "company.yaml").read_text())
+    company = yaml.safe_load(
+        (tmp_path / "config" / "bootstrap" / "company.yaml").read_text()
+    )
     org = company["records"][0]["AcctCD"]
     ledger = yaml.safe_load(
-        (tmp_path / "baseline" / "60-ledger-company.yaml").read_text()
+        (tmp_path / "config" / "baseline" / "60-ledger-company.yaml").read_text()
     )
-    periods = yaml.safe_load((tmp_path / "setup" / "30-open-periods.yaml").read_text())
+    periods = yaml.safe_load(
+        (tmp_path / "config" / "setup" / "30-open-periods.yaml").read_text()
+    )
     in_prefs = yaml.safe_load(
-        (tmp_path / "master" / "20-in-preferences.yaml").read_text()
+        (tmp_path / "config" / "master" / "20-in-preferences.yaml").read_text()
     )
-    cash = yaml.safe_load((tmp_path / "master" / "63-cash-account.yaml").read_text())
+    cash = yaml.safe_load(
+        (tmp_path / "config" / "master" / "63-cash-account.yaml").read_text()
+    )
     assert ledger["records"][0]["OrganizationID"] == org
     assert periods["record"]["OrganizationID"] == org
     assert in_prefs["records"][0]["TransitBranchID"] == org
@@ -926,7 +941,9 @@ def test_config_init_distribution_feature_closed(tmp_path: Path) -> None:
     CliRunner().invoke(
         cli.cli, ["config", "init", "--flavor", "distribution", str(tmp_path)]
     )
-    features = yaml.safe_load((tmp_path / "bootstrap" / "features.yaml").read_text())
+    features = yaml.safe_load(
+        (tmp_path / "config" / "bootstrap" / "features.yaml").read_text()
+    )
     for name in [
         "Inventory",
         "DistributionModule",
@@ -941,7 +958,7 @@ def test_config_init_distribution_feature_closed(tmp_path: Path) -> None:
 def test_config_init_distribution_dry_run_parses(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    # T78: every packaged seed file loads; bare apply default includes master/
+    # T78/T87: every packaged seed file loads; bare apply prefers config/ master
     CliRunner().invoke(
         cli.cli,
         [
@@ -962,7 +979,7 @@ def test_config_init_distribution_dry_run_parses(
     assert applied.exit_code == 0, applied.output
     assert "would PUT Company" in applied.output
     assert "would PUT Warehouse" in applied.output or "Warehouse" in applied.output
-    assert "master/" in applied.output or any(
+    assert "config/master/" in applied.output or any(
         "INPreferences" in ln or "Warehouse" in ln for ln in applied.output.splitlines()
     )
 

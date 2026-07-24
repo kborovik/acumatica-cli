@@ -428,26 +428,27 @@ def config_init(host: str | None, flavor: str | None, directory: Path | None) ->
     Templates ship with the package; every value is a placeholder or a
     verified minimal example - no secrets. Both flavors scaffold the full
     company ``bootstrap/project.xml`` (Bootstrap/1.0.0). ``--flavor
-    distribution`` adds expanded COA, master/, scenario/, and README (V28).
-    Existing files are never overwritten (reported as skipped). DIRECTORY
-    defaults to the current directory and is created if absent. No git
-    init, no gpg.
+    distribution`` scaffolds under ``config/`` + lifecycle ``scenario/``
+    + README (V28/T87). Existing files are never overwritten (reported as
+    skipped). DIRECTORY defaults to the current directory and is created
+    if absent. No git init, no gpg.
     """
     target = directory or Path.cwd()
     for action, path in scaffold(target, host=host, flavor=flavor):
         suffix = " (exists)" if action == "skip" else ""
         output.data(f"{action} {path}{suffix}")
-    # next-step cmds (issue #18): operator rebuild order after scaffold
+    # next-step cmds (issue #18/#19): operator rebuild order after scaffold
     output.data("")
     output.data("next:")
     output.data("  1. edit .env (set ACU_PASSWORD, ACU_TENANT; keep ACU_API_VERSION)")
     output.data("  2. acu config check")
     output.data("  3. acu bootstrap          # or: acu tenant create ... (SSH)")
-    output.data("  4. acu apply")
     if flavor == "distribution":
+        output.data("  4. acu apply config/")
         output.data("  5. acu run scenario/")
-        output.data("  6. acu diff")
+        output.data("  6. acu diff config/")
     else:
+        output.data("  4. acu apply")
         output.data("  5. acu diff")
 
 

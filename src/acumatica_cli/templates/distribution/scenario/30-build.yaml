@@ -1,0 +1,5 @@
+# Kit-assembly stub (V28). Empty steps/expect is a valid scenario — kit body
+# lands later. Lifecycle order keeps a slot between buy and sell.
+scenario: build
+description: Assemble kits from purchased components (stub — empty steps)
+steps: []
