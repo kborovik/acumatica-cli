@@ -1,6 +1,6 @@
 [project]
 name = "acumatica-cli"
-version = "0.11.0"
+version = "0.12.0"
 description = "Acumatica ERP Config-as-Code: tenant provisioning, baseline config, and reference data"
 authors = [{ name = "Konstantin Borovik", email = "kb@lab5.ca" }]
 license = "PolyForm-Noncommercial-1.0.0"
