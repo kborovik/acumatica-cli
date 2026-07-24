@@ -999,6 +999,70 @@ def test_default_seed_dirs_include_master_when_present(
     ]
 
 
+def test_default_seed_dirs_prefer_config_over_root(
+    wired: Instance, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # T84/V30: dual layout → only config/<name>/, never merge root trees
+    (tmp_path / ".env").write_text(
+        "ACU_BASE_URL=http://acu.test/AcumaticaERP\nACU_PASSWORD=x\n"
+    )
+    seed = "entity: UnitsOfMeasure\nkey: UnitID\nrecords:\n- UnitID: HOUR\n"
+    for name in ("bootstrap", "baseline"):
+        (tmp_path / name).mkdir()
+        (tmp_path / name / "root.yaml").write_text(seed)
+        (tmp_path / "config" / name).mkdir(parents=True)
+        (tmp_path / "config" / name / "cfg.yaml").write_text(seed)
+    monkeypatch.chdir(tmp_path)
+    seen: list[str] = []
+    monkeypatch.setattr(
+        cli.seed,
+        "diff",
+        lambda client, baseline: seen.append(str(baseline.path).replace("\\", "/"))
+        or [],
+    )
+
+    result = CliRunner().invoke(cli.cli, ["diff"])
+
+    assert result.exit_code == 0, result.output
+    assert seen == ["config/bootstrap/cfg.yaml", "config/baseline/cfg.yaml"]
+    assert not any("root.yaml" in s for s in seen)
+
+
+def test_expand_files_umbrella_config_seed_order(tmp_path: Path) -> None:
+    # T84/V22/V30: acu apply config/ expands nested SEED_DIRS fixed order
+    seed = "entity: UnitsOfMeasure\nkey: UnitID\nrecords:\n- UnitID: HOUR\n"
+    for name in ("master", "bootstrap", "setup", "baseline"):  # intentional scramble
+        d = tmp_path / "config" / name
+        d.mkdir(parents=True)
+        (d / f"{name}.yaml").write_text(seed)
+    (tmp_path / "config" / "bootstrap" / "features.yaml").write_text("- Inventory\n")
+
+    paths = [
+        str(p).replace("\\", "/")
+        for p in cli.expand_files((tmp_path / "config",))
+    ]
+
+    assert paths == [
+        str((tmp_path / "config" / "bootstrap" / "bootstrap.yaml")).replace("\\", "/"),
+        str((tmp_path / "config" / "baseline" / "baseline.yaml")).replace("\\", "/"),
+        str((tmp_path / "config" / "setup" / "setup.yaml")).replace("\\", "/"),
+        str((tmp_path / "config" / "master" / "master.yaml")).replace("\\", "/"),
+    ]
+    assert not any(p.endswith("features.yaml") for p in paths)
+
+
+def test_expand_files_leaf_dir_unchanged(tmp_path: Path) -> None:
+    # leaf seed dir still expands its own *.yaml only (no SEED_DIRS children)
+    d = tmp_path / "baseline"
+    d.mkdir()
+    (d / "b.yaml").write_text("entity: X\nkey: K\nrecords: []\n")
+    (d / "a.yaml").write_text("entity: X\nkey: K\nrecords: []\n")
+
+    paths = [p.name for p in cli.expand_files((d,))]
+
+    assert paths == ["a.yaml", "b.yaml"]
+
+
 @pytest.fixture
 def check_repo(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
     """A real data repo for config check: one .env, password in the file only.

@@ -627,37 +627,61 @@ def _probe_endpoints(client: AcumaticaClient, inst: Instance) -> bool:
 SEED_DIRS = ("bootstrap", "baseline", "setup", "master")
 
 
-def default_seed_dirs() -> tuple[Path, ...]:
-    """The init-scaffolded seed dirs that exist at the data-repo root.
+def _seed_child_dirs(parent: Path) -> list[Path]:
+    """SEED_DIRS children of ``parent`` that exist, fixed order (V22/V30)."""
+    return [parent / name for name in SEED_DIRS if (parent / name).is_dir()]
 
-    apply and diff default to these when called with no FILES, in fixed
-    order (bootstrap, baseline, setup, master); only dirs that exist are
-    included (finance-minimal has no master/; distribution does). The data
-    repo is the .env dir (V3 walk-up). None existing is an error - an empty
-    default would make a bare run a silent no-op. Paths come back relative
-    to cwd (the root is always cwd or an ancestor), so a bare run prints
-    exactly what naming the dirs would.
+
+def default_seed_dirs() -> tuple[Path, ...]:
+    """Default apply/diff dirs: prefer ``config/`` SEED_DIRS, else root (V30).
+
+    When the data-repo ``config/`` has any SEED_DIRS child, only those
+    ``config/<name>/`` paths are returned (dual layout never merges with
+    root). Else root ``bootstrap/``…``master/`` for present names
+    (finance-minimal). The data repo is the .env dir (V3 walk-up). None
+    existing is an error - an empty default would make a bare run a silent
+    no-op. Paths come back relative to cwd so a bare run prints exactly
+    what naming the dirs would.
     """
     root = data_root()
-    dirs = tuple(
-        Path(os.path.relpath(d)) for name in SEED_DIRS if (d := root / name).is_dir()
-    )
+    config = root / "config"
+    if config.is_dir() and _seed_child_dirs(config):
+        parents = _seed_child_dirs(config)
+    else:
+        parents = _seed_child_dirs(root)
+    dirs = tuple(Path(os.path.relpath(d)) for d in parents)
     if not dirs:
         expected = ", ".join(f"{name}/" for name in SEED_DIRS)
-        raise SystemExit(f"{root}: none of the seed directories exist ({expected})")
+        raise SystemExit(
+            f"{root}: none of the seed directories exist "
+            f"(config/<name>/ or {expected})"
+        )
     return dirs
 
 
-def expand_files(files: tuple[Path, ...]) -> list[Path]:
-    """Expand directory arguments into their *.yaml files, sorted.
+def _leaf_yaml(directory: Path) -> list[Path]:
+    """Sorted ``*.yaml`` in a leaf seed dir; skip ``features.yaml`` (I.data)."""
+    return sorted(p for p in directory.glob("*.yaml") if p.name != "features.yaml")
 
-    features.yaml is skipped: it configures the bootstrap package build
-    (a feature-name list, SPEC I.data), not an entity/records seed file.
+
+def expand_files(files: tuple[Path, ...]) -> list[Path]:
+    """Expand directory arguments into seed ``*.yaml`` files (V22/V30).
+
+    A dir with any SEED_DIRS child (umbrella e.g. ``config/``) expands those
+    nested subdirs in fixed SEED_DIRS order, then leaf ``*.yaml`` per subdir.
+    A leaf dir expands its own ``*.yaml`` only. ``features.yaml`` is skipped:
+    it configures the bootstrap package build, not an entity/records seed.
     """
     paths: list[Path] = []
     for path in files:
         if path.is_dir():
-            found = sorted(p for p in path.glob("*.yaml") if p.name != "features.yaml")
+            children = _seed_child_dirs(path)
+            if children:
+                found: list[Path] = []
+                for child in children:
+                    found += _leaf_yaml(child)
+            else:
+                found = _leaf_yaml(path)
             if not found:
                 raise SystemExit(f"{path}: no seed *.yaml files in directory")
             paths += found
@@ -675,9 +699,10 @@ def expand_files(files: tuple[Path, ...]) -> list[Path]:
 def apply_cmd(inst: Instance, files: tuple[Path, ...], dry_run: bool) -> None:
     """Seed baseline YAML into the tenant (idempotent PUT upserts).
 
-    FILES are baseline YAML files or directories containing them. Omitted,
-    they default to the data repo's existing init-scaffolded directories in
-    fixed order: bootstrap/, baseline/, setup/, master/ (when present).
+    FILES are baseline YAML files or directories containing them. A dir with
+    SEED_DIRS children (e.g. config/) expands nested trees in fixed order.
+    Omitted, defaults prefer config/<name>/ when present, else root SEED_DIRS
+    (V30).
     """
     assert_target_compatible(inst)
     with AcumaticaClient(inst) as client:
@@ -729,9 +754,10 @@ def schema_cmd(inst: Instance, out_dir: Path | None) -> None:
 def diff_cmd(inst: Instance, files: tuple[Path, ...]) -> None:
     """Compare baseline YAML against the live tenant; exit 2 on drift.
 
-    FILES are baseline YAML files or directories containing them. Omitted,
-    they default to the data repo's existing init-scaffolded directories in
-    fixed order: bootstrap/, baseline/, setup/, master/ (when present).
+    FILES are baseline YAML files or directories containing them. A dir with
+    SEED_DIRS children (e.g. config/) expands nested trees in fixed order.
+    Omitted, defaults prefer config/<name>/ when present, else root SEED_DIRS
+    (V30).
     """
     assert_target_compatible(inst)
     paths = expand_files(files or default_seed_dirs())
