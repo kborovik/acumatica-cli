@@ -99,6 +99,53 @@ def test_load_features_reads_the_yaml_list(tmp_path: Path) -> None:
     assert bootstrap.load_features(tmp_path) == ["MultiCompany", "Multicurrency"]
 
 
+def test_load_features_prefers_config_bootstrap(tmp_path: Path) -> None:
+    # T85/V30: config/bootstrap/features.yaml wins over root bootstrap/
+    (tmp_path / "bootstrap").mkdir()
+    (tmp_path / "bootstrap" / "features.yaml").write_text("- MultiCompany\n")
+    (tmp_path / "config" / "bootstrap").mkdir(parents=True)
+    (tmp_path / "config" / "bootstrap" / "features.yaml").write_text(
+        "- Inventory\n- Warehouse\n"
+    )
+    assert bootstrap.load_features(tmp_path) == ["Inventory", "Warehouse"]
+
+
+def test_load_contract_xml_prefers_config_bootstrap(tmp_path: Path) -> None:
+    # T85/V30: config/bootstrap/project.xml wins over root bootstrap/
+    root_contract = b"""\
+<Customization level="" description="root" product-version="26.101">
+  <EntityEndpoint>
+    <Endpoint xmlns="http://www.acumatica.com/entity/maintenance/5.31"
+              name="Bootstrap" version="1.0.0" systemContractVersion="4">
+      <TopLevelEntity name="RootOnly" screen="CS000000">
+        <Fields><Field name="ID" type="StringValue" /></Fields>
+      </TopLevelEntity>
+    </Endpoint>
+  </EntityEndpoint>
+</Customization>
+"""
+    cfg_contract = b"""\
+<Customization level="" description="config" product-version="26.101">
+  <EntityEndpoint>
+    <Endpoint xmlns="http://www.acumatica.com/entity/maintenance/5.31"
+              name="Bootstrap" version="1.0.0" systemContractVersion="4">
+      <TopLevelEntity name="ConfigOnly" screen="CS000000">
+        <Fields><Field name="ID" type="StringValue" /></Fields>
+      </TopLevelEntity>
+    </Endpoint>
+  </EntityEndpoint>
+</Customization>
+"""
+    (tmp_path / "bootstrap").mkdir()
+    (tmp_path / "bootstrap" / "project.xml").write_bytes(root_contract)
+    (tmp_path / "config" / "bootstrap").mkdir(parents=True)
+    (tmp_path / "config" / "bootstrap" / "project.xml").write_bytes(cfg_contract)
+
+    name, entities = bootstrap.parse_endpoint(bootstrap.load_contract_xml(tmp_path))
+    assert name == "Bootstrap/1.0.0"
+    assert entities == frozenset({"ConfigOnly"})
+
+
 @pytest.mark.parametrize(
     "body",
     [

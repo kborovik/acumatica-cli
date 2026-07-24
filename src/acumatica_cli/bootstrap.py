@@ -8,10 +8,11 @@ virgin tenant, so bootstrap = publish a package whose CustomizationPlugin
 cannot write CS100000 at all (T3 verdict) — and whose Bootstrap contract
 endpoint exposes the seeding surface (serialization verified T12).
 
-Contract ownership is hybrid (T69/V2/T81): the data repo's
-``bootstrap/project.xml`` is preferred when present; else the packaged
-full company ``bootstrap_project.xml`` (``Bootstrap/1.0.0``) so PyPI-only
-and offline virgin paths still bootstrap the full surface.
+Contract ownership is hybrid (T69/V2/T81/T85): the data repo's
+``config/bootstrap/project.xml`` is preferred, then root
+``bootstrap/project.xml``; else the packaged full company
+``bootstrap_project.xml`` (``Bootstrap/1.0.0``) so PyPI-only and offline
+virgin paths still bootstrap the full surface.
 
 Customization publishes are tenant-scoped, so the package must be published
 per tenant; publish() is idempotent on content — the skip gate compares the
@@ -19,8 +20,9 @@ digest embedded in the published package's description against the package
 built now, and the plugin's UpdateDatabase is a keyed update on re-run.
 
 The feature set the plugin enables is data, not code (V2): load_features()
-reads the data repo's bootstrap/features.yaml (absent -> the built-in six)
-and package_zip() splices it into the plugin source at build time.
+reads config/bootstrap/features.yaml then root bootstrap/features.yaml
+(absent -> the built-in six) and package_zip() splices it into the plugin
+source at build time.
 """
 
 import hashlib
@@ -43,11 +45,10 @@ PACKAGE_NAME = "AcuBootstrap"
 PLUGIN_CLASS = "AcuBootstrapPlugin"
 _ENDPOINT_NS = "{http://www.acumatica.com/entity/maintenance/5.31}"
 
-# Code default when the data repo carries no bootstrap/features.yaml
-# (SPEC I.data) — the minimum for company/branch + baseline seeding.
-# The set is injected into the plugin source at package build; it never
-# lives in bootstrap_plugin.cs (V2: feature flags are config, not tool
-# source — B6).
+# Code default when the data repo carries no features.yaml (SPEC I.data)
+# — the minimum for company/branch + baseline seeding. The set is injected
+# into the plugin source at package build; it never lives in
+# bootstrap_plugin.cs (V2: feature flags are config, not tool source — B6).
 DEFAULT_FEATURES = (
     "FinancialModule",
     "FinancialStandard",
@@ -59,6 +60,14 @@ DEFAULT_FEATURES = (
 FEATURES_SENTINEL = "/*ACU_FEATURES*/"
 
 
+def _bootstrap_file(root: Path, name: str) -> Path | None:
+    """Resolve a bootstrap package input: config/bootstrap then root (V30)."""
+    for path in (root / "config" / "bootstrap" / name, root / "bootstrap" / name):
+        if path.is_file():
+            return path
+    return None
+
+
 def packaged_contract_xml() -> bytes:
     """The CLI-shipped full company Bootstrap contract (``Bootstrap/1.0.0``)."""
     return (resources.files("acumatica_cli") / "bootstrap_project.xml").read_bytes()
@@ -68,12 +77,13 @@ def load_contract_xml(root: Path | None = None) -> bytes:
     """Active contract bytes: data-repo override when present, else packaged.
 
     ``root`` is the data-repo discovery root (the dir holding ``.env``).
-    Absent root or absent ``bootstrap/project.xml`` falls back to the
-    packaged full company contract (V2/T81, same absence pattern as features.yaml).
+    Prefer ``config/bootstrap/project.xml``, then root ``bootstrap/project.xml``
+    (V30 dual resolve). Absent root or file falls back to the packaged full
+    company contract (V2/T81, same absence pattern as features.yaml).
     """
     if root is not None:
-        path = root / "bootstrap" / "project.xml"
-        if path.is_file():
+        path = _bootstrap_file(root, "project.xml")
+        if path is not None:
             return path.read_bytes()
     return packaged_contract_xml()
 
@@ -97,15 +107,16 @@ PACKAGE_DESCRIPTION = ET.fromstring(packaged_contract_xml()).get("description", 
 
 
 def load_features(root: Path) -> list[str]:
-    """The FeaturesSet property names from <root>/bootstrap/features.yaml.
+    """FeaturesSet property names from config/ then root bootstrap (V30).
 
+    Prefer ``config/bootstrap/features.yaml``, then ``bootstrap/features.yaml``.
     Absent file -> the built-in six (SPEC I.data). Names are validated as
     plausible property names here (they are spliced into C# string literals);
     whether each matches a real FeaturesSet property only the plugin can
     tell — it logs the strays at publish time (the silent-typo guard).
     """
-    path = root / "bootstrap" / "features.yaml"
-    if not path.is_file():
+    path = _bootstrap_file(root, "features.yaml")
+    if path is None:
         return list(DEFAULT_FEATURES)
     with open(path) as f:
         data = yaml.safe_load(f)
@@ -136,9 +147,9 @@ def package_zip(
     ``Enabled`` set at the ACU_FEATURES sentinel — the one point where the
     data repo's feature list enters the package (V2).
 
-    Contract XML (V2/T69/T81): ``contract`` when given; else
-    ``bootstrap/project.xml`` under ``root`` when present; else the
-    packaged full company template.
+    Contract XML (V2/T69/T81/T85): ``contract`` when given; else
+    ``config/bootstrap/project.xml`` then ``bootstrap/project.xml`` under
+    ``root`` when present; else the packaged full company template.
     """
     pkg = resources.files("acumatica_cli")
     if contract is None:
