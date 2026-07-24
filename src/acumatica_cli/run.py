@@ -304,29 +304,25 @@ def _resolve_path(record: dict[str, Any], path: str) -> Any:
     return value
 
 
-def _inquire_totals(
+def _inquiry_totals(
     client: AcumaticaClient,
-    inquire: str,
-    fields: dict[str, Any] | list[str],
-    *,
-    parameters: dict[str, Any] | None = None,
-    match: dict[str, Any] | None = None,
-    endpoint: str | None = None,
+    probe: Expect | PresentSpec,
+    field_names: list[str],
 ) -> dict[str, float]:
     """Probe a contract inquiry; sum named fields over matching Results rows."""
+    assert probe.inquire is not None
     body = client.put(
-        inquire,
-        parameters or {},
-        endpoint=endpoint,
+        probe.inquire,
+        probe.parameters or {},
+        endpoint=probe.endpoint,
         params={"$expand": "Results"},
     )
-    keys = list(fields) if not isinstance(fields, dict) else list(fields)
-    totals = dict.fromkeys(keys, 0.0)
+    totals = dict.fromkeys(field_names, 0.0)
     for row in body.get("Results") or []:
         values = unwrap(row)
-        if match and any(
+        if probe.match and any(
             field not in values or _norm(values[field]) != _norm(want)
-            for field, want in match.items()
+            for field, want in probe.match.items()
         ):
             continue
         for field in totals:
@@ -338,26 +334,12 @@ def _inquire(client: AcumaticaClient, expect: Expect) -> dict[str, float]:
     """Probe a contract inquiry; sum each delta field over matching rows."""
     assert expect.inquire is not None
     assert expect.delta is not None
-    return _inquire_totals(
-        client,
-        expect.inquire,
-        expect.delta,
-        parameters=expect.parameters,
-        match=expect.match,
-        endpoint=expect.endpoint,
-    )
+    return _inquiry_totals(client, expect, list(expect.delta))
 
 
 def _present(client: AcumaticaClient, present: PresentSpec) -> bool:
     """True when every present.when predicate holds (absolute, not delta)."""
-    totals = _inquire_totals(
-        client,
-        present.inquire,
-        list(present.when),
-        parameters=present.parameters,
-        match=present.match,
-        endpoint=present.endpoint,
-    )
+    totals = _inquiry_totals(client, present, list(present.when))
     for field, pred in present.when.items():
         got = totals[field]
         if pred.gte is not None and got < float(pred.gte):
@@ -424,6 +406,39 @@ def _dry_run(scenario: Scenario) -> None:
         output.data(f"  would check {expect.label()}")
 
 
+def _run_get(
+    client: AcumaticaClient, step: Step, variables: dict[str, Any]
+) -> dict[str, Any]:
+    """Fetch a get step via key-URL or list filter; return unwrapped row."""
+    assert step.get is not None
+    params: dict[str, str] = {}
+    if step.get.expand:
+        params["$expand"] = ",".join(sorted(step.get.expand))
+    if step.get.filter is not None:
+        params["$filter"] = str(_subst(step.get.filter, variables))
+        if step.get.top is not None:
+            params["$top"] = str(step.get.top)
+        if step.get.orderby is not None:
+            params["$orderby"] = str(_subst(step.get.orderby, variables))
+        rows = client.get_list(
+            step.get.entity, params=params or None, endpoint=step.get.endpoint
+        )
+        if not rows:
+            raise RuntimeError(
+                f"step '{step.id}': {step.get.entity} filter "
+                f"{params.get('$filter')!r} matched no rows"
+            )
+        output.data(f"  get {step.get.entity} filter [{step.id}]")
+        return unwrap(rows[0])
+    assert step.get.keys is not None
+    keys = _subst(step.get.keys, variables)
+    record = client.get_record(step.get.entity, keys, step.get.endpoint, params or None)
+    if record is None:
+        raise RuntimeError(f"step '{step.id}': {step.get.entity} {keys} not found")
+    output.data(f"  get {step.get.entity} [{step.id}]")
+    return unwrap(record)
+
+
 def _run_step(client: AcumaticaClient, step: Step, variables: dict[str, Any]) -> None:
     """Execute one step, folding captured fields into the variable set."""
     if step.put is not None:
@@ -450,37 +465,7 @@ def _run_step(client: AcumaticaClient, step: Step, variables: dict[str, Any]) ->
         )
         output.data(f"  invoke {step.action.name} [{step.id}]")
     elif step.get is not None:
-        params: dict[str, str] = {}
-        if step.get.expand:
-            params["$expand"] = ",".join(sorted(step.get.expand))
-        if step.get.filter is not None:
-            params["$filter"] = str(_subst(step.get.filter, variables))
-            if step.get.top is not None:
-                params["$top"] = str(step.get.top)
-            if step.get.orderby is not None:
-                params["$orderby"] = str(_subst(step.get.orderby, variables))
-            rows = client.get_list(
-                step.get.entity, params=params or None, endpoint=step.get.endpoint
-            )
-            if not rows:
-                raise RuntimeError(
-                    f"step '{step.id}': {step.get.entity} filter "
-                    f"{params.get('$filter')!r} matched no rows"
-                )
-            fetched = unwrap(rows[0])
-            output.data(f"  get {step.get.entity} filter [{step.id}]")
-        else:
-            assert step.get.keys is not None
-            keys = _subst(step.get.keys, variables)
-            record = client.get_record(
-                step.get.entity, keys, step.get.endpoint, params or None
-            )
-            if record is None:
-                raise RuntimeError(
-                    f"step '{step.id}': {step.get.entity} {keys} not found"
-                )
-            fetched = unwrap(record)
-            output.data(f"  get {step.get.entity} [{step.id}]")
+        fetched = _run_get(client, step, variables)
         for path, var in (step.capture or {}).items():
             variables[var] = _resolve_path(fetched, path)
     if step.wait is not None:

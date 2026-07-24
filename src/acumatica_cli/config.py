@@ -256,11 +256,14 @@ def templates_for(flavor: str | None) -> tuple[tuple[str, str], ...]:
             by_dest[dest] = res
             order.append(dest)
             continue
-        if any(dest.startswith(p) for p in _SEED_PREFIXES):
-            dest = f"config/{dest}"
-        if dest not in by_dest:
-            order.append(dest)
-        by_dest[dest] = res
+        target = (
+            f"config/{dest}"
+            if any(dest.startswith(p) for p in _SEED_PREFIXES)
+            else dest
+        )
+        if target not in by_dest:
+            order.append(target)
+        by_dest[target] = res
     for res, dest in DISTRIBUTION_TEMPLATES:
         if dest not in by_dest:
             order.append(dest)

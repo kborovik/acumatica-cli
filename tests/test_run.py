@@ -281,9 +281,7 @@ steps:
 """
 
 
-def test_get_step_filter_captures_first_row(
-    tmp_path: Path, instance: Instance
-) -> None:
+def test_get_step_filter_captures_first_row(tmp_path: Path, instance: Instance) -> None:
     """List GET via filter finds auto-created docs (CreateBill VendorRef)."""
 
     def server(request: httpx.Request) -> httpx.Response:
@@ -441,7 +439,8 @@ def test_once_skip_when_present(
     assert ok is True
     assert puts == []  # no JE put — skip path
     out = capsys.readouterr().out
-    assert "skip " in out and "(once: already present)" in out
+    assert "skip " in out
+    assert "(once: already present)" in out
 
 
 def test_once_runs_when_absent(
@@ -475,7 +474,9 @@ def test_once_runs_when_absent(
     assert "(once: already present)" not in out
 
 
-def test_once_dry_run_annotates(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
+def test_once_dry_run_annotates(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
     scenario = run.load_scenario(_write(tmp_path, ONCE_SCENARIO))
     assert run.run(None, scenario, dry_run=True) is True
     out = capsys.readouterr().out
