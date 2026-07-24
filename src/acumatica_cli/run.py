@@ -25,6 +25,9 @@ Scenario file format (SPEC I.data):
           entity: PurchaseReceipt
           keys: ["${rcpt}"]
           until: { Status: Released }
+      - id: find-bill                               # optional: list GET
+        get: { entity: Bill, filter: "VendorRef eq 'PO-${po}'", top: 1 }
+        capture: { ReferenceNbr: bill }
     expect:
       - get: { entity: Payment, keys: [Payment, "${pmt}"] }
         fields: { Status: Closed }
@@ -38,8 +41,10 @@ tokens for later steps. `expect` delta assertions snapshot before the
 first step and re-probe after the last, comparing the difference - the
 scenario re-runs safely on a warm tenant (document numbers differ, the
 deltas hold). `get` assertions are absolute (statuses of documents
-created in this run). Exit 0 = every expectation holds; 1 = any step
-error or expectation miss (2 stays diff's drift code).
+created in this run). `once: true` + authored `present` inquire-absolute
+gate skips steps and expects when the probe already holds (capital
+non-stack; V4/gh #19). Exit 0 = every expectation holds or once-skip;
+1 = any step error or expectation miss (2 stays diff's drift code).
 """
 
 import re
@@ -77,12 +82,28 @@ class WaitSpec(Model):
 
 
 class GetOp(Model):
-    """Key-URL fetch a get step performs; expand pulls detail arrays."""
+    """Fetch a get step performs: key-URL or OData list filter.
+
+    Key-URL (`keys`) is the default path for known document numbers.
+    `filter` is for post-action discovery (e.g. AP Bill auto-created from
+    PurchaseReceipt CreateBill, found by VendorRef). Exactly one of
+    `keys` / `filter`. Optional `top` / `orderby` narrow list gets;
+    `expand` pulls detail arrays on either path.
+    """
 
     entity: str
-    keys: list[Any]
+    keys: list[Any] | None = None
+    filter: str | None = None
+    top: int | None = None
+    orderby: str | None = None
     expand: list[str] | None = None
     endpoint: str | None = None
+
+    @model_validator(mode="after")
+    def _keys_or_filter(self) -> GetOp:
+        if (self.keys is None) == (self.filter is None):
+            raise ValueError("get: exactly one of keys, filter")
+        return self
 
 
 class Step(Model):
@@ -154,14 +175,50 @@ class Expect(Model):
         return f"{self.inquire}{match}"
 
 
+class WhenPred(Model):
+    """Absolute field predicate for a once-present inquire probe (eq | gte)."""
+
+    eq: Any | None = None
+    gte: float | int | None = None
+
+    @model_validator(mode="after")
+    def _one_op(self) -> WhenPred:
+        if (self.eq is None) == (self.gte is None):
+            raise ValueError("when field: exactly one of eq, gte")
+        return self
+
+
+class PresentSpec(Model):
+    """Inquire-absolute presence gate for ``once: true`` (V4/gh #19).
+
+    Author-owned inquiry + optional row ``match`` + per-field ``when``
+    (eq|gte). Probe true → skip steps and expects; false → run cold.
+    No ``${var}`` interpolation — the gate runs before any step capture.
+    """
+
+    inquire: str
+    parameters: dict[str, Any] | None = None
+    match: dict[str, Any] | None = None
+    when: dict[str, WhenPred]
+    endpoint: str | None = None
+
+    @model_validator(mode="after")
+    def _when_nonempty(self) -> PresentSpec:
+        if not self.when:
+            raise ValueError("present: when must name at least one field")
+        return self
+
+
 class Scenario(Model):
     """A parsed scenario YAML: named steps plus expectations."""
 
     path: Path
     scenario: str
     description: str | None = None
-    steps: list[Step]
+    steps: list[Step] = Field(default_factory=list)  # empty ok — stub (V28 30-build)
     expect: list[Expect] = Field(default_factory=list)
+    once: bool = False
+    present: PresentSpec | None = None
 
     @model_validator(mode="after")
     def _unique_step_ids(self) -> Scenario:
@@ -170,6 +227,14 @@ class Scenario(Model):
             if step.id in seen:
                 raise ValueError(f"duplicate step id '{step.id}'")
             seen.add(step.id)
+        return self
+
+    @model_validator(mode="after")
+    def _once_present(self) -> Scenario:
+        if self.once and self.present is None:
+            raise ValueError("once: true requires present")
+        if self.present is not None and not self.once:
+            raise ValueError("present requires once: true")
         return self
 
 
@@ -239,27 +304,67 @@ def _resolve_path(record: dict[str, Any], path: str) -> Any:
     return value
 
 
-def _inquire(client: AcumaticaClient, expect: Expect) -> dict[str, float]:
-    """Probe a contract inquiry; sum each delta field over matching rows."""
-    assert expect.inquire is not None
-    assert expect.delta is not None
+def _inquire_totals(
+    client: AcumaticaClient,
+    inquire: str,
+    fields: dict[str, Any] | list[str],
+    *,
+    parameters: dict[str, Any] | None = None,
+    match: dict[str, Any] | None = None,
+    endpoint: str | None = None,
+) -> dict[str, float]:
+    """Probe a contract inquiry; sum named fields over matching Results rows."""
     body = client.put(
-        expect.inquire,
-        expect.parameters or {},
-        endpoint=expect.endpoint,
+        inquire,
+        parameters or {},
+        endpoint=endpoint,
         params={"$expand": "Results"},
     )
-    totals = dict.fromkeys(expect.delta, 0.0)
+    keys = list(fields) if not isinstance(fields, dict) else list(fields)
+    totals = dict.fromkeys(keys, 0.0)
     for row in body.get("Results") or []:
         values = unwrap(row)
-        if expect.match and any(
+        if match and any(
             field not in values or _norm(values[field]) != _norm(want)
-            for field, want in expect.match.items()
+            for field, want in match.items()
         ):
             continue
         for field in totals:
             totals[field] += float(values.get(field) or 0.0)
     return totals
+
+
+def _inquire(client: AcumaticaClient, expect: Expect) -> dict[str, float]:
+    """Probe a contract inquiry; sum each delta field over matching rows."""
+    assert expect.inquire is not None
+    assert expect.delta is not None
+    return _inquire_totals(
+        client,
+        expect.inquire,
+        expect.delta,
+        parameters=expect.parameters,
+        match=expect.match,
+        endpoint=expect.endpoint,
+    )
+
+
+def _present(client: AcumaticaClient, present: PresentSpec) -> bool:
+    """True when every present.when predicate holds (absolute, not delta)."""
+    totals = _inquire_totals(
+        client,
+        present.inquire,
+        list(present.when),
+        parameters=present.parameters,
+        match=present.match,
+        endpoint=present.endpoint,
+    )
+    for field, pred in present.when.items():
+        got = totals[field]
+        if pred.gte is not None and got < float(pred.gte):
+            return False
+        if pred.eq is not None and _norm(got) != _norm(pred.eq):
+            return False
+    return True
 
 
 def _wait(client: AcumaticaClient, spec: WaitSpec, variables: dict[str, Any]) -> None:
@@ -290,7 +395,20 @@ def _wait(client: AcumaticaClient, spec: WaitSpec, variables: dict[str, Any]) ->
 
 
 def _dry_run(scenario: Scenario) -> None:
-    """List steps and expectations without any HTTP."""
+    """List steps and expectations without any HTTP; annotate once gates."""
+    if scenario.once:
+        assert scenario.present is not None
+        when = ", ".join(
+            f"{field}={'gte ' + str(p.gte) if p.gte is not None else 'eq ' + str(p.eq)}"
+            for field, p in scenario.present.when.items()
+        )
+        output.data(
+            f"  once: present {scenario.present.inquire}"
+            + (f" match {scenario.present.match}" if scenario.present.match else "")
+            + f" when {when}"
+        )
+    if not scenario.steps:
+        output.data("  (no steps)")
     for step in scenario.steps:
         op = (
             f"PUT {step.put}"
@@ -332,15 +450,37 @@ def _run_step(client: AcumaticaClient, step: Step, variables: dict[str, Any]) ->
         )
         output.data(f"  invoke {step.action.name} [{step.id}]")
     elif step.get is not None:
-        keys = _subst(step.get.keys, variables)
-        params = (
-            {"$expand": ",".join(sorted(step.get.expand))} if step.get.expand else None
-        )
-        record = client.get_record(step.get.entity, keys, step.get.endpoint, params)
-        if record is None:
-            raise RuntimeError(f"step '{step.id}': {step.get.entity} {keys} not found")
-        fetched = unwrap(record)
-        output.data(f"  get {step.get.entity} [{step.id}]")
+        params: dict[str, str] = {}
+        if step.get.expand:
+            params["$expand"] = ",".join(sorted(step.get.expand))
+        if step.get.filter is not None:
+            params["$filter"] = str(_subst(step.get.filter, variables))
+            if step.get.top is not None:
+                params["$top"] = str(step.get.top)
+            if step.get.orderby is not None:
+                params["$orderby"] = str(_subst(step.get.orderby, variables))
+            rows = client.get_list(
+                step.get.entity, params=params or None, endpoint=step.get.endpoint
+            )
+            if not rows:
+                raise RuntimeError(
+                    f"step '{step.id}': {step.get.entity} filter "
+                    f"{params.get('$filter')!r} matched no rows"
+                )
+            fetched = unwrap(rows[0])
+            output.data(f"  get {step.get.entity} filter [{step.id}]")
+        else:
+            assert step.get.keys is not None
+            keys = _subst(step.get.keys, variables)
+            record = client.get_record(
+                step.get.entity, keys, step.get.endpoint, params or None
+            )
+            if record is None:
+                raise RuntimeError(
+                    f"step '{step.id}': {step.get.entity} {keys} not found"
+                )
+            fetched = unwrap(record)
+            output.data(f"  get {step.get.entity} [{step.id}]")
         for path, var in (step.capture or {}).items():
             variables[var] = _resolve_path(fetched, path)
     if step.wait is not None:
@@ -401,12 +541,21 @@ def run(
     never touch HTTP (a preview costs nothing live). Delta expectations
     snapshot BEFORE the first step (V4): the comparison is post minus
     pre, so a warm tenant re-runs clean.
+
+    ``once: true`` (V4/gh #19): inquire-absolute ``present`` probe first.
+    Probe true → stdout ``skip <path> (once: already present)``, no step
+    HTTP, no expects, exit 0. Probe false → steps + expects as usual.
     """
     output.data(f"{scenario.path} -> {scenario.scenario}")
     if dry_run:
         _dry_run(scenario)
         return True
     assert client is not None  # non-dry-run callers pass a live session
+    if scenario.once:
+        assert scenario.present is not None
+        if _present(client, scenario.present):
+            output.data(f"skip {scenario.path} (once: already present)")
+            return True
     before = [
         _inquire(client, expect) if expect.inquire else {} for expect in scenario.expect
     ]

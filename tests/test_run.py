@@ -268,6 +268,59 @@ def test_get_step_captures_paths(tmp_path: Path, instance: Instance) -> None:
     }
 
 
+FILTER_GET_SCENARIO = """\
+scenario: filter-capture
+steps:
+  - id: find-bill
+    get:
+      entity: Bill
+      filter: "VendorRef eq 'PO-000001'"
+      top: 1
+      orderby: ReferenceNbr desc
+    capture: { ReferenceNbr: bill_nbr }
+"""
+
+
+def test_get_step_filter_captures_first_row(
+    tmp_path: Path, instance: Instance
+) -> None:
+    """List GET via filter finds auto-created docs (CreateBill VendorRef)."""
+
+    def server(request: httpx.Request) -> httpx.Response:
+        if request.url.path.endswith("/Bill") and request.method == "GET":
+            assert request.url.params["$filter"] == "VendorRef eq 'PO-000001'"
+            assert request.url.params["$top"] == "1"
+            assert request.url.params["$orderby"] == "ReferenceNbr desc"
+            return httpx.Response(
+                200,
+                json=[
+                    {
+                        "ReferenceNbr": {"value": "000099"},
+                        "VendorRef": {"value": "PO-000001"},
+                    }
+                ],
+            )
+        return httpx.Response(200, json={})
+
+    scenario = run.load_scenario(_write(tmp_path, FILTER_GET_SCENARIO))
+    client = AcumaticaClient(instance, transport=httpx.MockTransport(server))
+    variables: dict[str, object] = {}
+    for step in scenario.steps:
+        run._run_step(client, step, variables)  # pyright: ignore[reportPrivateUsage]
+    assert variables == {"bill_nbr": "000099"}
+
+
+def test_get_step_requires_keys_or_filter(tmp_path: Path) -> None:
+    text = """\
+scenario: bad-get
+steps:
+  - id: bad
+    get: { entity: Bill }
+"""
+    with pytest.raises(SystemExit, match="exactly one of keys, filter"):
+        run.load_scenario(_write(tmp_path, text))
+
+
 def test_get_step_capture_path_errors_name_the_path(
     tmp_path: Path, instance: Instance
 ) -> None:
@@ -298,3 +351,133 @@ def test_step_rejects_two_ops_with_get(tmp_path: Path) -> None:
     )
     with pytest.raises(SystemExit, match="exclusive"):
         run.load_scenario(_write(tmp_path, text))
+
+
+ONCE_SCENARIO = """\
+scenario: seed-capital
+once: true
+present:
+  inquire: AccountSummaryInquiry
+  parameters: { Ledger: ACTUAL, Period: "072026" }
+  match: { Account: "30000" }
+  when:
+    EndingBalance: { gte: 50000 }
+steps:
+  - id: seed
+    put: JournalTransaction
+    record:
+      Module: GL
+      Hold: false
+      Details:
+        - { Account: '10100', DebitAmount: 50000.0 }
+        - { Account: '30000', CreditAmount: 50000.0 }
+    capture: { BatchNbr: je }
+expect:
+  - get: { entity: JournalTransaction, keys: [GL, "${je}"] }
+    fields: { Status: Balanced }
+"""
+
+
+def test_load_once_requires_present(tmp_path: Path) -> None:
+    text = """\
+scenario: bad-once
+once: true
+steps: []
+"""
+    with pytest.raises(SystemExit, match="once: true requires present"):
+        run.load_scenario(_write(tmp_path, text))
+
+
+def test_load_present_requires_once(tmp_path: Path) -> None:
+    text = """\
+scenario: bad-present
+present:
+  inquire: AccountSummaryInquiry
+  when: { EndingBalance: { gte: 1 } }
+steps: []
+"""
+    with pytest.raises(SystemExit, match="present requires once: true"):
+        run.load_scenario(_write(tmp_path, text))
+
+
+def test_load_empty_steps_stub(tmp_path: Path) -> None:
+    # V28 30-build empty stub is a valid scenario
+    text = """\
+scenario: build
+description: empty stub
+steps: []
+"""
+    scenario = run.load_scenario(_write(tmp_path, text))
+    assert scenario.steps == []
+    assert scenario.expect == []
+
+
+def test_once_skip_when_present(
+    tmp_path: Path, instance: Instance, capsys: pytest.CaptureFixture[str]
+) -> None:
+    # T86/V4: warm capital — present probe true → skip, no put, no expect
+    puts: list[str] = []
+
+    def server(request: httpx.Request) -> httpx.Response:
+        if request.method == "PUT" and request.url.path.endswith(
+            "/AccountSummaryInquiry"
+        ):
+            return httpx.Response(
+                200,
+                json={
+                    "Results": [
+                        wrap({"Account": "30000", "EndingBalance": 50000.0}),
+                    ]
+                },
+            )
+        if request.method == "PUT" and request.url.path.endswith("/JournalTransaction"):
+            puts.append(request.url.path)
+            return httpx.Response(200, json=wrap({"BatchNbr": "000001"}))
+        return httpx.Response(200, json={})
+
+    scenario = run.load_scenario(_write(tmp_path, ONCE_SCENARIO))
+    client = AcumaticaClient(instance, transport=httpx.MockTransport(server))
+    ok = run.run(client, scenario)
+    assert ok is True
+    assert puts == []  # no JE put — skip path
+    out = capsys.readouterr().out
+    assert "skip " in out and "(once: already present)" in out
+
+
+def test_once_runs_when_absent(
+    tmp_path: Path, instance: Instance, capsys: pytest.CaptureFixture[str]
+) -> None:
+    # cold path: EndingBalance 0 < gte 50000 → steps + expects run
+
+    def server(request: httpx.Request) -> httpx.Response:
+        path = request.url.path
+        if request.method == "PUT" and path.endswith("/AccountSummaryInquiry"):
+            return httpx.Response(
+                200,
+                json={
+                    "Results": [
+                        wrap({"Account": "30000", "EndingBalance": 0.0}),
+                    ]
+                },
+            )
+        if request.method == "PUT" and path.endswith("/JournalTransaction"):
+            return httpx.Response(200, json=wrap({"BatchNbr": "000042"}))
+        if "JournalTransaction" in path and request.method == "GET":
+            return httpx.Response(200, json=wrap({"Status": "Balanced"}))
+        return httpx.Response(200, json={})
+
+    scenario = run.load_scenario(_write(tmp_path, ONCE_SCENARIO))
+    client = AcumaticaClient(instance, transport=httpx.MockTransport(server))
+    ok = run.run(client, scenario)
+    assert ok is True
+    out = capsys.readouterr().out
+    assert "put JournalTransaction" in out
+    assert "(once: already present)" not in out
+
+
+def test_once_dry_run_annotates(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
+    scenario = run.load_scenario(_write(tmp_path, ONCE_SCENARIO))
+    assert run.run(None, scenario, dry_run=True) is True
+    out = capsys.readouterr().out
+    assert "once: present AccountSummaryInquiry" in out
+    assert "would PUT JournalTransaction" in out
