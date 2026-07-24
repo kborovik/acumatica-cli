@@ -152,6 +152,21 @@ def test_distribution_scenario(dist_acu: RunAcu, dist_tenant: ScratchTenant) -> 
     assert proc.returncode == 0, _combined(proc)
 
 
+def test_distribution_warm_capital_once_skip(
+    dist_acu: RunAcu, dist_tenant: ScratchTenant
+) -> None:
+    """T89/V4: second run scenario/ skips once capital (Owner Capital non-stack).
+
+    Cold path ran in test_distribution_scenario. Warm re-run must print the
+    once skip line for 10-seed-capital and still exit 0 for additive legs.
+    """
+    proc = dist_acu("--tenant", dist_tenant.login, "run", "scenario/")
+    combined = _combined(proc)
+    assert proc.returncode == 0, combined
+    assert "once: already present" in combined
+    assert "10-seed-capital" in combined
+
+
 def test_distribution_diff_clean(dist_acu: RunAcu, dist_tenant: ScratchTenant) -> None:
     proc = dist_acu("--tenant", dist_tenant.login, "diff")
     assert proc.returncode == 0, _combined(proc)

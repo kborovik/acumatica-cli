@@ -654,8 +654,7 @@ def default_seed_dirs() -> tuple[Path, ...]:
     if not dirs:
         expected = ", ".join(f"{name}/" for name in SEED_DIRS)
         raise SystemExit(
-            f"{root}: none of the seed directories exist "
-            f"(config/<name>/ or {expected})"
+            f"{root}: none of the seed directories exist (config/<name>/ or {expected})"
         )
     return dirs
 

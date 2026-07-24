@@ -29,15 +29,18 @@ acu --tenant DEV apply                   # seed bootstrap/, baseline/, setup/ (,
 acu --tenant DEV diff                    # prove zero drift (exit 2 on drift)
 ```
 
-**Distribution demo seed** (inventory, warehouse, items, vendors/customers, golden scenario):
+**Distribution demo seed** (inventory, warehouse, items, vendors/customers, lifecycle scenarios):
 
 ```sh
 acu config init --flavor distribution --host erp.example.com my-dist
 cd my-dist                               # edit .env; start from an empty tenant
-acu config check && acu bootstrap && acu apply && acu run scenario/ && acu diff
+acu config check && acu bootstrap \
+  && acu apply config/ && acu run scenario/ && acu diff config/
+# warm re-run: capital once-skips; Owner Capital stays 50000 (not 100000)
+acu run scenario/
 ```
 
-See [docs/distribution.md](docs/distribution.md) for the entity map and apply-order notes.
+See [docs/distribution.md](docs/distribution.md) for the entity map, once-guard, and apply-order notes.
 
 **Hosted Acumatica (no SSH):** the tenant already exists; leave `ACU_SSH` blank.
 
@@ -79,34 +82,36 @@ acu [--tenant NAME] [--url URL] [--ssh USER@HOST] [--api-version V]
     └── check [--strict]              preflight: discovery, secrets, target, REST, endpoints, SSH
 ```
 
-`apply` and `diff` called without FILES default to existing scaffolded directories, in order: `bootstrap/`, `baseline/`, `setup/`, then `master/` when present.
-`run` called without FILES defaults to `scenario/`.
+`apply` and `diff` without FILES prefer `config/<name>/` when any seed child exists under `config/`; otherwise root `bootstrap/`, `baseline/`, `setup/`, then `master/` when present.
+A path like `config/` expands nested seed dirs in that fixed order.
+`run` without FILES defaults to `scenario/`.
 `acu --completion` emits a completion script for bash, zsh, or fish — source it from your shell profile.
 Run `acu <command> --help` for details on any command.
 
 ## The data repo
 
 Your configuration lives in its own git repo.
-`acu config init` scaffolds finance-minimal seeds (Bootstrap `project.xml` at `Bootstrap/1.0.0`, no `master/`).
-`acu config init --flavor distribution` adds the full demo set (same contract identity, expanded COA, `master/`, golden `scenario/`, README).
+`acu config init` scaffolds finance-minimal seeds at the **root** (Bootstrap `project.xml` at `Bootstrap/1.0.0`, no `master/`, no scenario).
+`acu config init --flavor distribution` scaffolds the full demo under `config/` (same contract identity, expanded COA, masters) plus lifecycle `scenario/` and README.
 
-| Path          | What it holds                                                              |
-| ------------- | -------------------------------------------------------------------------- |
-| `bootstrap/`  | what makes a virgin tenant configurable: features, company, credit terms   |
-| `baseline/`   | reference data: subaccounts, chart of accounts, ledger, units of measure   |
-| `setup/`      | one-time actions: financial year, master calendar, open periods            |
-| `master/`     | distribution masters (prefs, warehouse, items, vendors, customers); flavor only |
-| `scenario/`   | transaction scenarios for `acu run`: purchase, build, sell flows            |
-| `target.yaml` | committed verified matrix: `erp` + `default_api` (what, not where)         |
-| `.env`        | where to apply and who signs in, every key an `ACU_*` variable             |
+| Path | What it holds |
+| ---- | ------------- |
+| `bootstrap/` / `config/bootstrap/` | virgin-tenant config: features, company, credit terms, `project.xml` |
+| `baseline/` / `config/baseline/` | reference data: subaccounts, COA, ledger, UOMs |
+| `setup/` / `config/setup/` | one-time actions: financial year, master calendar, open periods |
+| `config/master/` | distribution masters (prefs, warehouse, items, parties); flavor only |
+| `scenario/` | lifecycle txns for `acu run`: once capital → buy → build stub → sell |
+| `target.yaml` | committed verified matrix: `erp` + `default_api` (what, not where) |
+| `.env` | where to apply and who signs in, every key an `ACU_*` variable |
 
 Files in each directory apply alphabetically; the numbered prefixes (`10-`, `20-`, and so on) encode dependency order.
 The scaffolded `.gitignore` keeps `.env` out of git — store it encrypted (for example as `.env.gpg`) and decrypt once per clone.
 Commit `target.yaml` with the seeds so every clone knows the verified ERP line and Default API generation.
 
-Seed YAML in `bootstrap/`, `baseline/`, and `setup/` is state: `apply` upserts it, `diff` proves it.
+Seed YAML is state: `apply` upserts it, `diff` proves it.
 Scenario YAML is different — it describes transactions that flow forward.
-`acu run` executes each step in order (`put`, `action`, `wait`, `get`), captures server-assigned document numbers into `${var}` references for later steps, and checks `expect:` assertions as deltas against a pre-run snapshot, so a scenario re-runs safely on a warm tenant.
+`acu run` executes each step in order (`put`, `action`, `wait`, `get`), captures server-assigned document numbers into `${var}` references for later steps, and checks `expect:` assertions as deltas against a pre-run snapshot, so additive scenarios re-run safely on a warm tenant.
+`once: true` scenarios declare a `present` inquire-absolute gate; when the probe already holds, the CLI prints `skip <path> (once: already present)` and runs neither steps nor expects (Owner Capital does not restack).
 
 ### Seed `endpoint:` symbols
 

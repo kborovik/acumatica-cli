@@ -1034,8 +1034,9 @@ def test_default_seed_dirs_prefer_config_over_root(
     monkeypatch.setattr(
         cli.seed,
         "diff",
-        lambda client, baseline: seen.append(str(baseline.path).replace("\\", "/"))
-        or [],
+        lambda client, baseline: (
+            seen.append(str(baseline.path).replace("\\", "/")) or []
+        ),
     )
 
     result = CliRunner().invoke(cli.cli, ["diff"])
@@ -1055,15 +1056,14 @@ def test_expand_files_umbrella_config_seed_order(tmp_path: Path) -> None:
     (tmp_path / "config" / "bootstrap" / "features.yaml").write_text("- Inventory\n")
 
     paths = [
-        str(p).replace("\\", "/")
-        for p in cli.expand_files((tmp_path / "config",))
+        str(p).replace("\\", "/") for p in cli.expand_files((tmp_path / "config",))
     ]
 
     assert paths == [
-        str((tmp_path / "config" / "bootstrap" / "bootstrap.yaml")).replace("\\", "/"),
-        str((tmp_path / "config" / "baseline" / "baseline.yaml")).replace("\\", "/"),
-        str((tmp_path / "config" / "setup" / "setup.yaml")).replace("\\", "/"),
-        str((tmp_path / "config" / "master" / "master.yaml")).replace("\\", "/"),
+        str(tmp_path / "config" / "bootstrap" / "bootstrap.yaml").replace("\\", "/"),
+        str(tmp_path / "config" / "baseline" / "baseline.yaml").replace("\\", "/"),
+        str(tmp_path / "config" / "setup" / "setup.yaml").replace("\\", "/"),
+        str(tmp_path / "config" / "master" / "master.yaml").replace("\\", "/"),
     ]
     assert not any(p.endswith("features.yaml") for p in paths)
 

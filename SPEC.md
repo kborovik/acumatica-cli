@@ -122,7 +122,7 @@ T85|x|bootstrap path dual resolve (gh #19) — `load_contract_xml` + `load_featu
 T86|x|scenario once-guard (gh #19) — `once: true` ! authored `present` inquire-absolute `when` eq|gte; skip line; no expect on skip; empty steps ok|V4,V9,V10,I.cmd,I.data,T62
 T87|x|distribution init rehome (gh #19) — scaffold under config/; lifecycle scenarios 10-seed-capital + 20-buy-gateways + 30-build stub + 40-sell; drop monoscenario buy-sell; next-step cmds apply config/|V28,V29,V30,I.cmd,I.data,T84,T86
 T88|x|offline unit tests once skip + config/ path expansion (gh #19)|V4,V9,V13,V30,T84,T86
-T89|.|docs + warm capital non-stack path (gh #19) — README/distribution notes; e2e or documented live prove Owner Capital stays 50000 on second run scenario/|V4,V12,V28,T86,T87
+T89|x|docs + warm capital non-stack path (gh #19) — README/distribution notes; e2e or documented live prove Owner Capital stays 50000 on second run scenario/|V4,V12,V28,T86,T87
 
 ## §B BUGS
 
