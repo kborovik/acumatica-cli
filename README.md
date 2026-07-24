@@ -100,7 +100,7 @@ Your configuration lives in its own git repo.
 | `baseline/` / `config/baseline/` | reference data: subaccounts, COA, ledger, UOMs |
 | `setup/` / `config/setup/` | one-time actions: financial year, master calendar, open periods |
 | `config/master/` | distribution masters (prefs, warehouse, items, parties); flavor only |
-| `scenario/` | lifecycle txns for `acu run`: once capital → buy → build stub → sell |
+| `scenario/` | lifecycle txns for `acu run`: once capital, then buy, build stub, sell |
 | `target.yaml` | committed verified matrix: `erp` + `default_api` (what, not where) |
 | `.env` | where to apply and who signs in, every key an `ACU_*` variable |
 
