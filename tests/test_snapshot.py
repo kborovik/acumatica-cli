@@ -388,8 +388,9 @@ def test_cli_snapshot_dry_run(
     (tmp_path / ".env").write_text(
         "ACU_BASE_URL=http://acu.test/AcumaticaERP\nACU_PASSWORD=pw\n"
     )
-    snap = tmp_path / "snapshot"
-    snap.mkdir()
+    # T100/V32: bare default hard-cut config/snapshot/ (not root snapshot/)
+    snap = tmp_path / "config" / "snapshot"
+    snap.mkdir(parents=True)
     (snap / "10-tb.yaml").write_text(VIEW_ENTITY)
     monkeypatch.chdir(tmp_path)
     monkeypatch.setenv("ACU_PASSWORD", "pw")
@@ -441,6 +442,36 @@ def test_cli_snapshot_missing_dir(
     )
     assert result.exit_code == 1
     assert "snapshot directory does not exist" in result.output
+    # T100/T102: missing-dir names hard-cut config/snapshot (not root snapshot/)
+    assert "config/snapshot" in result.output or "config\\snapshot" in result.output
+
+
+def test_cli_snapshot_no_root_snapshot_fallback(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """T100/V32: root snapshot/ alone is not a bare-default fallback."""
+    (tmp_path / ".env").write_text(
+        "ACU_BASE_URL=http://acu.test/AcumaticaERP\nACU_PASSWORD=pw\n"
+    )
+    legacy = tmp_path / "snapshot"
+    legacy.mkdir()
+    (legacy / "10-tb.yaml").write_text(VIEW_ENTITY)
+    monkeypatch.chdir(tmp_path)
+    result = CliRunner().invoke(
+        cli.cli,
+        [
+            "--url",
+            "http://acu.test/AcumaticaERP",
+            "--password",
+            "pw",
+            "--tenant",
+            "T1",
+            "snapshot",
+            "--dry-run",
+        ],
+    )
+    assert result.exit_code == 1
+    assert "snapshot directory does not exist" in result.output
 
 
 def test_observation_roundtrip_parse(tmp_path: Path) -> None:
@@ -449,7 +480,7 @@ def test_observation_roundtrip_parse(tmp_path: Path) -> None:
         [{"AccountCD": "10100", "Description": "Checking", "Type": "Asset"}], view
     )
     obs = snapshot.Observation(view=view.name, erp="26.101.0225", rows=rows)
-    path = tmp_path / "snapshots" / "trial-balance.yaml"
+    path = tmp_path / "state" / "trial-balance.yaml"
     snapshot.write_observation(path, obs)
     loaded = snapshot.load_observation(path)
     assert loaded.view == obs.view

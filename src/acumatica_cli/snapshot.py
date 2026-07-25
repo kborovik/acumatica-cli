@@ -1,11 +1,13 @@
-"""Derived-state observations: snapshot/*.yaml views -> snapshots/*.yaml files.
+"""Derived-state observations: config/snapshot/*.yaml views -> state/*.yaml.
 
 `acu snapshot` captures live balances, quantities, and totals as committed
-evidence (SPEC I.cmd / V32). Not a seed inverse: never writes config/, never
-carries endpoint: symbols, never participates in apply/diff. Views configure
-the observer; observations are git-diffable flow-style YAML.
+evidence (SPEC I.cmd / V32). Not a seed inverse: never writes seed trees,
+never carries endpoint: symbols, never participates in apply/diff. Views
+configure the observer under config/snapshot/ (not SEED_DIRS); observations
+are git-diffable flow-style YAML under state/. Bare defaults hard-cut those
+paths (no root snapshot/ or snapshots/ fallback).
 
-View file format (I.data snapshot/*):
+View file format (I.data config/snapshot/*):
 
     name: trial-balance
     source:
@@ -15,7 +17,7 @@ View file format (I.data snapshot/*):
     capture: [Description, BegBalance, DebitTotal, CreditTotal, EndingBalance]
     decimals: 2
 
-Observation file format (I.data snapshots/*):
+Observation file format (I.data state/*):
 
     view: trial-balance
     erp: "26.101.0225"
@@ -66,7 +68,7 @@ class SourceSpec(Model):
 
 
 class ViewDef(Model):
-    """Observer config for one capture (I.data snapshot/*; V32/V33)."""
+    """Observer config for one capture (I.data config/snapshot/*; V32/V33)."""
 
     name: str
     source: SourceSpec
@@ -81,8 +83,7 @@ class ViewDef(Model):
         v = v.strip()
         if not v or "/" in v or "\\" in v or v.endswith(".yaml"):
             raise ValueError(
-                f"name must be a bare output stem (got {v!r}); "
-                "writes snapshots/<name>.yaml"
+                f"name must be a bare output stem (got {v!r}); writes state/<name>.yaml"
             )
         return v
 
@@ -102,7 +103,7 @@ class ViewDef(Model):
 
 
 class Observation(Model):
-    """Committed derived-state capture (I.data snapshots/*; V32)."""
+    """Committed derived-state capture (I.data state/*; V32)."""
 
     view: str
     erp: str

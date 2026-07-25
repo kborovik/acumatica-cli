@@ -957,7 +957,7 @@ def _exit_on_drift(inst: Instance, drifts: list[str], files: int) -> None:
     "out_dir",
     type=click.Path(file_okay=False, path_type=Path),
     default=None,
-    help="Observation output directory (default: snapshots/)",
+    help="Observation output directory (default: state/)",
 )
 @click.option(
     "--diff",
@@ -987,22 +987,23 @@ def snapshot_cmd(
     """Capture live derived state into committed observation files.
 
     FILES are snapshot view YAML files or directories. Omitted, they default
-    to the data repo's snapshot/ directory. Default write target is
-    snapshots/ (--out). Bare capture writes observations (change is fine).
-    --diff compares live to disk without writing. --assert-unchanged is the
-    warm-run idempotence gate (exit 2 when moved). Never writes seed trees
-    or endpoint: symbols (V32). Exit 0 ok, 1 op fail, 2 only under
-    --assert-unchanged when state moved.
+    to the data repo's config/snapshot/ directory (hard-cut; no root
+    snapshot/ fallback). Default write target is state/ (--out; no
+    snapshots/ fallback). Bare capture writes observations (change is
+    fine). --diff compares live to disk without writing.
+    --assert-unchanged is the warm-run idempotence gate (exit 2 when
+    moved). Never writes seed trees or endpoint: symbols (V32). Exit 0
+    ok, 1 op fail, 2 only under --assert-unchanged when state moved.
     """
     assert_target_compatible(inst)
     if not files:
-        default = data_root() / "snapshot"
+        default = data_root() / "config" / "snapshot"
         if not default.is_dir():
             raise SystemExit(f"{default}: snapshot directory does not exist")
         files = (Path(os.path.relpath(default)),)
     paths = snapshot.expand_view_files(files)
     views = [snapshot.load_view(path) for path in paths]
-    dest = out_dir if out_dir is not None else Path("snapshots")
+    dest = out_dir if out_dir is not None else Path("state")
     if dry_run:
         code = snapshot.run_views(None, views, out_dir=dest, mode="dry")
     else:
