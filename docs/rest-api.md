@@ -16,7 +16,37 @@ Newest Default contract endpoint on this build (from `GET /entity`):
 ### `GET /entity` — endpoint list (config check probe)
 
 Authenticated `GET /entity` returns the published contract endpoints.
-Parse shape (vendor contract + offline fixtures; re-verify on upgrade, V12):
+
+**26.x shape (verified 26.101.0225).**
+The body is a wrapper object.
+Rows live under `endpoints`.
+A `version` object may carry the live ERP build id
+(`acumaticaBuildVersion`, `databaseVersion`):
+
+```json
+{
+  "version": {
+    "acumaticaBuildVersion": "26.101.0225",
+    "databaseVersion": "26.101.0225"
+  },
+  "endpoints": [
+    {
+      "name": "Default",
+      "version": "25.200.001",
+      "href": "http://…/entity/Default/25.200.001/"
+    },
+    {
+      "name": "Bootstrap",
+      "version": "1.0.0",
+      "href": "http://…/entity/Bootstrap/1.0.0/"
+    }
+  ]
+}
+```
+
+**Legacy array shape.**
+Older builds and some offline fixtures still return a bare top-level
+array of the same row objects:
 
 ```json
 [
@@ -24,32 +54,32 @@ Parse shape (vendor contract + offline fixtures; re-verify on upgrade, V12):
     "name": "Default",
     "version": "25.200.001",
     "href": "http://…/entity/Default/25.200.001/"
-  },
-  {
-    "name": "Bootstrap",
-    "version": "1.0.0",
-    "href": "http://…/entity/Bootstrap/1.0.0/"
   }
 ]
 ```
 
+`parse_entity_list` accepts both shapes (V31).
+Each row needs string `name` and `version`.
+Unparseable body → fail-closed with status, content-type, and a short
+raw hint — never silent skip (V12).
+
 `acu config check` requires a `Default` row whose `version` equals
-`Instance.api_version` (exact string). Unparseable body → fail-closed
-with status, content-type, and a short raw hint — never silent skip.
+`Instance.api_version` (exact string).
 
 ### Live ERP build probe (not available)
 
 `target.yaml` field `erp` is **claimed only**.
-No stable HTTP surface is verified for the ERP product build id
-(e.g. `26.101.0225`) that is safe for `config check` without SSH.
-Until such a probe is re-verified (V12), check emits:
+The 26.x wrapper exposes `version.acumaticaBuildVersion` (see above),
+but `config check` does not yet consume it for a live match.
+Until that probe lands, check emits:
 
 ```text
 skip erp (live probe not available; claimed …)
 ```
 
 Do not add an SSH/sqlcmd path for this — control plane stays tenant CRUD
-only (V1). Full build detail may still appear in README prose.
+only (V1).
+Full build detail may still appear in README prose.
 
 The instance's own OpenAPI 3.0.1 schema is the authoritative field-level
 reference — dump it with `acu schema`
