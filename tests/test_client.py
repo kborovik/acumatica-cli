@@ -10,7 +10,13 @@ from typing import Any
 import httpx
 import pytest
 
-from acumatica_cli.client import AcumaticaClient, parse_entity_list, unwrap, wrap
+from acumatica_cli.client import (
+    AcumaticaClient,
+    parse_entity_list,
+    parse_entity_response,
+    unwrap,
+    wrap,
+)
 from acumatica_cli.config import Instance
 
 
@@ -328,6 +334,17 @@ def test_parse_entity_list_wrapper_endpoints() -> None:
         ("Default", "25.200.001"),
         ("Bootstrap", "1.0.0"),
     ]
+    endpoints, build = parse_entity_response(r)
+    assert endpoints == [("Default", "25.200.001"), ("Bootstrap", "1.0.0")]
+    assert build == "26.101.0225"
+
+
+def test_parse_entity_response_array_has_no_build() -> None:
+    # T92: legacy array → endpoints only, no ERP build id
+    r = httpx.Response(200, json=[{"name": "Default", "version": "25.200.001"}])
+    endpoints, build = parse_entity_response(r)
+    assert endpoints == [("Default", "25.200.001")]
+    assert build is None
 
 
 def test_parse_entity_list_fail_closed_on_object() -> None:

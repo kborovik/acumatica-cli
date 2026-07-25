@@ -71,6 +71,17 @@ def parse_entity_list(response: httpx.Response) -> list[tuple[str, str]]:
     content-type, and a short raw hint so a shape change is re-verified
     (V12) rather than silently skipped.
     """
+    return parse_entity_response(response)[0]
+
+
+def parse_entity_response(
+    response: httpx.Response,
+) -> tuple[list[tuple[str, str]], str | None]:
+    """Parse ``GET /entity`` → ``(endpoints, acumatica_build_version?)``.
+
+    Endpoints dual-shape per V31. Build id is ``version.acumaticaBuildVersion``
+    on the 26.x wrapper only; bare array → ``None`` (T92).
+    """
     try:
         body = response.json()
     except Exception as exc:
@@ -105,7 +116,7 @@ def parse_entity_list(response: httpx.Response) -> list[tuple[str, str]]:
                 f"(row missing string name/version: {item!r})"
             )
         out.append((name, version))
-    return out
+    return out, _entity_build_version(body)
 
 
 def _entity_list_rows(body: Any) -> list[Any] | None:
@@ -116,6 +127,19 @@ def _entity_list_rows(body: Any) -> list[Any] | None:
         endpoints = body.get("endpoints")
         if isinstance(endpoints, list) and endpoints:
             return endpoints
+    return None
+
+
+def _entity_build_version(body: Any) -> str | None:
+    """``version.acumaticaBuildVersion`` from 26.x wrapper; else None."""
+    if not isinstance(body, dict):
+        return None
+    version = body.get("version")
+    if not isinstance(version, dict):
+        return None
+    build = version.get("acumaticaBuildVersion")
+    if isinstance(build, str) and build:
+        return build
     return None
 
 
@@ -259,8 +283,16 @@ class AcumaticaClient:
 
         Fail-closed on unparseable body — see ``parse_entity_list``.
         """
+        return self.entity_root()[0]
+
+    def entity_root(self) -> tuple[list[tuple[str, str]], str | None]:
+        """Authenticated ``GET /entity`` → endpoints + optional ERP build id.
+
+        Build id is present only on the 26.x wrapper
+        (``version.acumaticaBuildVersion``). Bare array → ``None`` (T92).
+        """
         r = self._checked(self._http.get("/entity"))
-        return parse_entity_list(r)
+        return parse_entity_response(r)
 
     @staticmethod
     def _checked(r: httpx.Response) -> httpx.Response:

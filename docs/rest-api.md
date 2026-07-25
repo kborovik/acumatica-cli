@@ -66,12 +66,16 @@ raw hint — never silent skip (V12).
 `acu config check` requires a `Default` row whose `version` equals
 `Instance.api_version` (exact string).
 
-### Live ERP build probe (not available)
+### Live ERP build probe
 
-`target.yaml` field `erp` is **claimed only**.
-The 26.x wrapper exposes `version.acumaticaBuildVersion` (see above),
-but `config check` does not yet consume it for a live match.
-Until that probe lands, check emits:
+`target.yaml` field `erp` is the claimed dataset matrix line (V27).
+When `GET /entity` returns the 26.x wrapper and
+`version.acumaticaBuildVersion` is a non-empty string, `config check`
+compares that live id to the claimed `erp` on **major.minor** (first two
+dotted segments). Match → `ok erp (…)`; mismatch → `fail erp: …`.
+
+When the body is a bare array (no build id), or `target.yaml` is not in
+the match path, check emits:
 
 ```text
 skip erp (live probe not available; claimed …)

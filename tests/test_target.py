@@ -17,8 +17,12 @@ class DummyClient:
         self.instance = args[0] if args else None
 
     def list_endpoints(self) -> list[tuple[str, str]]:
+        return self.entity_root()[0]
+
+    def entity_root(self) -> tuple[list[tuple[str, str]], str | None]:
+        # default: array shape — no live ERP build (T92 skip path)
         ver = getattr(self.instance, "api_version", "25.200.001")
-        return [("Default", ver)]
+        return [("Default", ver)], None
 
     def __enter__(self) -> DummyClient:
         return self
@@ -104,7 +108,81 @@ def test_config_check_ok_target(
     assert (
         "ok target (default_api=25.200.001 matches configured; erp=26.101.0225 claimed)"
     ) in result.output
+    # T92: no build id on DummyClient → still skip after endpoints
+    assert "ok endpoints (Default/25.200.001 present)" in result.output
     assert "skip erp (live probe not available; claimed 26.101.0225)" in result.output
+    # order: target → rest → endpoints → erp (live id needs REST session)
+    lines = result.output.splitlines()
+    assert lines.index(
+        "ok target (default_api=25.200.001 matches configured; erp=26.101.0225 claimed)"
+    ) < lines.index("ok rest (http://acu.test/AcumaticaERP, tenant T1)")
+    assert lines.index("ok endpoints (Default/25.200.001 present)") < lines.index(
+        "skip erp (live probe not available; claimed 26.101.0225)"
+    )
+
+
+def test_config_check_ok_erp_from_wrapper(
+    data_root: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # T92: 26.x wrapper build id major.minor-matches claimed erp
+    (data_root / "target.yaml").write_text(
+        'erp: "26.101.0225"\ndefault_api: "25.200.001"\n'
+    )
+
+    class WrapperClient(DummyClient):
+        def entity_root(self) -> tuple[list[tuple[str, str]], str | None]:
+            ver = getattr(self.instance, "api_version", "25.200.001")
+            return [("Default", ver)], "26.101.0225"
+
+    monkeypatch.setattr(cli, "AcumaticaClient", WrapperClient)
+    monkeypatch.setattr(TenantManager, "ping", lambda self: None)
+
+    result = CliRunner().invoke(cli.cli, ["config", "check"])
+
+    assert result.exit_code == 0
+    assert "ok erp (26.101.0225 matches claimed 26.101.0225)" in result.output
+    assert "skip erp" not in result.output
+
+
+def test_config_check_erp_major_minor_match(
+    data_root: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # T76/T92: patch may differ; major.minor is the gate
+    (data_root / "target.yaml").write_text('erp: "26.101"\ndefault_api: "25.200.001"\n')
+
+    class WrapperClient(DummyClient):
+        def entity_root(self) -> tuple[list[tuple[str, str]], str | None]:
+            ver = getattr(self.instance, "api_version", "25.200.001")
+            return [("Default", ver)], "26.101.0225"
+
+    monkeypatch.setattr(cli, "AcumaticaClient", WrapperClient)
+    monkeypatch.setattr(TenantManager, "ping", lambda self: None)
+
+    result = CliRunner().invoke(cli.cli, ["config", "check"])
+
+    assert result.exit_code == 0
+    assert "ok erp (26.101.0225 matches claimed 26.101)" in result.output
+
+
+def test_config_check_erp_mismatch_fails(
+    data_root: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    (data_root / "target.yaml").write_text(
+        'erp: "25.200.001"\ndefault_api: "25.200.001"\n'
+    )
+
+    class WrapperClient(DummyClient):
+        def entity_root(self) -> tuple[list[tuple[str, str]], str | None]:
+            ver = getattr(self.instance, "api_version", "25.200.001")
+            return [("Default", ver)], "26.101.0225"
+
+    monkeypatch.setattr(cli, "AcumaticaClient", WrapperClient)
+    monkeypatch.setattr(TenantManager, "ping", lambda self: None)
+
+    result = CliRunner().invoke(cli.cli, ["config", "check"])
+
+    assert result.exit_code == 1
+    assert "fail erp: live 26.101.0225 vs claimed 25.200.001" in result.output
 
 
 def test_config_check_strict_missing_target(

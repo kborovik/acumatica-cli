@@ -61,7 +61,11 @@ class DummyClient:
 
     def list_endpoints(self) -> list[tuple[str, str]]:
         # T74: config check endpoints probe after REST login
-        return [("Default", self.instance.api_version)]
+        return self.entity_root()[0]
+
+    def entity_root(self) -> tuple[list[tuple[str, str]], str | None]:
+        # T92: bare-array path — no live ERP build id
+        return [("Default", self.instance.api_version)], None
 
     def __enter__(self) -> DummyClient:
         return self

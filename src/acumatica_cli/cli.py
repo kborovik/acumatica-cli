@@ -537,37 +537,73 @@ def config_check(ctx: click.Context, strict: bool) -> None:
     # both live probes run through the exact objects live commands use, so
     # a pass here proves the real code path, not a parallel one
     inst = _resolve_instance(ctx)
-    failed = _probe_target(root, inst, strict=strict)
-    try:
-        # entering the client is the whole probe: login + landed-tenant
-        # verify (V5), and the context manager guarantees logout (V6);
-        # endpoints probe (T74) reuses the same session when login succeeds
-        with AcumaticaClient(inst) as client:
-            output.data(f"ok rest ({inst.base_url}, tenant {inst.tenant})")
-            if not _probe_endpoints(client, inst):
-                failed = True
-    except (RuntimeError, httpx.HTTPError) as exc:
-        output.data(f"fail rest: {exc}")
+    failed, claimed_erp = _probe_target(root, inst, strict=strict)
+    if not _probe_rest(inst, claimed_erp):
         failed = True
-    if not inst.ssh:
-        # V3/I.cmd: ACU_SSH optional — hosted data-plane path skips, never fails
-        output.data("skip ssh (ACU_SSH not set)")
-    else:
-        try:
-            TenantManager(inst).ping()
-            output.data(f"ok ssh ({inst.ssh})")
-        except RuntimeError as exc:
-            output.data(f"fail ssh: {exc}")
-            failed = True
+    if not _probe_ssh(inst):
+        failed = True
     if failed:
         raise SystemExit(1)
 
 
-def _probe_target(root: Path | None, inst: Instance, *, strict: bool) -> bool:
-    """Emit the local target probe line; return True when it failed (V27).
+def _probe_rest(inst: Instance, claimed_erp: str | None) -> bool:
+    """REST login + endpoints + optional ERP build; True = all passed.
+
+    Entering the client is the probe: login + landed-tenant verify (V5);
+    context manager guarantees logout (V6). One GET /entity feeds endpoints
+    (T74/T90) and optional ERP build (T92).
+    """
+    try:
+        with AcumaticaClient(inst) as client:
+            output.data(f"ok rest ({inst.base_url}, tenant {inst.tenant})")
+            return _probe_entity_root(client, inst, claimed_erp)
+    except (RuntimeError, httpx.HTTPError) as exc:
+        output.data(f"fail rest: {exc}")
+        return False
+
+
+def _probe_entity_root(
+    client: AcumaticaClient, inst: Instance, claimed_erp: str | None
+) -> bool:
+    """Endpoints (+ ERP when claimed); True = all passed."""
+    ok = True
+    try:
+        endpoints, live_build = client.entity_root()
+    except (RuntimeError, httpx.HTTPError) as exc:
+        output.data(f"fail endpoints: {exc}")
+        endpoints, live_build = [], None
+        ok = False
+    else:
+        if not _probe_endpoints(endpoints, inst):
+            ok = False
+    if claimed_erp is not None and not _probe_erp(claimed_erp, live_build):
+        ok = False
+    return ok
+
+
+def _probe_ssh(inst: Instance) -> bool:
+    """SSH ping or skip when unset; True = pass/skip, False = fail."""
+    if not inst.ssh:
+        # V3/I.cmd: ACU_SSH optional — hosted data-plane path skips, never fails
+        output.data("skip ssh (ACU_SSH not set)")
+        return True
+    try:
+        TenantManager(inst).ping()
+        output.data(f"ok ssh ({inst.ssh})")
+        return True
+    except RuntimeError as exc:
+        output.data(f"fail ssh: {exc}")
+        return False
+
+
+def _probe_target(
+    root: Path | None, inst: Instance, *, strict: bool
+) -> tuple[bool, str | None]:
+    """Emit local target probe; return ``(failed, claimed_erp?)`` (V27).
 
     Invalid target hard-exits (any loader). Missing under data root warns
-    unless --strict. No data root → skip. Match → ok (erp claimed-only).
+    unless --strict. No data root → skip. Match → ok + claimed ``erp`` for
+    the live ERP probe after REST (T92).
     """
     try:
         target = load_target(root)
@@ -576,7 +612,7 @@ def _probe_target(root: Path | None, inst: Instance, *, strict: bool) -> bool:
         raise SystemExit(1) from exc
     if root is None:
         output.data("skip target (no data root)")
-        return False
+        return False, None
     if target is None:
         msg = (
             f"target: no target.yaml under {root} - dataset verified matrix "
@@ -584,35 +620,27 @@ def _probe_target(root: Path | None, inst: Instance, *, strict: bool) -> bool:
             "to require it"
         )
         output.data(f"{'fail' if strict else 'warn'} {msg}")
-        return strict
+        return strict, None
     if target.default_api != inst.api_version:
         output.data(
             f"fail target: dataset default_api={target.default_api} vs "
             f"configured {inst.api_version}"
         )
-        return True
+        return True, None
     output.data(
         f"ok target (default_api={target.default_api} matches configured; "
         f"erp={target.erp} claimed)"
     )
-    # T76: no stable HTTP ERP-build discovery (V12) — keep erp claimed-only;
-    # skip rather than invent SSH/sqlcmd (control-plane exclusion, V1)
-    output.data(f"skip erp (live probe not available; claimed {target.erp})")
-    return False
+    return False, target.erp
 
 
-def _probe_endpoints(client: AcumaticaClient, inst: Instance) -> bool:
+def _probe_endpoints(endpoints: list[tuple[str, str]], inst: Instance) -> bool:
     """Emit endpoints probe; return True on pass, False on fail (V12/V27).
 
     Exact match: a Default entry whose version half equals
-    ``Instance.api_version``. Fail-closed when GET /entity is unparseable.
+    ``Instance.api_version``. Caller already fail-closed on unparseable GET.
     """
     want = f"Default/{inst.api_version}"
-    try:
-        endpoints = client.list_endpoints()
-    except (RuntimeError, httpx.HTTPError) as exc:
-        output.data(f"fail endpoints: {exc}")
-        return False
     defaults = [v for name, v in endpoints if name == "Default"]
     if inst.api_version in defaults:
         output.data(f"ok endpoints ({want} present)")
@@ -621,6 +649,34 @@ def _probe_endpoints(client: AcumaticaClient, inst: Instance) -> bool:
     output.data(
         f"fail endpoints: configured {want} not listed; "
         f"present Default versions: {present}"
+    )
+    return False
+
+
+def _major_minor(version: str) -> str:
+    """First two dotted segments (T76/T92 major.minor match)."""
+    parts = version.split(".")
+    if len(parts) >= 2:
+        return f"{parts[0]}.{parts[1]}"
+    return version
+
+
+def _probe_erp(claimed: str, live: str | None) -> bool:
+    """Emit ERP probe; return True on pass/skip, False on fail (T92).
+
+    Live id comes from 26.x ``GET /entity`` wrapper
+    ``version.acumaticaBuildVersion``. Bare array → skip (no HTTP surface).
+    Compare major.minor only — patch builds may drift within a claimed line.
+    """
+    if live is None:
+        output.data(f"skip erp (live probe not available; claimed {claimed})")
+        return True
+    if _major_minor(live) == _major_minor(claimed):
+        output.data(f"ok erp ({live} matches claimed {claimed})")
+        return True
+    output.data(
+        f"fail erp: live {live} vs claimed {claimed} "
+        f"(major.minor {_major_minor(live)} vs {_major_minor(claimed)})"
     )
     return False
 
