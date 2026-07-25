@@ -63,6 +63,7 @@ for granular /sdd:check runs.
 - `tenant` = control plane resource; `create` alone chains a data-plane bootstrap publish after the SSH create — §V.1 module split intact
 - `bootstrap` = data plane verb: publish AcuBootstrap (`/CustomizationApi`); optional post-publish recycle when `ACU_SSH` set; `--export` local-only zip write (no REST, no SSH)
 - `config` = configuration ops: `init` local write, `show` local read, `check` live read-only preflight
+- `snapshot` = data plane verb: capture derived state (balances/qty) → `snapshots/`; views in `snapshot/`; never seed/apply path (V32)
 
 ## §V.17 — spec-state dependency recipe (extracted from SPEC.md §V.17)
 
@@ -86,7 +87,7 @@ for granular /sdd:check runs.
 ## §V.3 — discovery resolution matrix (extracted from SPEC.md §V.3)
 
 - required keys post-merge: `ACU_BASE_URL`, `ACU_PASSWORD` — unresolved → hard error naming key(s)
-- `ACU_SSH` ? — control plane; absent fine for data-plane cmds (apply/diff/run/extract/schema/config show|init)
+- `ACU_SSH` ? — control plane; absent fine for data-plane cmds (apply/diff/run/extract/schema/snapshot/config show|init)
 - tenant CRUD hard-errors when `ACU_SSH` unresolved, names key
 
 ## §V.20 — seed endpoint resolution (extracted from SPEC.md §V.20)
@@ -109,7 +110,7 @@ for granular /sdd:check runs.
 
 ## §V.27 — dataset-target gate (extracted from SPEC.md §V.27)
 
-- allowlisted data-plane cmds: `apply`/`diff`/`run`/`extract`/`schema`/`bootstrap` + `config check`
+- allowlisted data-plane cmds: `apply`/`diff`/`run`/`extract`/`schema`/`bootstrap`/`snapshot` + `config check`
 - present target → match `default_api` vs `Instance.api_version` else hard error naming dataset vs configured
 - missing → warn on `config check` unless `--strict`; invalid → hard fail any loader
 - gate ! inside bare `_resolve_instance`/`pass_instance` (tenant cmds + `config show` ungated)

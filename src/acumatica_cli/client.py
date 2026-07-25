@@ -538,3 +538,29 @@ class AcumaticaClient:
         return self._checked(
             self._http.post("/CustomizationApi/publishEnd", json={})
         ).json()
+
+    # -- OData Generic Inquiry (snapshot gi: source; V33) --
+
+    def _odata_gi_root(self) -> str:
+        """24R2+ OData GI service root ``/t/<tenant>/api/odata/gi`` (V33)."""
+        tenant = quote(self.instance.tenant, safe="")
+        return f"/t/{tenant}/api/odata/gi"
+
+    def odata_gi_metadata(self, name: str) -> str:
+        """GET OData GI service ``$metadata`` XML (V33 param validation).
+
+        ``name`` is reserved for future per-GI metadata URLs; the 24R2
+        service exposes one EDMX document at the service root.
+        """
+        del name  # service-level metadata; per-GI filter is validate_gi_params
+        r = self._checked(self._http.get(f"{self._odata_gi_root()}/$metadata"))
+        return r.text
+
+    def odata_gi(
+        self, name: str, params: dict[str, str] | None = None
+    ) -> Any:
+        """GET OData GI rows as JSON (requires Expose via OData on the GI)."""
+        gi = quote(name, safe="")
+        return self._checked(
+            self._http.get(f"{self._odata_gi_root()}/{gi}", params=params)
+        ).json()

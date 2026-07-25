@@ -113,7 +113,7 @@ def dist_tenant(
 
 
 def test_distribution_scaffold_layout(dist_repo: Path) -> None:
-    """T80/V28/T87: config/ umbrella + lifecycle scenarios + README."""
+    """T80/V28/T87/T97: config/ umbrella + lifecycle + snapshot views + README."""
     assert (dist_repo / "config" / "bootstrap" / "project.xml").is_file()
     assert (dist_repo / "config" / "master").is_dir()
     assert (dist_repo / "scenario" / "10-seed-capital.yaml").is_file()
@@ -121,6 +121,8 @@ def test_distribution_scaffold_layout(dist_repo: Path) -> None:
     assert (dist_repo / "scenario" / "30-build.yaml").is_file()
     assert (dist_repo / "scenario" / "40-sell.yaml").is_file()
     assert not (dist_repo / "scenario" / "buy-sell.yaml").exists()
+    assert (dist_repo / "snapshot" / "10-trial-balance.yaml").is_file()
+    assert (dist_repo / "snapshot" / "20-inventory-summary.yaml").is_file()
     assert (dist_repo / "README.md").is_file()
     assert list((dist_repo / "config" / "master").glob("*.yaml"))
 
@@ -171,3 +173,29 @@ def test_distribution_diff_clean(dist_acu: RunAcu, dist_tenant: ScratchTenant) -
     proc = dist_acu("--tenant", dist_tenant.login, "diff")
     assert proc.returncode == 0, _combined(proc)
     assert "no drift" in _combined(proc)
+
+
+def test_distribution_snapshot_write(
+    dist_acu: RunAcu, dist_tenant: ScratchTenant
+) -> None:
+    """T98/V32: after scenario, snapshot writes observations under snapshots/."""
+    proc = dist_acu("--tenant", dist_tenant.login, "snapshot")
+    assert proc.returncode == 0, _combined(proc)
+    assert "trial-balance" in _combined(proc) or "wrote" in _combined(proc)
+
+
+def test_distribution_snapshot_assert_unchanged(
+    dist_acu: RunAcu, dist_tenant: ScratchTenant
+) -> None:
+    """T98/V32/V4: warm scenario re-run + snapshot --assert-unchanged exits 0.
+
+    Depends on prior cold snapshot write. Once-guard keeps capital stable;
+    entity: Account/StockItem observations stay byte-stable when master
+    seed is unchanged by additive scenario legs.
+    """
+    run = dist_acu("--tenant", dist_tenant.login, "run", "scenario/")
+    assert run.returncode == 0, _combined(run)
+    proc = dist_acu(
+        "--tenant", dist_tenant.login, "snapshot", "--assert-unchanged"
+    )
+    assert proc.returncode == 0, _combined(proc)

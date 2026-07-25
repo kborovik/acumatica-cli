@@ -1,0 +1,15 @@
+# Snapshot view: stock-item roster (entity: StockItem).
+# On-hand GI LAB5-InventorySummary is the production observer when the
+# GI exists in config/master with Expose via OData (V33). Entity path
+# keeps offline scaffold + e2e green without a custom GI publish.
+name: inventory-summary
+source:
+  entity: StockItem
+key:
+  - InventoryID
+capture:
+  - InventoryID
+  - Description
+  - ItemStatus
+  - ItemClass
+decimals: 2

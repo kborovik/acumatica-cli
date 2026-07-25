@@ -168,6 +168,14 @@ DISTRIBUTION_TEMPLATES = (
     ),
     ("distribution/scenario/30-build.yaml", "scenario/30-build.yaml"),
     ("distribution/scenario/40-sell.yaml", "scenario/40-sell.yaml"),
+    (
+        "distribution/snapshot/10-trial-balance.yaml",
+        "snapshot/10-trial-balance.yaml",
+    ),
+    (
+        "distribution/snapshot/20-inventory-summary.yaml",
+        "snapshot/20-inventory-summary.yaml",
+    ),
     ("distribution/README.md", "README.md"),
 )
 

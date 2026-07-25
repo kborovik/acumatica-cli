@@ -132,13 +132,13 @@ T89|x|docs + warm capital non-stack path (gh #19) — README/distribution notes;
 T90|x|dual-shape `parse_entity_list` — accept array + `{endpoints:[...]}`; unit tests array/wrapper/fail-closed; `config check` endpoints green when Default listed under wrapper (gh #20)|V12,V31,I.cmd
 T91|x|docs `rest-api.md` — document 26.x GET /entity wrapper + array as legacy when still seen (gh #20)|V12,V31
 T92|x|optional: `config check` ERP probe from wrapper `version.acumaticaBuildVersion` when present (gh #20; T76 follow)|V12,V27,I.cmd,T76
-T93|.|snapshot engine — view model + capture render/parse + determinism rules + write/diff/assert paths|V32,V33,V10
-T94|.|`acu snapshot` CLI — selection like apply/diff/run; `--out` default `snapshots/`; `--diff`; `--assert-unchanged`; `--dry-run`; exit matrix; verb-map + V27 allowlist extras|V9,V15,V16,V27,V32,I.cmd,T93
-T95|.|entity: + gi: backends — contract REST entity list + OData GI; params `$metadata` validate fail-closed|V12,V27,V33,T93
-T96|.|offline tests: byte-identical twice, order shuffle, schema-tolerance allowlist, float formats → fixed string, key collision exit 1, exit codes|V13,V32,T93,T94
-T97|.|distribution scaffold: `snapshot/` trial-balance + inventory-summary views; GI defs in `config/master`; optional cold `snapshots/`|V28,V33,I.data,T94
-T98|.|e2e: after `run scenario/`, snapshot write; warm re-run + `snapshot --assert-unchanged` exit 0|V4,V32,T86,T94,T97
-T99|.|docs: snapshot vs extract/diff; OData GI expose; idempotence gate recipe|V12,T94
+T93|x|snapshot engine — view model + capture render/parse + determinism rules + write/diff/assert paths|V32,V33,V10
+T94|x|`acu snapshot` CLI — selection like apply/diff/run; `--out` default `snapshots/`; `--diff`; `--assert-unchanged`; `--dry-run`; exit matrix; verb-map + V27 allowlist extras|V9,V15,V16,V27,V32,I.cmd,T93
+T95|x|entity: + gi: backends — contract REST entity list + OData GI; params `$metadata` validate fail-closed|V12,V27,V33,T93
+T96|x|offline tests: byte-identical twice, order shuffle, schema-tolerance allowlist, float formats → fixed string, key collision exit 1, exit codes|V13,V32,T93,T94
+T97|x|distribution scaffold: `snapshot/` trial-balance + inventory-summary views; GI defs in `config/master`; optional cold `snapshots/`|V28,V33,I.data,T94
+T98|x|e2e: after `run scenario/`, snapshot write; warm re-run + `snapshot --assert-unchanged` exit 0|V4,V32,T86,T94,T97
+T99|x|docs: snapshot vs extract/diff; OData GI expose; idempotence gate recipe|V12,T94
 
 ## §B BUGS
 

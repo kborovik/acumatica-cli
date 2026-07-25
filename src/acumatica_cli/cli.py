@@ -12,7 +12,7 @@ import click
 import httpx
 from click.shell_completion import get_completion_class
 
-from . import bootstrap, extract, firstlogin, output, run, seed
+from . import bootstrap, extract, firstlogin, output, run, seed, snapshot
 from .client import AcumaticaClient
 from .config import (
     INIT_FLAVORS,
@@ -946,3 +946,78 @@ def _exit_on_drift(inst: Instance, drifts: list[str], files: int) -> None:
             output.data(f"  {line}")
         raise SystemExit(2)
     output.success(f"no drift on {inst.tenant} ({inst.base_url}, {files} file(s))")
+
+
+@cli.command("snapshot")
+@click.argument(
+    "files", nargs=-1, required=False, type=click.Path(exists=True, path_type=Path)
+)
+@click.option(
+    "--out",
+    "out_dir",
+    type=click.Path(file_okay=False, path_type=Path),
+    default=None,
+    help="Observation output directory (default: snapshots/)",
+)
+@click.option(
+    "--diff",
+    "do_diff",
+    is_flag=True,
+    help="Compare live vs disk; write nothing (exit 0 either way)",
+)
+@click.option(
+    "--assert-unchanged",
+    is_flag=True,
+    help="Like --diff, but exit 2 when state moved (idempotence gate)",
+)
+@click.option(
+    "--dry-run",
+    is_flag=True,
+    help="Resolve views and validate sources without HTTP",
+)
+@pass_instance
+def snapshot_cmd(
+    inst: Instance,
+    files: tuple[Path, ...],
+    out_dir: Path | None,
+    do_diff: bool,
+    assert_unchanged: bool,
+    dry_run: bool,
+) -> None:
+    """Capture live derived state into committed observation files.
+
+    FILES are snapshot view YAML files or directories. Omitted, they default
+    to the data repo's snapshot/ directory. Default write target is
+    snapshots/ (--out). Bare capture writes observations (change is fine).
+    --diff compares live to disk without writing. --assert-unchanged is the
+    warm-run idempotence gate (exit 2 when moved). Never writes seed trees
+    or endpoint: symbols (V32). Exit 0 ok, 1 op fail, 2 only under
+    --assert-unchanged when state moved.
+    """
+    assert_target_compatible(inst)
+    if not files:
+        default = data_root() / "snapshot"
+        if not default.is_dir():
+            raise SystemExit(f"{default}: snapshot directory does not exist")
+        files = (Path(os.path.relpath(default)),)
+    paths = snapshot.expand_view_files(files)
+    views = [snapshot.load_view(path) for path in paths]
+    dest = out_dir if out_dir is not None else Path("snapshots")
+    if dry_run:
+        code = snapshot.run_views(None, views, out_dir=dest, mode="dry")
+    else:
+        mode = "assert" if assert_unchanged else "diff" if do_diff else "write"
+        with AcumaticaClient(inst) as client:
+            code = snapshot.run_views(client, views, out_dir=dest, mode=mode)
+    if code:
+        raise SystemExit(code)
+    if dry_run:
+        return
+    if assert_unchanged:
+        output.success(f"{len(views)} snapshot(s) unchanged on {inst.tenant}")
+    elif do_diff:
+        output.success(f"{len(views)} snapshot(s) compared on {inst.tenant}")
+    else:
+        output.success(
+            f"{len(views)} snapshot(s) written under {dest} on {inst.tenant}"
+        )

@@ -13,6 +13,24 @@ Newest Default contract endpoint on this build (from `GET /entity`):
 /AcumaticaERP/entity/Default/25.200.001/
 ```
 
+### OData Generic Inquiry (`acu snapshot` `gi:` source)
+
+24R2+ service root (verified path form):
+
+```
+/AcumaticaERP/t/<tenant>/api/odata/gi/<Name>
+/AcumaticaERP/t/<tenant>/api/odata/gi/$metadata
+```
+
+The GI must have **Expose via OData** enabled on SM208000. View `params`
+are validated against `$metadata` at capture time (fail-closed): unknown
+parameter names hard-error rather than silently returning an unfiltered
+result set. Cookie session from contract login is reused (same
+`AcumaticaClient`).
+
+Legacy `/OData/<Tenant>/<Name>` remains for older builds; this CLI uses
+the 24R2+ form.
+
 ### `GET /entity` — endpoint list (config check probe)
 
 Authenticated `GET /entity` returns the published contract endpoints.
