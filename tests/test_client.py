@@ -295,7 +295,7 @@ def test_url_resolves_symbolic_default(instance: Instance) -> None:
 
 
 def test_parse_entity_list_name_version_rows() -> None:
-    # T74/V12: official GET /entity shape — [{name, version, ...}, ...]
+    # T74/V12/V31: legacy top-level array — [{name, version, ...}, ...]
     body = [
         {"name": "Default", "version": "25.200.001", "href": "/entity/Default/..."},
         {"name": "Bootstrap", "version": "1.0.0"},
@@ -307,8 +307,44 @@ def test_parse_entity_list_name_version_rows() -> None:
     ]
 
 
+def test_parse_entity_list_wrapper_endpoints() -> None:
+    # T90/V31: 26.x GET /entity wraps rows under endpoints (gh #20)
+    body = {
+        "version": {
+            "acumaticaBuildVersion": "26.101.0225",
+            "databaseVersion": "26.101.0225",
+        },
+        "endpoints": [
+            {
+                "name": "Default",
+                "version": "25.200.001",
+                "href": "/AcumaticaERP/entity/Default/25.200.001/",
+            },
+            {"name": "Bootstrap", "version": "1.0.0"},
+        ],
+    }
+    r = httpx.Response(200, json=body)
+    assert parse_entity_list(r) == [
+        ("Default", "25.200.001"),
+        ("Bootstrap", "1.0.0"),
+    ]
+
+
 def test_parse_entity_list_fail_closed_on_object() -> None:
+    # T90/V31: object without endpoints array stays fail-closed
     r = httpx.Response(200, json={"Default": ["25.200.001"]})
+    with pytest.raises(RuntimeError, match=r"not parseable as endpoint list"):
+        parse_entity_list(r)
+
+
+def test_parse_entity_list_fail_closed_empty_endpoints() -> None:
+    r = httpx.Response(200, json={"endpoints": []})
+    with pytest.raises(RuntimeError, match=r"not parseable as endpoint list"):
+        parse_entity_list(r)
+
+
+def test_parse_entity_list_fail_closed_empty_array() -> None:
+    r = httpx.Response(200, json=[])
     with pytest.raises(RuntimeError, match=r"not parseable as endpoint list"):
         parse_entity_list(r)
 
@@ -325,6 +361,24 @@ def test_list_endpoints_hits_entity_root(instance: Instance) -> None:
     client = _client(instance, recorder)
     assert client.list_endpoints() == [("Default", "25.200.001")]
     assert any(r.url.path.rstrip("/").endswith("/entity") for r in recorder.requests)
+
+
+def test_list_endpoints_accepts_wrapper(instance: Instance) -> None:
+    # T90: config check path — Default under 26.x wrapper is green
+    recorder = Recorder(
+        {
+            "/entity": httpx.Response(
+                200,
+                json={
+                    "version": {"acumaticaBuildVersion": "26.101.0225"},
+                    "endpoints": [
+                        {"name": "Default", "version": "25.200.001"},
+                    ],
+                },
+            )
+        }
+    )
+    assert _client(instance, recorder).list_endpoints() == [("Default", "25.200.001")]
 
 
 def test_swagger_returns_raw_bytes_from_endpoint(instance: Instance) -> None:

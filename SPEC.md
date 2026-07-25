@@ -124,7 +124,7 @@ T86|x|scenario once-guard (gh #19) — `once: true` ! authored `present` inquire
 T87|x|distribution init rehome (gh #19) — scaffold under config/; lifecycle scenarios 10-seed-capital + 20-buy-gateways + 30-build stub + 40-sell; drop monoscenario buy-sell; next-step cmds apply config/|V28,V29,V30,I.cmd,I.data,T84,T86
 T88|x|offline unit tests once skip + config/ path expansion (gh #19)|V4,V9,V13,V30,T84,T86
 T89|x|docs + warm capital non-stack path (gh #19) — README/distribution notes; e2e or documented live prove Owner Capital stays 50000 on second run scenario/|V4,V12,V28,T86,T87
-T90|.|dual-shape `parse_entity_list` — accept array + `{endpoints:[...]}`; unit tests array/wrapper/fail-closed; `config check` endpoints green when Default listed under wrapper (gh #20)|V12,V31,I.cmd
+T90|x|dual-shape `parse_entity_list` — accept array + `{endpoints:[...]}`; unit tests array/wrapper/fail-closed; `config check` endpoints green when Default listed under wrapper (gh #20)|V12,V31,I.cmd
 T91|.|docs `rest-api.md` — document 26.x GET /entity wrapper + array as legacy when still seen (gh #20)|V12,V31
 T92|.|optional: `config check` ERP probe from wrapper `version.acumaticaBuildVersion` when present (gh #20; T76 follow)|V12,V27,I.cmd,T76
 

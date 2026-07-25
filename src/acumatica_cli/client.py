@@ -65,10 +65,11 @@ def unwrap(entity: dict[str, Any]) -> dict[str, Any]:
 def parse_entity_list(response: httpx.Response) -> list[tuple[str, str]]:
     """Parse ``GET /entity`` into ``[(name, version), ...]`` (fail-closed).
 
-    Vendor contract shape (Acumatica help + docs/rest-api.md): a JSON array
-    of objects with ``name`` and ``version`` strings. Unparseable body →
-    RuntimeError with status, content-type, and a short raw hint so a
-    shape change is re-verified (V12) rather than silently skipped.
+    Dual shape (V31 / gh #20): top-level JSON array (legacy) or object with
+    an ``endpoints`` array (26.x wrapper). Each row needs string ``name``
+    and ``version``. Unparseable body → RuntimeError with status,
+    content-type, and a short raw hint so a shape change is re-verified
+    (V12) rather than silently skipped.
     """
     try:
         body = response.json()
@@ -80,15 +81,17 @@ def parse_entity_list(response: httpx.Response) -> list[tuple[str, str]]:
             f"content-type {response.headers.get('content-type', '?')}; "
             f"first 200 chars: {hint})"
         ) from exc
-    if not isinstance(body, list) or not body:
+    rows = _entity_list_rows(body)
+    if rows is None:
         hint = str(body)[:200]
         raise RuntimeError(
             "GET /entity response not parseable as endpoint list "
-            f"(status {response.status_code}; expected non-empty JSON array; "
+            f"(status {response.status_code}; expected non-empty JSON array "
+            "or object with non-empty 'endpoints' array; "
             f"first 200 chars: {hint})"
         )
     out: list[tuple[str, str]] = []
-    for item in body:
+    for item in rows:
         if not isinstance(item, dict):
             raise RuntimeError(
                 "GET /entity response not parseable as endpoint list "
@@ -103,6 +106,17 @@ def parse_entity_list(response: httpx.Response) -> list[tuple[str, str]]:
             )
         out.append((name, version))
     return out
+
+
+def _entity_list_rows(body: Any) -> list[Any] | None:
+    """Return endpoint row list from array or 26.x wrapper; else None."""
+    if isinstance(body, list) and body:
+        return body
+    if isinstance(body, dict):
+        endpoints = body.get("endpoints")
+        if isinstance(endpoints, list) and endpoints:
+            return endpoints
+    return None
 
 
 # The list GET's optimized-export failure (B9): the contract API's list GET
