@@ -20,7 +20,7 @@ acu bootstrap                 # publishes Bootstrap + features from config/boots
 acu apply config/             # config/{bootstrap,baseline,setup,master}/ fixed order
 acu run scenario/             # 10-seed-capital → 20-buy-gateways → 30-build → 40-sell
 acu diff config/              # expect exit 0 (no drift)
-acu snapshot                  # write state/ from config/snapshot/ views (EndingBalance / QtyOnHand)
+acu snapshot                  # write state/ from config/snapshot/ (EndingBalance TB)
 # warm gate: once-capital only — additive buy/sell would move numeric observations
 acu run scenario/10-seed-capital.yaml && acu snapshot --assert-unchanged
 ```
@@ -42,21 +42,23 @@ Unlike `extract` / `diff`, snapshot never writes seed trees, never carries `endp
 
 **Migration:** bare defaults hard-cut to `config/snapshot/` and `state/`. Root `snapshot/` / `snapshots/` are not fallbacks — move files or pass explicit paths.
 
-Default scaffold views use **contract inquire** for numeric stems (V33):
+Default scaffold golden is **trial-balance only** (V28/V33):
 
-| Stem | Source | Capture (must be numeric money/qty) |
-| ---- | ------ | ----------------------------------- |
+| Stem | Source | Capture (must be numeric money) |
+| ---- | ------ | ------------------------------- |
 | `trial-balance` | `inquire: AccountSummaryInquiry` | `EndingBalance` (+ balance columns) |
-| `inventory-summary` | `inquire: InventorySummaryInquiry` | `QtyOnHand` |
 
-Roster-only `entity: Account` / `entity: StockItem` is forbidden for those stems.
+Roster-only `entity: Account` is forbidden for that stem.
+`inventory-summary` / `QtyOnHand` is not packaged this pass (B25:
+`InventorySummaryInquiry` warehouse-only → empty Results). Custom views via
+`inquire:` or `gi:` remain supported when a V12-verified path is known.
 `gi:` stays optional when a GenericInquiry is V12-verified: enable **Expose via
 OData** on SM208000, seed the GI under `config/master/`, point `source.gi:` with
 params pinned in YAML (`$metadata` fail-closed). See [rest-api.md](rest-api.md)
 snapshot sources.
 
 Warm `--assert-unchanged` after a full `run scenario/` fails on purpose when
-buy/sell re-stack inventory and cash — re-run only once-class capital (skip path)
+buy/sell re-stack cash on the TB — re-run only once-class capital (skip path)
 or re-capture without mutation.
 
 ## Once vs additive scenarios

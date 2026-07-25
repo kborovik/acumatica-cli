@@ -561,20 +561,20 @@ def test_packaged_inquire_views_write_state_fixed_point(
     make_client: Callable[[], AcumaticaClient],
     server: _Server,
 ) -> None:
-    """T105/V32/V33: packaged golden views → state/ with EndingBalance + QtyOnHand.
+    """T105/T107/V32/V33: packaged golden TB → state/ with EndingBalance.
 
-    Offline mock inquire for both AccountSummaryInquiry and
-    InventorySummaryInquiry; write observations; warm assert-unchanged green.
+    Inventory-summary is not a packaged golden this pass (B25); engine still
+    covers QtyOnHand via fixture tests. Offline mock inquire for
+    AccountSummaryInquiry; write observation; warm assert-unchanged green.
     """
     from importlib import resources
 
     pkg = resources.files("acumatica_cli") / "templates" / "distribution" / "snapshot"
     tb_src = (pkg / "10-trial-balance.yaml").read_text(encoding="utf-8")
-    inv_src = (pkg / "20-inventory-summary.yaml").read_text(encoding="utf-8")
+    assert not (pkg / "20-inventory-summary.yaml").is_file()
     views_dir = tmp_path / "config" / "snapshot"
     views_dir.mkdir(parents=True)
     (views_dir / "10-trial-balance.yaml").write_text(tb_src)
-    (views_dir / "20-inventory-summary.yaml").write_text(inv_src)
 
     server.inquire_by_entity["AccountSummaryInquiry"] = [
         {
@@ -594,22 +594,9 @@ def test_packaged_inquire_views_write_state_fixed_point(
             "EndingBalance": 50000.0,
         },
     ]
-    server.inquire_by_entity["InventorySummaryInquiry"] = [
-        {
-            "InventoryID": "GW-EDGE",
-            "LocationID": "MAIN",
-            "QtyOnHand": 10.0,
-        },
-        {
-            "InventoryID": "GW-CELL",
-            "LocationID": "MAIN",
-            "QtyOnHand": 5,
-        },
-    ]
 
     views = [
         snapshot.load_view(views_dir / "10-trial-balance.yaml"),
-        snapshot.load_view(views_dir / "20-inventory-summary.yaml"),
     ]
     out = tmp_path / "state"
     with make_client() as client:
@@ -617,20 +604,14 @@ def test_packaged_inquire_views_write_state_fixed_point(
     assert code == 0
 
     tb_path = out / "trial-balance.yaml"
-    inv_path = out / "inventory-summary.yaml"
     assert tb_path.is_file()
-    assert inv_path.is_file()
+    assert not (out / "inventory-summary.yaml").exists()
 
     tb = snapshot.load_observation(tb_path)
-    inv = snapshot.load_observation(inv_path)
     # EndingBalance-class fixed-point (not bare float / int)
     ending = [r["EndingBalance"] for r in tb.rows]
     assert ending == ["46910.00", "50000.00"]
     assert all(isinstance(v, str) and "." in v for v in ending)
-    # QtyOnHand-class fixed-point
-    qtys = [r["QtyOnHand"] for r in inv.rows]
-    assert qtys == ["5.00", "10.00"]
-    assert all(isinstance(v, str) and "." in v for v in qtys)
 
     # warm re-capture unchanged (V4/V32 idempotence of observation path)
     with make_client() as client:

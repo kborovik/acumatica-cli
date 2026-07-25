@@ -22,7 +22,7 @@ acu run scenario/
 # 5. Prove no drift
 acu diff config/
 
-# 6. Capture derived-state observations (EndingBalance / QtyOnHand inquire views)
+# 6. Capture derived-state observations (EndingBalance trial-balance)
 acu snapshot
 # warm gate: once-capital only — additive buy/sell moves numeric observations
 acu run scenario/10-seed-capital.yaml && acu snapshot --assert-unchanged
@@ -39,8 +39,8 @@ Bare `acu apply` / `acu diff` also prefer `config/` when those trees exist.
 | `config/setup/` | Financial year, master calendar, open periods |
 | `config/master/` | Inventory, warehouse, items, vendors, customers, module prefs |
 | `scenario/` | Lifecycle: `10-seed-capital` (once) + `20-buy-gateways` + `30-build` (stub) + `40-sell` |
-| `config/snapshot/` | Observer views (`inquire:` TB + inventory; optional `gi:`) for `acu snapshot` (not SEED_DIRS) |
-| `state/` | Committed observation files (written by `acu snapshot`, not seed; money/qty fixed-point) |
+| `config/snapshot/` | Observer views (`inquire:` TB golden; optional custom `gi:` / `inquire:`) for `acu snapshot` (not SEED_DIRS) |
+| `state/` | Committed observation files (written by `acu snapshot`, not seed; money fixed-point) |
 | `target.yaml` | Verified ERP / Default API matrix |
 
 Org CD is the single placeholder **LAB5** across company, ledger-company, open periods, inventory transit branch, and cash account.
@@ -51,7 +51,7 @@ Org CD is the single placeholder **LAB5** across company, ledger-company, open p
 
 A warm second `acu run scenario/` skips capital when the probe already holds, so Owner Capital stays 50000 (not 100000).
 
-Additive buy/sell legs re-run with per-leg delta expects.
+Additive buy/sell legs re-run with per-leg delta expects (including `InventorySummaryInquiry` qty deltas on the scenario path — not snapshot golden).
 
 Monoscenario `buy-sell` is not part of this flavor.
 
@@ -63,12 +63,13 @@ Monoscenario `buy-sell` is not part of this flavor.
 | `diff` | seed YAML + live config | nothing (exit 2 on drift) |
 | `snapshot` | live **derived state** | `state/*.yaml` observations (not seed) |
 
-Default scaffold views use **contract inquire** for numeric stems (V33):
+Default scaffold golden is **trial-balance only** (V28/V33):
 
 - `10-trial-balance.yaml` → `inquire: AccountSummaryInquiry`, capture includes `EndingBalance`
-- `20-inventory-summary.yaml` → `inquire: InventorySummaryInquiry`, capture includes `QtyOnHand`
 
-Roster-only `entity: Account` / `entity: StockItem` is not used for those stems.
+Roster-only `entity: Account` is not used for that stem.
+`inventory-summary` / `QtyOnHand` is not packaged this pass (`InventorySummaryInquiry`
+warehouse-only returns empty Results). Add a custom view when a verified path is known.
 `gi:` remains optional when a GI is V12-verified and **Expose via OData** is on
 (seed under `config/master/`, pin `source.gi:` + params).
 

@@ -23,14 +23,18 @@ Each `config/snapshot/*.yaml` view picks **exactly one** source kind (V33):
 | `entity:` | `GET /entity/Default/<api_version>/<Entity>` | Contract REST list. No per-view `endpoint:` pin in v1. |
 | `gi:` | OData GI (below) | Optional when a GI is V12-verified and **Expose via OData** is on. |
 
-Golden stems `trial-balance` and `inventory-summary` must capture **≥1 numeric
-money/qty field** (fixed-point strings at view `decimals`, default 2) — roster-only
-`entity: Account` / `entity: StockItem` is forbidden for those stems (V33).
+Golden stem `trial-balance` must capture **≥1 numeric money field**
+(fixed-point strings at view `decimals`, default 2) — roster-only
+`entity: Account` is forbidden for that stem (V33).
 
-Packaged defaults use inquire:
+Packaged default:
 
 - finance + distribution TB → `inquire: AccountSummaryInquiry` with `EndingBalance`
-- distribution inventory → `inquire: InventorySummaryInquiry` with `QtyOnHand`
+
+`inventory-summary` / `QtyOnHand` is **not** a packaged golden this pass:
+live `InventorySummaryInquiry` with warehouse-only params returns empty
+Results (B25). Operators may still author a custom view (`inquire:` or
+`gi:`) when a V12-verified path is known.
 
 `gi:` remains optional for production-grade LAB5-style inquiries when the
 GenericInquiry surface is V12-verified; seed GI defs under `config/master/` and

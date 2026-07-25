@@ -122,7 +122,10 @@ def test_distribution_scaffold_layout(dist_repo: Path) -> None:
     assert (dist_repo / "scenario" / "40-sell.yaml").is_file()
     assert not (dist_repo / "scenario" / "buy-sell.yaml").exists()
     assert (dist_repo / "config" / "snapshot" / "10-trial-balance.yaml").is_file()
-    assert (dist_repo / "config" / "snapshot" / "20-inventory-summary.yaml").is_file()
+    # T107/V28/V33: golden state/ = trial-balance only (B25)
+    assert not (
+        dist_repo / "config" / "snapshot" / "20-inventory-summary.yaml"
+    ).exists()
     assert not (dist_repo / "snapshot").exists()
     assert (dist_repo / "README.md").is_file()
     assert list((dist_repo / "config" / "master").glob("*.yaml"))
@@ -179,10 +182,11 @@ def test_distribution_diff_clean(dist_acu: RunAcu, dist_tenant: ScratchTenant) -
 def test_distribution_snapshot_write(
     dist_acu: RunAcu, dist_tenant: ScratchTenant, dist_repo: Path
 ) -> None:
-    """T98/T102/T105/V32/V33: after scenario, state/ carries numeric fixed-point.
+    """T98/T102/T105/T107/V32/V33: after scenario, state/ TB is numeric fixed-point.
 
-    Golden inquire views (T104) project EndingBalance + QtyOnHand as
-    fixed-point strings at view decimals — not roster-only entity lists.
+    Golden inquire view projects EndingBalance as fixed-point strings at
+    view decimals — not a roster-only entity list. Inventory-summary is
+    not golden this pass (B25 warehouse-only empty Results).
     """
     import re
 
@@ -194,16 +198,12 @@ def test_distribution_snapshot_write(
     assert "trial-balance" in combined or "wrote" in combined
 
     tb_path = dist_repo / "state" / "trial-balance.yaml"
-    inv_path = dist_repo / "state" / "inventory-summary.yaml"
     assert tb_path.is_file()
-    assert inv_path.is_file()
+    assert not (dist_repo / "state" / "inventory-summary.yaml").exists()
 
     tb = yaml.safe_load(tb_path.read_text())
-    inv = yaml.safe_load(inv_path.read_text())
     assert tb["view"] == "trial-balance"
-    assert inv["view"] == "inventory-summary"
     assert tb["rows"], "trial-balance must have rows after scenario"
-    assert inv["rows"], "inventory-summary must have rows after buy/sell"
 
     fixed = re.compile(r"^-?\d+\.\d{2}$")
     ending = [r.get("EndingBalance") for r in tb["rows"] if "EndingBalance" in r]
@@ -214,20 +214,15 @@ def test_distribution_snapshot_write(
     assert capital is not None, "account 30000 (Owner Capital) missing from TB"
     assert float(capital["EndingBalance"]) >= 50000.0
 
-    qtys = [r.get("QtyOnHand") for r in inv["rows"] if "QtyOnHand" in r]
-    assert qtys, "inventory-summary rows must capture QtyOnHand (V33)"
-    assert all(isinstance(v, str) and fixed.match(v) for v in qtys), qtys
-    assert any(float(v) > 0 for v in qtys), "expected on-hand qty after buy"
-
 
 def test_distribution_snapshot_assert_unchanged(
     dist_acu: RunAcu, dist_tenant: ScratchTenant
 ) -> None:
-    """T98/T105/V4/V32: warm once-capital + snapshot --assert-unchanged exits 0.
+    """T98/T105/T107/V4/V32: warm once-capital + snapshot --assert-unchanged exits 0.
 
     Depends on prior cold snapshot write. Re-run only once-guard capital
-    (skip path) so EndingBalance / QtyOnHand stay byte-stable — additive
-    buy/sell legs would move numeric observations (not roster entity lists).
+    (skip path) so EndingBalance stays byte-stable — additive buy/sell
+    legs would move TB cash/inventory observations.
     """
     run = dist_acu(
         "--tenant",

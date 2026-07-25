@@ -177,10 +177,6 @@ DISTRIBUTION_TEMPLATES = (
         "distribution/snapshot/10-trial-balance.yaml",
         "config/snapshot/10-trial-balance.yaml",
     ),
-    (
-        "distribution/snapshot/20-inventory-summary.yaml",
-        "config/snapshot/20-inventory-summary.yaml",
-    ),
     ("distribution/README.md", "README.md"),
 )
 

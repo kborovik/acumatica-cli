@@ -146,7 +146,7 @@ T103|x|snapshot `inquire:` backend — contract inquiry PUT `$expand=Results`; p
 T104|x|package swap golden snapshot views — finance TB + distribution TB/inventory → numeric inquire (or gi) capture; drop roster-only Account/StockItem for those stems|V28,V33,I.data,T97,T101,T103
 T105|x|tests + e2e: `state/` rows carry EndingBalance / QtyOnHand fixed-point after scenario; offline mock inquire; warm `--assert-unchanged` still green|V4,V13,V32,V33,T98,T103,T104
 T106|x|docs: rest-api + distribution README — inquire: snapshot source; numeric stem rule; GI still optional when V12-verified|V12,V33,T99,T104
-T107|.|drop distribution inventory-summary snapshot scaffold — package template + init map + offline/e2e asserts + docs; golden `state/` = trial-balance only|V28,V33,I.data,I.cmd
+T107|x|drop distribution inventory-summary snapshot scaffold — package template + init map + offline/e2e asserts + docs; golden `state/` = trial-balance only|V28,V33,I.data,I.cmd
 
 ## §B BUGS
 

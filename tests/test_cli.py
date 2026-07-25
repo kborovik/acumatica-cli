@@ -901,24 +901,19 @@ def test_config_init_flavor_distribution_scaffolds_demo_seed(tmp_path: Path) -> 
     assert not (tmp_path / "master").exists()
     assert not (tmp_path / "snapshot").exists()
     assert (tmp_path / "config" / "snapshot" / "10-trial-balance.yaml").is_file()
-    assert (tmp_path / "config" / "snapshot" / "20-inventory-summary.yaml").is_file()
+    # T107/V28/V33: inventory-summary not golden this pass (B25 empty Results)
+    assert not (tmp_path / "config" / "snapshot" / "20-inventory-summary.yaml").exists()
     assert (tmp_path / "README.md").is_file()
     assert "acu apply config/" in result.output
     assert "acu run scenario/" in result.output
     assert "acu diff config/" in result.output
     writes = [ln for ln in result.output.splitlines() if ln.startswith("write ")]
     assert len(writes) > 16
-    # T104/V33: distribution golden views = numeric inquire, not roster entity
+    # T104/V33: distribution golden TB = numeric inquire, not roster entity
     dist_tb = (tmp_path / "config" / "snapshot" / "10-trial-balance.yaml").read_text()
     assert "inquire: AccountSummaryInquiry" in dist_tb
     assert "EndingBalance" in dist_tb
     assert "entity: Account" not in dist_tb
-    dist_inv = (
-        tmp_path / "config" / "snapshot" / "20-inventory-summary.yaml"
-    ).read_text()
-    assert "inquire: InventorySummaryInquiry" in dist_inv
-    assert "QtyOnHand" in dist_inv
-    assert "entity: StockItem" not in dist_inv
     # finance-minimal: root SEED_DIRS + lone config/snapshot observer (V28/T101)
     bare = tmp_path / "bare"
     CliRunner().invoke(cli.cli, ["config", "init", str(bare)])
