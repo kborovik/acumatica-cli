@@ -22,9 +22,10 @@ acu run scenario/
 # 5. Prove no drift
 acu diff config/
 
-# 6. Capture derived-state observations; warm re-run is the idempotence gate
+# 6. Capture derived-state observations (EndingBalance / QtyOnHand inquire views)
 acu snapshot
-acu run scenario/ && acu snapshot --assert-unchanged
+# warm gate: once-capital only — additive buy/sell moves numeric observations
+acu run scenario/10-seed-capital.yaml && acu snapshot --assert-unchanged
 ```
 
 Bare `acu apply` / `acu diff` also prefer `config/` when those trees exist.
@@ -38,8 +39,8 @@ Bare `acu apply` / `acu diff` also prefer `config/` when those trees exist.
 | `config/setup/` | Financial year, master calendar, open periods |
 | `config/master/` | Inventory, warehouse, items, vendors, customers, module prefs |
 | `scenario/` | Lifecycle: `10-seed-capital` (once) + `20-buy-gateways` + `30-build` (stub) + `40-sell` |
-| `config/snapshot/` | Observer views (`entity:` or `gi:`) for `acu snapshot` (not SEED_DIRS) |
-| `state/` | Committed observation files (written by `acu snapshot`, not seed) |
+| `config/snapshot/` | Observer views (`inquire:` TB + inventory; optional `gi:`) for `acu snapshot` (not SEED_DIRS) |
+| `state/` | Committed observation files (written by `acu snapshot`, not seed; money/qty fixed-point) |
 | `target.yaml` | Verified ERP / Default API matrix |
 
 Org CD is the single placeholder **LAB5** across company, ledger-company, open periods, inventory transit branch, and cash account.
@@ -62,7 +63,14 @@ Monoscenario `buy-sell` is not part of this flavor.
 | `diff` | seed YAML + live config | nothing (exit 2 on drift) |
 | `snapshot` | live **derived state** | `state/*.yaml` observations (not seed) |
 
-Default scaffold views use `entity: Account` / `entity: StockItem` so virgin-tenant e2e stays green without custom GIs. For production-grade trial balance / on-hand qty, build GIs on SM208000, enable **Expose via OData**, seed their definitions under `config/master/` once the GenericInquiry surface is V12-verified, and point `config/snapshot/*.yaml` at `source.gi:`.
+Default scaffold views use **contract inquire** for numeric stems (V33):
+
+- `10-trial-balance.yaml` → `inquire: AccountSummaryInquiry`, capture includes `EndingBalance`
+- `20-inventory-summary.yaml` → `inquire: InventorySummaryInquiry`, capture includes `QtyOnHand`
+
+Roster-only `entity: Account` / `entity: StockItem` is not used for those stems.
+`gi:` remains optional when a GI is V12-verified and **Expose via OData** is on
+(seed under `config/master/`, pin `source.gi:` + params).
 
 **Migration:** bare `acu snapshot` reads `config/snapshot/` and writes `state/` (not root `snapshot/` / `snapshots/`).
 

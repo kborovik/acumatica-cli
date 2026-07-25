@@ -13,6 +13,30 @@ Newest Default contract endpoint on this build (from `GET /entity`):
 /AcumaticaERP/entity/Default/25.200.001/
 ```
 
+### Snapshot view sources (`acu snapshot`)
+
+Each `config/snapshot/*.yaml` view picks **exactly one** source kind (V33):
+
+| Kind | HTTP | Notes |
+| ---- | ---- | ----- |
+| `inquire:` | `PUT /entity/Default/<api_version>/<Inquiry>?$expand=Results` | Same contract-inquiry idiom as `run` `expect` / `present`. View `params` are the PUT body (pinned in YAML). Optional `match:` filters Results rows. |
+| `entity:` | `GET /entity/Default/<api_version>/<Entity>` | Contract REST list. No per-view `endpoint:` pin in v1. |
+| `gi:` | OData GI (below) | Optional when a GI is V12-verified and **Expose via OData** is on. |
+
+Golden stems `trial-balance` and `inventory-summary` must capture **≥1 numeric
+money/qty field** (fixed-point strings at view `decimals`, default 2) — roster-only
+`entity: Account` / `entity: StockItem` is forbidden for those stems (V33).
+
+Packaged defaults use inquire:
+
+- finance + distribution TB → `inquire: AccountSummaryInquiry` with `EndingBalance`
+- distribution inventory → `inquire: InventorySummaryInquiry` with `QtyOnHand`
+
+`gi:` remains optional for production-grade LAB5-style inquiries when the
+GenericInquiry surface is V12-verified; seed GI defs under `config/master/` and
+point `source.gi:` at the name. Observations land under `state/<name>.yaml`
+(flow-style rows; money/qty always fixed-point strings, never bare float).
+
 ### OData Generic Inquiry (`acu snapshot` `gi:` source)
 
 24R2+ service root (verified path form):

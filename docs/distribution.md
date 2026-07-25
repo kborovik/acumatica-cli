@@ -20,8 +20,9 @@ acu bootstrap                 # publishes Bootstrap + features from config/boots
 acu apply config/             # config/{bootstrap,baseline,setup,master}/ fixed order
 acu run scenario/             # 10-seed-capital → 20-buy-gateways → 30-build → 40-sell
 acu diff config/              # expect exit 0 (no drift)
-acu snapshot                  # write state/ from config/snapshot/ views
-acu run scenario/ && acu snapshot --assert-unchanged   # warm idempotence gate
+acu snapshot                  # write state/ from config/snapshot/ views (EndingBalance / QtyOnHand)
+# warm gate: once-capital only — additive buy/sell would move numeric observations
+acu run scenario/10-seed-capital.yaml && acu snapshot --assert-unchanged
 ```
 
 Bare `apply` / `diff` (no path args) also prefer `config/<name>/` when those trees exist (V30).
@@ -34,18 +35,29 @@ Finance-minimal repos keep root `bootstrap/`…`setup/` and have no `master/`; t
 
 | Artifact | Path | Role |
 | -------- | ---- | ---- |
-| View defs | `config/snapshot/*.yaml` | Observer config (`entity:` or `gi:`, keys, capture allowlist; not SEED_DIRS) |
-| Observations | `state/*.yaml` | Committed evidence; flow-style one row per line |
+| View defs | `config/snapshot/*.yaml` | Observer config (`inquire:` / `entity:` / `gi:`, keys, capture allowlist; not SEED_DIRS) |
+| Observations | `state/*.yaml` | Committed evidence; flow-style one row per line; money/qty = fixed-point strings |
 
 Unlike `extract` / `diff`, snapshot never writes seed trees, never carries `endpoint:` symbols, and never participates in apply. Exit codes invert `diff`'s default: bare capture treats change as normal (exit 0); exit 2 only under `--assert-unchanged` when state moved.
 
 **Migration:** bare defaults hard-cut to `config/snapshot/` and `state/`. Root `snapshot/` / `snapshots/` are not fallbacks — move files or pass explicit paths.
 
-Default scaffold views use `entity: Account` and `entity: StockItem` so e2e stays green without custom GIs. For true trial balance / on-hand qty:
+Default scaffold views use **contract inquire** for numeric stems (V33):
 
-1. Build the GI on SM208000 and enable **Expose via OData**.
-2. Seed the GI definition under `config/master/` once the GenericInquiry REST surface is V12-verified.
-3. Point `config/snapshot/*.yaml` at `source.gi: Name` with params pinned in YAML (validated against `$metadata`).
+| Stem | Source | Capture (must be numeric money/qty) |
+| ---- | ------ | ----------------------------------- |
+| `trial-balance` | `inquire: AccountSummaryInquiry` | `EndingBalance` (+ balance columns) |
+| `inventory-summary` | `inquire: InventorySummaryInquiry` | `QtyOnHand` |
+
+Roster-only `entity: Account` / `entity: StockItem` is forbidden for those stems.
+`gi:` stays optional when a GenericInquiry is V12-verified: enable **Expose via
+OData** on SM208000, seed the GI under `config/master/`, point `source.gi:` with
+params pinned in YAML (`$metadata` fail-closed). See [rest-api.md](rest-api.md)
+snapshot sources.
+
+Warm `--assert-unchanged` after a full `run scenario/` fails on purpose when
+buy/sell re-stack inventory and cash — re-run only once-class capital (skip path)
+or re-capture without mutation.
 
 ## Once vs additive scenarios
 

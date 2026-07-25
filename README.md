@@ -104,8 +104,8 @@ Your configuration lives in its own git repo.
 | `setup/` / `config/setup/` | one-time actions: financial year, master calendar, open periods |
 | `config/master/` | distribution masters (prefs, warehouse, items, parties); flavor only |
 | `scenario/` | lifecycle txns for `acu run`: once capital, then buy, build stub, sell |
-| `config/snapshot/` | observer views for `acu snapshot` (`entity:` or `gi:` sources; not SEED_DIRS) |
-| `state/` | committed derived-state observations (evidence, not seed) |
+| `config/snapshot/` | observer views for `acu snapshot` (`inquire:` / `entity:` / `gi:`; not SEED_DIRS) |
+| `state/` | committed derived-state observations (evidence, not seed; money/qty fixed-point) |
 | `target.yaml` | committed verified matrix: `erp` + `default_api` (what, not where) |
 | `.env` | where to apply and who signs in, every key an `ACU_*` variable |
 
@@ -118,7 +118,7 @@ Scenario YAML is different — it describes transactions that flow forward.
 `acu run` executes each step in order (`put`, `action`, `wait`, `get`), captures server-assigned document numbers into `${var}` references for later steps, and checks `expect:` assertions as deltas against a pre-run snapshot, so additive scenarios re-run safely on a warm tenant.
 `once: true` scenarios declare a `present` inquire-absolute gate; when the probe already holds, the CLI prints `skip <path> (once: already present)` and runs neither steps nor expects (Owner Capital does not restack).
 
-`acu snapshot` is the third observation path: it captures live balances and quantities into `state/` for git review. It is not `extract` (config seed) and not `diff` (desired vs actual config). After a cold `acu run scenario/ && acu snapshot`, a warm `acu run scenario/ && acu snapshot --assert-unchanged` is the scenario idempotence gate (exit 2 only when observations moved). OData GI sources require **Expose via OData** on the inquiry; view `params` are validated against `$metadata` fail-closed.
+`acu snapshot` is the third observation path: it captures live balances and quantities into `state/` for git review. It is not `extract` (config seed) and not `diff` (desired vs actual config). Packaged golden views use contract `inquire:` for numeric stems (`EndingBalance` / `QtyOnHand` fixed-point); `gi:` stays optional when a GI is V12-verified and **Expose via OData** is on (`params` fail-closed vs `$metadata`). After a cold `acu run scenario/ && acu snapshot`, warm `acu run scenario/10-seed-capital.yaml && acu snapshot --assert-unchanged` is the once-class gate (full scenario re-run is additive and moves inventory/cash observations).
 
 **Migration (path hard-cut):** bare defaults are `config/snapshot/` (views) and `state/` (observations). Root `snapshot/` and `snapshots/` are no longer defaulted — move files or pass explicit path args.
 
