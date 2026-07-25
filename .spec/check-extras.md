@@ -113,4 +113,4 @@ for granular /sdd:check runs.
 - present target → match `default_api` vs `Instance.api_version` else hard error naming dataset vs configured
 - missing → warn on `config check` unless `--strict`; invalid → hard fail any loader
 - gate ! inside bare `_resolve_instance`/`pass_instance` (tenant cmds + `config show` ungated)
-- `erp` claimed-only until live probe
+- `erp` live when `GET /entity` wrapper has `version.acumaticaBuildVersion` → major.minor match `target.erp` else fail; bare array / no build id → skip (claimed still on target line); never SSH/sqlcmd (V1)
