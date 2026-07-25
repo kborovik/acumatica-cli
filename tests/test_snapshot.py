@@ -201,9 +201,9 @@ def test_validate_gi_params_empty_metadata_with_params() -> None:
 def test_dry_run_no_http(tmp_path: Path) -> None:
     path = _write_view(tmp_path, VIEW_ENTITY)
     view = snapshot.load_view(path)
-    code = snapshot.run_views(None, [view], out_dir=tmp_path / "snapshots", mode="dry")
+    code = snapshot.run_views(None, [view], out_dir=tmp_path / "state", mode="dry")
     assert code == 0
-    assert not (tmp_path / "snapshots").exists()
+    assert not (tmp_path / "state").exists()
 
 
 class _Server:
@@ -356,7 +356,7 @@ def test_run_views_write_and_assert(
         {"AccountCD": "10100", "Description": "Checking", "Type": "Asset"},
     ]
     view = snapshot.load_view(_write_view(tmp_path, VIEW_ENTITY))
-    out = tmp_path / "snapshots"
+    out = tmp_path / "state"
     with make_client() as client:
         code = snapshot.run_views(client, [view], out_dir=out, mode="write")
     assert code == 0

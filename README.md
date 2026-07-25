@@ -72,7 +72,7 @@ acu [--tenant NAME] [--url URL] [--ssh USER@HOST] [--api-version V]
 ├── diff  [FILES...]                  drift check vs the live tenant (exit 2 on drift)
 ├── run   [--dry-run] [FILES...]      execute transaction scenario YAML (exit 1 on any miss)
 ├── snapshot [--out DIR] [--diff] [--assert-unchanged] [--dry-run] [FILES...]
-│                                     capture derived state into snapshots/ (not seed)
+│                                     capture derived state into state/ (not seed)
 ├── extract [--out DIR] [--only NAME]... [--force] [--dry-run]
 │                                     dump live tenant state as seed YAML (inverse of apply)
 ├── schema [--out DIR]                dump the endpoint's OpenAPI schema (swagger.json)
@@ -87,7 +87,7 @@ acu [--tenant NAME] [--url URL] [--ssh USER@HOST] [--api-version V]
 `apply` and `diff` without FILES prefer `config/<name>/` when any seed child exists under `config/`; otherwise root `bootstrap/`, `baseline/`, `setup/`, then `master/` when present.
 A path like `config/` expands nested seed dirs in that fixed order.
 `run` without FILES defaults to `scenario/`.
-`snapshot` without FILES defaults to `snapshot/`; writes go to `snapshots/` (`--out`).
+`snapshot` without FILES defaults to `config/snapshot/`; writes go to `state/` (`--out`).
 `acu --completion` emits a completion script for bash, zsh, or fish — source it from your shell profile.
 Run `acu <command> --help` for details on any command.
 
@@ -104,8 +104,8 @@ Your configuration lives in its own git repo.
 | `setup/` / `config/setup/` | one-time actions: financial year, master calendar, open periods |
 | `config/master/` | distribution masters (prefs, warehouse, items, parties); flavor only |
 | `scenario/` | lifecycle txns for `acu run`: once capital, then buy, build stub, sell |
-| `snapshot/` | observer views for `acu snapshot` (`entity:` or `gi:` sources) |
-| `snapshots/` | committed derived-state observations (evidence, not seed) |
+| `config/snapshot/` | observer views for `acu snapshot` (`entity:` or `gi:` sources; not SEED_DIRS) |
+| `state/` | committed derived-state observations (evidence, not seed) |
 | `target.yaml` | committed verified matrix: `erp` + `default_api` (what, not where) |
 | `.env` | where to apply and who signs in, every key an `ACU_*` variable |
 
@@ -118,7 +118,9 @@ Scenario YAML is different — it describes transactions that flow forward.
 `acu run` executes each step in order (`put`, `action`, `wait`, `get`), captures server-assigned document numbers into `${var}` references for later steps, and checks `expect:` assertions as deltas against a pre-run snapshot, so additive scenarios re-run safely on a warm tenant.
 `once: true` scenarios declare a `present` inquire-absolute gate; when the probe already holds, the CLI prints `skip <path> (once: already present)` and runs neither steps nor expects (Owner Capital does not restack).
 
-`acu snapshot` is the third observation path: it captures live balances and quantities into `snapshots/` for git review. It is not `extract` (config seed) and not `diff` (desired vs actual config). After a cold `acu run scenario/ && acu snapshot`, a warm `acu run scenario/ && acu snapshot --assert-unchanged` is the scenario idempotence gate (exit 2 only when observations moved). OData GI sources require **Expose via OData** on the inquiry; view `params` are validated against `$metadata` fail-closed.
+`acu snapshot` is the third observation path: it captures live balances and quantities into `state/` for git review. It is not `extract` (config seed) and not `diff` (desired vs actual config). After a cold `acu run scenario/ && acu snapshot`, a warm `acu run scenario/ && acu snapshot --assert-unchanged` is the scenario idempotence gate (exit 2 only when observations moved). OData GI sources require **Expose via OData** on the inquiry; view `params` are validated against `$metadata` fail-closed.
+
+**Migration (path hard-cut):** bare defaults are `config/snapshot/` (views) and `state/` (observations). Root `snapshot/` and `snapshots/` are no longer defaulted — move files or pass explicit path args.
 
 ### Seed `endpoint:` symbols
 

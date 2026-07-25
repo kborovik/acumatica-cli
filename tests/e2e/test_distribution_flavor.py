@@ -121,8 +121,9 @@ def test_distribution_scaffold_layout(dist_repo: Path) -> None:
     assert (dist_repo / "scenario" / "30-build.yaml").is_file()
     assert (dist_repo / "scenario" / "40-sell.yaml").is_file()
     assert not (dist_repo / "scenario" / "buy-sell.yaml").exists()
-    assert (dist_repo / "snapshot" / "10-trial-balance.yaml").is_file()
-    assert (dist_repo / "snapshot" / "20-inventory-summary.yaml").is_file()
+    assert (dist_repo / "config" / "snapshot" / "10-trial-balance.yaml").is_file()
+    assert (dist_repo / "config" / "snapshot" / "20-inventory-summary.yaml").is_file()
+    assert not (dist_repo / "snapshot").exists()
     assert (dist_repo / "README.md").is_file()
     assert list((dist_repo / "config" / "master").glob("*.yaml"))
 
@@ -176,12 +177,14 @@ def test_distribution_diff_clean(dist_acu: RunAcu, dist_tenant: ScratchTenant) -
 
 
 def test_distribution_snapshot_write(
-    dist_acu: RunAcu, dist_tenant: ScratchTenant
+    dist_acu: RunAcu, dist_tenant: ScratchTenant, dist_repo: Path
 ) -> None:
-    """T98/V32: after scenario, snapshot writes observations under snapshots/."""
+    """T98/T102/V32: after scenario, snapshot writes observations under state/."""
     proc = dist_acu("--tenant", dist_tenant.login, "snapshot")
     assert proc.returncode == 0, _combined(proc)
-    assert "trial-balance" in _combined(proc) or "wrote" in _combined(proc)
+    combined = _combined(proc)
+    assert "trial-balance" in combined or "wrote" in combined
+    assert (dist_repo / "state" / "trial-balance.yaml").is_file()
 
 
 def test_distribution_snapshot_assert_unchanged(
@@ -195,7 +198,5 @@ def test_distribution_snapshot_assert_unchanged(
     """
     run = dist_acu("--tenant", dist_tenant.login, "run", "scenario/")
     assert run.returncode == 0, _combined(run)
-    proc = dist_acu(
-        "--tenant", dist_tenant.login, "snapshot", "--assert-unchanged"
-    )
+    proc = dist_acu("--tenant", dist_tenant.login, "snapshot", "--assert-unchanged")
     assert proc.returncode == 0, _combined(proc)

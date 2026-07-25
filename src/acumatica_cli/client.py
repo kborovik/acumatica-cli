@@ -556,9 +556,7 @@ class AcumaticaClient:
         r = self._checked(self._http.get(f"{self._odata_gi_root()}/$metadata"))
         return r.text
 
-    def odata_gi(
-        self, name: str, params: dict[str, str] | None = None
-    ) -> Any:
+    def odata_gi(self, name: str, params: dict[str, str] | None = None) -> Any:
         """GET OData GI rows as JSON (requires Expose via OData on the GI)."""
         gi = quote(name, safe="")
         return self._checked(

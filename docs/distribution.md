@@ -20,13 +20,13 @@ acu bootstrap                 # publishes Bootstrap + features from config/boots
 acu apply config/             # config/{bootstrap,baseline,setup,master}/ fixed order
 acu run scenario/             # 10-seed-capital → 20-buy-gateways → 30-build → 40-sell
 acu diff config/              # expect exit 0 (no drift)
-acu snapshot                  # write snapshots/ from snapshot/ views
+acu snapshot                  # write state/ from config/snapshot/ views
 acu run scenario/ && acu snapshot --assert-unchanged   # warm idempotence gate
 ```
 
 Bare `apply` / `diff` (no path args) also prefer `config/<name>/` when those trees exist (V30).
 
-Finance-minimal repos keep root `bootstrap/`…`setup/` and have no `master/`.
+Finance-minimal repos keep root `bootstrap/`…`setup/` and have no `master/`; they still scaffold `config/snapshot/` for the trial-balance observer.
 
 ## Snapshot observations
 
@@ -34,16 +34,18 @@ Finance-minimal repos keep root `bootstrap/`…`setup/` and have no `master/`.
 
 | Artifact | Path | Role |
 | -------- | ---- | ---- |
-| View defs | `snapshot/*.yaml` | Observer config (`entity:` or `gi:`, keys, capture allowlist) |
-| Observations | `snapshots/*.yaml` | Committed evidence; flow-style one row per line |
+| View defs | `config/snapshot/*.yaml` | Observer config (`entity:` or `gi:`, keys, capture allowlist; not SEED_DIRS) |
+| Observations | `state/*.yaml` | Committed evidence; flow-style one row per line |
 
-Unlike `extract` / `diff`, snapshot never writes under `config/`, never carries `endpoint:` symbols, and never participates in apply. Exit codes invert `diff`'s default: bare capture treats change as normal (exit 0); exit 2 only under `--assert-unchanged` when state moved.
+Unlike `extract` / `diff`, snapshot never writes seed trees, never carries `endpoint:` symbols, and never participates in apply. Exit codes invert `diff`'s default: bare capture treats change as normal (exit 0); exit 2 only under `--assert-unchanged` when state moved.
+
+**Migration:** bare defaults hard-cut to `config/snapshot/` and `state/`. Root `snapshot/` / `snapshots/` are not fallbacks — move files or pass explicit paths.
 
 Default scaffold views use `entity: Account` and `entity: StockItem` so e2e stays green without custom GIs. For true trial balance / on-hand qty:
 
 1. Build the GI on SM208000 and enable **Expose via OData**.
 2. Seed the GI definition under `config/master/` once the GenericInquiry REST surface is V12-verified.
-3. Point `snapshot/*.yaml` at `source.gi: Name` with params pinned in YAML (validated against `$metadata`).
+3. Point `config/snapshot/*.yaml` at `source.gi: Name` with params pinned in YAML (validated against `$metadata`).
 
 ## Once vs additive scenarios
 

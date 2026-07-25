@@ -38,8 +38,8 @@ Bare `acu apply` / `acu diff` also prefer `config/` when those trees exist.
 | `config/setup/` | Financial year, master calendar, open periods |
 | `config/master/` | Inventory, warehouse, items, vendors, customers, module prefs |
 | `scenario/` | Lifecycle: `10-seed-capital` (once) + `20-buy-gateways` + `30-build` (stub) + `40-sell` |
-| `snapshot/` | Observer views (`entity:` or `gi:`) for `acu snapshot` |
-| `snapshots/` | Committed observation files (written by `acu snapshot`, not seed) |
+| `config/snapshot/` | Observer views (`entity:` or `gi:`) for `acu snapshot` (not SEED_DIRS) |
+| `state/` | Committed observation files (written by `acu snapshot`, not seed) |
 | `target.yaml` | Verified ERP / Default API matrix |
 
 Org CD is the single placeholder **LAB5** across company, ledger-company, open periods, inventory transit branch, and cash account.
@@ -60,16 +60,18 @@ Monoscenario `buy-sell` is not part of this flavor.
 | ------- | ----- | ------ |
 | `extract` | live **config** | seed YAML under bootstrap/baseline/setup |
 | `diff` | seed YAML + live config | nothing (exit 2 on drift) |
-| `snapshot` | live **derived state** | `snapshots/*.yaml` observations (not seed) |
+| `snapshot` | live **derived state** | `state/*.yaml` observations (not seed) |
 
-Default scaffold views use `entity: Account` / `entity: StockItem` so virgin-tenant e2e stays green without custom GIs. For production-grade trial balance / on-hand qty, build GIs on SM208000, enable **Expose via OData**, seed their definitions under `config/master/` once the GenericInquiry surface is V12-verified, and point `snapshot/*.yaml` at `source.gi:`.
+Default scaffold views use `entity: Account` / `entity: StockItem` so virgin-tenant e2e stays green without custom GIs. For production-grade trial balance / on-hand qty, build GIs on SM208000, enable **Expose via OData**, seed their definitions under `config/master/` once the GenericInquiry surface is V12-verified, and point `config/snapshot/*.yaml` at `source.gi:`.
+
+**Migration:** bare `acu snapshot` reads `config/snapshot/` and writes `state/` (not root `snapshot/` / `snapshots/`).
 
 ## Non-goals
 
 - Multi-org, multicurrency, full tax engine
 - Production cutover / opening balances from a legacy system
 - Replacing external data repos for production cutovers
-- Historical series inside the tool — use `git log -p snapshots/`
+- Historical series inside the tool — use `git log -p state/`
 
 ## Default flavor
 
