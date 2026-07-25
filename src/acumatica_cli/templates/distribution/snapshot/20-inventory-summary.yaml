@@ -1,15 +1,16 @@
-# Snapshot view: stock-item roster (entity: StockItem).
-# On-hand GI LAB5-InventorySummary is the production observer when the
-# GI exists in config/master with Expose via OData (V33). Entity path
-# keeps offline scaffold + e2e green without a custom GI publish.
+# Snapshot view: on-hand qty (QtyOnHand-class, V33).
+# inquire: InventorySummaryInquiry — same contract inquiry as run expects.
+# WarehouseID pinned to distribution WH01; Results projected by InventoryID
+# (+ LocationID when the inquiry expands locations). gi: LAB5-InventorySummary
+# remains optional when a GI is V12-verified and Expose via OData is on.
 name: inventory-summary
 source:
-  entity: StockItem
+  inquire: InventorySummaryInquiry
+  params:
+    WarehouseID: WH01
 key:
   - InventoryID
+  - LocationID
 capture:
-  - InventoryID
-  - Description
-  - ItemStatus
-  - ItemClass
+  - QtyOnHand
 decimals: 2

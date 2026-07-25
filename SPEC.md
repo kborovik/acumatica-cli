@@ -143,7 +143,7 @@ T100|x|snapshot path hard-cut — bare default `config/snapshot/`; `--out` defau
 T101|x|scaffold: finance `config/snapshot/10-trial-balance.yaml`; distribution rehome TB+inventory → `config/snapshot/`; package templates|V28,V32,I.cmd,T100
 T102|x|tests + docs + e2e: path strings `config/snapshot` + `state/`; missing-dir message; migration note root `snapshot/`/`snapshots/`|V9,V13,T100,T101
 T103|x|snapshot `inquire:` backend — contract inquiry PUT `$expand=Results`; project Results rows via key+capture; optional match filter; params pinned (V33)|V10,V12,V32,V33,I.data,T93,T95
-T104|.|package swap golden snapshot views — finance TB + distribution TB/inventory → numeric inquire (or gi) capture; drop roster-only Account/StockItem for those stems|V28,V33,I.data,T97,T101,T103
+T104|x|package swap golden snapshot views — finance TB + distribution TB/inventory → numeric inquire (or gi) capture; drop roster-only Account/StockItem for those stems|V28,V33,I.data,T97,T101,T103
 T105|.|tests + e2e: `state/` rows carry EndingBalance / QtyOnHand fixed-point after scenario; offline mock inquire; warm `--assert-unchanged` still green|V4,V13,V32,V33,T98,T103,T104
 T106|.|docs: rest-api + distribution README — inquire: snapshot source; numeric stem rule; GI still optional when V12-verified|V12,V33,T99,T104
 

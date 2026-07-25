@@ -707,6 +707,11 @@ def test_config_init_scaffolds_data_repo(tmp_path: Path) -> None:
     env = (repo / ".env").read_text()
     assert "ACU_BASE_URL=http://erp.test/AcumaticaERP" in env
     assert "ACU_SSH=Administrator@erp.test" in env
+    # T104/V28/V33: finance TB is EndingBalance-class inquire, not roster Account
+    tb = (repo / "config" / "snapshot" / "10-trial-balance.yaml").read_text()
+    assert "inquire: AccountSummaryInquiry" in tb
+    assert "EndingBalance" in tb
+    assert "entity: Account" not in tb
     assert "erp.example.com" not in env
 
 
@@ -865,8 +870,8 @@ def test_config_init_unknown_flavor_rejected(tmp_path: Path) -> None:
 
 
 def test_config_init_flavor_distribution_scaffolds_demo_seed(tmp_path: Path) -> None:
-    # T77/T78/T82/T87/T101 V28: distribution under config/ + lifecycle + snapshot;
-    # both flavors share Bootstrap/1.0.0 project.xml (not a second identity)
+    # T77/T78/T82/T87/T101/T104 V28/V33: distribution under config/ + lifecycle
+    # + numeric inquire snapshot views; both flavors share Bootstrap/1.0.0
     result = CliRunner().invoke(
         cli.cli,
         [
@@ -903,6 +908,17 @@ def test_config_init_flavor_distribution_scaffolds_demo_seed(tmp_path: Path) -> 
     assert "acu diff config/" in result.output
     writes = [ln for ln in result.output.splitlines() if ln.startswith("write ")]
     assert len(writes) > 16
+    # T104/V33: distribution golden views = numeric inquire, not roster entity
+    dist_tb = (tmp_path / "config" / "snapshot" / "10-trial-balance.yaml").read_text()
+    assert "inquire: AccountSummaryInquiry" in dist_tb
+    assert "EndingBalance" in dist_tb
+    assert "entity: Account" not in dist_tb
+    dist_inv = (
+        tmp_path / "config" / "snapshot" / "20-inventory-summary.yaml"
+    ).read_text()
+    assert "inquire: InventorySummaryInquiry" in dist_inv
+    assert "QtyOnHand" in dist_inv
+    assert "entity: StockItem" not in dist_inv
     # finance-minimal: root SEED_DIRS + lone config/snapshot observer (V28/T101)
     bare = tmp_path / "bare"
     CliRunner().invoke(cli.cli, ["config", "init", str(bare)])
@@ -914,6 +930,9 @@ def test_config_init_flavor_distribution_scaffolds_demo_seed(tmp_path: Path) -> 
         in (bare / "bootstrap" / "project.xml").read_text()
     )
     assert (bare / "config" / "snapshot" / "10-trial-balance.yaml").is_file()
+    bare_tb = (bare / "config" / "snapshot" / "10-trial-balance.yaml").read_text()
+    assert "inquire: AccountSummaryInquiry" in bare_tb
+    assert "EndingBalance" in bare_tb
     assert not (bare / "config" / "master").exists()
     assert not (bare / "config" / "bootstrap").exists()
 
