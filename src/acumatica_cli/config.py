@@ -58,6 +58,11 @@ INIT_TEMPLATES = (
     ("finance/setup/10-financial-year.yaml", "setup/10-financial-year.yaml"),
     ("finance/setup/20-master-calendar.yaml", "setup/20-master-calendar.yaml"),
     ("finance/setup/30-open-periods.yaml", "setup/30-open-periods.yaml"),
+    # V28/V32: observer views under config/snapshot/ (not SEED_DIRS; lone config/ ok)
+    (
+        "finance/snapshot/10-trial-balance.yaml",
+        "config/snapshot/10-trial-balance.yaml",
+    ),
 )
 
 # Opt-in `--flavor distribution` overlays + extras (V28/V29/T87). Resource
@@ -170,11 +175,11 @@ DISTRIBUTION_TEMPLATES = (
     ("distribution/scenario/40-sell.yaml", "scenario/40-sell.yaml"),
     (
         "distribution/snapshot/10-trial-balance.yaml",
-        "snapshot/10-trial-balance.yaml",
+        "config/snapshot/10-trial-balance.yaml",
     ),
     (
         "distribution/snapshot/20-inventory-summary.yaml",
-        "snapshot/20-inventory-summary.yaml",
+        "config/snapshot/20-inventory-summary.yaml",
     ),
     ("distribution/README.md", "README.md"),
 )
@@ -245,10 +250,13 @@ class Instance(BaseSettings):
 def templates_for(flavor: str | None) -> tuple[tuple[str, str], ...]:
     """Resolve (resource, dest) pairs for ``config init`` (V28/T87).
 
-    Absent flavor → finance-minimal ``INIT_TEMPLATES`` at root. ``distribution``
-    keeps root meta (``.env``/``.gitignore``/``target.yaml``), rehomes finance
-    seed under ``config/``, then overlays ``DISTRIBUTION_TEMPLATES`` (config/
-    seeds + lifecycle ``scenario/`` + README). Never dual root+config trees.
+    Absent flavor → finance-minimal ``INIT_TEMPLATES`` at root (+ observer
+    ``config/snapshot/``). ``distribution`` keeps root meta
+    (``.env``/``.gitignore``/``target.yaml``), rehomes finance seed under
+    ``config/``, then overlays ``DISTRIBUTION_TEMPLATES`` (config/ seeds +
+    lifecycle ``scenario/`` + ``config/snapshot/`` + README). Never dual
+    root+config seed trees. Paths already under ``config/`` (snapshot
+    views) pass through unchanged.
     """
     if flavor is None:
         return INIT_TEMPLATES
@@ -264,11 +272,14 @@ def templates_for(flavor: str | None) -> tuple[tuple[str, str], ...]:
             by_dest[dest] = res
             order.append(dest)
             continue
-        target = (
-            f"config/{dest}"
-            if any(dest.startswith(p) for p in _SEED_PREFIXES)
-            else dest
-        )
+        if dest.startswith("config/"):
+            target = dest
+        else:
+            target = (
+                f"config/{dest}"
+                if any(dest.startswith(p) for p in _SEED_PREFIXES)
+                else dest
+            )
         if target not in by_dest:
             order.append(target)
         by_dest[target] = res

@@ -140,7 +140,7 @@ T97|x|distribution scaffold: `snapshot/` trial-balance + inventory-summary views
 T98|x|e2e: after `run scenario/`, snapshot write; warm re-run + `snapshot --assert-unchanged` exit 0|V4,V32,T86,T94,T97
 T99|x|docs: snapshot vs extract/diff; OData GI expose; idempotence gate recipe|V12,T94
 T100|x|snapshot path hard-cut — bare default `config/snapshot/`; `--out` default `state/`; drop root `snapshot/` + `snapshots/` defaults|V32,I.cmd,I.data
-T101|.|scaffold: finance `config/snapshot/10-trial-balance.yaml`; distribution rehome TB+inventory → `config/snapshot/`; package templates|V28,V32,I.cmd,T100
+T101|x|scaffold: finance `config/snapshot/10-trial-balance.yaml`; distribution rehome TB+inventory → `config/snapshot/`; package templates|V28,V32,I.cmd,T100
 T102|.|tests + docs + e2e: path strings `config/snapshot` + `state/`; missing-dir message; migration note root `snapshot/`/`snapshots/`|V9,V13,T100,T101
 
 ## §B BUGS

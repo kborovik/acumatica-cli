@@ -1,0 +1,18 @@
+# Snapshot view: chart-of-accounts observation (entity: Account).
+# True GL trial balance can switch to gi: LAB5-TrialBalance once that GI
+# is seeded under config/master and Expose via OData is enabled (V33).
+# After scenario/, re-run + `acu snapshot --assert-unchanged` is the
+# idempotence gate (V32).
+name: trial-balance
+source:
+  entity: Account
+  params:
+    $filter: "Active eq true"
+key:
+  - AccountCD
+capture:
+  - AccountCD
+  - Description
+  - Type
+  - AccountClass
+decimals: 2
