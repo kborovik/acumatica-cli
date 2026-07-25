@@ -49,6 +49,17 @@ capture: [Description, BegBalance, EndingBalance]
 decimals: 2
 """
 
+VIEW_INQUIRE_INV = """\
+name: inventory-summary
+source:
+  inquire: InventorySummaryInquiry
+  params:
+    WarehouseID: WH01
+key: [InventoryID, LocationID]
+capture: [QtyOnHand]
+decimals: 2
+"""
+
 
 def _write_view(tmp_path: Path, text: str, name: str = "10-view.yaml") -> Path:
     path = tmp_path / name
@@ -275,7 +286,10 @@ class _Server:
     def __init__(self) -> None:
         self.entity_rows: list[dict[str, Any]] = []
         self.gi_rows: list[dict[str, Any]] = []
+        # T105: per-inquiry Results (AccountSummaryInquiry, InventorySummaryInquiry, …)
+        self.inquire_by_entity: dict[str, list[dict[str, Any]]] = {}
         self.inquire_results: list[dict[str, Any]] = []
+        self.last_inquire_entity: str | None = None
         self.last_inquire_body: dict[str, Any] | None = None
         self.last_inquire_expand: str | None = None
         self.metadata = """\
@@ -296,22 +310,28 @@ class _Server:
 """
         self.build = "26.101.0225"
 
+    def _inquire_rows_for(self, entity: str) -> list[dict[str, Any]]:
+        if entity in self.inquire_by_entity:
+            return self.inquire_by_entity[entity]
+        # backward-compat single-bucket used by older TB-only tests
+        return self.inquire_results
+
     def handler(self, request: httpx.Request) -> httpx.Response:
         path = request.url.path
-        # T103: contract inquiry PUT $expand=Results
-        if (
-            request.method == "PUT"
-            and "/entity/Default/" in path
-            and path.rstrip("/").endswith("AccountSummaryInquiry")
-        ):
-            self.last_inquire_body = json.loads(request.content.decode())
-            self.last_inquire_expand = request.url.params.get("$expand")
-            return httpx.Response(
-                200,
-                json={
-                    "Results": [wrap(r) for r in self.inquire_results],
-                },
-            )
+        # T103/T105: contract inquiry PUT $expand=Results (any inquiry entity)
+        if request.method == "PUT" and "/entity/Default/" in path:
+            entity = path.rstrip("/").rsplit("/", 1)[-1]
+            if entity.endswith("Inquiry") or entity in self.inquire_by_entity:
+                self.last_inquire_entity = entity
+                self.last_inquire_body = json.loads(request.content.decode())
+                self.last_inquire_expand = request.url.params.get("$expand")
+                rows = self._inquire_rows_for(entity)
+                return httpx.Response(
+                    200,
+                    json={
+                        "Results": [wrap(r) for r in rows],
+                    },
+                )
         routes: list[tuple[bool, httpx.Response]] = [
             (
                 path.endswith("/entity/auth/login"),
@@ -502,6 +522,120 @@ def test_inquire_empty_results(
     with make_client() as client:
         obs = snapshot.capture_view(client, view)
     assert obs.rows == []
+
+
+def test_inquire_inventory_qty_fixed_point(
+    tmp_path: Path,
+    make_client: Callable[[], AcumaticaClient],
+    server: _Server,
+) -> None:
+    # T105/V33: InventorySummaryInquiry → QtyOnHand fixed-point strings
+    server.inquire_by_entity["InventorySummaryInquiry"] = [
+        {
+            "InventoryID": "GW-EDGE",
+            "LocationID": "MAIN",
+            "QtyOnHand": 10.0,
+            "Noise": "drop",
+        },
+        {
+            "InventoryID": "GW-CELL",
+            "LocationID": "MAIN",
+            "QtyOnHand": 5,
+        },
+    ]
+    view = snapshot.load_view(_write_view(tmp_path, VIEW_INQUIRE_INV, "20-inv.yaml"))
+    with make_client() as client:
+        obs = snapshot.capture_view(client, view)
+    assert server.last_inquire_entity == "InventorySummaryInquiry"
+    assert server.last_inquire_expand == "Results"
+    assert server.last_inquire_body is not None
+    assert server.last_inquire_body["WarehouseID"]["value"] == "WH01"
+    assert [r["InventoryID"] for r in obs.rows] == ["GW-CELL", "GW-EDGE"]
+    assert obs.rows[0]["QtyOnHand"] == "5.00"
+    assert obs.rows[1]["QtyOnHand"] == "10.00"
+    assert "Noise" not in obs.rows[1]
+
+
+def test_packaged_inquire_views_write_state_fixed_point(
+    tmp_path: Path,
+    make_client: Callable[[], AcumaticaClient],
+    server: _Server,
+) -> None:
+    """T105/V32/V33: packaged golden views → state/ with EndingBalance + QtyOnHand.
+
+    Offline mock inquire for both AccountSummaryInquiry and
+    InventorySummaryInquiry; write observations; warm assert-unchanged green.
+    """
+    from importlib import resources
+
+    pkg = resources.files("acumatica_cli") / "templates" / "distribution" / "snapshot"
+    tb_src = (pkg / "10-trial-balance.yaml").read_text(encoding="utf-8")
+    inv_src = (pkg / "20-inventory-summary.yaml").read_text(encoding="utf-8")
+    views_dir = tmp_path / "config" / "snapshot"
+    views_dir.mkdir(parents=True)
+    (views_dir / "10-trial-balance.yaml").write_text(tb_src)
+    (views_dir / "20-inventory-summary.yaml").write_text(inv_src)
+
+    server.inquire_by_entity["AccountSummaryInquiry"] = [
+        {
+            "Account": "10100",
+            "Description": "Checking",
+            "BegBalance": 0,
+            "DebitTotal": 50000.0,
+            "CreditTotal": 3090.0,
+            "EndingBalance": 46910.0,
+        },
+        {
+            "Account": "30000",
+            "Description": "Owner Capital",
+            "BegBalance": 0,
+            "DebitTotal": 0,
+            "CreditTotal": 50000,
+            "EndingBalance": 50000.0,
+        },
+    ]
+    server.inquire_by_entity["InventorySummaryInquiry"] = [
+        {
+            "InventoryID": "GW-EDGE",
+            "LocationID": "MAIN",
+            "QtyOnHand": 10.0,
+        },
+        {
+            "InventoryID": "GW-CELL",
+            "LocationID": "MAIN",
+            "QtyOnHand": 5,
+        },
+    ]
+
+    views = [
+        snapshot.load_view(views_dir / "10-trial-balance.yaml"),
+        snapshot.load_view(views_dir / "20-inventory-summary.yaml"),
+    ]
+    out = tmp_path / "state"
+    with make_client() as client:
+        code = snapshot.run_views(client, views, out_dir=out, mode="write")
+    assert code == 0
+
+    tb_path = out / "trial-balance.yaml"
+    inv_path = out / "inventory-summary.yaml"
+    assert tb_path.is_file()
+    assert inv_path.is_file()
+
+    tb = snapshot.load_observation(tb_path)
+    inv = snapshot.load_observation(inv_path)
+    # EndingBalance-class fixed-point (not bare float / int)
+    ending = [r["EndingBalance"] for r in tb.rows]
+    assert ending == ["46910.00", "50000.00"]
+    assert all(isinstance(v, str) and "." in v for v in ending)
+    # QtyOnHand-class fixed-point
+    qtys = [r["QtyOnHand"] for r in inv.rows]
+    assert qtys == ["5.00", "10.00"]
+    assert all(isinstance(v, str) and "." in v for v in qtys)
+
+    # warm re-capture unchanged (V4/V32 idempotence of observation path)
+    with make_client() as client:
+        code = snapshot.run_views(client, views, out_dir=out, mode="assert")
+    assert code == 0
 
 
 def test_run_views_write_and_assert(

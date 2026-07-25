@@ -179,24 +179,64 @@ def test_distribution_diff_clean(dist_acu: RunAcu, dist_tenant: ScratchTenant) -
 def test_distribution_snapshot_write(
     dist_acu: RunAcu, dist_tenant: ScratchTenant, dist_repo: Path
 ) -> None:
-    """T98/T102/V32: after scenario, snapshot writes observations under state/."""
+    """T98/T102/T105/V32/V33: after scenario, state/ carries numeric fixed-point.
+
+    Golden inquire views (T104) project EndingBalance + QtyOnHand as
+    fixed-point strings at view decimals — not roster-only entity lists.
+    """
+    import re
+
+    import yaml
+
     proc = dist_acu("--tenant", dist_tenant.login, "snapshot")
     assert proc.returncode == 0, _combined(proc)
     combined = _combined(proc)
     assert "trial-balance" in combined or "wrote" in combined
-    assert (dist_repo / "state" / "trial-balance.yaml").is_file()
+
+    tb_path = dist_repo / "state" / "trial-balance.yaml"
+    inv_path = dist_repo / "state" / "inventory-summary.yaml"
+    assert tb_path.is_file()
+    assert inv_path.is_file()
+
+    tb = yaml.safe_load(tb_path.read_text())
+    inv = yaml.safe_load(inv_path.read_text())
+    assert tb["view"] == "trial-balance"
+    assert inv["view"] == "inventory-summary"
+    assert tb["rows"], "trial-balance must have rows after scenario"
+    assert inv["rows"], "inventory-summary must have rows after buy/sell"
+
+    fixed = re.compile(r"^-?\d+\.\d{2}$")
+    ending = [r.get("EndingBalance") for r in tb["rows"] if "EndingBalance" in r]
+    assert ending, "trial-balance rows must capture EndingBalance (V33)"
+    assert all(isinstance(v, str) and fixed.match(v) for v in ending), ending
+    # Owner Capital funded by once-class seed-capital (V4)
+    capital = next((r for r in tb["rows"] if r.get("Account") == "30000"), None)
+    assert capital is not None, "account 30000 (Owner Capital) missing from TB"
+    assert float(capital["EndingBalance"]) >= 50000.0
+
+    qtys = [r.get("QtyOnHand") for r in inv["rows"] if "QtyOnHand" in r]
+    assert qtys, "inventory-summary rows must capture QtyOnHand (V33)"
+    assert all(isinstance(v, str) and fixed.match(v) for v in qtys), qtys
+    assert any(float(v) > 0 for v in qtys), "expected on-hand qty after buy"
 
 
 def test_distribution_snapshot_assert_unchanged(
     dist_acu: RunAcu, dist_tenant: ScratchTenant
 ) -> None:
-    """T98/V32/V4: warm scenario re-run + snapshot --assert-unchanged exits 0.
+    """T98/T105/V4/V32: warm once-capital + snapshot --assert-unchanged exits 0.
 
-    Depends on prior cold snapshot write. Once-guard keeps capital stable;
-    entity: Account/StockItem observations stay byte-stable when master
-    seed is unchanged by additive scenario legs.
+    Depends on prior cold snapshot write. Re-run only once-guard capital
+    (skip path) so EndingBalance / QtyOnHand stay byte-stable — additive
+    buy/sell legs would move numeric observations (not roster entity lists).
     """
-    run = dist_acu("--tenant", dist_tenant.login, "run", "scenario/")
-    assert run.returncode == 0, _combined(run)
+    run = dist_acu(
+        "--tenant",
+        dist_tenant.login,
+        "run",
+        "scenario/10-seed-capital.yaml",
+    )
+    combined = _combined(run)
+    assert run.returncode == 0, combined
+    assert "once: already present" in combined
     proc = dist_acu("--tenant", dist_tenant.login, "snapshot", "--assert-unchanged")
     assert proc.returncode == 0, _combined(proc)
