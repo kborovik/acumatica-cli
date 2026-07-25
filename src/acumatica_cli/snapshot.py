@@ -11,9 +11,10 @@ View file format (I.data config/snapshot/*):
 
     name: trial-balance
     source:
-      gi: LAB5-TrialBalance          # or: entity: Account
-      params: { Period: "072026" }   # pinned; not runtime-resolved
-    key: [Branch, Account]
+      inquire: AccountSummaryInquiry  # or: gi: LAB5-… | entity: Account
+      params: { Ledger: ACTUAL, Period: "072026" }  # pinned; not runtime-resolved
+      match: { Account: "30000" }     # optional Results row filter (inquire only)
+    key: [Account]
     capture: [Description, BegBalance, DebitTotal, CreditTotal, EndingBalance]
     decimals: 2
 
@@ -38,33 +39,53 @@ from pydantic import Field, ValidationError, field_validator, model_validator
 from . import output
 from .client import AcumaticaClient, unwrap
 from .models import Model, validation_summary
+from .seed import _norm  # pyright: ignore[reportPrivateUsage]
 
 # Flow-style observation rows: one mapping per line under `rows:`.
 _ROW_PREFIX = "  - "
 
 
 class SourceSpec(Model):
-    """Exactly one of gi: | entity:; optional params pinned in YAML (V33)."""
+    """Exactly one of gi: | entity: | inquire:; optional params pinned (V33).
+
+    ``match`` is an optional Results-row filter for ``inquire:`` only
+    (same idiom as ``run`` expect/present). Params for inquire become the
+    PUT body; ``$expand=Results`` is always added by the backend.
+    """
 
     gi: str | None = None
     entity: str | None = None
+    inquire: str | None = None
     params: dict[str, Any] = Field(default_factory=dict)
+    match: dict[str, Any] | None = None
 
     @model_validator(mode="after")
     def _one_source(self) -> SourceSpec:
-        if (self.gi is None) == (self.entity is None):
-            raise ValueError("source: exactly one of gi, entity")
+        kinds = sum(1 for v in (self.gi, self.entity, self.inquire) if v is not None)
+        if kinds != 1:
+            raise ValueError("source: exactly one of gi, entity, inquire")
+        if self.match is not None and self.inquire is None:
+            raise ValueError("source.match requires inquire")
         return self
 
     @property
-    def kind(self) -> Literal["gi", "entity"]:
-        """Discriminator: ``gi`` or ``entity`` (exactly one set)."""
-        return "gi" if self.gi is not None else "entity"
+    def kind(self) -> Literal["gi", "entity", "inquire"]:
+        """Discriminator: ``gi``, ``entity``, or ``inquire`` (exactly one set)."""
+        if self.gi is not None:
+            return "gi"
+        if self.entity is not None:
+            return "entity"
+        return "inquire"
 
     @property
     def name(self) -> str:
-        """The GI title or contract entity name for this source."""
-        return self.gi if self.gi is not None else self.entity  # type: ignore[return-value]
+        """The GI title, contract entity, or inquiry entity name for this source."""
+        if self.gi is not None:
+            return self.gi
+        if self.entity is not None:
+            return self.entity
+        assert self.inquire is not None
+        return self.inquire
 
 
 class ViewDef(Model):
@@ -334,10 +355,12 @@ def live_erp_build(client: AcumaticaClient) -> str:
 
 
 def fetch_live_rows(client: AcumaticaClient, view: ViewDef) -> list[dict[str, Any]]:
-    """Pull raw unwrapped rows for a view via entity: or gi: (V33)."""
+    """Pull raw unwrapped rows for a view via entity: / gi: / inquire: (V33)."""
     if view.source.kind == "entity":
         return _fetch_entity_rows(client, view)
-    return _fetch_gi_rows(client, view)
+    if view.source.kind == "gi":
+        return _fetch_gi_rows(client, view)
+    return _fetch_inquire_rows(client, view)
 
 
 def _odata_params(params: dict[str, Any]) -> dict[str, str]:
@@ -414,6 +437,33 @@ def _fetch_gi_rows(client: AcumaticaClient, view: ViewDef) -> list[dict[str, Any
     validate_gi_params(meta, gi, params)
     raw = client.odata_gi(gi, params=_odata_params(params) or None)
     return _odata_value_rows(raw)
+
+
+def _fetch_inquire_rows(client: AcumaticaClient, view: ViewDef) -> list[dict[str, Any]]:
+    """Contract inquiry PUT ``$expand=Results`` (V33; same idiom as run).
+
+    View ``params`` are the PUT body (pinned in YAML). Optional ``match``
+    keeps only Results rows whose unwrapped fields equal the filter
+    (``seed._norm`` compare — number spelling tolerant). Rows are then
+    projected by key+capture in ``project_rows``.
+    """
+    assert view.source.inquire is not None
+    body = client.put(
+        view.source.inquire,
+        dict(view.source.params),
+        params={"$expand": "Results"},
+    )
+    match = view.source.match
+    rows: list[dict[str, Any]] = []
+    for row in body.get("Results") or []:
+        values = unwrap(row) if isinstance(row, dict) else {}
+        if match and any(
+            field not in values or _norm(values[field]) != _norm(want)
+            for field, want in match.items()
+        ):
+            continue
+        rows.append(values)
+    return rows
 
 
 def _odata_value_rows(body: Any) -> list[dict[str, Any]]:

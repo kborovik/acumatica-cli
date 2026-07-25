@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 from collections.abc import Callable
 from pathlib import Path
 from typing import Any
@@ -36,6 +37,18 @@ capture: [OnHand, Available]
 decimals: 2
 """
 
+VIEW_INQUIRE = """\
+name: trial-balance
+source:
+  inquire: AccountSummaryInquiry
+  params:
+    Ledger: ACTUAL
+    Period: "072026"
+key: [Account]
+capture: [Description, BegBalance, EndingBalance]
+decimals: 2
+"""
+
 
 def _write_view(tmp_path: Path, text: str, name: str = "10-view.yaml") -> Path:
     path = tmp_path / name
@@ -52,6 +65,30 @@ def test_load_view_entity(tmp_path: Path) -> None:
     assert view.decimals == 2
 
 
+def test_load_view_inquire(tmp_path: Path) -> None:
+    # T103/V33: inquire: is a first-class source kind
+    view = snapshot.load_view(_write_view(tmp_path, VIEW_INQUIRE))
+    assert view.source.kind == "inquire"
+    assert view.source.inquire == "AccountSummaryInquiry"
+    assert view.source.params == {"Ledger": "ACTUAL", "Period": "072026"}
+    assert view.source.match is None
+    assert view.key == ["Account"]
+
+
+def test_load_view_inquire_with_match(tmp_path: Path) -> None:
+    text = """\
+name: trial-balance
+source:
+  inquire: AccountSummaryInquiry
+  params: {Ledger: ACTUAL, Period: "072026"}
+  match: {Account: "30000"}
+key: [Account]
+capture: [EndingBalance]
+"""
+    view = snapshot.load_view(_write_view(tmp_path, text))
+    assert view.source.match == {"Account": "30000"}
+
+
 def test_load_view_rejects_both_sources(tmp_path: Path) -> None:
     text = """\
 name: bad
@@ -61,7 +98,20 @@ source:
 key: [A]
 capture: [B]
 """
-    with pytest.raises(SystemExit, match="exactly one of gi, entity"):
+    with pytest.raises(SystemExit, match="exactly one of gi, entity, inquire"):
+        snapshot.load_view(_write_view(tmp_path, text))
+
+
+def test_load_view_rejects_inquire_plus_entity(tmp_path: Path) -> None:
+    text = """\
+name: bad
+source:
+  inquire: AccountSummaryInquiry
+  entity: Account
+key: [A]
+capture: [B]
+"""
+    with pytest.raises(SystemExit, match="exactly one of gi, entity, inquire"):
         snapshot.load_view(_write_view(tmp_path, text))
 
 
@@ -72,7 +122,20 @@ source: {}
 key: [A]
 capture: [B]
 """
-    with pytest.raises(SystemExit, match="exactly one of gi, entity"):
+    with pytest.raises(SystemExit, match="exactly one of gi, entity, inquire"):
+        snapshot.load_view(_write_view(tmp_path, text))
+
+
+def test_load_view_match_requires_inquire(tmp_path: Path) -> None:
+    text = """\
+name: bad
+source:
+  entity: Account
+  match: {AccountCD: "10000"}
+key: [AccountCD]
+capture: [Description]
+"""
+    with pytest.raises(SystemExit, match="match requires inquire"):
         snapshot.load_view(_write_view(tmp_path, text))
 
 
@@ -207,11 +270,14 @@ def test_dry_run_no_http(tmp_path: Path) -> None:
 
 
 class _Server:
-    """Minimal MockTransport router for entity + OData GI."""
+    """Minimal MockTransport router for entity + OData GI + inquire PUT."""
 
     def __init__(self) -> None:
         self.entity_rows: list[dict[str, Any]] = []
         self.gi_rows: list[dict[str, Any]] = []
+        self.inquire_results: list[dict[str, Any]] = []
+        self.last_inquire_body: dict[str, Any] | None = None
+        self.last_inquire_expand: str | None = None
         self.metadata = """\
 <?xml version="1.0"?>
 <edmx:Edmx xmlns:edmx="http://docs.oasis-open.org/odata/ns/edmx">
@@ -232,6 +298,20 @@ class _Server:
 
     def handler(self, request: httpx.Request) -> httpx.Response:
         path = request.url.path
+        # T103: contract inquiry PUT $expand=Results
+        if (
+            request.method == "PUT"
+            and "/entity/Default/" in path
+            and path.rstrip("/").endswith("AccountSummaryInquiry")
+        ):
+            self.last_inquire_body = json.loads(request.content.decode())
+            self.last_inquire_expand = request.url.params.get("$expand")
+            return httpx.Response(
+                200,
+                json={
+                    "Results": [wrap(r) for r in self.inquire_results],
+                },
+            )
         routes: list[tuple[bool, httpx.Response]] = [
             (
                 path.endswith("/entity/auth/login"),
@@ -345,6 +425,83 @@ def test_gi_unknown_param_exits(
     view = snapshot.load_view(_write_view(tmp_path, text, "20-inv.yaml"))
     with make_client() as client, pytest.raises(SystemExit, match="unknown params"):
         snapshot.capture_view(client, view)
+
+
+def test_inquire_backend_capture(
+    tmp_path: Path,
+    make_client: Callable[[], AcumaticaClient],
+    server: _Server,
+) -> None:
+    # T103/V33: PUT AccountSummaryInquiry $expand=Results → project rows
+    server.inquire_results = [
+        {
+            "Account": "30000",
+            "Description": "Owner Capital",
+            "BegBalance": 0,
+            "EndingBalance": 50000.0,
+            "Noise": "drop-me",
+        },
+        {
+            "Account": "10100",
+            "Description": "Checking",
+            "BegBalance": 0.0,
+            "EndingBalance": 50000,
+        },
+    ]
+    view = snapshot.load_view(_write_view(tmp_path, VIEW_INQUIRE))
+    with make_client() as client:
+        obs = snapshot.capture_view(client, view)
+    assert server.last_inquire_expand == "Results"
+    # params pinned in YAML become the value-wrapped PUT body
+    assert server.last_inquire_body is not None
+    assert server.last_inquire_body["Ledger"]["value"] == "ACTUAL"
+    assert server.last_inquire_body["Period"]["value"] == "072026"
+    # key sort + fixed-point money (V32)
+    assert [r["Account"] for r in obs.rows] == ["10100", "30000"]
+    assert obs.rows[0]["EndingBalance"] == "50000.00"
+    assert obs.rows[1]["EndingBalance"] == "50000.00"
+    assert "Noise" not in obs.rows[1]
+
+
+def test_inquire_match_filter(
+    tmp_path: Path,
+    make_client: Callable[[], AcumaticaClient],
+    server: _Server,
+) -> None:
+    # T103/V33: optional match keeps only matching Results rows
+    server.inquire_results = [
+        {"Account": "10100", "EndingBalance": 50000},
+        {"Account": "30000", "EndingBalance": 50000},
+        {"Account": "11000", "EndingBalance": 0},
+    ]
+    text = """\
+name: trial-balance
+source:
+  inquire: AccountSummaryInquiry
+  params: {Ledger: ACTUAL, Period: "072026"}
+  match: {Account: "30000"}
+key: [Account]
+capture: [EndingBalance]
+decimals: 2
+"""
+    view = snapshot.load_view(_write_view(tmp_path, text))
+    with make_client() as client:
+        obs = snapshot.capture_view(client, view)
+    assert len(obs.rows) == 1
+    assert obs.rows[0]["Account"] == "30000"
+    assert obs.rows[0]["EndingBalance"] == "50000.00"
+
+
+def test_inquire_empty_results(
+    tmp_path: Path,
+    make_client: Callable[[], AcumaticaClient],
+    server: _Server,
+) -> None:
+    server.inquire_results = []
+    view = snapshot.load_view(_write_view(tmp_path, VIEW_INQUIRE))
+    with make_client() as client:
+        obs = snapshot.capture_view(client, view)
+    assert obs.rows == []
 
 
 def test_run_views_write_and_assert(
