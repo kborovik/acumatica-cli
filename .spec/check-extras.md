@@ -115,3 +115,53 @@ for granular /sdd:check runs.
 - missing → warn on `config check` unless `--strict`; invalid → hard fail any loader
 - gate ! inside bare `_resolve_instance`/`pass_instance` (tenant cmds + `config show` ungated)
 - `erp` live when `GET /entity` wrapper has `version.acumaticaBuildVersion` → major.minor match `target.erp` else fail; bare array / no build id → skip (claimed still on target line); never SSH/sqlcmd (V1)
+
+## §V.19 — release-pipeline recipe (extracted from SPEC.md §V.19)
+
+- sole path: `make release <part>` — `make check` first, then bump + commit + tag + push
+- never local `gh release create`
+- tag `v*` → `release.yml` re-runs CI check (`workflow_call` → `ci.yml`) then `uv build` + pypi.org via OIDC + creates GH release
+- no PyPI API token in repo or GitHub secrets
+- tag `v<version>` == pyproject `version`
+- CI also runs on every push/PR to `main`
+
+## §V.21 — contract identity (extracted from SPEC.md §V.21)
+
+- entity or field shape change in active contract XML ! version bump
+- active paths: `config/bootstrap/project.xml` or `bootstrap/project.xml` or packaged full company fallback
+- version held → older build's digest gate republishes prior contract under same identity (silent downgrade, no version signal in seed failures)
+- single contract line both flavors (`Bootstrap/1.0.0` baseline — not dual minimal/full versions)
+- version-ref parity scan → existing §V.21 parity recipe above
+
+## §V.28 — init-flavor recipe (extracted from SPEC.md §V.28)
+
+- `--flavor` absent → finance-minimal @ **root** only (offline e2e green; root SEED_DIRS permanent for no-flavor)
+- observer `config/snapshot/10-trial-balance.yaml` (numeric EndingBalance-class via `inquire:` or `gi:`; lone `config/` ok; `snapshot` ! SEED_DIRS)
+- both flavors same full company contract identity `Bootstrap/1.0.0` — not a second Bootstrap identity
+- `distribution` → seed under `config/{bootstrap,baseline,setup,master}/` + `config/snapshot/` TB only w/ EndingBalance-class numeric money capture (V33)
+- inventory-summary ! golden this pass
+- golden `scenario/` lifecycle: `10-seed-capital` (once+present) + `20-buy-gateways` + `30-build` (empty stub ok) + `40-sell` + README
+- monoscenario `buy-sell` forbidden; skip-if-exists unchanged; distribution never default (gh #19)
+
+## §V.32 — snapshot-observation recipe (extracted from SPEC.md §V.32)
+
+- views `config/snapshot/*.yaml`, captures `state/<name>.yaml`
+- bare defaults hard-cut those paths (no root `snapshot/` or `snapshots/` fallback)
+- never SEED_DIRS/seed shape; never `endpoint:` symbols; `apply`/`diff` never load them
+- `capture:` allowlist only; money = Decimal → fixed-point string @ `decimals` (default 2)
+- sort by `key` always; key-tuple collision → exit 1; no body timestamps
+- `erp:` header from live build; view `params` pinned in YAML not runtime-resolved
+- one-row-per-line flow YAML
+- exit 0 write or compare (change fine bare); exit 1 op fail; exit 2 only `--assert-unchanged` when moved
+- `--diff` write nothing; `--dry-run` local only
+
+## §V.33 — snapshot-source recipe (extracted from SPEC.md §V.33)
+
+- each view exactly one of `gi:`|`entity:`|`inquire:`
+- `entity:` → contract REST list GET `Default/<Instance.api_version>` (no per-view `endpoint:` pin v1)
+- `gi:` → OData (`/t/<tenant>/api/odata/gi/<Name>` 24R2+, legacy form ok); Expose via OData required; `params` fail-closed vs `$metadata` @ load
+- GI definition = seed under `master` when GenericInquiry surface V12-verified (`apply` creates, `snapshot` reads)
+- `inquire:` → contract inquiry PUT `$expand=Results` (same idiom as `run` expect/present; `params` pinned in view YAML; optional row `match` filter)
+- stem `trial-balance` ! capture ≥1 numeric money field (fixed-point @ `decimals`) — roster-only `entity: Account` forbidden for that stem
+- distribution golden: TB → EndingBalance-class (`inquire: AccountSummaryInquiry` or `gi:` LAB5-TrialBalance)
+- inventory-summary QtyOnHand golden ! shipped this pass (`InventorySummaryInquiry` warehouse-only → empty Results on live; optional later)
