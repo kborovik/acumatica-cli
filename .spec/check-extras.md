@@ -130,18 +130,20 @@ for granular /sdd:check runs.
 - entity or field shape change in active contract XML ! version bump
 - active paths: `config/bootstrap/project.xml` or `bootstrap/project.xml` or packaged full company fallback
 - version held → older build's digest gate republishes prior contract under same identity (silent downgrade, no version signal in seed failures)
-- single contract line both flavors (`Bootstrap/1.0.0` baseline — not dual minimal/full versions)
+- single contract line `Bootstrap/1.0.0` (not dual minimal/full versions)
 - version-ref parity scan → existing §V.21 parity recipe above
 
-## §V.28 — init-flavor recipe (extracted from SPEC.md §V.28)
+## §V.28 — init-template recipe (extracted from SPEC.md §V.28)
 
-- `--flavor` absent → finance-minimal @ **root** only (offline e2e green; root SEED_DIRS permanent for no-flavor)
-- observer `config/snapshot/10-trial-balance.yaml` (numeric EndingBalance-class via `inquire:` or `gi:`; lone `config/` ok; `snapshot` ! SEED_DIRS)
-- both flavors same full company contract identity `Bootstrap/1.0.0` — not a second Bootstrap identity
-- `distribution` → seed under `config/{bootstrap,baseline,setup,master}/` + `config/snapshot/` TB only w/ EndingBalance-class numeric money capture (V33)
+- `config init` single full seed — no `--flavor`
+- layout `config/{bootstrap,baseline,setup,master}/` + observer `config/snapshot/10-trial-balance.yaml` (numeric EndingBalance-class via `inquire:` or `gi:`; `snapshot` ! SEED_DIRS)
+- package templates ! derive from sibling `acumatica-gitops` seed trees; prune non-seed extras (`demo/`, Makefile, live `.env`, committed `state/`)
+- full company contract identity `Bootstrap/1.0.0` — not a second Bootstrap identity
+- `config/snapshot/` TB only w/ EndingBalance-class numeric money capture (V33)
 - inventory-summary ! golden this pass
-- golden `scenario/` lifecycle: `10-seed-capital` (once+present) + `20-buy-gateways` + `30-build` (empty stub ok) + `40-sell` + README
-- monoscenario `buy-sell` forbidden; skip-if-exists unchanged; distribution never default (gh #19)
+- golden `scenario/` lifecycle: `10-seed-capital` (once+present) + `20-buy` + `30-build` + `40-sell` + README (gitops names)
+- monoscenario `buy-sell` forbidden; skip-if-exists unchanged
+- root SEED_DIRS ! default scaffold; V30 dual-layout still honors legacy root data repos
 
 ## §V.32 — snapshot-observation recipe (extracted from SPEC.md §V.32)
 
