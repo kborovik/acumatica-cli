@@ -1,4 +1,4 @@
-# Tax categories (TX205500) via the Default endpoint. Lab5 Gateway Works
+# Tax categories (TX205500) via the Default endpoint. LAB5 Electronics Inc.
 # carries no tax configuration (plan risk R8), but StockItem insert 422s
 # "'Tax Category' cannot be empty" (live-read 2026-07-13) - the minimal
 # answer is one exempt category, defaulted onto items through the item

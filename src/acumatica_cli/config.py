@@ -32,132 +32,99 @@ DB_NAME = "AcumaticaDB"
 # Dotfiles are stored dotless (wheel tooling tends to drop dotfiles) and
 # mapped to their real names on write.
 #
-# Single full seed (V28/T108): no --flavor. Dest layout is always
-# config/{bootstrap,baseline,setup,master}/ + scenario/ + config/snapshot/
-# + root meta (.env, .gitignore, target.yaml, README). Resource paths still
-# live under templates/finance|distribution until T109 rehomes from gitops.
-# bootstrap/project.xml is not a templates/ file: scaffold copies the
+# Single full seed (V28/T108/T109): no --flavor. Package resources mirror
+# dest layout under templates/ (derived from sibling acumatica-gitops seed
+# trees; prune demo/, Makefile, live .env, state/, packaged project.xml).
+# bootstrap project.xml is not a templates/ file: scaffold copies the
 # packaged full company contract (bootstrap_project.xml) → Bootstrap/1.0.0.
 INIT_TEMPLATES = (
-    ("finance/env", ".env"),
-    ("finance/gitignore", ".gitignore"),
-    ("finance/target", "target.yaml"),
-    ("finance/baseline/10-subaccounts.yaml", "config/baseline/10-subaccounts.yaml"),
-    ("distribution/baseline/20-accounts.yaml", "config/baseline/20-accounts.yaml"),
-    ("finance/baseline/40-ledger.yaml", "config/baseline/40-ledger.yaml"),
+    ("env", ".env"),
+    ("gitignore", ".gitignore"),
+    ("target", "target.yaml"),
+    ("README.md", "README.md"),
+    ("config/bootstrap/company.yaml", "config/bootstrap/company.yaml"),
+    ("config/bootstrap/credit-terms.yaml", "config/bootstrap/credit-terms.yaml"),
+    ("config/bootstrap/features.yaml", "config/bootstrap/features.yaml"),
     (
-        "finance/baseline/50-gl-preferences.yaml",
+        "config/bootstrap/project.xml",
+        "config/bootstrap/project.xml",
+    ),  # sentinel; see scaffold
+    ("config/baseline/10-subaccounts.yaml", "config/baseline/10-subaccounts.yaml"),
+    ("config/baseline/20-accounts.yaml", "config/baseline/20-accounts.yaml"),
+    ("config/baseline/40-ledger.yaml", "config/baseline/40-ledger.yaml"),
+    (
+        "config/baseline/50-gl-preferences.yaml",
         "config/baseline/50-gl-preferences.yaml",
     ),
     (
-        "distribution/baseline/60-ledger-company.yaml",
+        "config/baseline/60-ledger-company.yaml",
         "config/baseline/60-ledger-company.yaml",
     ),
-    ("distribution/baseline/90-uoms.yaml", "config/baseline/90-uoms.yaml"),
-    ("distribution/bootstrap/company.yaml", "config/bootstrap/company.yaml"),
-    ("finance/bootstrap/credit-terms.yaml", "config/bootstrap/credit-terms.yaml"),
-    ("distribution/bootstrap/features.yaml", "config/bootstrap/features.yaml"),
+    ("config/baseline/90-uoms.yaml", "config/baseline/90-uoms.yaml"),
     (
-        "finance/bootstrap/project.xml",
-        "config/bootstrap/project.xml",
-    ),  # sentinel; see scaffold
-    ("finance/setup/10-financial-year.yaml", "config/setup/10-financial-year.yaml"),
-    ("finance/setup/20-master-calendar.yaml", "config/setup/20-master-calendar.yaml"),
-    ("distribution/setup/30-open-periods.yaml", "config/setup/30-open-periods.yaml"),
-    (
-        "distribution/snapshot/10-trial-balance.yaml",
-        "config/snapshot/10-trial-balance.yaml",
+        "config/baseline/91-company-packaging.yaml",
+        "config/baseline/91-company-packaging.yaml",
     ),
-    ("distribution/master/10-reason-codes.yaml", "config/master/10-reason-codes.yaml"),
+    ("config/setup/10-financial-year.yaml", "config/setup/10-financial-year.yaml"),
+    ("config/setup/20-master-calendar.yaml", "config/setup/20-master-calendar.yaml"),
+    ("config/setup/30-open-periods.yaml", "config/setup/30-open-periods.yaml"),
+    ("config/master/10-reason-codes.yaml", "config/master/10-reason-codes.yaml"),
+    ("config/master/20-in-preferences.yaml", "config/master/20-in-preferences.yaml"),
     (
-        "distribution/master/20-in-preferences.yaml",
-        "config/master/20-in-preferences.yaml",
-    ),
-    (
-        "distribution/master/30-availability-rules.yaml",
+        "config/master/30-availability-rules.yaml",
         "config/master/30-availability-rules.yaml",
     ),
+    ("config/master/40-posting-classes.yaml", "config/master/40-posting-classes.yaml"),
+    ("config/master/50-warehouse.yaml", "config/master/50-warehouse.yaml"),
     (
-        "distribution/master/40-posting-classes.yaml",
-        "config/master/40-posting-classes.yaml",
-    ),
-    ("distribution/master/50-warehouse.yaml", "config/master/50-warehouse.yaml"),
-    (
-        "distribution/master/51-warehouse-locations.yaml",
+        "config/master/51-warehouse-locations.yaml",
         "config/master/51-warehouse-locations.yaml",
     ),
     (
-        "distribution/master/52-warehouse-defaults.yaml",
+        "config/master/52-warehouse-defaults.yaml",
         "config/master/52-warehouse-defaults.yaml",
     ),
+    ("config/master/53-tax-categories.yaml", "config/master/53-tax-categories.yaml"),
+    ("config/master/54-item-classes.yaml", "config/master/54-item-classes.yaml"),
+    ("config/master/56-so-preferences.yaml", "config/master/56-so-preferences.yaml"),
+    ("config/master/57-po-preferences.yaml", "config/master/57-po-preferences.yaml"),
+    ("config/master/58-order-types.yaml", "config/master/58-order-types.yaml"),
+    ("config/master/60-ar-preferences.yaml", "config/master/60-ar-preferences.yaml"),
+    ("config/master/61-ap-preferences.yaml", "config/master/61-ap-preferences.yaml"),
+    ("config/master/62-ca-preferences.yaml", "config/master/62-ca-preferences.yaml"),
+    ("config/master/63-cash-account.yaml", "config/master/63-cash-account.yaml"),
+    ("config/master/64-payment-methods.yaml", "config/master/64-payment-methods.yaml"),
     (
-        "distribution/master/53-tax-categories.yaml",
-        "config/master/53-tax-categories.yaml",
-    ),
-    ("distribution/master/54-item-classes.yaml", "config/master/54-item-classes.yaml"),
-    (
-        "distribution/master/56-so-preferences.yaml",
-        "config/master/56-so-preferences.yaml",
-    ),
-    (
-        "distribution/master/57-po-preferences.yaml",
-        "config/master/57-po-preferences.yaml",
-    ),
-    ("distribution/master/58-order-types.yaml", "config/master/58-order-types.yaml"),
-    (
-        "distribution/master/60-ar-preferences.yaml",
-        "config/master/60-ar-preferences.yaml",
-    ),
-    (
-        "distribution/master/61-ap-preferences.yaml",
-        "config/master/61-ap-preferences.yaml",
-    ),
-    (
-        "distribution/master/62-ca-preferences.yaml",
-        "config/master/62-ca-preferences.yaml",
-    ),
-    ("distribution/master/63-cash-account.yaml", "config/master/63-cash-account.yaml"),
-    (
-        "distribution/master/64-payment-methods.yaml",
-        "config/master/64-payment-methods.yaml",
-    ),
-    (
-        "distribution/master/65-statement-cycles.yaml",
+        "config/master/65-statement-cycles.yaml",
         "config/master/65-statement-cycles.yaml",
     ),
+    ("config/master/70-vendor-classes.yaml", "config/master/70-vendor-classes.yaml"),
     (
-        "distribution/master/70-vendor-classes.yaml",
-        "config/master/70-vendor-classes.yaml",
-    ),
-    (
-        "distribution/master/71-customer-classes.yaml",
+        "config/master/71-customer-classes.yaml",
         "config/master/71-customer-classes.yaml",
     ),
-    ("distribution/master/75-vendors.yaml", "config/master/75-vendors.yaml"),
-    ("distribution/master/76-customers.yaml", "config/master/76-customers.yaml"),
+    ("config/master/75-vendors.yaml", "config/master/75-vendors.yaml"),
+    ("config/master/76-customers.yaml", "config/master/76-customers.yaml"),
     (
-        "distribution/master/80-stock-items-parts.yaml",
+        "config/master/80-stock-items-parts.yaml",
         "config/master/80-stock-items-parts.yaml",
     ),
     (
-        "distribution/master/82-stock-items-kits.yaml",
+        "config/master/82-stock-items-kits.yaml",
         "config/master/82-stock-items-kits.yaml",
     ),
     (
-        "distribution/master/85-kit-specifications.yaml",
+        "config/master/85-kit-specifications.yaml",
         "config/master/85-kit-specifications.yaml",
     ),
     (
-        "distribution/scenario/10-seed-capital.yaml",
-        "scenario/10-seed-capital.yaml",
+        "config/snapshot/10-trial-balance.yaml",
+        "config/snapshot/10-trial-balance.yaml",
     ),
-    (
-        "distribution/scenario/20-buy-gateways.yaml",
-        "scenario/20-buy-gateways.yaml",
-    ),
-    ("distribution/scenario/30-build.yaml", "scenario/30-build.yaml"),
-    ("distribution/scenario/40-sell.yaml", "scenario/40-sell.yaml"),
-    ("distribution/README.md", "README.md"),
+    ("scenario/10-seed-capital.yaml", "scenario/10-seed-capital.yaml"),
+    ("scenario/20-buy.yaml", "scenario/20-buy.yaml"),
+    ("scenario/30-build.yaml", "scenario/30-build.yaml"),
+    ("scenario/40-sell.yaml", "scenario/40-sell.yaml"),
 )
 
 

@@ -1,5 +1,5 @@
-# once-class owner capital (V4/gh #19). once+present skips when Owner Capital
-# already funds Checking — warm re-run must not restack 30000.
+# once-class owner capital (V9/gh #19). once+present skips when Owner Capital
+# already funds Checking — warm re-run must not restack 30000 (closes §B.1).
 #
 # Deltas (cold once-run only; skip path runs no expects):
 #   capital: Dr 10100 / Cr 30000 = 50000

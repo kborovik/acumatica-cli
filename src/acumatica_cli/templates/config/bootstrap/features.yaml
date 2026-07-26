@@ -11,7 +11,7 @@
 # real bin (MAIN) instead of system <UNASSIGNED> - without it Inventory
 # Summary shows Location <UNASSIGNED> for every qty (2026-07-19 probe).
 # Multicurrency is deliberately NOT here:
-# Lab5 Gateway Works is USD-only (single-org, single-branch demo - see
+# LAB5 Electronics Inc. is USD-only (single-org, single-branch demo - see
 # README). A misspelled name enables nothing - the plugin flags it in
 # the publish log.
 - FinancialModule

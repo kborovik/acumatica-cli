@@ -691,7 +691,8 @@ def test_config_init_scaffolds_data_repo(tmp_path: Path) -> None:
         "config/master/20-in-preferences.yaml",
         "config/snapshot/10-trial-balance.yaml",
         "scenario/10-seed-capital.yaml",
-        "scenario/20-buy-gateways.yaml",
+        "scenario/20-buy.yaml",
+        "config/baseline/91-company-packaging.yaml",
         "scenario/30-build.yaml",
         "scenario/40-sell.yaml",
     ]

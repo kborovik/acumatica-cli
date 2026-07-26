@@ -1,0 +1,14 @@
+# Company packaging UOMs (CS101500 Weight UOM / Volume UOM) via Bootstrap.
+# Stock Items (IN202500) Packaging tab inherits these; empty company UOMs
+# leave Weight UOM / Volume UOM blank with validation warnings on every item.
+#
+# APPLY ORDER: after 90-uoms.yaml (KG, LITER). Bootstrap company create
+# runs before baseline UOMs, so packaging UOMs are a second Company PUT
+# once the units exist - not on first org insert in company.yaml.
+entity: Company
+key: AcctCD
+endpoint: bootstrap
+records:
+- AcctCD: LAB5
+  WeightUOM: KG
+  VolumeUOM: LITER

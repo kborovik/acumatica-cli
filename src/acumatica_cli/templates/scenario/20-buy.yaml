@@ -1,0 +1,361 @@
+# Additive buy leg: component POs -> receipt (CreateBill) -> AP bill -> AP WIRE pay.
+# Warm re-runnable (document numbers change; per-leg deltas hold).
+#
+# Buys parts for one build pack (30-build): 10 EDGE + 5 CELL + 5 RAIL BOM,
+# plus a buffer so components do NOT net to zero. Buying exactly the BOM left
+# every part at 0 on hand, so IN401000 filmed as "No records yet" and the
+# demo/walk.yaml parts-on-hand beat had nothing to show. Buffer is +5 on the
+# high-volume lines and +3 on the x5 lines; a real manufacturer carries stock.
+# Four component vendors (SHENZHEN / ENCLOTEC / WAVELINK / MEMSTOR).
+#
+# Unit costs roll up to kit costs EDGE 139 / CELL 195 / RAIL 145 so sell COGS
+# stays aligned with 40-sell expects. Buffer does not move average cost (same
+# unit costs), so 40-sell COGS 1848 / revenue 4138 are unchanged.
+#
+# Deltas:
+#   purchases: 2045 + 664 + 428 + 900 = 4037 cash out
+#     receipt CreateBill -> AP bill; ReleaseBill; AP WIRE Check
+#     PO accrual 20200 clears on bill; AP 20100 clears on payment
+#   inventory (WH01): ENCL-STD +20, ENCL-DIN +8, MB-CM4 +25, MOD-LTE +8,
+#     ANT-LORA +25, ANT-LTE +8, PSU-12V +25, SD-32GB +25, CBL-PWR +25
+#   cash 10100: -4037
+#   left on hand after 30-build consumes the BOM: 5 of each +5 line,
+#     3 of each +3 line (947 of component value retained in 12100)
+#
+# AP bill is created by PurchaseReceipt.CreateBill (multi-line Bill PUT
+# 500s on this build); VendorRef = PO-${po} keys the filter get that
+# captures the server-assigned bill number (acu run filter get).
+# Requires Checking 10100 funded (scenario/10-seed-capital.yaml).
+scenario: buy
+description: Buy kit components (PO receipt bill+pay) for manufacturer build
+steps:
+# ---- buy: SHENZHEN (boards / modems) ---------------------------------
+- id: po-shenzhen
+  put: PurchaseOrder
+  record:
+    VendorID: SHENZHEN
+    Hold: false
+    Details:
+    - {InventoryID: MB-CM4, OrderQty: 25, UnitCost: 69.00}
+    - {InventoryID: MOD-LTE, OrderQty: 8, UnitCost: 40.00}
+  capture: {OrderNbr: po_shenzhen}
+- id: rcpt-shenzhen
+  put: PurchaseReceipt
+  record:
+    Type: Receipt
+    VendorID: SHENZHEN
+    Hold: false
+    CreateBill: true
+    VendorRef: "PO-${po_shenzhen}"
+    Details:
+    - {POOrderType: Normal, POOrderNbr: "${po_shenzhen}", POLineNbr: 1, ReceiptQty: 25}
+    - {POOrderType: Normal, POOrderNbr: "${po_shenzhen}", POLineNbr: 2, ReceiptQty: 8}
+  capture: {ReceiptNbr: rcpt_shenzhen}
+- id: release-rcpt-shenzhen
+  action: {entity: PurchaseReceipt, name: ReleasePurchaseReceipt}
+  record: {Type: Receipt, ReceiptNbr: "${rcpt_shenzhen}"}
+  wait:
+    entity: PurchaseReceipt
+    keys: [Receipt, "${rcpt_shenzhen}"]
+    until: {Status: Released}
+- id: billnbr-shenzhen
+  get:
+    entity: Bill
+    filter: "VendorRef eq 'PO-${po_shenzhen}'"
+    top: 1
+  capture: {ReferenceNbr: bill_shenzhen}
+- id: release-bill-shenzhen
+  action: {entity: Bill, name: ReleaseBill}
+  record: {Type: Bill, ReferenceNbr: "${bill_shenzhen}"}
+  wait:
+    entity: Bill
+    keys: [Bill, "${bill_shenzhen}"]
+    until: {Status: Open}
+- id: pay-shenzhen
+  put: Check
+  record:
+    Type: Payment
+    Vendor: SHENZHEN
+    PaymentMethod: WIRE
+    CashAccount: '10100'
+    PaymentAmount: 2045.00
+    PaymentRef: "WIRE-AP-${bill_shenzhen}"
+    Hold: false
+    Details:
+    - {DocType: Bill, ReferenceNbr: "${bill_shenzhen}", AmountPaid: 2045.00}
+  capture: {ReferenceNbr: chk_shenzhen}
+- id: release-pay-shenzhen
+  action: {entity: Check, name: ReleaseCheck}
+  record: {Type: Payment, ReferenceNbr: "${chk_shenzhen}"}
+  wait:
+    entity: Check
+    keys: [Payment, "${chk_shenzhen}"]
+    until: {Status: Closed}
+# ---- buy: ENCLOTEC (enclosures) --------------------------------------
+- id: po-enclotec
+  put: PurchaseOrder
+  record:
+    VendorID: ENCLOTEC
+    Hold: false
+    Details:
+    - {InventoryID: ENCL-STD, OrderQty: 20, UnitCost: 22.00}
+    - {InventoryID: ENCL-DIN, OrderQty: 8, UnitCost: 28.00}
+  capture: {OrderNbr: po_enclotec}
+- id: rcpt-enclotec
+  put: PurchaseReceipt
+  record:
+    Type: Receipt
+    VendorID: ENCLOTEC
+    Hold: false
+    CreateBill: true
+    VendorRef: "PO-${po_enclotec}"
+    Details:
+    - {POOrderType: Normal, POOrderNbr: "${po_enclotec}", POLineNbr: 1, ReceiptQty: 20}
+    - {POOrderType: Normal, POOrderNbr: "${po_enclotec}", POLineNbr: 2, ReceiptQty: 8}
+  capture: {ReceiptNbr: rcpt_enclotec}
+- id: release-rcpt-enclotec
+  action: {entity: PurchaseReceipt, name: ReleasePurchaseReceipt}
+  record: {Type: Receipt, ReceiptNbr: "${rcpt_enclotec}"}
+  wait:
+    entity: PurchaseReceipt
+    keys: [Receipt, "${rcpt_enclotec}"]
+    until: {Status: Released}
+- id: billnbr-enclotec
+  get:
+    entity: Bill
+    filter: "VendorRef eq 'PO-${po_enclotec}'"
+    top: 1
+  capture: {ReferenceNbr: bill_enclotec}
+- id: release-bill-enclotec
+  action: {entity: Bill, name: ReleaseBill}
+  record: {Type: Bill, ReferenceNbr: "${bill_enclotec}"}
+  wait:
+    entity: Bill
+    keys: [Bill, "${bill_enclotec}"]
+    until: {Status: Open}
+- id: pay-enclotec
+  put: Check
+  record:
+    Type: Payment
+    Vendor: ENCLOTEC
+    PaymentMethod: WIRE
+    CashAccount: '10100'
+    PaymentAmount: 664.00
+    PaymentRef: "WIRE-AP-${bill_enclotec}"
+    Hold: false
+    Details:
+    - {DocType: Bill, ReferenceNbr: "${bill_enclotec}", AmountPaid: 664.00}
+  capture: {ReferenceNbr: chk_enclotec}
+- id: release-pay-enclotec
+  action: {entity: Check, name: ReleaseCheck}
+  record: {Type: Payment, ReferenceNbr: "${chk_enclotec}"}
+  wait:
+    entity: Check
+    keys: [Payment, "${chk_enclotec}"]
+    until: {Status: Closed}
+# ---- buy: WAVELINK (antennas) ----------------------------------------
+- id: po-wavelink
+  put: PurchaseOrder
+  record:
+    VendorID: WAVELINK
+    Hold: false
+    Details:
+    - {InventoryID: ANT-LORA, OrderQty: 25, UnitCost: 12.00}
+    - {InventoryID: ANT-LTE, OrderQty: 8, UnitCost: 16.00}
+  capture: {OrderNbr: po_wavelink}
+- id: rcpt-wavelink
+  put: PurchaseReceipt
+  record:
+    Type: Receipt
+    VendorID: WAVELINK
+    Hold: false
+    CreateBill: true
+    VendorRef: "PO-${po_wavelink}"
+    Details:
+    - {POOrderType: Normal, POOrderNbr: "${po_wavelink}", POLineNbr: 1, ReceiptQty: 25}
+    - {POOrderType: Normal, POOrderNbr: "${po_wavelink}", POLineNbr: 2, ReceiptQty: 8}
+  capture: {ReceiptNbr: rcpt_wavelink}
+- id: release-rcpt-wavelink
+  action: {entity: PurchaseReceipt, name: ReleasePurchaseReceipt}
+  record: {Type: Receipt, ReceiptNbr: "${rcpt_wavelink}"}
+  wait:
+    entity: PurchaseReceipt
+    keys: [Receipt, "${rcpt_wavelink}"]
+    until: {Status: Released}
+- id: billnbr-wavelink
+  get:
+    entity: Bill
+    filter: "VendorRef eq 'PO-${po_wavelink}'"
+    top: 1
+  capture: {ReferenceNbr: bill_wavelink}
+- id: release-bill-wavelink
+  action: {entity: Bill, name: ReleaseBill}
+  record: {Type: Bill, ReferenceNbr: "${bill_wavelink}"}
+  wait:
+    entity: Bill
+    keys: [Bill, "${bill_wavelink}"]
+    until: {Status: Open}
+- id: pay-wavelink
+  put: Check
+  record:
+    Type: Payment
+    Vendor: WAVELINK
+    PaymentMethod: WIRE
+    CashAccount: '10100'
+    PaymentAmount: 428.00
+    PaymentRef: "WIRE-AP-${bill_wavelink}"
+    Hold: false
+    Details:
+    - {DocType: Bill, ReferenceNbr: "${bill_wavelink}", AmountPaid: 428.00}
+  capture: {ReferenceNbr: chk_wavelink}
+- id: release-pay-wavelink
+  action: {entity: Check, name: ReleaseCheck}
+  record: {Type: Payment, ReferenceNbr: "${chk_wavelink}"}
+  wait:
+    entity: Check
+    keys: [Payment, "${chk_wavelink}"]
+    until: {Status: Closed}
+# ---- buy: MEMSTOR (power / media / cable) ----------------------------
+- id: po-memstor
+  put: PurchaseOrder
+  record:
+    VendorID: MEMSTOR
+    Hold: false
+    Details:
+    - {InventoryID: PSU-12V, OrderQty: 25, UnitCost: 18.00}
+    - {InventoryID: SD-32GB, OrderQty: 25, UnitCost: 10.00}
+    - {InventoryID: CBL-PWR, OrderQty: 25, UnitCost: 8.00}
+  capture: {OrderNbr: po_memstor}
+- id: rcpt-memstor
+  put: PurchaseReceipt
+  record:
+    Type: Receipt
+    VendorID: MEMSTOR
+    Hold: false
+    CreateBill: true
+    VendorRef: "PO-${po_memstor}"
+    Details:
+    - {POOrderType: Normal, POOrderNbr: "${po_memstor}", POLineNbr: 1, ReceiptQty: 25}
+    - {POOrderType: Normal, POOrderNbr: "${po_memstor}", POLineNbr: 2, ReceiptQty: 25}
+    - {POOrderType: Normal, POOrderNbr: "${po_memstor}", POLineNbr: 3, ReceiptQty: 25}
+  capture: {ReceiptNbr: rcpt_memstor}
+- id: release-rcpt-memstor
+  action: {entity: PurchaseReceipt, name: ReleasePurchaseReceipt}
+  record: {Type: Receipt, ReceiptNbr: "${rcpt_memstor}"}
+  wait:
+    entity: PurchaseReceipt
+    keys: [Receipt, "${rcpt_memstor}"]
+    until: {Status: Released}
+- id: billnbr-memstor
+  get:
+    entity: Bill
+    filter: "VendorRef eq 'PO-${po_memstor}'"
+    top: 1
+  capture: {ReferenceNbr: bill_memstor}
+- id: release-bill-memstor
+  action: {entity: Bill, name: ReleaseBill}
+  record: {Type: Bill, ReferenceNbr: "${bill_memstor}"}
+  wait:
+    entity: Bill
+    keys: [Bill, "${bill_memstor}"]
+    until: {Status: Open}
+- id: pay-memstor
+  put: Check
+  record:
+    Type: Payment
+    Vendor: MEMSTOR
+    PaymentMethod: WIRE
+    CashAccount: '10100'
+    PaymentAmount: 900.00
+    PaymentRef: "WIRE-AP-${bill_memstor}"
+    Hold: false
+    Details:
+    - {DocType: Bill, ReferenceNbr: "${bill_memstor}", AmountPaid: 900.00}
+  capture: {ReferenceNbr: chk_memstor}
+- id: release-pay-memstor
+  action: {entity: Check, name: ReleaseCheck}
+  record: {Type: Payment, ReferenceNbr: "${chk_memstor}"}
+  wait:
+    entity: Check
+    keys: [Payment, "${chk_memstor}"]
+    until: {Status: Closed}
+expect:
+- get:
+    entity: Bill
+    keys: [Bill, "${bill_shenzhen}"]
+  fields:
+    Status: Closed
+- get:
+    entity: Check
+    keys: [Payment, "${chk_shenzhen}"]
+  fields:
+    Status: Closed
+- get:
+    entity: Bill
+    keys: [Bill, "${bill_enclotec}"]
+  fields:
+    Status: Closed
+- get:
+    entity: Check
+    keys: [Payment, "${chk_enclotec}"]
+  fields:
+    Status: Closed
+- get:
+    entity: Bill
+    keys: [Bill, "${bill_wavelink}"]
+  fields:
+    Status: Closed
+- get:
+    entity: Check
+    keys: [Payment, "${chk_wavelink}"]
+  fields:
+    Status: Closed
+- get:
+    entity: Bill
+    keys: [Bill, "${bill_memstor}"]
+  fields:
+    Status: Closed
+- get:
+    entity: Check
+    keys: [Payment, "${chk_memstor}"]
+  fields:
+    Status: Closed
+- inquire: InventorySummaryInquiry
+  parameters: {InventoryID: ENCL-STD, WarehouseID: WH01}
+  delta: {QtyOnHand: 20.0}
+- inquire: InventorySummaryInquiry
+  parameters: {InventoryID: ENCL-DIN, WarehouseID: WH01}
+  delta: {QtyOnHand: 8.0}
+- inquire: InventorySummaryInquiry
+  parameters: {InventoryID: MB-CM4, WarehouseID: WH01}
+  delta: {QtyOnHand: 25.0}
+- inquire: InventorySummaryInquiry
+  parameters: {InventoryID: MOD-LTE, WarehouseID: WH01}
+  delta: {QtyOnHand: 8.0}
+- inquire: InventorySummaryInquiry
+  parameters: {InventoryID: ANT-LORA, WarehouseID: WH01}
+  delta: {QtyOnHand: 25.0}
+- inquire: InventorySummaryInquiry
+  parameters: {InventoryID: ANT-LTE, WarehouseID: WH01}
+  delta: {QtyOnHand: 8.0}
+- inquire: InventorySummaryInquiry
+  parameters: {InventoryID: PSU-12V, WarehouseID: WH01}
+  delta: {QtyOnHand: 25.0}
+- inquire: InventorySummaryInquiry
+  parameters: {InventoryID: SD-32GB, WarehouseID: WH01}
+  delta: {QtyOnHand: 25.0}
+- inquire: InventorySummaryInquiry
+  parameters: {InventoryID: CBL-PWR, WarehouseID: WH01}
+  delta: {QtyOnHand: 25.0}
+- inquire: AccountSummaryInquiry
+  parameters: {Ledger: ACTUAL, Period: "072026"}
+  match: {Account: '20200'}
+  delta: {EndingBalance: 0.00}
+- inquire: AccountSummaryInquiry
+  parameters: {Ledger: ACTUAL, Period: "072026"}
+  match: {Account: '20100'}
+  delta: {EndingBalance: 0.00}
+- inquire: AccountSummaryInquiry
+  parameters: {Ledger: ACTUAL, Period: "072026"}
+  match: {Account: '10100'}
+  delta: {EndingBalance: -4037.00}

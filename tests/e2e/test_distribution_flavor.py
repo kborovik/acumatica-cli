@@ -117,7 +117,7 @@ def test_distribution_scaffold_layout(dist_repo: Path) -> None:
     assert (dist_repo / "config" / "bootstrap" / "project.xml").is_file()
     assert (dist_repo / "config" / "master").is_dir()
     assert (dist_repo / "scenario" / "10-seed-capital.yaml").is_file()
-    assert (dist_repo / "scenario" / "20-buy-gateways.yaml").is_file()
+    assert (dist_repo / "scenario" / "20-buy.yaml").is_file()
     assert (dist_repo / "scenario" / "30-build.yaml").is_file()
     assert (dist_repo / "scenario" / "40-sell.yaml").is_file()
     assert not (dist_repo / "scenario" / "buy-sell.yaml").exists()

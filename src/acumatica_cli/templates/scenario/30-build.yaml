@@ -1,0 +1,136 @@
+# Additive build leg: kit assembly (IN307000) parts -> finished gateways.
+# Warm re-runnable (document numbers change; per-leg deltas hold).
+#
+# Assembles one sell pack + surplus matching prior finished-goods buy:
+#   GW-EDGE x10, GW-CELL x5, GW-RAIL x5 (kit rev V1).
+# Consumes exact BOM from config/master/85-kit-specifications.yaml.
+#
+# Deltas:
+#   kits: EDGE +10, CELL +5, RAIL +5
+#   parts: ENCL-STD -15, ENCL-DIN -5, MB-CM4 -20, MOD-LTE -5,
+#     ANT-LORA -20, ANT-LTE -5, PSU-12V -20, SD-32GB -20, CBL-PWR -20
+#   cash 10100: 0 (pure inventory conversion)
+#
+# StockComponents omitted on PUT — kit specification expands components.
+# Type Production is the Default-endpoint assembly doc type; ReasonCode
+# INASSEMBLY is seeded in config/master/10-reason-codes.yaml.
+# Requires parts on hand from scenario/20-buy.yaml (or equivalent).
+scenario: build
+description: Assemble gateway kits from purchased components
+steps:
+# ---- build: GW-EDGE x10 ----------------------------------------------
+- id: asm-edge
+  put: KitAssembly
+  record:
+    Type: Production
+    KitInventoryID: GW-EDGE
+    Revision: V1
+    Qty: 10
+    WarehouseID: WH01
+    LocationID: MAIN
+    ReasonCode: INASSEMBLY
+    Hold: false
+  capture: {ReferenceNbr: asm_edge}
+- id: release-asm-edge
+  action: {entity: KitAssembly, name: ReleaseKitAssembly}
+  record: {Type: Production, ReferenceNbr: "${asm_edge}"}
+  wait:
+    entity: KitAssembly
+    keys: [Production, "${asm_edge}"]
+    until: {Status: Released}
+# ---- build: GW-CELL x5 -----------------------------------------------
+- id: asm-cell
+  put: KitAssembly
+  record:
+    Type: Production
+    KitInventoryID: GW-CELL
+    Revision: V1
+    Qty: 5
+    WarehouseID: WH01
+    LocationID: MAIN
+    ReasonCode: INASSEMBLY
+    Hold: false
+  capture: {ReferenceNbr: asm_cell}
+- id: release-asm-cell
+  action: {entity: KitAssembly, name: ReleaseKitAssembly}
+  record: {Type: Production, ReferenceNbr: "${asm_cell}"}
+  wait:
+    entity: KitAssembly
+    keys: [Production, "${asm_cell}"]
+    until: {Status: Released}
+# ---- build: GW-RAIL x5 -----------------------------------------------
+- id: asm-rail
+  put: KitAssembly
+  record:
+    Type: Production
+    KitInventoryID: GW-RAIL
+    Revision: V1
+    Qty: 5
+    WarehouseID: WH01
+    LocationID: MAIN
+    ReasonCode: INASSEMBLY
+    Hold: false
+  capture: {ReferenceNbr: asm_rail}
+- id: release-asm-rail
+  action: {entity: KitAssembly, name: ReleaseKitAssembly}
+  record: {Type: Production, ReferenceNbr: "${asm_rail}"}
+  wait:
+    entity: KitAssembly
+    keys: [Production, "${asm_rail}"]
+    until: {Status: Released}
+expect:
+- get:
+    entity: KitAssembly
+    keys: [Production, "${asm_edge}"]
+  fields:
+    Status: Released
+- get:
+    entity: KitAssembly
+    keys: [Production, "${asm_cell}"]
+  fields:
+    Status: Released
+- get:
+    entity: KitAssembly
+    keys: [Production, "${asm_rail}"]
+  fields:
+    Status: Released
+- inquire: InventorySummaryInquiry
+  parameters: {InventoryID: GW-EDGE, WarehouseID: WH01}
+  delta: {QtyOnHand: 10.0}
+- inquire: InventorySummaryInquiry
+  parameters: {InventoryID: GW-CELL, WarehouseID: WH01}
+  delta: {QtyOnHand: 5.0}
+- inquire: InventorySummaryInquiry
+  parameters: {InventoryID: GW-RAIL, WarehouseID: WH01}
+  delta: {QtyOnHand: 5.0}
+- inquire: InventorySummaryInquiry
+  parameters: {InventoryID: ENCL-STD, WarehouseID: WH01}
+  delta: {QtyOnHand: -15.0}
+- inquire: InventorySummaryInquiry
+  parameters: {InventoryID: ENCL-DIN, WarehouseID: WH01}
+  delta: {QtyOnHand: -5.0}
+- inquire: InventorySummaryInquiry
+  parameters: {InventoryID: MB-CM4, WarehouseID: WH01}
+  delta: {QtyOnHand: -20.0}
+- inquire: InventorySummaryInquiry
+  parameters: {InventoryID: MOD-LTE, WarehouseID: WH01}
+  delta: {QtyOnHand: -5.0}
+- inquire: InventorySummaryInquiry
+  parameters: {InventoryID: ANT-LORA, WarehouseID: WH01}
+  delta: {QtyOnHand: -20.0}
+- inquire: InventorySummaryInquiry
+  parameters: {InventoryID: ANT-LTE, WarehouseID: WH01}
+  delta: {QtyOnHand: -5.0}
+- inquire: InventorySummaryInquiry
+  parameters: {InventoryID: PSU-12V, WarehouseID: WH01}
+  delta: {QtyOnHand: -20.0}
+- inquire: InventorySummaryInquiry
+  parameters: {InventoryID: SD-32GB, WarehouseID: WH01}
+  delta: {QtyOnHand: -20.0}
+- inquire: InventorySummaryInquiry
+  parameters: {InventoryID: CBL-PWR, WarehouseID: WH01}
+  delta: {QtyOnHand: -20.0}
+- inquire: AccountSummaryInquiry
+  parameters: {Ledger: ACTUAL, Period: "072026"}
+  match: {Account: '10100'}
+  delta: {EndingBalance: 0.00}

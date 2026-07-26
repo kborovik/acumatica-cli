@@ -6,7 +6,7 @@
 #     + AGRISENSE 3x EDGE 897 = 4138 revenue; COGS 7x139 + 3x195 + 2x145 = 1848
 #   all three customers pay WIRE in full -> AR 11000 net 0; cash +4138
 #   inventory: EDGE -7, CELL -3, RAIL -2
-# Requires on-hand stock from scenario/20-buy-gateways.yaml (or equivalent).
+# Requires on-hand kits from scenario/30-build.yaml (or equivalent).
 scenario: sell
 description: Sell pack (SO ship invoice collect) for ACMEMFG NORTHGRID AGRISENSE
 steps:
