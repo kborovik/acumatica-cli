@@ -1,18 +1,21 @@
-"""Live virgin-tenant verify for ``--flavor distribution`` (SPEC T80, issue #18).
+"""Live virgin-tenant scenario + snapshot lifecycle (SPEC T80/T98/T110).
 
-Self-contained: scaffolds packaged distribution templates into a tmp data
-repo, creates a scratch tenant, then bootstrap → apply → run scenario →
-diff clean. Parallel to finance-minimal ``test_provision_lifecycle`` but
-does not share its session tenant (different login, different seed set).
+Self-contained: scaffolds the packaged full ``config init`` seed into a tmp
+data repo, creates a scratch tenant, then apply → run scenario/ → warm
+once-skip → diff clean → snapshot write → assert-unchanged. Parallel to
+``test_provision_lifecycle`` (apply/diff focus) on a separate tenant login
+so the two modules do not share session tenant state.
 
-Opt-in via ``make e2e FILE=test_distribution_flavor``. Default offline
-suite stays green without this file (``not e2e``).
+Opt-in via ``make e2e FILE=test_scenario_lifecycle``. Default offline suite
+stays green without this file (``not e2e``).
 """
 
 import subprocess
+import sys
+import threading
 from collections.abc import Callable, Iterator
 from pathlib import Path
-from typing import NamedTuple
+from typing import IO, NamedTuple
 
 import pytest
 
@@ -22,7 +25,7 @@ from acumatica_cli.tenant import TenantManager
 pytestmark = pytest.mark.e2e
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
-SCRATCH_LOGIN = "E2EDIST"
+SCRATCH_LOGIN = "E2ESCEN"
 
 RunAcu = Callable[..., subprocess.CompletedProcess[str]]
 DeleteTenant = Callable[[str], None]
@@ -38,11 +41,11 @@ def _combined(proc: subprocess.CompletedProcess[str]) -> str:
 
 
 @pytest.fixture(scope="module")
-def dist_repo(tmp_path_factory: pytest.TempPathFactory) -> Path:
-    """Distribution-flavor data repo with live credentials from repo-root .env."""
+def scenario_repo(tmp_path_factory: pytest.TempPathFactory) -> Path:
+    """Full-scaffold data repo with live credentials from repo-root .env."""
     import shutil
 
-    root = tmp_path_factory.mktemp("dist-data-repo")
+    root = tmp_path_factory.mktemp("scenario-data-repo")
     for _ in scaffold(root):
         pass
     real_env = REPO_ROOT / ".env"
@@ -54,12 +57,8 @@ def dist_repo(tmp_path_factory: pytest.TempPathFactory) -> Path:
 
 
 @pytest.fixture(scope="module")
-def dist_acu(dist_repo: Path) -> RunAcu:
-    """Run installed ``acu`` from the distribution scaffold (stream like conftest)."""
-    import subprocess
-    import sys
-    import threading
-    from typing import IO
+def scenario_acu(scenario_repo: Path) -> RunAcu:
+    """Run installed ``acu`` from the scenario scaffold (stream like conftest)."""
 
     def _pump(pipe: IO[str], lines: list[str], sink: IO[str]) -> None:
         for line in pipe:
@@ -72,7 +71,7 @@ def dist_acu(dist_repo: Path) -> RunAcu:
         sys.stderr.flush()
         with subprocess.Popen(
             ["acu", *args],
-            cwd=dist_repo,
+            cwd=scenario_repo,
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
             text=True,
@@ -103,7 +102,7 @@ def dist_acu(dist_repo: Path) -> RunAcu:
 
 
 @pytest.fixture(scope="module")
-def dist_tenant(
+def scenario_tenant(
     tenant_manager: TenantManager, delete_tenant: DeleteTenant
 ) -> Iterator[ScratchTenant]:
     delete_tenant(SCRATCH_LOGIN)
@@ -112,75 +111,77 @@ def dist_tenant(
     delete_tenant(SCRATCH_LOGIN)
 
 
-def test_distribution_scaffold_layout(dist_repo: Path) -> None:
-    """T80/V28/T87/T97: config/ umbrella + lifecycle + snapshot views + README."""
-    assert (dist_repo / "config" / "bootstrap" / "project.xml").is_file()
-    assert (dist_repo / "config" / "master").is_dir()
-    assert (dist_repo / "scenario" / "10-seed-capital.yaml").is_file()
-    assert (dist_repo / "scenario" / "20-buy.yaml").is_file()
-    assert (dist_repo / "scenario" / "30-build.yaml").is_file()
-    assert (dist_repo / "scenario" / "40-sell.yaml").is_file()
-    assert not (dist_repo / "scenario" / "buy-sell.yaml").exists()
-    assert (dist_repo / "config" / "snapshot" / "10-trial-balance.yaml").is_file()
+def test_full_scaffold_layout(scenario_repo: Path) -> None:
+    """T80/T110/V28: config/ umbrella + lifecycle + TB snapshot + README."""
+    assert (scenario_repo / "config" / "bootstrap" / "project.xml").is_file()
+    assert (scenario_repo / "config" / "master").is_dir()
+    assert (scenario_repo / "scenario" / "10-seed-capital.yaml").is_file()
+    assert (scenario_repo / "scenario" / "20-buy.yaml").is_file()
+    assert (scenario_repo / "scenario" / "30-build.yaml").is_file()
+    assert (scenario_repo / "scenario" / "40-sell.yaml").is_file()
+    assert not (scenario_repo / "scenario" / "buy-sell.yaml").exists()
+    assert (scenario_repo / "config" / "snapshot" / "10-trial-balance.yaml").is_file()
     # T107/V28/V33: golden state/ = trial-balance only (B25)
     assert not (
-        dist_repo / "config" / "snapshot" / "20-inventory-summary.yaml"
+        scenario_repo / "config" / "snapshot" / "20-inventory-summary.yaml"
     ).exists()
-    assert not (dist_repo / "snapshot").exists()
-    assert (dist_repo / "README.md").is_file()
-    assert list((dist_repo / "config" / "master").glob("*.yaml"))
+    assert not (scenario_repo / "snapshot").exists()
+    assert (scenario_repo / "README.md").is_file()
+    assert list((scenario_repo / "config" / "master").glob("*.yaml"))
 
 
-def test_distribution_tenant_create(
-    dist_acu: RunAcu, dist_tenant: ScratchTenant
+def test_scenario_tenant_create(
+    scenario_acu: RunAcu, scenario_tenant: ScratchTenant
 ) -> None:
-    proc = dist_acu(
+    proc = scenario_acu(
         "tenant",
         "create",
         "--id",
-        str(dist_tenant.company_id),
+        str(scenario_tenant.company_id),
         "--login",
-        dist_tenant.login,
+        scenario_tenant.login,
     )
     assert proc.returncode == 0, _combined(proc)
     assert "AcuBootstrap published" in _combined(proc)
 
 
-def test_distribution_apply(dist_acu: RunAcu, dist_tenant: ScratchTenant) -> None:
+def test_scenario_apply(scenario_acu: RunAcu, scenario_tenant: ScratchTenant) -> None:
     """Bare apply prefers config/ and includes master after setup (T77/T84)."""
-    proc = dist_acu("--tenant", dist_tenant.login, "apply")
+    proc = scenario_acu("--tenant", scenario_tenant.login, "apply")
     assert proc.returncode == 0, _combined(proc)
     assert "config/master/" in proc.stdout or "Warehouse" in _combined(proc)
 
 
-def test_distribution_scenario(dist_acu: RunAcu, dist_tenant: ScratchTenant) -> None:
-    proc = dist_acu("--tenant", dist_tenant.login, "run", "scenario/")
+def test_scenario_run(scenario_acu: RunAcu, scenario_tenant: ScratchTenant) -> None:
+    proc = scenario_acu("--tenant", scenario_tenant.login, "run", "scenario/")
     assert proc.returncode == 0, _combined(proc)
 
 
-def test_distribution_warm_capital_once_skip(
-    dist_acu: RunAcu, dist_tenant: ScratchTenant
+def test_scenario_warm_capital_once_skip(
+    scenario_acu: RunAcu, scenario_tenant: ScratchTenant
 ) -> None:
     """T89/V4: second run scenario/ skips once capital (Owner Capital non-stack).
 
-    Cold path ran in test_distribution_scenario. Warm re-run must print the
-    once skip line for 10-seed-capital and still exit 0 for additive legs.
+    Cold path ran in test_scenario_run. Warm re-run must print the once skip
+    line for 10-seed-capital and still exit 0 for additive legs.
     """
-    proc = dist_acu("--tenant", dist_tenant.login, "run", "scenario/")
+    proc = scenario_acu("--tenant", scenario_tenant.login, "run", "scenario/")
     combined = _combined(proc)
     assert proc.returncode == 0, combined
     assert "once: already present" in combined
     assert "10-seed-capital" in combined
 
 
-def test_distribution_diff_clean(dist_acu: RunAcu, dist_tenant: ScratchTenant) -> None:
-    proc = dist_acu("--tenant", dist_tenant.login, "diff")
+def test_scenario_diff_clean(
+    scenario_acu: RunAcu, scenario_tenant: ScratchTenant
+) -> None:
+    proc = scenario_acu("--tenant", scenario_tenant.login, "diff")
     assert proc.returncode == 0, _combined(proc)
     assert "no drift" in _combined(proc)
 
 
-def test_distribution_snapshot_write(
-    dist_acu: RunAcu, dist_tenant: ScratchTenant, dist_repo: Path
+def test_scenario_snapshot_write(
+    scenario_acu: RunAcu, scenario_tenant: ScratchTenant, scenario_repo: Path
 ) -> None:
     """T98/T102/T105/T107/V32/V33: after scenario, state/ TB is numeric fixed-point.
 
@@ -192,14 +193,14 @@ def test_distribution_snapshot_write(
 
     import yaml
 
-    proc = dist_acu("--tenant", dist_tenant.login, "snapshot")
+    proc = scenario_acu("--tenant", scenario_tenant.login, "snapshot")
     assert proc.returncode == 0, _combined(proc)
     combined = _combined(proc)
     assert "trial-balance" in combined or "wrote" in combined
 
-    tb_path = dist_repo / "state" / "trial-balance.yaml"
+    tb_path = scenario_repo / "state" / "trial-balance.yaml"
     assert tb_path.is_file()
-    assert not (dist_repo / "state" / "inventory-summary.yaml").exists()
+    assert not (scenario_repo / "state" / "inventory-summary.yaml").exists()
 
     tb = yaml.safe_load(tb_path.read_text())
     assert tb["view"] == "trial-balance"
@@ -215,8 +216,8 @@ def test_distribution_snapshot_write(
     assert float(capital["EndingBalance"]) >= 50000.0
 
 
-def test_distribution_snapshot_assert_unchanged(
-    dist_acu: RunAcu, dist_tenant: ScratchTenant
+def test_scenario_snapshot_assert_unchanged(
+    scenario_acu: RunAcu, scenario_tenant: ScratchTenant
 ) -> None:
     """T98/T105/T107/V4/V32: warm once-capital + snapshot --assert-unchanged exits 0.
 
@@ -224,14 +225,16 @@ def test_distribution_snapshot_assert_unchanged(
     (skip path) so EndingBalance stays byte-stable — additive buy/sell
     legs would move TB cash/inventory observations.
     """
-    run = dist_acu(
+    run = scenario_acu(
         "--tenant",
-        dist_tenant.login,
+        scenario_tenant.login,
         "run",
         "scenario/10-seed-capital.yaml",
     )
     combined = _combined(run)
     assert run.returncode == 0, combined
     assert "once: already present" in combined
-    proc = dist_acu("--tenant", dist_tenant.login, "snapshot", "--assert-unchanged")
+    proc = scenario_acu(
+        "--tenant", scenario_tenant.login, "snapshot", "--assert-unchanged"
+    )
     assert proc.returncode == 0, _combined(proc)

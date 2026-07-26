@@ -5,8 +5,8 @@ conftest scaffolds a synthetic single-org company from the packaged
 `acu config init` templates into a tmp data repo, then `acu tenant
 create` (which chains the bootstrap publish, T45) -> `acu apply` ->
 `acu diff` clean, all running from that repo. Bare apply/diff exercise
-the default-dirs path (I.cmd): the scaffolded bootstrap/ baseline/
-setup/ are the data-repo root dirs the walk-up finds.
+the default-dirs path (I.cmd/V30): the scaffolded ``config/`` SEED_DIRS
+(bootstrap/baseline/setup/master) are preferred over root.
 
 Opt-in tier: every test carries the `e2e` marker, which the default
 suite deselects (`make check` stays offline, V13). Run via `make e2e`
@@ -90,9 +90,10 @@ def test_tenant_create_bootstraps_at_birth(
 def test_apply_configures_the_fresh_tenant(
     acu: RunAcu, scratch_tenant: ScratchTenant
 ) -> None:
-    """Bare apply sweeps the default dirs (T44): bootstrap/, baseline/, setup/."""
+    """Bare apply sweeps default config/ SEED_DIRS (T44/V30)."""
     proc = acu("--tenant", scratch_tenant.login, "apply")
     assert proc.returncode == 0, _combined(proc)
+    assert "config/" in proc.stdout or "Warehouse" in _combined(proc)
 
 
 def test_diff_is_clean_on_configured_tenant(
@@ -121,7 +122,7 @@ def test_apply_is_idempotent(acu: RunAcu, scratch_tenant: ScratchTenant) -> None
 def test_diff_detects_injected_drift(
     acu: RunAcu, scratch_tenant: ScratchTenant, data_repo: Path, tmp_path: Path
 ) -> None:
-    source = sorted((data_repo / "baseline").glob("*.yaml"))[0]
+    source = sorted((data_repo / "config" / "baseline").glob("*.yaml"))[0]
     doc: dict[str, Any] = yaml.safe_load(source.read_text())
     keys = doc["key"] if isinstance(doc["key"], list) else [doc["key"]]
     record: dict[str, Any] = doc["records"][0]
@@ -144,5 +145,5 @@ def test_diff_against_nonexistent_tenant_exits_one(acu: RunAcu) -> None:
     and silently lands on the default tenant, and only the landed-tenant
     guard in AcumaticaClient stands between that and a false-green diff.
     """
-    proc = acu("--tenant", "NoSuchTenantB5", "diff", "baseline")
+    proc = acu("--tenant", "NoSuchTenantB5", "diff", "config/baseline")
     assert proc.returncode == 1, _combined(proc)

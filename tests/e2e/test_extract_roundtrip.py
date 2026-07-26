@@ -107,7 +107,7 @@ def test_tenant_a_bootstraps(acu: RunAcu, scratch_pair: ScratchPair) -> None:
 
 
 def test_apply_configures_tenant_a(acu: RunAcu, scratch_pair: ScratchPair) -> None:
-    """Bare apply sweeps the scaffolded repo's bootstrap/, baseline/, setup/."""
+    """Bare apply sweeps the scaffolded repo's config/ SEED_DIRS (V28/V30)."""
     proc = acu("--tenant", LOGIN_A, "apply")
     assert proc.returncode == 0, _combined(proc)
 
@@ -122,8 +122,9 @@ def test_extract_dumps_tenant_a(
     the byte-compare would); every entity/action file must parse back
     through load_baseline (I.cmd: emitted files are seed files by
     construction). Currency is on the packaged full company contract
-    (T81); finance-minimal apply may leave zero financial currencies, so
-    that row may skip clean as (no records) but never as not-in-contract.
+    (T81); full seed may still leave zero financial currencies on some
+    tenants, so that row may skip clean as (no records) but never as
+    not-in-contract.
     """
     dir_a, _ = out_dirs
     manifest = load_manifest()

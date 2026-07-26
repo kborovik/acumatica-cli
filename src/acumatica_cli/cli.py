@@ -682,7 +682,7 @@ def default_seed_dirs() -> tuple[Path, ...]:
     When the data-repo ``config/`` has any SEED_DIRS child, only those
     ``config/<name>/`` paths are returned (dual layout never merges with
     root). Else root ``bootstrap/``…``master/`` for present names
-    (finance-minimal). The data repo is the .env dir (V3 walk-up). None
+    (legacy root layout). The data repo is the .env dir (V3 walk-up). None
     existing is an error - an empty default would make a bare run a silent
     no-op. Paths come back relative to cwd so a bare run prints exactly
     what naming the dirs would.

@@ -136,7 +136,7 @@ T106|x|docs: rest-api + distribution README — inquire: snapshot source; numeri
 T107|x|drop distribution inventory-summary snapshot scaffold — package template + init map + offline/e2e asserts + docs; golden `state/` = trial-balance only|V28,V33,I.data,I.cmd
 T108|x|drop `--flavor` CLI + dual `templates_for` / `INIT_FLAVORS`; single template map|V28,I.cmd
 T109|x|package templates from `acumatica-gitops` seed trees (`config/*` + `scenario/` + snapshot + meta); drop `templates/finance` + `templates/distribution` split; align scenario `20-buy`; prune non-seed extras|V28,V29,I.data,T108
-T110|.|offline tests + e2e: single full scaffold; drop flavor-param coverage; e2e still green|V13,V28,T108,T109
+T110|x|offline tests + e2e: single full scaffold; drop flavor-param coverage; e2e still green|V13,V28,T108,T109
 T111|.|docs sweep: README + retire/merge distribution flavor docs + help text; next-step cmds `apply config/`|V12,V28,T108,T109
 
 ## §B BUGS
