@@ -43,7 +43,7 @@ def dist_repo(tmp_path_factory: pytest.TempPathFactory) -> Path:
     import shutil
 
     root = tmp_path_factory.mktemp("dist-data-repo")
-    for _ in scaffold(root, flavor="distribution"):
+    for _ in scaffold(root):
         pass
     real_env = REPO_ROOT / ".env"
     if real_env.exists():

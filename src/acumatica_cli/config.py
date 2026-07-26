@@ -32,58 +32,42 @@ DB_NAME = "AcumaticaDB"
 # Dotfiles are stored dotless (wheel tooling tends to drop dotfiles) and
 # mapped to their real names on write.
 #
-# Layout under templates/ (symmetric flavors):
-#   finance/       — default finance-minimal package set (V28)
-#   distribution/  — overlays + master/scenario extras
+# Single full seed (V28/T108): no --flavor. Dest layout is always
+# config/{bootstrap,baseline,setup,master}/ + scenario/ + config/snapshot/
+# + root meta (.env, .gitignore, target.yaml, README). Resource paths still
+# live under templates/finance|distribution until T109 rehomes from gitops.
 # bootstrap/project.xml is not a templates/ file: scaffold copies the
-# packaged full company contract (bootstrap_project.xml) so both flavors
-# share Bootstrap/1.0.0 (T81/T82).
+# packaged full company contract (bootstrap_project.xml) → Bootstrap/1.0.0.
 INIT_TEMPLATES = (
     ("finance/env", ".env"),
     ("finance/gitignore", ".gitignore"),
     ("finance/target", "target.yaml"),
-    ("finance/baseline/10-subaccounts.yaml", "baseline/10-subaccounts.yaml"),
-    ("finance/baseline/20-accounts.yaml", "baseline/20-accounts.yaml"),
-    ("finance/baseline/40-ledger.yaml", "baseline/40-ledger.yaml"),
-    ("finance/baseline/50-gl-preferences.yaml", "baseline/50-gl-preferences.yaml"),
-    ("finance/baseline/60-ledger-company.yaml", "baseline/60-ledger-company.yaml"),
-    ("finance/baseline/90-uoms.yaml", "baseline/90-uoms.yaml"),
-    ("finance/bootstrap/company.yaml", "bootstrap/company.yaml"),
-    ("finance/bootstrap/credit-terms.yaml", "bootstrap/credit-terms.yaml"),
-    ("finance/bootstrap/features.yaml", "bootstrap/features.yaml"),
-    (
-        "finance/bootstrap/project.xml",
-        "bootstrap/project.xml",
-    ),  # sentinel; see scaffold
-    ("finance/setup/10-financial-year.yaml", "setup/10-financial-year.yaml"),
-    ("finance/setup/20-master-calendar.yaml", "setup/20-master-calendar.yaml"),
-    ("finance/setup/30-open-periods.yaml", "setup/30-open-periods.yaml"),
-    # V28/V32: observer views under config/snapshot/ (not SEED_DIRS; lone config/ ok)
-    (
-        "finance/snapshot/10-trial-balance.yaml",
-        "config/snapshot/10-trial-balance.yaml",
-    ),
-)
-
-# Opt-in `--flavor distribution` overlays + extras (V28/V29/T87). Resource
-# paths live under templates/distribution/; dest paths rehome seed under
-# config/ (V30). Overlays replace rehomed finance-minimal files (company
-# LAB5, expanded COA, features, open-periods, uoms). Contract identity is
-# shared (T82) — no distribution-only project.xml. Lifecycle scenarios
-# replace monoscenario buy-sell (V28).
-_SEED_PREFIXES = ("bootstrap/", "baseline/", "setup/", "master/")
-_ROOT_META = frozenset({".env", ".gitignore", "target.yaml"})
-
-DISTRIBUTION_TEMPLATES = (
-    ("distribution/bootstrap/company.yaml", "config/bootstrap/company.yaml"),
-    ("distribution/bootstrap/features.yaml", "config/bootstrap/features.yaml"),
+    ("finance/baseline/10-subaccounts.yaml", "config/baseline/10-subaccounts.yaml"),
     ("distribution/baseline/20-accounts.yaml", "config/baseline/20-accounts.yaml"),
+    ("finance/baseline/40-ledger.yaml", "config/baseline/40-ledger.yaml"),
+    (
+        "finance/baseline/50-gl-preferences.yaml",
+        "config/baseline/50-gl-preferences.yaml",
+    ),
     (
         "distribution/baseline/60-ledger-company.yaml",
         "config/baseline/60-ledger-company.yaml",
     ),
     ("distribution/baseline/90-uoms.yaml", "config/baseline/90-uoms.yaml"),
+    ("distribution/bootstrap/company.yaml", "config/bootstrap/company.yaml"),
+    ("finance/bootstrap/credit-terms.yaml", "config/bootstrap/credit-terms.yaml"),
+    ("distribution/bootstrap/features.yaml", "config/bootstrap/features.yaml"),
+    (
+        "finance/bootstrap/project.xml",
+        "config/bootstrap/project.xml",
+    ),  # sentinel; see scaffold
+    ("finance/setup/10-financial-year.yaml", "config/setup/10-financial-year.yaml"),
+    ("finance/setup/20-master-calendar.yaml", "config/setup/20-master-calendar.yaml"),
     ("distribution/setup/30-open-periods.yaml", "config/setup/30-open-periods.yaml"),
+    (
+        "distribution/snapshot/10-trial-balance.yaml",
+        "config/snapshot/10-trial-balance.yaml",
+    ),
     ("distribution/master/10-reason-codes.yaml", "config/master/10-reason-codes.yaml"),
     (
         "distribution/master/20-in-preferences.yaml",
@@ -173,14 +157,8 @@ DISTRIBUTION_TEMPLATES = (
     ),
     ("distribution/scenario/30-build.yaml", "scenario/30-build.yaml"),
     ("distribution/scenario/40-sell.yaml", "scenario/40-sell.yaml"),
-    (
-        "distribution/snapshot/10-trial-balance.yaml",
-        "config/snapshot/10-trial-balance.yaml",
-    ),
     ("distribution/README.md", "README.md"),
 )
-
-INIT_FLAVORS = frozenset({"distribution"})
 
 
 class Instance(BaseSettings):
@@ -243,72 +221,26 @@ class Instance(BaseSettings):
         return v
 
 
-def templates_for(flavor: str | None) -> tuple[tuple[str, str], ...]:
-    """Resolve (resource, dest) pairs for ``config init`` (V28/T87).
-
-    Absent flavor → finance-minimal ``INIT_TEMPLATES`` at root (+ observer
-    ``config/snapshot/``). ``distribution`` keeps root meta
-    (``.env``/``.gitignore``/``target.yaml``), rehomes finance seed under
-    ``config/``, then overlays ``DISTRIBUTION_TEMPLATES`` (config/ seeds +
-    lifecycle ``scenario/`` + ``config/snapshot/`` + README). Never dual
-    root+config seed trees. Paths already under ``config/`` (snapshot
-    views) pass through unchanged.
-    """
-    if flavor is None:
-        return INIT_TEMPLATES
-    if flavor not in INIT_FLAVORS:
-        raise SystemExit(
-            f"unknown config init flavor {flavor!r}; "
-            f"known: {', '.join(sorted(INIT_FLAVORS))}"
-        )
-    by_dest: dict[str, str] = {}
-    order: list[str] = []
-    for res, dest in INIT_TEMPLATES:
-        if dest in _ROOT_META:
-            by_dest[dest] = res
-            order.append(dest)
-            continue
-        if dest.startswith("config/"):
-            target = dest
-        else:
-            target = (
-                f"config/{dest}"
-                if any(dest.startswith(p) for p in _SEED_PREFIXES)
-                else dest
-            )
-        if target not in by_dest:
-            order.append(target)
-        by_dest[target] = res
-    for res, dest in DISTRIBUTION_TEMPLATES:
-        if dest not in by_dest:
-            order.append(dest)
-        by_dest[dest] = res
-    return tuple((by_dest[dest], dest) for dest in order)
-
-
-def scaffold(
-    directory: Path, host: str | None = None, flavor: str | None = None
-) -> Iterator[tuple[str, Path]]:
+def scaffold(directory: Path, host: str | None = None) -> Iterator[tuple[str, Path]]:
     """Write the data-repo template set into ``directory``, never overwriting.
 
     Yields ("write" | "skip", path) per template file. ``host`` replaces the
     placeholder host inside the scaffolded .env ``ACU_BASE_URL``/``ACU_SSH``
-    values; secrets stay placeholders (V2). ``flavor`` selects the template
-    set (V28; default finance-minimal). The directory is created if absent.
-    No git init, no gpg - version control and secret encryption stay the
-    operator's call.
+    values; secrets stay placeholders (V2). Single full seed under
+    ``config/`` + lifecycle ``scenario/`` (V28/T108; no flavor). The
+    directory is created if absent. No git init, no gpg - version control
+    and secret encryption stay the operator's call.
     """
     pkg = resources.files("acumatica_cli") / "templates"
     directory.mkdir(parents=True, exist_ok=True)
-    for resource, dest in templates_for(flavor):
+    for resource, dest in INIT_TEMPLATES:
         target = directory / dest
         if target.exists():
             yield "skip", target
             continue
         # Single full contract (T81/T82): scaffold from the packaged
         # bootstrap_project.xml so init cannot diverge from the fallback.
-        # Finance-minimal root path; distribution rehomes under config/ (T87).
-        if dest in ("bootstrap/project.xml", "config/bootstrap/project.xml"):
+        if dest == "config/bootstrap/project.xml":
             content = (
                 resources.files("acumatica_cli") / "bootstrap_project.xml"
             ).read_text(encoding="utf-8")

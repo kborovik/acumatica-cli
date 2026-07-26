@@ -15,7 +15,6 @@ from click.shell_completion import get_completion_class
 from . import bootstrap, extract, firstlogin, output, run, seed, snapshot
 from .client import AcumaticaClient
 from .config import (
-    INIT_FLAVORS,
     Instance,
     data_root,
     find_data_root,
@@ -411,45 +410,33 @@ def config_group() -> None:
     help="Hostname substituted into the scaffolded .env ACU_BASE_URL/ACU_SSH "
     "values (default: a placeholder)",
 )
-@click.option(
-    "--flavor",
-    type=click.Choice(sorted(INIT_FLAVORS), case_sensitive=True),
-    default=None,
-    help="Template set: omit for finance-minimal (default, offline e2e); "
-    "distribution = full virgin-tenant demo seed (master/, scenario/, "
-    "expanded COA/features)",
-)
 @click.argument(
     "directory", required=False, type=click.Path(file_okay=False, path_type=Path)
 )
-def config_init(host: str | None, flavor: str | None, directory: Path | None) -> None:
-    """Scaffold a data repo: .env, .gitignore, bootstrap/, baseline/, setup/.
+def config_init(host: str | None, directory: Path | None) -> None:
+    """Scaffold a data repo: .env, target.yaml, config/ seed, scenario/.
 
     Templates ship with the package; every value is a placeholder or a
-    verified minimal example - no secrets. Both flavors scaffold the full
-    company ``bootstrap/project.xml`` (Bootstrap/1.0.0). ``--flavor
-    distribution`` scaffolds under ``config/`` + lifecycle ``scenario/``
-    + README (V28/T87). Existing files are never overwritten (reported as
-    skipped). DIRECTORY defaults to the current directory and is created
-    if absent. No git init, no gpg.
+    verified example - no secrets. Single full seed under ``config/``
+    (bootstrap/baseline/setup/master) + lifecycle ``scenario/`` +
+    ``config/snapshot/`` + README; full company ``project.xml``
+    (Bootstrap/1.0.0). No ``--flavor`` (V28/T108). Existing files are
+    never overwritten (reported as skipped). DIRECTORY defaults to the
+    current directory and is created if absent. No git init, no gpg.
     """
     target = directory or Path.cwd()
-    for action, path in scaffold(target, host=host, flavor=flavor):
+    for action, path in scaffold(target, host=host):
         suffix = " (exists)" if action == "skip" else ""
         output.data(f"{action} {path}{suffix}")
-    # next-step cmds (issue #18/#19): operator rebuild order after scaffold
+    # next-step cmds: operator rebuild order after scaffold (V28)
     output.data("")
     output.data("next:")
     output.data("  1. edit .env (set ACU_PASSWORD, ACU_TENANT; keep ACU_API_VERSION)")
     output.data("  2. acu config check")
     output.data("  3. acu bootstrap          # or: acu tenant create ... (SSH)")
-    if flavor == "distribution":
-        output.data("  4. acu apply config/")
-        output.data("  5. acu run scenario/")
-        output.data("  6. acu diff config/")
-    else:
-        output.data("  4. acu apply")
-        output.data("  5. acu diff")
+    output.data("  4. acu apply config/")
+    output.data("  5. acu run scenario/")
+    output.data("  6. acu diff config/")
 
 
 @config_group.command("show")

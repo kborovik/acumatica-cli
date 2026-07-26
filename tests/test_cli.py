@@ -13,7 +13,7 @@ import yaml
 from click.testing import CliRunner
 
 from acumatica_cli import cli
-from acumatica_cli.config import Instance, load_instance
+from acumatica_cli.config import INIT_TEMPLATES, Instance, load_instance
 from acumatica_cli.tenant import Tenant, TenantManager
 
 BASELINE = """\
@@ -661,10 +661,9 @@ def test_url_flag_rejected_after_subcommand(wired: Instance) -> None:
 
 
 def test_config_init_scaffolds_data_repo(tmp_path: Path) -> None:
-    # I.cmd config init: 17-file template set into a created-if-absent dir
-    # (T82: bootstrap/project.xml always scaffolded; T101: config/snapshot
-    # observer); runs where V3 discovery finds no .env (tmp_path has none
-    # up-tree)
+    # I.cmd config init / V28/T108: single full seed under config/ + scenario/
+    # (T82: project.xml always scaffolded; T101: config/snapshot observer);
+    # runs where V3 discovery finds no .env (tmp_path has none up-tree)
     repo = tmp_path / "repo"
     result = CliRunner().invoke(
         cli.cli, ["config", "init", "--host", "erp.test", str(repo)]
@@ -675,30 +674,38 @@ def test_config_init_scaffolds_data_repo(tmp_path: Path) -> None:
         ".env",
         ".gitignore",
         "target.yaml",
-        "baseline/10-subaccounts.yaml",
-        "baseline/20-accounts.yaml",
-        "baseline/40-ledger.yaml",
-        "baseline/50-gl-preferences.yaml",
-        "baseline/60-ledger-company.yaml",
-        "baseline/90-uoms.yaml",
-        "bootstrap/company.yaml",
-        "bootstrap/credit-terms.yaml",
-        "bootstrap/features.yaml",
-        "bootstrap/project.xml",
-        "setup/10-financial-year.yaml",
-        "setup/20-master-calendar.yaml",
-        "setup/30-open-periods.yaml",
+        "README.md",
+        "config/baseline/10-subaccounts.yaml",
+        "config/baseline/20-accounts.yaml",
+        "config/baseline/40-ledger.yaml",
+        "config/baseline/50-gl-preferences.yaml",
+        "config/baseline/60-ledger-company.yaml",
+        "config/baseline/90-uoms.yaml",
+        "config/bootstrap/company.yaml",
+        "config/bootstrap/credit-terms.yaml",
+        "config/bootstrap/features.yaml",
+        "config/bootstrap/project.xml",
+        "config/setup/10-financial-year.yaml",
+        "config/setup/20-master-calendar.yaml",
+        "config/setup/30-open-periods.yaml",
+        "config/master/20-in-preferences.yaml",
         "config/snapshot/10-trial-balance.yaml",
+        "scenario/10-seed-capital.yaml",
+        "scenario/20-buy-gateways.yaml",
+        "scenario/30-build.yaml",
+        "scenario/40-sell.yaml",
     ]
     for rel in expected:
         assert (repo / rel).is_file(), rel
-    assert (
-        len([ln for ln in result.output.splitlines() if ln.startswith("write ")]) == 17
-    )
+    assert not (repo / "bootstrap").exists()
+    assert not (repo / "master").exists()
+    assert not (repo / "snapshot").exists()
+    writes = [ln for ln in result.output.splitlines() if ln.startswith("write ")]
+    assert len(writes) == len(INIT_TEMPLATES)
     # T81/T82: scaffolded contract is Bootstrap/1.0.0 full company
     assert (
         'name="Bootstrap" version="1.0.0"'
-        in (repo / "bootstrap" / "project.xml").read_text()
+        in (repo / "config" / "bootstrap" / "project.xml").read_text()
     )
     target = (repo / "target.yaml").read_text()
     assert "default_api:" in target
@@ -707,12 +714,14 @@ def test_config_init_scaffolds_data_repo(tmp_path: Path) -> None:
     env = (repo / ".env").read_text()
     assert "ACU_BASE_URL=http://erp.test/AcumaticaERP" in env
     assert "ACU_SSH=Administrator@erp.test" in env
-    # T104/V28/V33: finance TB is EndingBalance-class inquire, not roster Account
+    # T104/V28/V33: TB is EndingBalance-class inquire, not roster Account
     tb = (repo / "config" / "snapshot" / "10-trial-balance.yaml").read_text()
     assert "inquire: AccountSummaryInquiry" in tb
     assert "EndingBalance" in tb
     assert "entity: Account" not in tb
     assert "erp.example.com" not in env
+    # T107/V33: inventory-summary not golden
+    assert not (repo / "config" / "snapshot" / "20-inventory-summary.yaml").exists()
 
 
 def test_config_init_defaults_to_cwd_with_placeholder_host(
@@ -738,7 +747,7 @@ def test_config_init_rerun_skips_and_never_overwrites(tmp_path: Path) -> None:
 
     assert result.exit_code == 0
     skip_lines = [ln for ln in result.output.splitlines() if ln.startswith("skip ")]
-    assert len(skip_lines) == 17
+    assert len(skip_lines) == len(INIT_TEMPLATES)
     assert all(ln.endswith(" (exists)") for ln in skip_lines)
     assert "next:" in result.output
     assert (tmp_path / ".env").read_text() == "ACU_BASE_URL=http://hand.edited/X\n"
@@ -760,9 +769,8 @@ def test_config_init_writes_no_secrets(tmp_path: Path) -> None:
 def test_config_init_scaffold_round_trips(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    # T26 verify: empty dir -> init --host -> config show succeeds and
-    # apply --dry-run parses every seed template (features.yaml skipped);
-    # T39 extends the round-trip over setup/ action files
+    # T26/T108: empty dir -> init --host -> config show succeeds and
+    # bare apply --dry-run parses full config/ seed (features.yaml skipped)
     CliRunner().invoke(cli.cli, ["config", "init", "--host", "erp.test", str(tmp_path)])
     monkeypatch.chdir(tmp_path)
     monkeypatch.setenv("ACU_PASSWORD", "secret")
@@ -772,28 +780,22 @@ def test_config_init_scaffold_round_trips(
     assert shown.exit_code == 0
     assert "ACU_BASE_URL=http://erp.test/AcumaticaERP" in shown.output
 
-    applied = CliRunner().invoke(
-        cli.cli, ["apply", "--dry-run", "bootstrap", "baseline", "setup"]
-    )
-    assert applied.exit_code == 0
-    assert "would PUT Company [COMPANY]" in applied.output
-    assert "would PUT CreditTerms [NET30]" in applied.output
-    assert "would PUT Subaccount [000000]" in applied.output
-    assert "would PUT Account [32000]" in applied.output
-    assert "would PUT Account [33000]" in applied.output
-    assert "would PUT Ledger [ACTUAL]" in applied.output
-    assert "would PUT GLPreferences [32000]" in applied.output
-    assert "would PUT LedgerCompany [ACTUAL, COMPANY]" in applied.output
-    assert "would PUT UnitsOfMeasure [HOUR]" in applied.output
+    applied = CliRunner().invoke(cli.cli, ["apply", "--dry-run"])
+    assert applied.exit_code == 0, applied.output
+    assert "would PUT Company" in applied.output
+    assert "would PUT CreditTerms" in applied.output
+    assert "would PUT Subaccount" in applied.output
+    assert "would PUT Account" in applied.output
+    assert "would PUT Ledger" in applied.output
+    assert "would PUT GLPreferences" in applied.output
+    assert "would PUT LedgerCompany" in applied.output
+    assert "would PUT UnitsOfMeasure" in applied.output
     assert "would invoke GeneratePeriods" in applied.output
     assert "would invoke GenerateCalendar" in applied.output
     assert "would invoke ProcessAll" in applied.output
-    assert applied.output.count("(dry run)") == 11
-    # V22: numbered prefixes encode apply order - subaccounts before
-    # accounts before ledger before GL preferences (which references
-    # accounts 32000/33000) before the org-ledger link, uoms last; the
-    # setup/ action chain follows the whole baseline (financial year
-    # before calendar generation before period activation)
+    assert "would PUT Warehouse" in applied.output or "Warehouse" in applied.output
+    assert "config/master/" in applied.output or "INPreferences" in applied.output
+    # V22: numbered prefixes encode apply order within baseline before setup
     order = [
         applied.output.index("would PUT Subaccount ["),
         applied.output.index("would PUT Account ["),
@@ -809,15 +811,12 @@ def test_config_init_scaffold_round_trips(
 
 
 def test_config_init_template_set_is_feature_closed(tmp_path: Path) -> None:
-    # V22 feature closure (B15): the scaffolded features.yaml must enable
-    # every feature the shipped baseline templates require - the Subaccount
-    # template PUTs against feature-gated GL203000, so SubAccount must be
-    # in the list or a scaffolded apply 403s at the first baseline file
+    # V22 feature closure (B15 + masters): SubAccount + warehouse/kit features
     CliRunner().invoke(cli.cli, ["config", "init", str(tmp_path)])
 
-    features = yaml.safe_load((tmp_path / "bootstrap" / "features.yaml").read_text())
-    assert "SubAccount" in features
-    # the built-in six stay - dropping one starves bootstrap itself
+    features = yaml.safe_load(
+        (tmp_path / "config" / "bootstrap" / "features.yaml").read_text()
+    )
     for name in [
         "FinancialModule",
         "FinancialStandard",
@@ -825,187 +824,63 @@ def test_config_init_template_set_is_feature_closed(tmp_path: Path) -> None:
         "Inventory",
         "Branch",
         "MultiCompany",
+        "SubAccount",
+        "Warehouse",
+        "WarehouseLocation",
+        "KitAssemblies",
     ]:
         assert name in features
 
 
 def test_config_init_template_set_is_reference_closed(tmp_path: Path) -> None:
-    # V22 reference closure (B16 sibling of B15): every OrganizationID an
-    # org-referencing template carries must be the organization the shipped
-    # set itself creates - bootstrap/company.yaml's AcctCD - or a scaffolded
-    # apply 422s on an org that does not exist
+    # V22/V29: org-referencing templates share company AcctCD
     CliRunner().invoke(cli.cli, ["config", "init", str(tmp_path)])
-
-    company = yaml.safe_load((tmp_path / "bootstrap" / "company.yaml").read_text())
-    acct_cd = company["records"][0]["AcctCD"]
-    ledger_link = yaml.safe_load(
-        (tmp_path / "baseline" / "60-ledger-company.yaml").read_text()
-    )
-    assert ledger_link["records"][0]["OrganizationID"] == acct_cd
-    open_periods = yaml.safe_load(
-        (tmp_path / "setup" / "30-open-periods.yaml").read_text()
-    )
-    assert open_periods["record"]["OrganizationID"] == acct_cd
-
-
-def test_config_init_prints_next_step_cmds(tmp_path: Path) -> None:
-    # T77/I.cmd: post-scaffold stdout names rebuild cmds (bootstrap/apply/diff)
-    result = CliRunner().invoke(cli.cli, ["config", "init", str(tmp_path)])
-
-    assert result.exit_code == 0
-    assert "next:" in result.output
-    assert "acu bootstrap" in result.output
-    assert "acu apply" in result.output
-    assert "acu diff" in result.output
-
-
-def test_config_init_unknown_flavor_rejected(tmp_path: Path) -> None:
-    # V16: flavor is click.Choice over INIT_FLAVORS — free string never accepted
-    result = CliRunner().invoke(
-        cli.cli, ["config", "init", "--flavor", "nope", str(tmp_path)]
-    )
-
-    assert result.exit_code != 0
-    assert "Invalid value for '--flavor'" in result.output
-
-
-def test_config_init_flavor_distribution_scaffolds_demo_seed(tmp_path: Path) -> None:
-    # T77/T78/T82/T87/T101/T104 V28/V33: distribution under config/ + lifecycle
-    # + numeric inquire snapshot views; both flavors share Bootstrap/1.0.0
-    result = CliRunner().invoke(
-        cli.cli,
-        [
-            "config",
-            "init",
-            "--flavor",
-            "distribution",
-            "--host",
-            "erp.test",
-            str(tmp_path),
-        ],
-    )
-
-    assert result.exit_code == 0
-    assert (tmp_path / "config" / "bootstrap" / "project.xml").is_file()
-    assert (
-        'name="Bootstrap" version="1.0.0"'
-        in (tmp_path / "config" / "bootstrap" / "project.xml").read_text()
-    )
-    assert (tmp_path / "config" / "master" / "20-in-preferences.yaml").is_file()
-    assert (tmp_path / "scenario" / "10-seed-capital.yaml").is_file()
-    assert (tmp_path / "scenario" / "20-buy-gateways.yaml").is_file()
-    assert (tmp_path / "scenario" / "30-build.yaml").is_file()
-    assert (tmp_path / "scenario" / "40-sell.yaml").is_file()
-    assert not (tmp_path / "scenario" / "buy-sell.yaml").exists()
-    assert not (tmp_path / "bootstrap").exists()
-    assert not (tmp_path / "master").exists()
-    assert not (tmp_path / "snapshot").exists()
-    assert (tmp_path / "config" / "snapshot" / "10-trial-balance.yaml").is_file()
-    # T107/V28/V33: inventory-summary not golden this pass (B25 empty Results)
-    assert not (tmp_path / "config" / "snapshot" / "20-inventory-summary.yaml").exists()
-    assert (tmp_path / "README.md").is_file()
-    assert "acu apply config/" in result.output
-    assert "acu run scenario/" in result.output
-    assert "acu diff config/" in result.output
-    writes = [ln for ln in result.output.splitlines() if ln.startswith("write ")]
-    assert len(writes) > 16
-    # T104/V33: distribution golden TB = numeric inquire, not roster entity
-    dist_tb = (tmp_path / "config" / "snapshot" / "10-trial-balance.yaml").read_text()
-    assert "inquire: AccountSummaryInquiry" in dist_tb
-    assert "EndingBalance" in dist_tb
-    assert "entity: Account" not in dist_tb
-    # finance-minimal: root SEED_DIRS + lone config/snapshot observer (V28/T101)
-    bare = tmp_path / "bare"
-    CliRunner().invoke(cli.cli, ["config", "init", str(bare)])
-    assert not (bare / "master").exists()
-    assert not (bare / "scenario").exists()
-    assert (bare / "bootstrap" / "project.xml").is_file()
-    assert (
-        'name="Bootstrap" version="1.0.0"'
-        in (bare / "bootstrap" / "project.xml").read_text()
-    )
-    assert (bare / "config" / "snapshot" / "10-trial-balance.yaml").is_file()
-    bare_tb = (bare / "config" / "snapshot" / "10-trial-balance.yaml").read_text()
-    assert "inquire: AccountSummaryInquiry" in bare_tb
-    assert "EndingBalance" in bare_tb
-    assert not (bare / "config" / "master").exists()
-    assert not (bare / "config" / "bootstrap").exists()
-
-
-def test_config_init_distribution_org_cd_consistent(tmp_path: Path) -> None:
-    # V29: single org-CD placeholder across company, ledger link, periods,
-    # inventory transit branch, cash BranchID (under config/ after T87)
-    CliRunner().invoke(
-        cli.cli, ["config", "init", "--flavor", "distribution", str(tmp_path)]
-    )
 
     company = yaml.safe_load(
         (tmp_path / "config" / "bootstrap" / "company.yaml").read_text()
     )
-    org = company["records"][0]["AcctCD"]
-    ledger = yaml.safe_load(
+    acct_cd = company["records"][0]["AcctCD"]
+    ledger_link = yaml.safe_load(
         (tmp_path / "config" / "baseline" / "60-ledger-company.yaml").read_text()
     )
-    periods = yaml.safe_load(
+    assert ledger_link["records"][0]["OrganizationID"] == acct_cd
+    open_periods = yaml.safe_load(
         (tmp_path / "config" / "setup" / "30-open-periods.yaml").read_text()
     )
+    assert open_periods["record"]["OrganizationID"] == acct_cd
     in_prefs = yaml.safe_load(
         (tmp_path / "config" / "master" / "20-in-preferences.yaml").read_text()
     )
     cash = yaml.safe_load(
         (tmp_path / "config" / "master" / "63-cash-account.yaml").read_text()
     )
-    assert ledger["records"][0]["OrganizationID"] == org
-    assert periods["record"]["OrganizationID"] == org
-    assert in_prefs["records"][0]["TransitBranchID"] == org
-    assert cash["records"][0]["BranchID"] == org
+    assert in_prefs["records"][0]["TransitBranchID"] == acct_cd
+    assert cash["records"][0]["BranchID"] == acct_cd
 
 
-def test_config_init_distribution_feature_closed(tmp_path: Path) -> None:
-    # V22 feature closure for distribution masters (Warehouse, kits, …)
-    CliRunner().invoke(
+def test_config_init_prints_next_step_cmds(tmp_path: Path) -> None:
+    # V28/T108: post-scaffold stdout names rebuild cmds with config/ + scenario/
+    result = CliRunner().invoke(cli.cli, ["config", "init", str(tmp_path)])
+
+    assert result.exit_code == 0
+    assert "next:" in result.output
+    assert "acu bootstrap" in result.output
+    assert "acu apply config/" in result.output
+    assert "acu run scenario/" in result.output
+    assert "acu diff config/" in result.output
+
+
+def test_config_init_no_flavor_option(tmp_path: Path) -> None:
+    # V28/T108: --flavor removed; free/unknown flag is rejected by click
+    result = CliRunner().invoke(
         cli.cli, ["config", "init", "--flavor", "distribution", str(tmp_path)]
     )
-    features = yaml.safe_load(
-        (tmp_path / "config" / "bootstrap" / "features.yaml").read_text()
-    )
-    for name in [
-        "Inventory",
-        "DistributionModule",
-        "Warehouse",
-        "WarehouseLocation",
-        "KitAssemblies",
-        "SubAccount",
-    ]:
-        assert name in features
 
-
-def test_config_init_distribution_dry_run_parses(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    # T78/T87: every packaged seed file loads; bare apply prefers config/ master
-    CliRunner().invoke(
-        cli.cli,
-        [
-            "config",
-            "init",
-            "--flavor",
-            "distribution",
-            "--host",
-            "erp.test",
-            str(tmp_path),
-        ],
-    )
-    monkeypatch.chdir(tmp_path)
-    monkeypatch.setenv("ACU_PASSWORD", "secret")
-    monkeypatch.setattr(cli, "AcumaticaClient", DummyClient)
-
-    applied = CliRunner().invoke(cli.cli, ["apply", "--dry-run"])
-    assert applied.exit_code == 0, applied.output
-    assert "would PUT Company" in applied.output
-    assert "would PUT Warehouse" in applied.output or "Warehouse" in applied.output
-    assert "config/master/" in applied.output or any(
-        "INPreferences" in ln or "Warehouse" in ln for ln in applied.output.splitlines()
+    assert result.exit_code != 0
+    assert (
+        "no such option" in result.output.lower()
+        or "no such option" in str(result.exception).lower()
+        or "Error" in result.output
     )
 
 
@@ -1490,17 +1365,15 @@ def test_explicit_files_override_default_dirs(
 def test_bare_apply_matches_explicit_dirs(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    # T44 verify leg, offline: bare `acu apply --dry-run` over a scaffolded
-    # repo plans exactly what naming the three dirs plans
+    # T44/T108: bare `acu apply --dry-run` over a scaffolded repo plans
+    # exactly what naming the config/ umbrella plans (V30 prefer config/)
     CliRunner().invoke(cli.cli, ["config", "init", "--host", "erp.test", str(tmp_path)])
     monkeypatch.chdir(tmp_path)
     monkeypatch.setenv("ACU_PASSWORD", "secret")
     monkeypatch.setattr(cli, "AcumaticaClient", DummyClient)
 
     bare = CliRunner().invoke(cli.cli, ["apply", "--dry-run"])
-    explicit = CliRunner().invoke(
-        cli.cli, ["apply", "--dry-run", "bootstrap", "baseline", "setup"]
-    )
+    explicit = CliRunner().invoke(cli.cli, ["apply", "--dry-run", "config/"])
 
     assert bare.exit_code == 0
     plans = [line for line in bare.output.splitlines() if "would " in line]
