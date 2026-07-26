@@ -1,8 +1,8 @@
-# Distribution flavor (`acu config init --flavor distribution`)
+# Demo seed (`acu config init`)
 
-Opt-in full virgin-tenant demo seed for inventory and distribution.
-
-Default `acu config init` (no `--flavor`) stays finance-minimal so offline e2e stays green.
+Single full virgin-tenant demo seed for finance + inventory/distribution
+(lab5 Demo Tenant Factory class). No `--flavor` — one packaged template set
+under `config/` + lifecycle `scenario/`.
 
 ## Rebuild order
 
@@ -11,14 +11,14 @@ Start from a **brand-new empty tenant**.
 Do not apply onto a half-configured company.
 
 ```sh
-acu config init --flavor distribution --host erp.example.com my-dist
-cd my-dist
+acu config init --host erp.example.com my-erp
+cd my-erp
 # edit .env: ACU_PASSWORD, ACU_TENANT; keep ACU_API_VERSION aligned with target.yaml
 
 acu config check
 acu bootstrap                 # publishes Bootstrap + features from config/bootstrap/
 acu apply config/             # config/{bootstrap,baseline,setup,master}/ fixed order
-acu run scenario/             # 10-seed-capital → 20-buy-gateways → 30-build → 40-sell
+acu run scenario/             # 10-seed-capital → 20-buy → 30-build → 40-sell
 acu diff config/              # expect exit 0 (no drift)
 acu snapshot                  # write state/ from config/snapshot/ (EndingBalance TB)
 # warm gate: once-capital only — additive buy/sell would move numeric observations
@@ -27,7 +27,7 @@ acu run scenario/10-seed-capital.yaml && acu snapshot --assert-unchanged
 
 Bare `apply` / `diff` (no path args) also prefer `config/<name>/` when those trees exist (V30).
 
-Finance-minimal repos keep root `bootstrap/`…`setup/` and have no `master/`; they still scaffold `config/snapshot/` for the trial-balance observer.
+Legacy data repos may still use root `bootstrap/`…`master/`; init no longer scaffolds that layout.
 
 ## Snapshot observations
 
@@ -66,8 +66,8 @@ or re-capture without mutation.
 | File | Class | Behavior on warm re-run |
 | ---- | ----- | ----------------------- |
 | `scenario/10-seed-capital.yaml` | once | `once: true` + `present` inquire on Owner Capital 30000 `EndingBalance gte 50000`; skip when already present |
-| `scenario/20-buy-gateways.yaml` | additive | re-runs; per-leg delta expects |
-| `scenario/30-build.yaml` | stub | empty steps (kit body later) |
+| `scenario/20-buy.yaml` | additive | re-runs; per-leg delta expects |
+| `scenario/30-build.yaml` | additive | kit assembly; re-runs |
 | `scenario/40-sell.yaml` | additive | re-runs; per-leg delta expects |
 
 Warm capital non-stack proof (live or e2e):
@@ -81,7 +81,7 @@ acu --tenant DEV run scenario/    # warm: skip 10-seed-capital; capital stays 50
 
 Offline unit tests cover the once skip path (`tests/test_run.py::test_once_skip_when_present`).
 
-Live virgin-tenant chain: `make e2e FILE=test_distribution_flavor`.
+Live virgin-tenant scenario + snapshot chain: `make e2e FILE=test_scenario_lifecycle`.
 
 ## Apply-order and dependency notes
 
@@ -97,7 +97,7 @@ Cross-directory order is fixed: bootstrap → baseline → setup → master (umb
 | Setup calendar | Financial year → master calendar → open periods for LAB5 |
 | Master prefs | Reason codes and IN prefs before warehouse; warehouse before item classes and stock items |
 | Parties | Vendor/customer classes before vendors/customers |
-| Scenario | Runs only after master apply; capital once-guard then additive buy/sell |
+| Scenario | Runs only after master apply; capital once-guard then additive buy/build/sell |
 
 Feature closure: every feature-gated form used by a seed file must appear in `config/bootstrap/features.yaml`.
 
@@ -105,7 +105,7 @@ Reference closure: every foreign key must resolve to a tenant-native row or an e
 
 ## Entity map
 
-Paths are under `config/` for seed trees (distribution flavor).
+Paths are under `config/` for seed trees (except `scenario/` at the data-repo root).
 
 | Seed file | Entity / action | Endpoint | Screen |
 | -------- | --------------- | -------- | ------ |
@@ -117,6 +117,7 @@ Paths are under `config/` for seed trees (distribution flavor).
 | `config/baseline/50-gl-preferences.yaml` | GLPreferences | bootstrap | GL102000 |
 | `config/baseline/60-ledger-company.yaml` | LedgerCompany | bootstrap | GL201500 |
 | `config/baseline/90-uoms.yaml` | UnitsOfMeasure | default | CS203500 |
+| `config/baseline/91-company-packaging.yaml` | Company (Weight/Volume UOM) | bootstrap | CS101500 |
 | `config/setup/10-financial-year.yaml` | FinancialYearSettings / GeneratePeriods | bootstrap | GL101000 |
 | `config/setup/20-master-calendar.yaml` | MasterCalendar / GenerateCalendar | bootstrap | GL201000 |
 | `config/setup/30-open-periods.yaml` | ManagePeriods / ProcessAll | bootstrap | GL503000 |
@@ -146,11 +147,11 @@ Paths are under `config/` for seed trees (distribution flavor).
 | `config/master/82-stock-items-kits.yaml` | StockItem | default | IN202500 |
 | `config/master/85-kit-specifications.yaml` | KitSpecification | default | IN209500 |
 | `scenario/10-seed-capital.yaml` | JournalTransaction (once) | default | GL301000 |
-| `scenario/20-buy-gateways.yaml` | PO / receipt / AP bill+pay | default | PO/IN/AP |
-| `scenario/30-build.yaml` | (stub) | — | — |
+| `scenario/20-buy.yaml` | PO / receipt / AP bill+pay | default | PO/IN/AP |
+| `scenario/30-build.yaml` | KitAssembly | default | IN307000 |
 | `scenario/40-sell.yaml` | SO / ship / invoice / AR pay | default | SO/IN/AR |
 
-`endpoint: bootstrap` resolves to the active Bootstrap package version from `config/bootstrap/project.xml` (or root `bootstrap/project.xml` on finance-minimal).
+`endpoint: bootstrap` resolves to the active Bootstrap package version from `config/bootstrap/project.xml` (or root `bootstrap/project.xml` on legacy layout).
 
 `endpoint: default` (or omitted on Default-only entities) resolves to `Default/<ACU_API_VERSION>`.
 
@@ -159,11 +160,3 @@ Paths are under `config/` for seed trees (distribution flavor).
 - Multi-org, multicurrency, full tax engine
 - Production cutover or opening balances from a legacy system
 - Replacing external data repos for production cutovers
-
-## Changelog note (release)
-
-When shipping the version that lands config/ umbrella + once-guard (gh #19):
-
-- Call out `config/` seed layout for `--flavor distribution`.
-- Call out lifecycle scenarios and once-guard skip for capital.
-- Call out bare `apply` / `diff` prefer `config/` when present; umbrella `acu apply config/`.

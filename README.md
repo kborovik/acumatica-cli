@@ -20,27 +20,23 @@ Acumatica configuration normally lives in the web UI: wizards, screens, and manu
 uv tool install acumatica-cli
 
 acu config init --host erp.example.com my-erp
-cd my-erp                                # edit .env: set ACU_PASSWORD
+cd my-erp                                # edit .env: set ACU_PASSWORD, ACU_TENANT
                                          # keep ACU_API_VERSION in sync with target.yaml
+                                         # start from a brand-new empty tenant
 
 acu config check                         # read-only preflight (incl. target.yaml)
 acu tenant create --id 3 --login DEV     # create the tenant + bootstrap it (needs SSH)
-acu --tenant DEV apply                   # seed bootstrap/, baseline/, setup/ (, master/)
-acu --tenant DEV diff                    # prove zero drift (exit 2 on drift)
+# or hosted: acu --tenant DEV bootstrap
+acu --tenant DEV apply config/           # seed config/{bootstrap,baseline,setup,master}/
+acu --tenant DEV run scenario/           # once capital → buy → build → sell
+acu --tenant DEV diff config/            # prove zero drift (exit 2 on drift)
+acu --tenant DEV snapshot                # capture state/ trial-balance
+# warm: capital once-skips; Owner Capital stays 50000 (not 100000)
+acu --tenant DEV run scenario/
 ```
 
-**Distribution demo seed** (inventory, warehouse, items, vendors/customers, lifecycle scenarios):
-
-```sh
-acu config init --flavor distribution --host erp.example.com my-dist
-cd my-dist                               # edit .env; start from an empty tenant
-acu config check && acu bootstrap \
-  && acu apply config/ && acu run scenario/ && acu diff config/
-# warm re-run: capital once-skips; Owner Capital stays 50000 (not 100000)
-acu run scenario/
-```
-
-See [docs/distribution.md](docs/distribution.md) for the entity map, once-guard, and apply-order notes.
+Bare `apply` / `diff` (no path args) also prefer `config/` when those trees exist.
+See [docs/demo-seed.md](docs/demo-seed.md) for the entity map, once-guard, and apply-order notes.
 
 **Hosted Acumatica (no SSH):** the tenant already exists; leave `ACU_SSH` blank.
 
@@ -49,8 +45,8 @@ acu config init --host customer.acumatica.com my-erp
 cd my-erp                                # edit .env: ACU_TENANT, ACU_PASSWORD; ACU_SSH=
 acu config check                         # REST preflight; ssh probe is skipped
 acu --tenant DEV bootstrap               # publish AcuBootstrap via REST only
-acu --tenant DEV apply
-acu --tenant DEV diff
+acu --tenant DEV apply config/
+acu --tenant DEV diff config/
 # offline UI fallback when REST publish is blocked:
 acu bootstrap --export AcuBootstrap.zip  # import + publish on SM204505
 ```
@@ -78,8 +74,7 @@ acu [--tenant NAME] [--url URL] [--ssh USER@HOST] [--api-version V]
 ├── schema [--out DIR]                dump the endpoint's OpenAPI schema (swagger.json)
 │
 └── config                            configuration ops
-    ├── init [--host HOST] [--flavor distribution] [DIR]
-    │                                 scaffold a data repo (.env, target.yaml, example YAML)
+    ├── init [--host HOST] [DIR]      scaffold full data repo (config/, scenario/, target.yaml)
     ├── show                          print the resolved config as a complete .env
     └── check [--strict]              preflight: discovery, secrets, target, REST, endpoints, SSH
 ```
@@ -94,20 +89,21 @@ Run `acu <command> --help` for details on any command.
 ## The data repo
 
 Your configuration lives in its own git repo.
-`acu config init` scaffolds finance-minimal seeds at the **root** (Bootstrap `project.xml` at `Bootstrap/1.0.0`, no `master/`, no scenario).
-`acu config init --flavor distribution` scaffolds the full demo under `config/` (same contract identity, expanded COA, masters) plus lifecycle `scenario/` and README.
+`acu config init` scaffolds a **single full seed** under `config/` (Bootstrap `project.xml` at `Bootstrap/1.0.0`, expanded COA, masters) plus lifecycle `scenario/`, observer `config/snapshot/`, and README. There is no `--flavor`.
 
 | Path | What it holds |
 | ---- | ------------- |
-| `bootstrap/` / `config/bootstrap/` | virgin-tenant config: features, company, credit terms, `project.xml` |
-| `baseline/` / `config/baseline/` | reference data: subaccounts, COA, ledger, UOMs |
-| `setup/` / `config/setup/` | one-time actions: financial year, master calendar, open periods |
-| `config/master/` | distribution masters (prefs, warehouse, items, parties); flavor only |
-| `scenario/` | lifecycle txns for `acu run`: once capital, then buy, build stub, sell |
+| `config/bootstrap/` | virgin-tenant config: features, company, credit terms, `project.xml` |
+| `config/baseline/` | reference data: subaccounts, COA, ledger, UOMs, packaging |
+| `config/setup/` | one-time actions: financial year, master calendar, open periods |
+| `config/master/` | inventory/distribution masters (prefs, warehouse, items, parties) |
+| `scenario/` | lifecycle txns for `acu run`: once capital, then buy, build, sell |
 | `config/snapshot/` | observer views for `acu snapshot` (`inquire:` / `entity:` / `gi:`; not SEED_DIRS) |
 | `state/` | committed derived-state observations (evidence, not seed; money/qty fixed-point) |
 | `target.yaml` | committed verified matrix: `erp` + `default_api` (what, not where) |
 | `.env` | where to apply and who signs in, every key an `ACU_*` variable |
+
+Legacy data repos may still keep root `bootstrap/`…`master/`; bare `apply`/`diff` prefer `config/` when present and never merge both trees.
 
 Files in each directory apply alphabetically; the numbered prefixes (`10-`, `20-`, and so on) encode dependency order.
 The scaffolded `.gitignore` keeps `.env` out of git — store it encrypted (for example as `.env.gpg`) and decrypt once per clone.
@@ -288,11 +284,13 @@ Configuration is one file: a decrypted `.env` at the repo root names the instanc
 
 The tier is self-contained.
 Each run scaffolds a synthetic single-org company from the packaged `acu config init` templates into a temporary directory, copies the real `.env` into it, and runs the installed `acu` binary from there — no data repo, no pre-existing fixtures on the instance.
-Scratch tenants (`E2E`, `E2EA`, `E2EB`) are created on the way in and always deleted on the way out, so nothing persists.
+Scratch tenants (`E2E`, `E2EA`, `E2EB`, `E2ESCEN`) are created on the way in and always deleted on the way out, so nothing persists.
+The packaged full `config init` seed (under `config/`) is the only scaffold.
 
 ```sh
 gmake e2e                                # whole tier, about 20 minutes
-gmake e2e FILE=test_provision_lifecycle  # one file, by stem or path
+gmake e2e FILE=test_provision_lifecycle  # apply/diff focus
+gmake e2e FILE=test_scenario_lifecycle   # scenario + snapshot focus
 ```
 
 ## License

@@ -29,7 +29,7 @@ Golden stem `trial-balance` must capture **≥1 numeric money field**
 
 Packaged default:
 
-- finance + distribution TB → `inquire: AccountSummaryInquiry` with `EndingBalance`
+- demo seed TB → `inquire: AccountSummaryInquiry` with `EndingBalance`
 
 `inventory-summary` / `QtyOnHand` is **not** a packaged golden this pass:
 live `InventorySummaryInquiry` with warehouse-only params returns empty
