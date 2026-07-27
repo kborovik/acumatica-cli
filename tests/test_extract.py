@@ -932,6 +932,62 @@ def test_fetch_filter_narrows_plain_list_get(
     assert dict(server.requests[-1].url.params) == {"$filter": "UnitID eq 'HOUR'"}
 
 
+def test_expand_for_detail_keys_and_maincontact() -> None:
+    """T60/T65: detail_keys + MainContact include drive $expand paths."""
+    wh = extract.EntitySpec(
+        entity="Warehouse",
+        keys=["WarehouseID"],
+        file="config/master/51-warehouse-locations.yaml",
+        detail_keys={"Locations": "LocationID"},
+        include=["Locations", "ReceivingLocationID"],
+    )
+    assert extract._expand_for(wh) == ["Locations"]  # pyright: ignore[reportPrivateUsage]
+    vendor = extract.EntitySpec(
+        entity="Vendor",
+        keys=["VendorID"],
+        file="config/master/75-vendors.yaml",
+        include=["VendorName", "MainContact"],
+    )
+    assert extract._expand_for(vendor) == [  # pyright: ignore[reportPrivateUsage]
+        "MainContact",
+        "MainContact/Address",
+    ]
+    bare = _spec()
+    assert extract._expand_for(bare) == []  # pyright: ignore[reportPrivateUsage]
+
+
+def test_fetch_sends_expand_for_detail_keys(
+    instance: Instance, server: FakeServer
+) -> None:
+    """Warehouse locations list GET carries $expand=Locations (T119)."""
+    spec = extract.EntitySpec(
+        entity="Warehouse",
+        keys=["WarehouseID"],
+        file="config/master/51-warehouse-locations.yaml",
+        endpoint="default",
+        detail_keys={"Locations": "LocationID"},
+        include=["Locations", "ReceivingLocationID"],
+    )
+    extract._fetch(_client(instance, server), spec)  # pyright: ignore[reportPrivateUsage]
+    assert dict(server.requests[-1].url.params) == {"$expand": "Locations"}
+
+
+def test_fetch_sends_expand_for_maincontact(
+    instance: Instance, server: FakeServer
+) -> None:
+    """Vendor list GET expands MainContact/Address for Country write-path."""
+    spec = extract.EntitySpec(
+        entity="Vendor",
+        keys=["VendorID"],
+        file="config/master/75-vendors.yaml",
+        include=["VendorName", "MainContact"],
+    )
+    extract._fetch(_client(instance, server), spec)  # pyright: ignore[reportPrivateUsage]
+    assert dict(server.requests[-1].url.params) == {
+        "$expand": "MainContact,MainContact/Address"
+    }
+
+
 def test_entity_spec_filter_defaults_to_none() -> None:
     # no filter -> the plain list GET goes out with no params at all
     assert _spec().filter is None
@@ -1017,7 +1073,21 @@ def test_warehouse_include_partitions_bootstrap_locations_defaults(
 def test_vendor_include_drops_large_default_surface(
     instance: Instance, server: FakeServer, tmp_path: Path
 ) -> None:
-    """Vendor/Customer include allow-lists keep template fields only."""
+    """Vendor/Customer include allow-lists keep template fields only.
+
+    MainContact/Address/Country must survive extract so re-apply on a
+    virgin tenant does not 422 Country cannot be empty (T65/T119).
+    ContactID is server-assigned and must never enter seed (B11 nested).
+    """
+    # inject server surrogates into canned live state (expand path returns them)
+    server.tables["Vendor"][0]["MainContact"] = {
+        "ContactID": 101399,
+        "Address": {"Country": "US", "LastModifiedDateTime": "2026-07-27T00:00:00"},
+    }
+    server.tables["Customer"][0]["MainContact"] = {
+        "ContactID": 101405,
+        "Address": {"Country": "US"},
+    }
     _run(instance, server, tmp_path, only=frozenset({"Vendor", "Customer"}))
     vendor = yaml.safe_load(
         (tmp_path / "config" / "master" / "75-vendors.yaml").read_text()
@@ -1034,6 +1104,8 @@ def test_vendor_include_drops_large_default_surface(
         "SendOrdersbyEmail",
         "MainContact",
     }
+    assert vendor["MainContact"] == {"Address": {"Country": "US"}}
+    assert "ContactID" not in vendor["MainContact"]
     assert "Status" not in vendor
     assert "LastModifiedDateTime" not in vendor
     assert set(customer) == {
@@ -1042,6 +1114,7 @@ def test_vendor_include_drops_large_default_surface(
         "CustomerClass",
         "MainContact",
     }
+    assert customer["MainContact"] == {"Address": {"Country": "US"}}
     assert "Status" not in customer
 
 

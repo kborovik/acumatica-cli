@@ -186,6 +186,29 @@ def catalog_completeness_gap(
     return templates - catalog, catalog - templates
 
 
+def _expand_for(spec: EntitySpec) -> list[str]:
+    """``$expand`` paths the catalog row needs for details + linked entities.
+
+    Detail arrays travel only under ``$expand=<ListField>`` (T60); linked
+    entities under ``$expand=<Field>`` / nested slash paths (T65). Without
+    expand the plain list GET returns top-level scalars alone — extract
+    would drop ``Locations`` / ``MainContact`` and re-apply on a virgin
+    tenant 422s (Vendor ``Country`` cannot be empty) or loses warehouse
+    bins. Detail fields come from ``detail_keys``; ``MainContact`` is the
+    packaged linked-entity include (Address nested for Country write-path).
+    """
+    paths: list[str] = []
+    if spec.detail_keys:
+        paths.extend(spec.detail_keys)
+    for field in spec.include or ():
+        if field in (spec.detail_keys or {}):
+            continue
+        if field == "MainContact":
+            paths.append("MainContact")
+            paths.append("MainContact/Address")
+    return sorted(set(paths))
+
+
 def _fetch(client: AcumaticaClient, spec: EntitySpec) -> list[dict[str, Any]]:
     """Every live record of the entity, contract-API-wrapped.
 
@@ -197,37 +220,108 @@ def _fetch(client: AcumaticaClient, spec: EntitySpec) -> list[dict[str, Any]]:
 
     A catalog filter rides both list reads, so the two paths serve the
     same record set and the per-key walk only visits filtered keys.
+    ``$expand`` rides both paths when the catalog claims detail lists or
+    linked entities (T60/T65) — same class of expand as seed.diff.
     """
     endpoint = resolve_endpoint(spec.endpoint, api_version=client.instance.api_version)
-    narrowed = {"$filter": spec.filter} if spec.filter else {}
+    params: dict[str, str] = {}
+    if spec.filter:
+        params["$filter"] = spec.filter
+    expand = _expand_for(spec)
+    if expand:
+        params["$expand"] = ",".join(expand)
     try:
-        return client.get_list(spec.entity, params=narrowed or None, endpoint=endpoint)
+        return client.get_list(spec.entity, params=params or None, endpoint=endpoint)
     except RuntimeError as err:
         if OPTIMIZATION_500 not in str(err):
             raise
     key_rows = client.get_list(
         spec.entity,
-        params={"$select": ",".join(spec.keys)} | narrowed,
+        params={"$select": ",".join(spec.keys)}
+        | ({"$filter": spec.filter} if spec.filter else {}),
         endpoint=endpoint,
     )
+    expand_params = {"$expand": ",".join(expand)} if expand else None
     records: list[dict[str, Any]] = []
     for row in key_rows:
         values = unwrap(row)
         record = client.get_record(
-            spec.entity, [values[k] for k in spec.keys], endpoint
+            spec.entity,
+            [values[k] for k in spec.keys],
+            endpoint,
+            params=expand_params,
         )
         if record is not None:
             records.append(record)
     return records
 
 
+# Server-assigned / audit fields that must never enter seed (B11 class).
+# Applied recursively under linked entities and detail rows after expand
+# (T65/T119): MainContact.ContactID and AllowedCashAccounts.LastModified*
+# would otherwise permanent-red-diff after re-apply on a fresh tenant.
+_SERVER_DERIVED = frozenset(
+    {
+        "ContactID",
+        "CreatedDateTime",
+        "LastModifiedDateTime",
+        "NoteID",
+        "tstamp",
+    }
+)
+
+
+def _elide_server_derived(value: Any) -> Any:
+    """Drop server-derived keys recursively; elide empty nested containers."""
+    if isinstance(value, dict):
+        cleaned = {
+            k: _elide_server_derived(v)
+            for k, v in value.items()
+            if k not in _SERVER_DERIVED
+            and v is not None
+            and v != ""
+            and not (isinstance(v, (dict, list)) and not v)
+        }
+        return cleaned
+    if isinstance(value, list):
+        return [_elide_server_derived(v) for v in value]
+    return value
+
+
+def _kept_fields(spec: EntitySpec, record: dict[str, Any]) -> dict[str, Any]:
+    """Apply include/strip + nested server-derived elision to one unwrapped row."""
+    keep: dict[str, Any] = {}
+    for field, value in record.items():
+        if field in spec.keys:
+            keep[field] = value
+            continue
+        if field in _SERVER_DERIVED:
+            continue
+        if spec.include:
+            if field not in spec.include:
+                continue
+        elif field in spec.strip:
+            continue
+        # Nested ContactID / LastModifiedDateTime under expand (T65/T119).
+        cleaned = _elide_server_derived(value)
+        if cleaned is None or cleaned == "":
+            continue
+        if isinstance(cleaned, (dict, list)) and not cleaned:
+            continue
+        keep[field] = cleaned
+    ordered = {k: keep[k] for k in spec.keys if k in keep}
+    ordered |= {k: keep[k] for k in sorted(keep.keys() - set(spec.keys))}
+    return ordered
+
+
 def _shape(spec: EntitySpec, live: list[dict[str, Any]]) -> list[dict[str, Any]]:
     """Live records -> byte-stable seed records.
 
     Unwrap, apply the strip deny-list or include allow-list (key fields
-    always survive), elide None and empty-string values, order fields key
-    fields first (catalog order) then alphabetical, and sort records by
-    key tuple - server order never leaks into the emitted bytes.
+    always survive), elide None and empty-string values, drop nested
+    server-derived fields (B11), order fields key fields first (catalog
+    order) then alphabetical, and sort records by key tuple - server
+    order never leaks into the emitted bytes.
 
     Records duplicating the declared key tuple are a hard error (V25): an
     under-keyed file diffs as permanent false drift and apply collapses
@@ -242,19 +336,7 @@ def _shape(spec: EntitySpec, live: list[dict[str, Any]]) -> list[dict[str, Any]]
             raise RuntimeError(
                 f"{spec.entity}: live record missing key field(s) {', '.join(missing)}"
             )
-        keep = {
-            field: value
-            for field, value in record.items()
-            if field in spec.keys
-            or (
-                (field in spec.include if spec.include else field not in spec.strip)
-                and value is not None
-                and value != ""
-            )
-        }
-        ordered = {k: keep[k] for k in spec.keys}
-        ordered |= {k: keep[k] for k in sorted(keep.keys() - set(spec.keys))}
-        shaped.append(ordered)
+        shaped.append(_kept_fields(spec, record))
     shaped.sort(key=lambda r: tuple(str(r[k]) for k in spec.keys))
     idents = [tuple(str(r[k]) for k in spec.keys) for r in shaped]
     for prev, cur in itertools.pairwise(idents):

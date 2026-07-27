@@ -1,34 +1,34 @@
-"""Live extract round-trip against the real instance (T50, `make e2e`).
+"""Live full extract round-trip against the real instance (T119, `make e2e`).
 
-The round-trip is extract's proof of fitness as the inverse of apply:
-tenant A is configured from the scaffolded synthetic data repo (T63:
-the conftest scaffolds the packaged config-init templates into a tmp
-dir - single org, no repo-root symlinks, no dataset tenants) and dumped
-into a/; tenant B is created fresh and configured from a/ alone; diff
-over a/ reads B clean (V4); a second extract from B into b/ must come
-back byte-identical to a/ - any server-derived field the manifest fails
-to strip surfaces here as a byte difference (V22). The GL batch leg
-proves the replayed setup chain is complete end to end (B16 class): a
-hand-built batch PUT releases to Posted on B.
+Extract's proof of fitness as the inverse of apply for the full packaged
+seed under ``config/`` (bootstrap + baseline + setup + master, V34):
 
-Pre-build archaeology, probed live before this file was written (V12):
+1. Tenant A is configured from the scaffolded synthetic data repo (T63:
+   packaged ``config init`` templates into a tmp dir — single org, no
+   repo-root symlinks, no dataset tenants).
+2. ``acu extract --out a/`` dumps the full catalog off A (hard-cut
+   ``config/`` emit; T115).
+3. Tenant B is created fresh and configured from ``a/config`` alone.
+4. ``acu diff a/config`` on B is clean (V4, exit 0).
+5. Re-extract from B into ``b/`` is byte-identical to ``a/`` — any
+   server-derived field the catalog fails to strip surfaces as a byte
+   difference (V22; B11/B26 class).
 
-- B9 is alive on this build: the plain list GET on Bootstrap Currency
-  500s with the optimization marker while the $select-narrowed list GET
-  answers 200 - extract's fallback is the load-bearing Currency read.
-- Bootstrap Currency serves the entire currency list (~172 rows;
-  IsFinancial marks the configured ones), so the manifest narrows the
-  read with filter: IsFinancial eq true (T52) - the extracted file
-  carries the configured set and the fallback walks only its keys.
-- Unpaged list GETs are complete at this scale: row counts matched a
-  $top=10000 sweep on every probed entity (12 to 172 rows).
+Master is non-optional: after full bare apply, no ``config/master/`` row
+may skip as ``(no records)`` — that would mean A's configuration is
+incomplete before the inverse is even exercised. Multi-file filter-split
+(Warehouse / StockItem) quality is T117; packaging UOMs are not claimed
+(T118 / B26).
 
-Opt-in tier: `e2e` marker, deselected by the default suite (V13). Run
-via `make e2e` from the repo root; the only repo-root file involved is
-the decrypted .env, copied into the scaffold by the conftest. The
-tests drive the installed `acu` binary through the shared conftest
-runner (V9 contract as scripts see it) and are sequential and stateful
-by design; the session fixture always deletes both scratch tenants and
+The GL batch leg proves the replayed setup chain is complete end to end
+(B16 class): a hand-built batch PUT releases to Posted on B.
+
+Opt-in tier: ``e2e`` marker, deselected by the default suite (V13). Run
+via ``make e2e`` from the repo root; the only repo-root file involved is
+the decrypted ``.env``, copied into the scaffold by the conftest. Tests
+drive the installed ``acu`` binary through the shared conftest runner
+(V9 contract as scripts see it) and are sequential and stateful by
+design; the session fixture always deletes both scratch tenants and
 recycles (V5).
 """
 
@@ -98,6 +98,16 @@ def _yaml_set(root: Path) -> set[str]:
     return {str(p.relative_to(root)) for p in root.rglob("*.yaml")}
 
 
+def _catalog_expected() -> set[str]:
+    """Full V34 catalog emit set: every entity + setup row + features."""
+    manifest = load_manifest()
+    return (
+        {spec.file for spec in manifest.entities}
+        | {synth.file for synth in manifest.setup}
+        | {FEATURES_FILE}
+    )
+
+
 def test_tenant_a_bootstraps(acu: RunAcu, scratch_pair: ScratchPair) -> None:
     """Tenant A: created from the data repo, bootstrap chained at birth."""
     proc = acu("tenant", "create", "--id", str(scratch_pair.id_a), "--login", LOGIN_A)
@@ -107,45 +117,64 @@ def test_tenant_a_bootstraps(acu: RunAcu, scratch_pair: ScratchPair) -> None:
 
 
 def test_apply_configures_tenant_a(acu: RunAcu, scratch_pair: ScratchPair) -> None:
-    """Bare apply sweeps the scaffolded repo's config/ SEED_DIRS (V28/V30)."""
+    """Bare apply sweeps the scaffolded repo's config/ SEED_DIRS (V28/V30).
+
+    Full seed includes master after setup — the extract inverse is only
+    meaningful when A carries the whole packaged surface.
+    """
     proc = acu("--tenant", LOGIN_A, "apply")
     assert proc.returncode == 0, _combined(proc)
+    combined = _combined(proc)
+    # umbrella / default_seed_dirs order: bootstrap → baseline → setup → master
+    assert "config/master/" in combined or "master/" in combined, combined
 
 
 def test_extract_dumps_tenant_a(
     acu: RunAcu, scratch_pair: ScratchPair, out_dirs: tuple[Path, Path]
 ) -> None:
-    """Extract --out a/ emits the config-init set off the configured A.
+    """Extract --out a/ emits the full catalog off the configured A.
 
-    Every in-contract manifest row must produce a file (a "(no records)"
-    skip here means A's configuration is incomplete - fail loud before
-    the byte-compare would); every entity/action file must parse back
-    through load_baseline (I.cmd: emitted files are seed files by
-    construction). V34 catalog matches the template seed set (no
-    multicurrency Currency row under LAB5). Multi-file filter-split
-    quality is T117; full master round-trip green is T119.
+    Every in-contract catalog row must produce a file under ``config/``
+    (V30 hard-cut). A ``(no records)`` skip on master means A's apply was
+    incomplete — fail loud before the byte-compare. Every entity/action
+    file must parse through ``load_baseline`` (emitted files are seed
+    files by construction). V34: catalog file set equals template seed
+    set (no multicurrency Currency row under LAB5).
     """
     dir_a, _ = out_dirs
-    manifest = load_manifest()
+    expected = _catalog_expected()
+    master_expected = {p for p in expected if p.startswith("config/master/")}
+    assert master_expected, "catalog must include config/master/ rows (T117/T119)"
+
     proc = acu("--tenant", LOGIN_A, "extract", "--out", str(dir_a))
     assert proc.returncode == 0, _combined(proc)
     skips = [ln for ln in proc.stdout.splitlines() if ln.startswith("skip ")]
     assert not any("entity not in active Bootstrap contract" in ln for ln in skips), (
         _combined(proc)
     )
-    expected = (
-        {spec.file for spec in manifest.entities}
-        | {synth.file for synth in manifest.setup}
-        | {FEATURES_FILE}
+    # master is non-optional after full apply (T119)
+    master_skips = [
+        ln for ln in skips if "config/master/" in ln and "(no records)" in ln
+    ]
+    assert not master_skips, (
+        "full apply left master empty — extract inverse incomplete:\n"
+        + "\n".join(master_skips)
+        + "\n"
+        + _combined(proc)
     )
-    # allow clean (no records) skips only when a row truly has zero live data
+    # allow clean (no records)/(exists) skips only for non-master rows
     for ln in skips:
         assert "(no records)" in ln or "(exists)" in ln, _combined(proc)
-        # strip skipped paths from expected so set compare still holds
         for rel in list(expected):
             if rel in ln:
                 expected.discard(rel)
+    # master rows must still be in expected (not discarded via skip)
+    assert master_expected.issubset(expected | _yaml_set(dir_a))
     assert _yaml_set(dir_a) == expected
+    assert master_expected.issubset(_yaml_set(dir_a))
+    # hard-cut layout: no root SEED_DIRS emit
+    for rel in _yaml_set(dir_a):
+        assert rel.startswith("config/"), rel
     for rel in expected - {FEATURES_FILE}:
         load_baseline(dir_a / rel)
 
@@ -164,12 +193,17 @@ def test_replay_extract_onto_tenant_b(
     dir_a, _ = out_dirs
     proc = acu("--tenant", LOGIN_B, "apply", str(dir_a / "config"))
     assert proc.returncode == 0, _combined(proc)
+    combined = _combined(proc)
+    assert "config/master/" in combined or "master/" in combined, combined
 
 
 def test_diff_over_extract_is_clean_on_b(
     acu: RunAcu, scratch_pair: ScratchPair, out_dirs: tuple[Path, Path]
 ) -> None:
-    """Independent read-back: a/ vs B shows no drift (V4, exit 0)."""
+    """Independent read-back: a/config vs B shows no drift (V4, exit 0).
+
+    Covers the full seed including master — not a GL-only subset.
+    """
     dir_a, _ = out_dirs
     proc = acu("--tenant", LOGIN_B, "diff", str(dir_a / "config"))
     assert proc.returncode == 0, _combined(proc)
@@ -181,16 +215,20 @@ def test_reextract_is_byte_identical(
 ) -> None:
     """Extract --out b/ off B returns a/ byte for byte (V22 leak detector).
 
-    A field the server derives (or rewrites) that the manifest fails to
+    A field the server derives (or rewrites) that the catalog fails to
     strip survives the replay with a different value on B and surfaces
-    here as a byte difference - the assertion message carries the first
-    differing file's unified diff for the archaeology loop.
+    here as a byte difference — the assertion message carries the first
+    differing file's unified diff for the archaeology loop. Master
+    filter-split files (Warehouse, StockItem) are in the set.
     """
     dir_a, dir_b = out_dirs
     proc = acu("--tenant", LOGIN_B, "extract", "--out", str(dir_b))
     assert proc.returncode == 0, _combined(proc)
-    assert _yaml_set(dir_b) == _yaml_set(dir_a)
-    for rel in sorted(_yaml_set(dir_a)):
+    set_a, set_b = _yaml_set(dir_a), _yaml_set(dir_b)
+    assert set_b == set_a
+    master = {p for p in set_a if p.startswith("config/master/")}
+    assert master, "re-extract must include config/master/ (T119)"
+    for rel in sorted(set_a):
         text_a = (dir_a / rel).read_text(encoding="utf-8")
         text_b = (dir_b / rel).read_text(encoding="utf-8")
         if text_a != text_b:
@@ -222,7 +260,7 @@ def test_gl_batch_posts_on_tenant_b(
     payload = {
         "Module": {"value": "GL"},
         "TransactionDate": {"value": "2026-06-15"},
-        "Description": {"value": "T50 extract round-trip probe"},
+        "Description": {"value": "T119 extract round-trip probe"},
         "Hold": {"value": False},
         "Details": [
             {

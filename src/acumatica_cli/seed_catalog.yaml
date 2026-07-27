@@ -218,7 +218,8 @@ entities:
   features: [WarehouseLocation]
   detail_keys:
     Locations: LocationID
-  # Locations tab + default bin pointers (same WH01 row as 52)
+  # Locations tab + default bin pointers (same WH01 row as 52).
+  # detail_keys → extract $expand=Locations (T60/T119); plain GET drops bins.
   include:
   - Locations
   - ReceivingLocationID
@@ -372,6 +373,9 @@ entities:
 
 # Large Default party surfaces: include-only template fields so extract
 # never dumps the hundreds of contract fields (audit, dormant tabs).
+# MainContact is a linked entity — extract._fetch $expand=MainContact,
+# MainContact/Address (T65/T119); without expand re-apply 422s on insert
+# (Country cannot be empty). Country must read back under Address.
 
 - entity: Vendor
   keys: [VendorID]
