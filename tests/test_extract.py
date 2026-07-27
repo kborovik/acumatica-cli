@@ -1221,6 +1221,19 @@ def test_templates_do_not_claim_packaging_uoms() -> None:
     assert claims == []
 
 
+def test_package_templates_have_no_yaml_comments() -> None:
+    """V28/T122: package templates/**/*.yaml are data only — no # comments."""
+    root = Path(__file__).resolve().parents[1] / "src" / "acumatica_cli" / "templates"
+    violations: list[str] = []
+    for path in sorted(root.rglob("*.yaml")):
+        text = path.read_text(encoding="utf-8")
+        for i, line in enumerate(text.splitlines(), 1):
+            if re.match(r"^\s*#", line) or re.search(r"\s#\s", line):
+                rel = path.relative_to(root)
+                violations.append(f"{rel}:{i}:{line}")
+    assert violations == []
+
+
 def test_b9_non_optimization_500_never_takes_fallback(
     instance: Instance,
 ) -> None:

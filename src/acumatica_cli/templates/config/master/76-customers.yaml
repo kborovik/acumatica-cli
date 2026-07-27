@@ -1,12 +1,3 @@
-# Customers (AR303000) via the Default endpoint - reachable once AR
-# preferences exist (60-ar-preferences.yaml; P1 probe 500'd before it).
-# Seven B2B buyers of the gateway kits. Terms/AR accounts and the cash
-# discount default from customer class B2B (71-customer-classes.yaml) -
-# records stay minimal so class changes propagate. The nested
-# MainContact/Address/Country mirrors the vendor finding (T65).
-#
-# APPLY ORDER (dir expansion sorts *.yaml alphabetically; numbered
-# prefixes encode order): after 71-customer-classes.yaml.
 entity: Customer
 key: CustomerID
 records:

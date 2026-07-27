@@ -1,24 +1,6 @@
-# Additive build leg: kit assembly (IN307000) parts -> finished gateways.
-# Warm re-runnable (document numbers change; per-leg deltas hold).
-#
-# Assembles one sell pack + surplus matching prior finished-goods buy:
-#   GW-EDGE x10, GW-CELL x5, GW-RAIL x5 (kit rev V1).
-# Consumes exact BOM from config/master/85-kit-specifications.yaml.
-#
-# Deltas:
-#   kits: EDGE +10, CELL +5, RAIL +5
-#   parts: ENCL-STD -15, ENCL-DIN -5, MB-CM4 -20, MOD-LTE -5,
-#     ANT-LORA -20, ANT-LTE -5, PSU-12V -20, SD-32GB -20, CBL-PWR -20
-#   cash 10100: 0 (pure inventory conversion)
-#
-# StockComponents omitted on PUT — kit specification expands components.
-# Type Production is the Default-endpoint assembly doc type; ReasonCode
-# INASSEMBLY is seeded in config/master/10-reason-codes.yaml.
-# Requires parts on hand from scenario/20-buy.yaml (or equivalent).
 scenario: build
 description: Assemble gateway kits from purchased components
 steps:
-# ---- build: GW-EDGE x10 ----------------------------------------------
 - id: asm-edge
   put: KitAssembly
   record:
@@ -38,7 +20,6 @@ steps:
     entity: KitAssembly
     keys: [Production, "${asm_edge}"]
     until: {Status: Released}
-# ---- build: GW-CELL x5 -----------------------------------------------
 - id: asm-cell
   put: KitAssembly
   record:
@@ -58,7 +39,6 @@ steps:
     entity: KitAssembly
     keys: [Production, "${asm_cell}"]
     until: {Status: Released}
-# ---- build: GW-RAIL x5 -----------------------------------------------
 - id: asm-rail
   put: KitAssembly
   record:

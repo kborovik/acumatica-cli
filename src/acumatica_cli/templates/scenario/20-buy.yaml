@@ -1,35 +1,6 @@
-# Additive buy leg: component POs -> receipt (CreateBill) -> AP bill -> AP WIRE pay.
-# Warm re-runnable (document numbers change; per-leg deltas hold).
-#
-# Buys parts for one build pack (30-build): 10 EDGE + 5 CELL + 5 RAIL BOM,
-# plus a buffer so components do NOT net to zero. Buying exactly the BOM left
-# every part at 0 on hand, so IN401000 filmed as "No records yet" and the
-# demo/walk.yaml parts-on-hand beat had nothing to show. Buffer is +5 on the
-# high-volume lines and +3 on the x5 lines; a real manufacturer carries stock.
-# Four component vendors (SHENZHEN / ENCLOTEC / WAVELINK / MEMSTOR).
-#
-# Unit costs roll up to kit costs EDGE 139 / CELL 195 / RAIL 145 so sell COGS
-# stays aligned with 40-sell expects. Buffer does not move average cost (same
-# unit costs), so 40-sell COGS 1848 / revenue 4138 are unchanged.
-#
-# Deltas:
-#   purchases: 2045 + 664 + 428 + 900 = 4037 cash out
-#     receipt CreateBill -> AP bill; ReleaseBill; AP WIRE Check
-#     PO accrual 20200 clears on bill; AP 20100 clears on payment
-#   inventory (WH01): ENCL-STD +20, ENCL-DIN +8, MB-CM4 +25, MOD-LTE +8,
-#     ANT-LORA +25, ANT-LTE +8, PSU-12V +25, SD-32GB +25, CBL-PWR +25
-#   cash 10100: -4037
-#   left on hand after 30-build consumes the BOM: 5 of each +5 line,
-#     3 of each +3 line (947 of component value retained in 12100)
-#
-# AP bill is created by PurchaseReceipt.CreateBill (multi-line Bill PUT
-# 500s on this build); VendorRef = PO-${po} keys the filter get that
-# captures the server-assigned bill number (acu run filter get).
-# Requires Checking 10100 funded (scenario/10-seed-capital.yaml).
 scenario: buy
 description: Buy kit components (PO receipt bill+pay) for manufacturer build
 steps:
-# ---- buy: SHENZHEN (boards / modems) ---------------------------------
 - id: po-shenzhen
   put: PurchaseOrder
   record:
@@ -91,7 +62,6 @@ steps:
     entity: Check
     keys: [Payment, "${chk_shenzhen}"]
     until: {Status: Closed}
-# ---- buy: ENCLOTEC (enclosures) --------------------------------------
 - id: po-enclotec
   put: PurchaseOrder
   record:
@@ -153,7 +123,6 @@ steps:
     entity: Check
     keys: [Payment, "${chk_enclotec}"]
     until: {Status: Closed}
-# ---- buy: WAVELINK (antennas) ----------------------------------------
 - id: po-wavelink
   put: PurchaseOrder
   record:
@@ -215,7 +184,6 @@ steps:
     entity: Check
     keys: [Payment, "${chk_wavelink}"]
     until: {Status: Closed}
-# ---- buy: MEMSTOR (power / media / cable) ----------------------------
 - id: po-memstor
   put: PurchaseOrder
   record:

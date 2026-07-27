@@ -1,8 +1,3 @@
-# Units of measure (CS203500) via the Default endpoint - EA for stock
-# items; BOX second unit; PIECE/HOUR retained from scaffold.
-# KG + LITER: company packaging base UOMs (Companies Weight/Volume UOM;
-# Stock Items Packaging tab inherits them). Must exist before
-# 91-company-packaging.yaml sets them on the org.
 entity: UnitsOfMeasure
 key: UnitID
 records:

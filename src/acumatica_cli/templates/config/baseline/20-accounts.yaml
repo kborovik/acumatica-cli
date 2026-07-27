@@ -1,21 +1,3 @@
-# Chart of accounts (GL202500), designed for LAB5 Electronics Inc. (lab5.ca demo tenant seed) - 23 accounts covering GL foundation plus the
-# AP/AR/IN/SO/PO posting resolution the buy-build-sell scenario needs.
-# Field shape live-verified on 26.101.0225 by the earlier SalesDemo
-# replay (T24). Stripped per that work: internal AccountID, AccountClass
-# (no Default-endpoint entity), AccountGroup (PM - absent on a fresh
-# tenant, PUT 422s), RevaluationRateType, and the server-derived
-# ChartOfAccountsOrder + CashAccount (PUT-tolerated but the server keeps
-# its own derivation, so any sourced value diffs dirty forever - B11).
-# CurrencyID only on denominated cash accounts (the SalesDemo extract
-# carried it on 11 cash accounts only). Equity accounts are Type:
-# Liability - the Account.Type list has no Equity value.
-#
-# APPLY ORDER (dir expansion sorts *.yaml alphabetically; numbered
-# prefixes encode order): after 10-subaccounts.yaml; before
-# 32-gl-preferences.yaml, which references 32000/33000 below. FX
-# gain/loss accounts (83xxx/84000) intentionally absent - USD-only
-# tenant; add them only if AR/AP release proves to need a financial
-# currency row (plan risk R4).
 entity: Account
 key: AccountCD
 records:

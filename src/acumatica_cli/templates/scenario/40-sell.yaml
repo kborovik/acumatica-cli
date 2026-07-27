@@ -1,16 +1,6 @@
-# Additive sell leg: three-customer SO -> ship -> invoice -> AR WIRE pay.
-# Warm re-runnable (document numbers change; per-leg deltas hold).
-#
-# Deltas:
-#   sales: ACMEMFG 4x EDGE 1196 + NORTHGRID 3x CELL + 2x RAIL 2045
-#     + AGRISENSE 3x EDGE 897 = 4138 revenue; COGS 7x139 + 3x195 + 2x145 = 1848
-#   all three customers pay WIRE in full -> AR 11000 net 0; cash +4138
-#   inventory: EDGE -7, CELL -3, RAIL -2
-# Requires on-hand kits from scenario/30-build.yaml (or equivalent).
 scenario: sell
 description: Sell pack (SO ship invoice collect) for ACMEMFG NORTHGRID AGRISENSE
 steps:
-# ---- sell: ACMEMFG (pays in full) ------------------------------------
 - id: so-acme
   put: SalesOrder
   record:
@@ -75,7 +65,6 @@ steps:
     entity: Payment
     keys: [Payment, "${pmt_acme}"]
     until: {Status: Closed}
-# ---- sell: NORTHGRID (pays in full) ----------------------------------
 - id: so-northgrid
   put: SalesOrder
   record:
@@ -141,7 +130,6 @@ steps:
     entity: Payment
     keys: [Payment, "${pmt_northgrid}"]
     until: {Status: Closed}
-# ---- sell: AGRISENSE (pays in full) ----------------------------------
 - id: so-agrisense
   put: SalesOrder
   record:

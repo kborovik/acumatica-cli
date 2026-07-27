@@ -1,21 +1,3 @@
-# Purchased-part stock items (IN202500) via the Default endpoint. The 9
-# components the gateway kits assemble from (see README). ItemClass PARTS
-# supplies valuation (Average), BaseUOM (EA), posting (inventory 12100)
-# and the availability rule - records stay minimal so class changes
-# propagate. No DefaultPrice: parts are purchased, not sold; unit costs
-# live in the scenario's PO lines. AverageCost/LastCost are
-# transaction-derived - never claimed (B11 class).
-#
-# DefaultWarehouseID WH01 explicit: items created before the class
-# carried it keep their creation-time default (MAIN, the transit
-# warehouse - PO lines then fail, P5 probe); explicit beats derived.
-#
-# Packaging WeightUOM/VolumeUOM omitted: endpoint GET does not
-# return them (B26/B11 class) - claiming them permanent-red diffs.
-#
-# APPLY ORDER (dir expansion sorts *.yaml alphabetically; numbered
-# prefixes encode order): after 54-item-classes.yaml; before
-# 85-kit-specifications.yaml, whose components reference these items.
 entity: StockItem
 key: InventoryID
 records:

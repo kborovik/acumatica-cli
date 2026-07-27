@@ -1,13 +1,3 @@
-# Payment method (CA204000) via the Default endpoint. The seven system
-# payment methods are AP-only (UseInAR false, P1 probe) - an AR customer
-# payment refuses without a UseInAR method linked to the cash account.
-# WIRE covers both sides; AllowedCashAccounts is a detail array (T60
-# machinery, rows keyed by CashAccount) linking 10100 as the default
-# account on both AP and AR.
-#
-# APPLY ORDER (dir expansion sorts *.yaml alphabetically; numbered
-# prefixes encode order): after 63-cash-account.yaml (10100 must
-# exist); before 75-vendors.yaml/76-customers.yaml scenario use.
 entity: PaymentMethod
 key: PaymentMethodID
 detail_keys:

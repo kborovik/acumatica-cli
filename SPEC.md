@@ -150,7 +150,7 @@ T118|x|drop WeightUOM/VolumeUOM + other not-returned packaging claims from templ
 T119|x|e2e full extract round-trip: apply → extract → apply on B → `diff config/` clean → re-extract byte-identical incl master|V4,V22,V24,V34,T115,T117,T118
 T120|x|docs + help + changelog: extract inverse of apply under `config/`; entity map = catalog mirror; root-emit migration note|V12,I.cmd,T115
 T121|x|extract per-row progress stdout matching apply banner (`path -> tenant on url (entity)`) + keep skip/write/would-write outcome + end summary|V9,I.cmd
-T122|.|strip `#` comments from package template YAML — scope: `src/acumatica_cli/templates/**/*.yaml` grep `^\s*#` + trailing `\s#\s`; data only; offline unit gate no-comment; narrative stays sibling gitops separate files|V28
+T122|x|strip `#` comments from package template YAML — scope: `src/acumatica_cli/templates/**/*.yaml` grep `^\s*#` + trailing `\s#\s`; data only; offline unit gate no-comment; narrative stays sibling gitops separate files|V28
 
 ## §B BUGS
 
