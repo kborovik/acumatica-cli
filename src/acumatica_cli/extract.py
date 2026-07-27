@@ -130,6 +130,58 @@ def load_manifest() -> Manifest:
         raise RuntimeError(f"{_CATALOG_NAME}: {validation_summary(exc)}") from exc
 
 
+# V34 exclusions: features synthesis, contract XML, observer views — not seed.
+_TEMPLATE_SEED_EXEMPT_NAMES = frozenset({"features.yaml", "project.xml"})
+_TEMPLATE_SEED_EXEMPT_PREFIXES = ("config/views/",)
+
+
+def packaged_template_seed_files() -> frozenset[str]:
+    """Packaged ``templates/config/**`` seed paths that V34 requires catalog rows for.
+
+    Paths are data-repo relative (``config/...``). Excludes features synthesis,
+    ``project.xml``, and ``config/views/`` observer defs.
+    """
+    root = resources.files("acumatica_cli").joinpath("templates", "config")
+    out: set[str] = set()
+
+    def walk(node: Any, prefix: str) -> None:
+        for child in node.iterdir():
+            name = child.name
+            rel = f"{prefix}{name}" if not prefix else f"{prefix}/{name}"
+            path = f"config/{rel}"
+            if child.is_dir():
+                walk(child, rel)
+                continue
+            if not name.endswith(".yaml"):
+                continue
+            if name in _TEMPLATE_SEED_EXEMPT_NAMES:
+                continue
+            if any(path.startswith(p) for p in _TEMPLATE_SEED_EXEMPT_PREFIXES):
+                continue
+            out.add(path)
+
+    walk(root, "")
+    return frozenset(out)
+
+
+def catalog_seed_files(manifest: Manifest | None = None) -> frozenset[str]:
+    """Catalog entity + setup emit paths (features synthesis is not a catalog row)."""
+    m = manifest if manifest is not None else load_manifest()
+    return frozenset(s.file for s in m.entities) | frozenset(s.file for s in m.setup)
+
+
+def catalog_completeness_gap(
+    manifest: Manifest | None = None,
+) -> tuple[frozenset[str], frozenset[str]]:
+    """V34 completeness: (missing from catalog, extra in catalog).
+
+    Empty pair means template seed set equals catalog file set.
+    """
+    templates = packaged_template_seed_files()
+    catalog = catalog_seed_files(manifest)
+    return templates - catalog, catalog - templates
+
+
 def _fetch(client: AcumaticaClient, spec: EntitySpec) -> list[dict[str, Any]]:
     """Every live record of the entity, contract-API-wrapped.
 

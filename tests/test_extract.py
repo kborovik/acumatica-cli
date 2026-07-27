@@ -123,7 +123,9 @@ def _client(instance: Instance, server: FakeServer) -> AcumaticaClient:
     return AcumaticaClient(instance, transport=httpx.MockTransport(server))
 
 
-# -- canned live state for the packaged catalog's nine M1 entities --
+# -- canned live state for the packaged GL-chain catalog entities --
+# Master-surface rows (T116 path completeness) default empty: offline
+# extract skips (no records) until T117 filter-split fixtures land.
 
 TABLES: dict[str, list[dict[str, Any]]] = {
     "Company": [
@@ -182,7 +184,8 @@ TABLES: dict[str, list[dict[str, Any]]] = {
             "LastModifiedDateTime": "2026-07-11T00:00:00+00:00",
         },
     ],
-    # B9 entity: the plain list GET 500s (delegate_view below)
+    # B9 / filter fixtures for Currency unit tests (not a packaged catalog
+    # row under LAB5 — Multicurrency omitted from templates; V34 equality).
     "Currency": [
         {
             "CuryID": "EUR",
@@ -192,13 +195,10 @@ TABLES: dict[str, list[dict[str, Any]]] = {
             "IsActive": True,
             "IsFinancial": True,
             "RealGainAcctID": "83000",
-            # stripped by the catalog (T31 Translation* pairs)
             "TranslationGainAcctID": "83000",
             "TranslationLossAcctID": "84000",
         },
         {
-            # tenant-native ISO-list noise: the catalog filter
-            # (IsFinancial eq true) keeps it out of the extraction (T52)
             "CuryID": "JPY",
             "Description": "Yen",
             "DecimalPlaces": 0,
@@ -247,8 +247,37 @@ TABLES: dict[str, list[dict[str, Any]]] = {
         {"FinancialYear": "2027", "FinPeriodID": "022027", "Status": "Inactive"},
     ],
 }
+# Last-wins keys per entity name (multi-file Warehouse/StockItem share names).
 KEYS = {spec.entity: spec.keys for spec in extract.load_manifest().entities}
+KEYS["Currency"] = ["CuryID"]  # synthetic B9 fixture entity
+# Empty tables for every catalog entity without canned live state → skip clean
+for row in extract.load_manifest().entities:
+    TABLES.setdefault(row.entity, [])
 DELEGATE_VIEW = frozenset({"Currency"})
+
+# Catalog row counts (V34 path set): entity + setup (+ features outside catalog).
+_CATALOG_ENTITY_ROWS = len(extract.load_manifest().entities)
+_CATALOG_SETUP_ROWS = len(extract.load_manifest().setup)
+_CATALOG_SEED_ROWS = _CATALOG_ENTITY_ROWS + _CATALOG_SETUP_ROWS  # 37
+# GL-chain rows that write under default TABLES (Company appears twice).
+_GL_WRITE_ENTITIES = frozenset(
+    {
+        "Company",
+        "CreditTerms",
+        "Subaccount",
+        "Account",
+        "Ledger",
+        "GLPreferences",
+        "LedgerCompany",
+        "UnitsOfMeasure",
+    }
+)
+_GL_ENTITY_WRITES = sum(
+    1 for s in extract.load_manifest().entities if s.entity in _GL_WRITE_ENTITIES
+)  # Company x2 + 7 = 9
+_MASTER_SKIPS = _CATALOG_ENTITY_ROWS - _GL_ENTITY_WRITES  # empty master rows
+_FULL_WRITES = _GL_ENTITY_WRITES + _CATALOG_SETUP_ROWS + 1  # + features
+_FULL_ROWS = _CATALOG_SEED_ROWS + 1  # + features pass
 
 
 @pytest.fixture
@@ -260,41 +289,35 @@ def server() -> FakeServer:
 
 
 def test_packaged_manifest_is_self_consistent() -> None:
-    """The M1 catalog: the verified GL set, endpoint-explicit, keyed."""
+    """Packaged catalog: GL chain + master path rows, endpoint-explicit, keyed."""
     manifest = extract.load_manifest()
-    assert [s.entity for s in manifest.entities] == [
-        "Company",
-        "CreditTerms",
-        "Subaccount",
-        "Account",
-        "Currency",
-        "Ledger",
-        "GLPreferences",
-        "LedgerCompany",
-        "UnitsOfMeasure",
-    ]
-    assert [s.file for s in manifest.entities] == [
+    files = [s.file for s in manifest.entities]
+    assert files[:9] == [
         "config/bootstrap/company.yaml",
         "config/bootstrap/credit-terms.yaml",
         "config/baseline/10-subaccounts.yaml",
         "config/baseline/20-accounts.yaml",
-        "config/baseline/30-currencies.yaml",
         "config/baseline/40-ledger.yaml",
         "config/baseline/50-gl-preferences.yaml",
         "config/baseline/60-ledger-company.yaml",
         "config/baseline/90-uoms.yaml",
+        "config/baseline/91-company-packaging.yaml",
     ]
+    assert "config/baseline/30-currencies.yaml" not in files  # V34: not in templates
+    assert "config/master/10-reason-codes.yaml" in files
+    assert "config/master/85-kit-specifications.yaml" in files
+    assert len(manifest.entities) == _CATALOG_ENTITY_ROWS
     assert [(s.kind, s.file) for s in manifest.setup] == [
         ("financial-year", "config/setup/10-financial-year.yaml"),
         ("master-calendar", "config/setup/20-master-calendar.yaml"),
         ("open-periods", "config/setup/30-open-periods.yaml"),
     ]
     assert extract.FEATURES_FILE == "config/bootstrap/features.yaml"
-    files = [s.file for s in manifest.entities] + [s.file for s in manifest.setup]
-    assert len(files) == len(set(files))
-    assert extract.FEATURES_FILE not in files
+    seed_files = files + [s.file for s in manifest.setup]
+    assert len(seed_files) == len(set(seed_files))
+    assert extract.FEATURES_FILE not in seed_files
     # V30/T115 hard-cut: every emit path under config/, never root SEED_DIRS
-    for path in [*files, extract.FEATURES_FILE]:
+    for path in [*seed_files, extract.FEATURES_FILE]:
         assert path.startswith("config/"), path
         assert not path.startswith(("bootstrap/", "baseline/", "setup/", "master/")), (
             path
@@ -302,17 +325,31 @@ def test_packaged_manifest_is_self_consistent() -> None:
     for spec in manifest.entities:
         assert spec.keys, spec.entity
         if spec.entity in seed.BOOTSTRAP_ENTITIES:
-            # V20 by construction: the emitted file must carry endpoint:
-            # symbolic bootstrap stays symbolic until HTTP/load time (V21)
-            assert spec.endpoint == "bootstrap", spec.entity
-    # the Currency filter keeps the tenant-native ISO list out (T50/T52)
-    filters = {s.entity: s.filter for s in manifest.entities if s.filter}
-    assert filters == {"Currency": "IsFinancial eq true"}
+            # V20: bootstrap-served entities must carry an endpoint (literal
+            # or symbolic). Dual-serve Default surfaces may use `default`
+            # (Warehouse locations/defaults) rather than bootstrap.
+            assert spec.endpoint is not None, spec.entity
     # V25/B21: the pair identifies each org-ledger link; LedgerCD (the
     # primary-view field) must stay first - diff's read-back filters on
     # the first key alone (B14)
     keys = {s.entity: s.keys for s in manifest.entities}
     assert keys["LedgerCompany"] == ["LedgerCD", "OrganizationID"]
+
+
+def test_catalog_completeness_v34() -> None:
+    """V34 unit gate: packaged template seed set equals catalog file set."""
+    missing, extra = extract.catalog_completeness_gap()
+    assert not missing, f"missing_from_catalog={sorted(missing)}"
+    assert not extra, f"extra_in_catalog={sorted(extra)}"
+
+    # features synthesis + views are excluded from both sides
+    templates = extract.packaged_template_seed_files()
+    assert extract.FEATURES_FILE not in templates
+    assert not any(p.startswith("config/views/") for p in templates)
+    assert "config/bootstrap/project.xml" not in templates
+    catalog = extract.catalog_seed_files()
+    assert templates == catalog
+    assert len(templates) == _CATALOG_SEED_ROWS
 
 
 def test_manifest_keeps_symbolic_bootstrap_endpoint() -> None:
@@ -453,10 +490,14 @@ def test_run_writes_files_and_reports(
     assert not (tmp_path / "baseline").exists()
     assert not (tmp_path / "setup").exists()
     for spec in extract.load_manifest().entities:
-        assert (tmp_path / spec.file).is_file()
-        # Currency filter keeps only IsFinancial rows (T52)
-        n = 1 if spec.entity == "Currency" else len(TABLES[spec.entity])
-        assert f"write {tmp_path / spec.file} ({n} records)" in out
+        target = tmp_path / spec.file
+        live = TABLES.get(spec.entity) or []
+        if not live:
+            assert f"skip {target} (no records)" in out
+            assert not target.exists()
+            continue
+        assert target.is_file()
+        assert f"write {target} ({len(live)} records)" in out
 
 
 def test_run_skip_exists_and_force_overwrites(
@@ -504,9 +545,8 @@ def test_run_dry_run_writes_nothing(
     features = tmp_path / "config" / "bootstrap" / "features.yaml"
     assert f"would write {company} (1 records)" in out
     assert f"would write {fin_year} (1 records)" in out
-    # 8 = the built-in six + SubAccount + Multicurrency (Currency produces
-    # records under the packaged full company contract — T81)
-    assert f"would write {features} (8 records)" in out
+    # built-in six + SubAccount (Warehouse/Kit gates only when those rows produce)
+    assert f"would write {features} (7 records)" in out
     assert list(tmp_path.iterdir()) == []
 
 
@@ -516,20 +556,22 @@ def test_rerun_skips_every_emitted_file(
     tmp_path: Path,
     capsys: pytest.CaptureFixture[str],
 ) -> None:
-    """Second run: every destination skips; --force rewrites them all."""
+    """Second run: every written destination skips; --force rewrites them."""
     _run(instance, server, tmp_path)
     capsys.readouterr()
     _run(instance, server, tmp_path)
     lines = [ln for ln in capsys.readouterr().out.splitlines() if ln]
-    # 9 entities + 3 setup + features = 13 (T81: Currency included)
-    assert len(lines) == 13
-    assert all(ln.startswith("skip ") for ln in lines)
-    assert all(ln.endswith("(exists)") for ln in lines)
+    # written destinations re-skip as (exists); empty master re-skips (no records)
+    exists_skips = [ln for ln in lines if ln.endswith("(exists)")]
+    no_rec_skips = [ln for ln in lines if ln.endswith("(no records)")]
+    assert len(exists_skips) == _FULL_WRITES
+    assert len(no_rec_skips) == _MASTER_SKIPS
+    assert len(lines) == _FULL_ROWS
     _run(instance, server, tmp_path, force=True)
     lines = [ln for ln in capsys.readouterr().out.splitlines() if ln]
-    assert len(lines) == 13
-    assert sum(1 for ln in lines if ln.startswith("write ")) == 13
-    assert any("30-currencies" in ln and ln.startswith("write ") for ln in lines)
+    assert len(lines) == _FULL_ROWS
+    assert sum(1 for ln in lines if ln.startswith("write ")) == _FULL_WRITES
+    assert any("91-company-packaging" in ln and ln.startswith("write ") for ln in lines)
 
 
 def test_run_only_filters_entity_name_or_file_stem(
@@ -547,6 +589,24 @@ def test_run_only_filters_entity_name_or_file_stem(
 # -- B9: the delegate-view fallback --
 
 
+def _currency_spec() -> extract.EntitySpec:
+    """Synthetic Currency row (not packaged under LAB5; B9/filter unit fixture)."""
+    return extract.EntitySpec(
+        entity="Currency",
+        keys=["CuryID"],
+        file="config/baseline/30-currencies.yaml",
+        endpoint="bootstrap",
+        filter="IsFinancial eq true",
+        strip=[
+            "TranslationGainAcctID",
+            "TranslationGainSubID",
+            "TranslationLossAcctID",
+            "TranslationLossSubID",
+        ],
+        features=["Multicurrency"],
+    )
+
+
 def test_b9_fallback_selects_keys_then_key_urls(
     instance: Instance,
     server: FakeServer,
@@ -554,19 +614,19 @@ def test_b9_fallback_selects_keys_then_key_urls(
 ) -> None:
     """The optimization 500 reroutes: $select key list, then per-key GETs.
 
-    The manifest filter rides both list reads (T52): the fallback's key
-    list is already narrowed, so the non-financial JPY row never gets a
-    key-URL walk and never reaches the emitted file. Currency is on the
-    packaged full company contract (T81), so no data-repo override needed.
+    The filter rides both list reads (T52): the fallback's key list is
+    already narrowed, so the non-financial JPY row never gets a key-URL
+    walk and never reaches the shaped records.
     """
-    out = tmp_path / "out"
-    _run(instance, server, out, only=frozenset({"Currency"}))
+    spec = _currency_spec()
+    client = _client(instance, server)
+    live = extract._fetch(client, spec)  # pyright: ignore[reportPrivateUsage]
+    records = extract._shape(spec, live)  # pyright: ignore[reportPrivateUsage]
     currency_requests = [
         (r.url.path.split("/entity/", 1)[1], dict(r.url.params))
         for r in server.requests
     ]
     assert currency_requests == [
-        # plain list GET -> 500, filter riding
         ("Bootstrap/1.0.0/Currency", {"$filter": "IsFinancial eq true"}),
         (
             "Bootstrap/1.0.0/Currency",
@@ -574,12 +634,15 @@ def test_b9_fallback_selects_keys_then_key_urls(
         ),
         ("Bootstrap/1.0.0/Currency/EUR", {}),
     ]
-    text = (out / "config" / "baseline" / "30-currencies.yaml").read_text()
-    assert "RealGainAcctID" in text  # the key-URL GET returned full records
-    assert "TranslationGainAcctID" not in text  # catalog strip still applies
-    assert "JPY" not in text  # the filter narrowed the fallback path
-    # symbolic endpoint survives extract so a version bump never rewrites
+    text = extract._render(spec, records)  # pyright: ignore[reportPrivateUsage]
+    assert "RealGainAcctID" in text
+    assert "TranslationGainAcctID" not in text
+    assert "JPY" not in text
     assert "endpoint: bootstrap" in text
+    out = tmp_path / "config" / "baseline" / "30-currencies.yaml"
+    out.parent.mkdir(parents=True)
+    out.write_text(text)
+    assert out.is_file()
 
 
 def test_fetch_filter_narrows_plain_list_get(
@@ -601,21 +664,17 @@ def test_entity_spec_filter_defaults_to_none() -> None:
 
 def test_b9_non_optimization_500_never_takes_fallback(
     instance: Instance,
-    tmp_path: Path,
-    capsys: pytest.CaptureFixture[str],
 ) -> None:
-    """Only the optimization 500 reroutes; any other 500 is a row failure.
+    """Only the optimization 500 reroutes; any other 500 raises to the caller.
 
     Pre-V24 this aborted the run; now the row reports and the run goes on,
     but the B9 fallback ($select key list) still never fires for it.
     """
-    out = tmp_path / "out"
     server = FakeServer({}, {})  # unknown entity -> non-optimization 500
-    failed = _run(instance, server, out, only=frozenset({"Currency"}))
-    assert failed == 1
-    err = capsys.readouterr().err
-    assert "x Currency: " in err
-    assert "No entity satisfies" in err
+    with pytest.raises(RuntimeError, match="No entity satisfies"):
+        extract._fetch(  # pyright: ignore[reportPrivateUsage]
+            _client(instance, server), _currency_spec()
+        )
     assert not any("select" in str(r.url) for r in server.requests)
 
 
@@ -710,13 +769,13 @@ def test_features_closure_unions_gates_of_record_producing_entities(
 ) -> None:
     """features.yaml = the built-in six + gates, and load_features parses it.
 
-    Multicurrency rides Currency (packaged full company — T81); SubAccount
-    rides Subaccount. Both produce records under the default FakeServer.
+    SubAccount rides Subaccount (produces under default FakeServer). Master
+    feature gates (Warehouse, KitAssemblies, …) stay off while those rows
+    skip empty offline.
     """
     _run(instance, server, tmp_path)
     assert bootstrap.load_features(tmp_path) == [
         *bootstrap.DEFAULT_FEATURES,
-        "Multicurrency",
         "SubAccount",
     ]
 
@@ -724,11 +783,10 @@ def test_features_closure_unions_gates_of_record_producing_entities(
 def test_features_closure_drops_gate_when_no_records(
     instance: Instance, server: FakeServer, tmp_path: Path
 ) -> None:
-    server.tables = server.tables | {"Subaccount": [], "Currency": []}
+    server.tables = server.tables | {"Subaccount": []}
     _run(instance, server, tmp_path)
     names = bootstrap.load_features(tmp_path)
     assert "SubAccount" not in names
-    assert "Multicurrency" not in names
     assert names == list(bootstrap.DEFAULT_FEATURES)
 
 
@@ -761,6 +819,9 @@ def test_round_trip_every_file_parses_and_diffs_clean(
     manifest = extract.load_manifest()
     for spec in manifest.entities:
         path = tmp_path / spec.file
+        if not (TABLES.get(spec.entity) or []):
+            assert not path.exists(), spec.file  # empty → skip (no records)
+            continue
         assert path.exists(), spec.entity
         parsed = seed.load_baseline(path)
         assert isinstance(parsed, seed.BaselineFile)
@@ -783,8 +844,8 @@ def test_round_trip_is_byte_stable_under_permuted_server_order(
     _run(instance, FakeServer(permuted, KEYS, DELEGATE_VIEW), b)
     files = sorted(p.relative_to(a) for p in a.rglob("*.yaml"))
     assert files == sorted(p.relative_to(b) for p in b.rglob("*.yaml"))
-    # 9 entities + 3 setup + features (T81: Currency included)
-    assert len(files) == 13
+    # GL-chain entity writes + setup + features (master empty → skip)
+    assert len(files) == _FULL_WRITES
     for rel in files:
         assert (a / rel).read_bytes() == (b / rel).read_bytes(), str(rel)
 
@@ -810,9 +871,9 @@ def test_row_failure_reported_and_run_continues(
     assert (tmp_path / "config" / "baseline" / "20-accounts.yaml").is_file()
     assert (tmp_path / "config" / "setup" / "30-open-periods.yaml").is_file()
     assert (tmp_path / "config" / "bootstrap" / "features.yaml").is_file()
-    # 8 surviving entities + 3 synths + features; Subaccount failed (T81:
-    # Currency writes under packaged full company)
-    assert "x 12 written, 0 skipped, 1 failed" in captured.err
+    # GL writes minus Subaccount + setup + features; empty master skips
+    written = _FULL_WRITES - 1
+    assert f"x {written} written, {_MASTER_SKIPS} skipped, 1 failed" in captured.err
 
 
 def test_setup_not_entered_500_skips_clean(
@@ -853,8 +914,8 @@ def test_duplicate_key_tuple_is_row_failure_and_run_continues(
     # rows past the failure all ran; the failed file never gates them
     assert (tmp_path / "config" / "baseline" / "20-accounts.yaml").is_file()
     assert (tmp_path / "config" / "bootstrap" / "features.yaml").is_file()
-    # Currency writes; Subaccount failed (T81)
-    assert "x 12 written, 0 skipped, 1 failed" in captured.err
+    written = _FULL_WRITES - 1
+    assert f"x {written} written, {_MASTER_SKIPS} skipped, 1 failed" in captured.err
 
 
 def test_setup_synth_failure_isolated(
@@ -879,17 +940,10 @@ def test_setup_synth_failure_isolated(
 
 # the B19 live repro (issue #5): a clean tenant's reads split by server
 # accident between empty 200 [] and PXSetupNotEnteredException 500
-VIRGIN_TABLES: dict[str, list[dict[str, Any]]] = {
-    "Company": [],
-    "CreditTerms": [],
-    "UnitsOfMeasure": TABLES["UnitsOfMeasure"],
-    "FinancialYearSettings": [],
-}
 VIRGIN_SETUP_NOT_ENTERED = frozenset(
     {
         "Subaccount",
         "Account",
-        "Currency",
         "Ledger",
         "GLPreferences",
         "LedgerCompany",
@@ -897,6 +951,15 @@ VIRGIN_SETUP_NOT_ENTERED = frozenset(
         "CompanyPeriod",
     }
 )
+VIRGIN_TABLES: dict[str, list[dict[str, Any]]] = {
+    "Company": [],
+    "CreditTerms": [],
+    "UnitsOfMeasure": TABLES["UnitsOfMeasure"],
+    "FinancialYearSettings": [],
+}
+# remaining catalog entities answer empty 200 [] (skip no records)
+for row in extract.load_manifest().entities:
+    VIRGIN_TABLES.setdefault(row.entity, [])
 
 
 def test_virgin_tenant_dry_run_walks_full_manifest_exit_0(
@@ -912,10 +975,23 @@ def test_virgin_tenant_dry_run_walks_full_manifest_exit_0(
         cli.cli, ["extract", "--out", str(tmp_path), "--dry-run"]
     )
     assert result.exit_code == 0, result.output
-    # 2 empty entities + 8 setup-not-entered (Currency in package — T81) +
-    # financial-year empty + UoM write + features write
-    assert result.output.count("(no records)") == 2
-    assert result.output.count("(screen setup not entered)") == 8
+    # entity empty + setup-not-entered screens + financial-year empty
+    # + UoM write + features write; master path rows skip as (no records)
+    empty_entity_n = sum(
+        1
+        for s in extract.load_manifest().entities
+        if s.entity not in VIRGIN_SETUP_NOT_ENTERED
+        and not (VIRGIN_TABLES.get(s.entity) or [])
+    )
+    entity_setup_not_entered_n = sum(
+        1
+        for s in extract.load_manifest().entities
+        if s.entity in VIRGIN_SETUP_NOT_ENTERED
+    )
+    # master-calendar + open-periods synths also hit setup_not_entered sources
+    screen_skip_n = entity_setup_not_entered_n + 2
+    assert result.output.count("(no records)") == empty_entity_n
+    assert result.output.count("(screen setup not entered)") == screen_skip_n
     assert result.output.count("(entity not in active Bootstrap contract)") == 0
     assert result.output.count("(no financial year setup)") == 1
     assert (
@@ -927,7 +1003,8 @@ def test_virgin_tenant_dry_run_walks_full_manifest_exit_0(
         f"would write {tmp_path / 'config' / 'bootstrap' / 'features.yaml'} (6 records)"
         in result.output
     )
-    assert "+ 2 written, 11 skipped (dry run)" in result.stderr
+    skipped = empty_entity_n + screen_skip_n + 1  # + financial-year empty
+    assert f"+ 2 written, {skipped} skipped (dry run)" in result.stderr
     assert list(tmp_path.iterdir()) == []
 
 

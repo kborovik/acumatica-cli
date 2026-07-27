@@ -88,24 +88,11 @@ entities:
   - CreatedDateTime
   - LastModifiedDateTime
 
-- entity: Currency
-  endpoint: bootstrap
-  keys: [CuryID]
-  file: config/baseline/30-currencies.yaml
-  features: [Multicurrency] # CM202000 financial currency (B6/B8)
-  # Bootstrap Currency serves the whole tenant-native ISO list (~172
-  # rows); IsFinancial marks the configured set (T50 archaeology) -
-  # unfiltered, the extracted file is noise instead of config-as-code
-  # and the B9 per-key walk costs minutes of one-row GETs
-  filter: IsFinancial eq true
-  strip:
-  # Translation* pairs are read-invisible while the translation feature
-  # is off: write-tolerated, never read back, so a sourced value diffs
-  # "not returned by endpoint" (T31, V22 server-derived sibling)
-  - TranslationGainAcctID
-  - TranslationGainSubID
-  - TranslationLossAcctID
-  - TranslationLossSubID
+# Multicurrency Currency (30-currencies) is not in the LAB5 template set
+# (features.yaml deliberately omits Multicurrency). V34 equality: catalog
+# file set = template seed set. Currency extract archaeology (B9 filter
+# IsFinancial, Translation* strip) returns with T117 when a multicurrency
+# seed is packaged.
 
 - entity: Ledger
   keys: [LedgerID]
@@ -136,6 +123,139 @@ entities:
 - entity: UnitsOfMeasure
   keys: [UnitID]
   file: config/baseline/90-uoms.yaml
+
+# Second Company PUT after UOMs exist (CS101500 packaging Weight/Volume).
+# Strip/include archaeology for not-returned packaging fields is T118/B26;
+# filter-split vs company.yaml is T117.
+- entity: Company
+  endpoint: bootstrap
+  keys: [AcctCD]
+  file: config/baseline/91-company-packaging.yaml
+
+# config/master/ - path rows for V34 completeness (T116). Filter-split for
+# multi-file Warehouse/StockItem and include/strip archaeology for large
+# Default surfaces land in T117.
+
+- entity: ReasonCode
+  endpoint: bootstrap
+  keys: [ReasonCodeID]
+  file: config/master/10-reason-codes.yaml
+
+- entity: INPreferences
+  endpoint: bootstrap
+  keys: [HoldEntry]
+  file: config/master/20-in-preferences.yaml
+  features: [Warehouse]
+
+- entity: AvailabilityCalculationRule
+  endpoint: bootstrap
+  keys: [AvailabilitySchemeID]
+  file: config/master/30-availability-rules.yaml
+
+- entity: PostingClass
+  endpoint: bootstrap
+  keys: [PostClassID]
+  file: config/master/40-posting-classes.yaml
+
+- entity: Warehouse
+  endpoint: bootstrap
+  keys: [SiteCD]
+  file: config/master/50-warehouse.yaml
+  features: [Warehouse]
+
+- entity: Warehouse
+  endpoint: default
+  keys: [WarehouseID]
+  file: config/master/51-warehouse-locations.yaml
+  features: [WarehouseLocation]
+
+- entity: Warehouse
+  endpoint: default
+  keys: [WarehouseID]
+  file: config/master/52-warehouse-defaults.yaml
+  features: [WarehouseLocation]
+
+- entity: TaxCategory
+  keys: [TaxCategoryID]
+  file: config/master/53-tax-categories.yaml
+
+- entity: ItemClass
+  keys: [ClassID]
+  file: config/master/54-item-classes.yaml
+
+- entity: SOPreferences
+  endpoint: bootstrap
+  keys: [DefaultOrderType]
+  file: config/master/56-so-preferences.yaml
+
+- entity: POPreferences
+  endpoint: bootstrap
+  keys: [HoldReceipts]
+  file: config/master/57-po-preferences.yaml
+
+- entity: OrderType
+  endpoint: bootstrap
+  keys: [OrderType]
+  file: config/master/58-order-types.yaml
+
+- entity: ARPreferences
+  endpoint: bootstrap
+  keys: [HoldEntry]
+  file: config/master/60-ar-preferences.yaml
+
+- entity: APPreferences
+  endpoint: bootstrap
+  keys: [HoldEntry]
+  file: config/master/61-ap-preferences.yaml
+
+- entity: CAPreferences
+  endpoint: bootstrap
+  keys: [TransitAcctId]
+  file: config/master/62-ca-preferences.yaml
+
+- entity: CashAccount
+  endpoint: bootstrap
+  keys: [CashAccountCD]
+  file: config/master/63-cash-account.yaml
+
+- entity: PaymentMethod
+  keys: [PaymentMethodID]
+  file: config/master/64-payment-methods.yaml
+
+- entity: StatementCycle
+  endpoint: bootstrap
+  keys: [StatementCycleId]
+  file: config/master/65-statement-cycles.yaml
+
+- entity: VendorClass
+  endpoint: bootstrap
+  keys: [VendorClassID]
+  file: config/master/70-vendor-classes.yaml
+
+- entity: CustomerClass
+  keys: [ClassID]
+  file: config/master/71-customer-classes.yaml
+
+- entity: Vendor
+  keys: [VendorID]
+  file: config/master/75-vendors.yaml
+
+- entity: Customer
+  keys: [CustomerID]
+  file: config/master/76-customers.yaml
+
+- entity: StockItem
+  keys: [InventoryID]
+  file: config/master/80-stock-items-parts.yaml
+
+- entity: StockItem
+  keys: [InventoryID]
+  file: config/master/82-stock-items-kits.yaml
+
+- entity: KitSpecification
+  keys: [KitInventoryID, RevisionID]
+  file: config/master/85-kit-specifications.yaml
+  features: [KitAssemblies]
 
 # config/setup/ - the GL action chain (T36/T37): financial-year setup,
 # then calendar generation, then period activation; numbered prefixes

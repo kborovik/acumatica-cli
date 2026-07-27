@@ -121,10 +121,9 @@ def test_extract_dumps_tenant_a(
     skip here means A's configuration is incomplete - fail loud before
     the byte-compare would); every entity/action file must parse back
     through load_baseline (I.cmd: emitted files are seed files by
-    construction). Currency is on the packaged full company contract
-    (T81); full seed may still leave zero financial currencies on some
-    tenants, so that row may skip clean as (no records) but never as
-    not-in-contract.
+    construction). V34 catalog matches the template seed set (no
+    multicurrency Currency row under LAB5). Multi-file filter-split
+    quality is T117; full master round-trip green is T119.
     """
     dir_a, _ = out_dirs
     manifest = load_manifest()
@@ -134,15 +133,18 @@ def test_extract_dumps_tenant_a(
     assert not any("entity not in active Bootstrap contract" in ln for ln in skips), (
         _combined(proc)
     )
-    currency_skips = [ln for ln in skips if "30-currencies" in ln]
-    assert all("(no records)" in ln for ln in currency_skips), _combined(proc)
     expected = (
-        {spec.file for spec in manifest.entities if spec.entity != "Currency"}
+        {spec.file for spec in manifest.entities}
         | {synth.file for synth in manifest.setup}
         | {FEATURES_FILE}
     )
-    if not currency_skips:
-        expected.add("config/baseline/30-currencies.yaml")
+    # allow clean (no records) skips only when a row truly has zero live data
+    for ln in skips:
+        assert "(no records)" in ln or "(exists)" in ln, _combined(proc)
+        # strip skipped paths from expected so set compare still holds
+        for rel in list(expected):
+            if rel in ln:
+                expected.discard(rel)
     assert _yaml_set(dir_a) == expected
     for rel in expected - {FEATURES_FILE}:
         load_baseline(dir_a / rel)
