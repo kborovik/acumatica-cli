@@ -143,7 +143,7 @@ T111|x|docs sweep: README + retire/merge distribution flavor docs + help text; n
 T112|x|rename CLI verb `snapshot`→`state`; module `snapshot.py`→`state.py`; hard-cut drop `snapshot` alias|V15,V32,I.cmd,T94
 T113|x|defaults `config/views/` + `state/`; package template rehome `config/snapshot`→`config/views`; init map + scaffold path|V28,V32,I.data,I.cmd,T112
 T114|x|check-extras V15/V27/V28/V32/V33 verb+path; tests + e2e + docs README migration note hard-cut|V9,V12,V13,V15,T112,T113
-T115|.|extract hard-cut emit `config/`; rename `extract_manifest.yaml`→`seed_catalog.yaml`; rehome catalog file paths; offline path tests|V30,V34,I.cmd,I.data
+T115|x|extract hard-cut emit `config/`; rename `extract_manifest.yaml`→`seed_catalog.yaml`; rehome catalog file paths; offline path tests|V30,V34,I.cmd,I.data
 T116|.|catalog completeness offline: template seed set equals catalog file set; unit gate|V34
 T117|.|catalog rows for full packaged seed incl master; filter-split multi-file entities; include/strip archaeology large Default surfaces|V34,V22,I.data
 T118|.|drop WeightUOM/VolumeUOM + other not-returned packaging claims from templates/seed; prove `diff config/` green path on LAB5-class|V22,V34,B26

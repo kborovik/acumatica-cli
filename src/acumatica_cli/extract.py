@@ -1,22 +1,24 @@
 """Live tenant state to seed YAML: the inverse of apply.
 
-Driven by the packaged extract_manifest.yaml - per entity: the source
+Driven by the packaged seed_catalog.yaml - per entity: the source
 endpoint, key fields, destination file, an optional record filter, and a
 strip deny-list or include allow-list shaping the extracted records.
-Emitted files parse via seed.load_baseline by construction (V20:
-bootstrap-entity rows must carry an endpoint) and re-extract
-byte-identically: records sort by key tuple,
-fields order key-first then alphabetical, None and empty-string values
-are elided.
+Hard-cut emit under config/{bootstrap,baseline,setup,master}/ (V30/V34):
+no root SEED_DIRS paths, no --layout. Emitted files parse via
+seed.load_baseline by construction (V20: bootstrap-entity rows must
+carry an endpoint) and re-extract byte-identically: records sort by key
+tuple, fields order key-first then alphabetical, None and empty-string
+values are elided.
 
 setup/ action files are synthesized, not dumped: an action leaves no
-keyed record to extract, so each manifest setup row's kind-dispatched
+keyed record to extract, so each catalog setup row's kind-dispatched
 synthesizer reads the live state the action created (the done_when
-surface) and derives the action file back. bootstrap/features.yaml is
-the feature closure (V22/B15): the built-in six plus the union of the
-manifest features: gates over record-producing entities - a live
-FeaturesSet read is not available over the contract API (keyless
-BqlDelegate view), so the closure derives from what the tenant serves.
+surface) and derives the action file back.
+config/bootstrap/features.yaml is the feature closure (V22/B15): the
+built-in six plus the union of the catalog features: gates over
+record-producing entities - a live FeaturesSet read is not available
+over the contract API (keyless BqlDelegate view), so the closure
+derives from what the tenant serves.
 
 Extract reads live state and writes local files only - drift stays diff's
 job (exit 2 never happens here).
@@ -42,13 +44,14 @@ from .client import (
 from .models import Model, validation_summary
 from .seed import active_bootstrap, resolve_endpoint
 
-# The one non-manifest destination: the feature-closure file (V22/B15).
-FEATURES_FILE = "bootstrap/features.yaml"
+# The one non-catalog destination: the feature-closure file (V22/B15).
+FEATURES_FILE = "config/bootstrap/features.yaml"
 _SYMBOLIC_BOOTSTRAP = "bootstrap"
+_CATALOG_NAME = "seed_catalog.yaml"
 
 
 class EntitySpec(Model):
-    """One manifest row: how a live entity becomes a seed file."""
+    """One catalog row: how a live entity becomes a seed file."""
 
     entity: str
     keys: list[str] = Field(min_length=1)
@@ -87,7 +90,7 @@ class SetupSynth(Model):
 
 
 class Manifest(Model):
-    """The parsed extract manifest: entity rows plus setup synthesis rows."""
+    """The parsed seed catalog: entity rows plus setup synthesis rows."""
 
     entities: list[EntitySpec]
     setup: list[SetupSynth] = Field(default_factory=list)
@@ -117,16 +120,14 @@ class Manifest(Model):
 
 
 def load_manifest() -> Manifest:
-    """Parse and validate the packaged extract manifest."""
+    """Parse and validate the packaged seed catalog."""
     raw = yaml.safe_load(
-        (resources.files("acumatica_cli") / "extract_manifest.yaml").read_text(
-            encoding="utf-8"
-        )
+        (resources.files("acumatica_cli") / _CATALOG_NAME).read_text(encoding="utf-8")
     )
     try:
         return Manifest.model_validate(raw)
     except ValidationError as exc:
-        raise RuntimeError(f"extract_manifest.yaml: {validation_summary(exc)}") from exc
+        raise RuntimeError(f"{_CATALOG_NAME}: {validation_summary(exc)}") from exc
 
 
 def _fetch(client: AcumaticaClient, spec: EntitySpec) -> list[dict[str, Any]]:
@@ -138,7 +139,7 @@ def _fetch(client: AcumaticaClient, spec: EntitySpec) -> list[dict[str, Any]]:
     reads each record through the key-URL single-record GET, which skips
     the optimizer (V4: read-back must survive delegate-view entities).
 
-    A manifest filter rides both list reads, so the two paths serve the
+    A catalog filter rides both list reads, so the two paths serve the
     same record set and the per-key walk only visits filtered keys.
     """
     endpoint = resolve_endpoint(spec.endpoint, api_version=client.instance.api_version)
@@ -169,7 +170,7 @@ def _shape(spec: EntitySpec, live: list[dict[str, Any]]) -> list[dict[str, Any]]
 
     Unwrap, apply the strip deny-list or include allow-list (key fields
     always survive), elide None and empty-string values, order fields key
-    fields first (manifest order) then alphabetical, and sort records by
+    fields first (catalog order) then alphabetical, and sort records by
     key tuple - server order never leaks into the emitted bytes.
 
     Records duplicating the declared key tuple are a hard error (V25): an
@@ -289,7 +290,7 @@ def _synth_open_periods(client: AcumaticaClient) -> dict[str, Any] | None:
         return None
     years = _years(live)
     # OrganizationID = the extracted Company's AcctCD: the reference
-    # resolves inside the emitted set (V22 - bootstrap/company.yaml
+    # resolves inside the emitted set (V22 - config/bootstrap/company.yaml
     # creates the organization the action names)
     companies = client.get_list("Company", endpoint=ep)
     if not companies:
@@ -316,7 +317,7 @@ def _synth_open_periods(client: AcumaticaClient) -> dict[str, Any] | None:
 
 
 # kind -> (synthesizer, skip reason when the live state is absent);
-# SetupSynth validates manifest kinds against this registry
+# SetupSynth validates catalog kinds against this registry
 type Synthesizer = Callable[[AcumaticaClient], dict[str, Any] | None]
 SYNTHESIZERS: dict[str, tuple[Synthesizer, str]] = {
     "financial-year": (_synth_financial_year, "no financial year setup"),
@@ -326,7 +327,7 @@ SYNTHESIZERS: dict[str, tuple[Synthesizer, str]] = {
 
 
 def render_features(gates: Iterable[str]) -> str:
-    """The feature-closure bootstrap/features.yaml: built-in six + gates.
+    """The feature-closure config/bootstrap/features.yaml: built-in six + gates.
 
     Deterministic order (byte-stable re-extract): the built-in six in
     their bootstrap.DEFAULT_FEATURES spelling, then the extra gates
@@ -386,7 +387,7 @@ class _Extraction:
         A PXSetupNotEnteredException 500 is the virgin-tenant empty-state
         class — the screen has no data to extract, same answer as 200 [] —
         so it skips clean. Anything else is a reported row failure; the
-        run continues to the next manifest row either way.
+        run continues to the next catalog row either way.
         """
         if SETUP_NOT_ENTERED_500 in str(err):
             self._skip(target, "screen setup not entered")
@@ -492,11 +493,12 @@ def run(
     force: bool = False,
     dry_run: bool = False,
 ) -> int:
-    """Extract the manifest file set plus the feature closure under out_dir.
+    """Extract the catalog file set plus the feature closure under out_dir.
 
-    Per file: skip when it exists (--force overwrites), skip when the
-    tenant has no records, report-only under --dry-run. `only` filters
-    rows by entity name, synthesizer kind, or file stem.
+    Paths hard-cut under config/ SEED_DIRS (V30). Per file: skip when it
+    exists (--force overwrites), skip when the tenant has no records,
+    report-only under --dry-run. `only` filters rows by entity name,
+    synthesizer kind, or file stem.
 
     A failing row is reported and the run continues (V24) - the return
     value is the failed-row count, 0 when every row wrote or skipped clean

@@ -142,7 +142,7 @@ def test_extract_dumps_tenant_a(
         | {FEATURES_FILE}
     )
     if not currency_skips:
-        expected.add("baseline/30-currencies.yaml")
+        expected.add("config/baseline/30-currencies.yaml")
     assert _yaml_set(dir_a) == expected
     for rel in expected - {FEATURES_FILE}:
         load_baseline(dir_a / rel)
@@ -158,16 +158,9 @@ def test_tenant_b_bootstraps(acu: RunAcu, scratch_pair: ScratchPair) -> None:
 def test_replay_extract_onto_tenant_b(
     acu: RunAcu, scratch_pair: ScratchPair, out_dirs: tuple[Path, Path]
 ) -> None:
-    """B is configured from a/ alone, in the V22 dir order."""
+    """B is configured from a/ alone, umbrella expand of config/ (V30)."""
     dir_a, _ = out_dirs
-    proc = acu(
-        "--tenant",
-        LOGIN_B,
-        "apply",
-        str(dir_a / "bootstrap"),
-        str(dir_a / "baseline"),
-        str(dir_a / "setup"),
-    )
+    proc = acu("--tenant", LOGIN_B, "apply", str(dir_a / "config"))
     assert proc.returncode == 0, _combined(proc)
 
 
@@ -176,14 +169,7 @@ def test_diff_over_extract_is_clean_on_b(
 ) -> None:
     """Independent read-back: a/ vs B shows no drift (V4, exit 0)."""
     dir_a, _ = out_dirs
-    proc = acu(
-        "--tenant",
-        LOGIN_B,
-        "diff",
-        str(dir_a / "bootstrap"),
-        str(dir_a / "baseline"),
-        str(dir_a / "setup"),
-    )
+    proc = acu("--tenant", LOGIN_B, "diff", str(dir_a / "config"))
     assert proc.returncode == 0, _combined(proc)
     assert "no drift" in _combined(proc)
 

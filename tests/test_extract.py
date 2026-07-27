@@ -1,4 +1,4 @@
-"""Extract engine: manifest validation, shaping, and the live round-trip.
+"""Extract engine: catalog validation, shaping, and the live round-trip.
 
 Live records are served by an AcumaticaClient over httpx.MockTransport
 (FakeServer honors $filter/$select and key URLs), so extract and the
@@ -123,7 +123,7 @@ def _client(instance: Instance, server: FakeServer) -> AcumaticaClient:
     return AcumaticaClient(instance, transport=httpx.MockTransport(server))
 
 
-# -- canned live state for the packaged manifest's nine M1 entities --
+# -- canned live state for the packaged catalog's nine M1 entities --
 
 TABLES: dict[str, list[dict[str, Any]]] = {
     "Company": [
@@ -152,7 +152,7 @@ TABLES: dict[str, list[dict[str, Any]]] = {
             "Description": "Default",
             "Active": True,
             "Secured": False,
-            # stripped by the manifest (B11 class)
+            # stripped by the catalog (B11 class)
             "LastModifiedDateTime": "2026-07-11T00:00:00+00:00",
         }
     ],
@@ -163,7 +163,7 @@ TABLES: dict[str, list[dict[str, Any]]] = {
             "Description": "Retained Earnings",
             "PostOption": "Summary",
             "Type": "Liability",
-            # stripped by the manifest (B10/B11)
+            # stripped by the catalog (B10/B11)
             "AccountGroup": "EXPENSE",
             "ChartOfAccountsOrder": 2,
             "CashAccount": "",
@@ -192,12 +192,12 @@ TABLES: dict[str, list[dict[str, Any]]] = {
             "IsActive": True,
             "IsFinancial": True,
             "RealGainAcctID": "83000",
-            # stripped by the manifest (T31 Translation* pairs)
+            # stripped by the catalog (T31 Translation* pairs)
             "TranslationGainAcctID": "83000",
             "TranslationLossAcctID": "84000",
         },
         {
-            # tenant-native ISO-list noise: the manifest filter
+            # tenant-native ISO-list noise: the catalog filter
             # (IsFinancial eq true) keeps it out of the extraction (T52)
             "CuryID": "JPY",
             "Description": "Yen",
@@ -211,7 +211,7 @@ TABLES: dict[str, list[dict[str, Any]]] = {
             "LedgerID": "ACTUAL",
             "Description": "Actual Ledger",
             "Type": "Actual",
-            # stripped by the manifest (server-derived, T34)
+            # stripped by the catalog (server-derived, T34)
             "CurrencyID": "USD",
         }
     ],
@@ -260,7 +260,7 @@ def server() -> FakeServer:
 
 
 def test_packaged_manifest_is_self_consistent() -> None:
-    """The M1 manifest: the verified GL set, endpoint-explicit, keyed."""
+    """The M1 catalog: the verified GL set, endpoint-explicit, keyed."""
     manifest = extract.load_manifest()
     assert [s.entity for s in manifest.entities] == [
         "Company",
@@ -273,14 +273,32 @@ def test_packaged_manifest_is_self_consistent() -> None:
         "LedgerCompany",
         "UnitsOfMeasure",
     ]
-    assert [(s.kind, s.file) for s in manifest.setup] == [
-        ("financial-year", "setup/10-financial-year.yaml"),
-        ("master-calendar", "setup/20-master-calendar.yaml"),
-        ("open-periods", "setup/30-open-periods.yaml"),
+    assert [s.file for s in manifest.entities] == [
+        "config/bootstrap/company.yaml",
+        "config/bootstrap/credit-terms.yaml",
+        "config/baseline/10-subaccounts.yaml",
+        "config/baseline/20-accounts.yaml",
+        "config/baseline/30-currencies.yaml",
+        "config/baseline/40-ledger.yaml",
+        "config/baseline/50-gl-preferences.yaml",
+        "config/baseline/60-ledger-company.yaml",
+        "config/baseline/90-uoms.yaml",
     ]
+    assert [(s.kind, s.file) for s in manifest.setup] == [
+        ("financial-year", "config/setup/10-financial-year.yaml"),
+        ("master-calendar", "config/setup/20-master-calendar.yaml"),
+        ("open-periods", "config/setup/30-open-periods.yaml"),
+    ]
+    assert extract.FEATURES_FILE == "config/bootstrap/features.yaml"
     files = [s.file for s in manifest.entities] + [s.file for s in manifest.setup]
     assert len(files) == len(set(files))
     assert extract.FEATURES_FILE not in files
+    # V30/T115 hard-cut: every emit path under config/, never root SEED_DIRS
+    for path in [*files, extract.FEATURES_FILE]:
+        assert path.startswith("config/"), path
+        assert not path.startswith(("bootstrap/", "baseline/", "setup/", "master/")), (
+            path
+        )
     for spec in manifest.entities:
         assert spec.keys, spec.entity
         if spec.entity in seed.BOOTSTRAP_ENTITIES:
@@ -321,7 +339,7 @@ def test_manifest_rejects_duplicate_files() -> None:
 
 
 def test_manifest_rejects_row_claiming_features_file() -> None:
-    # bootstrap/features.yaml belongs to the feature-closure render
+    # config/bootstrap/features.yaml belongs to the feature-closure render
     spec = extract.EntitySpec(
         entity="Ledger", keys=["LedgerID"], file=extract.FEATURES_FILE
     )
@@ -331,7 +349,7 @@ def test_manifest_rejects_row_claiming_features_file() -> None:
 
 def test_setup_synth_rejects_unknown_kind() -> None:
     with pytest.raises(ValueError, match="unknown setup synthesizer kind"):
-        extract.SetupSynth(kind="bogus", file="setup/x.yaml")
+        extract.SetupSynth(kind="bogus", file="config/setup/x.yaml")
 
 
 def test_entity_spec_rejects_empty_keys() -> None:
@@ -362,7 +380,7 @@ def _spec(**overrides: Any) -> extract.EntitySpec:
     base: dict[str, Any] = {
         "entity": "UnitsOfMeasure",
         "keys": ["UnitID"],
-        "file": "baseline/90-uoms.yaml",
+        "file": "config/baseline/90-uoms.yaml",
     }
     return extract.EntitySpec(**(base | overrides))
 
@@ -429,6 +447,11 @@ def test_run_writes_files_and_reports(
 ) -> None:
     _run(instance, server, tmp_path)
     out = capsys.readouterr().out
+    # hard-cut: emit only under config/, never root SEED_DIRS (T115/V30)
+    assert (tmp_path / "config").is_dir()
+    assert not (tmp_path / "bootstrap").exists()
+    assert not (tmp_path / "baseline").exists()
+    assert not (tmp_path / "setup").exists()
     for spec in extract.load_manifest().entities:
         assert (tmp_path / spec.file).is_file()
         # Currency filter keeps only IsFinancial rows (T52)
@@ -442,7 +465,7 @@ def test_run_skip_exists_and_force_overwrites(
     tmp_path: Path,
     capsys: pytest.CaptureFixture[str],
 ) -> None:
-    target = tmp_path / "bootstrap" / "company.yaml"
+    target = tmp_path / "config" / "bootstrap" / "company.yaml"
     target.parent.mkdir(parents=True)
     target.write_text("operator-edited\n")
 
@@ -463,7 +486,7 @@ def test_run_skips_entity_with_no_live_records(
 ) -> None:
     server.tables = server.tables | {"UnitsOfMeasure": []}
     _run(instance, server, tmp_path, only=frozenset({"UnitsOfMeasure"}))
-    target = tmp_path / "baseline" / "90-uoms.yaml"
+    target = tmp_path / "config" / "baseline" / "90-uoms.yaml"
     assert f"skip {target} (no records)" in capsys.readouterr().out
     assert not target.exists()
 
@@ -476,14 +499,14 @@ def test_run_dry_run_writes_nothing(
 ) -> None:
     _run(instance, server, tmp_path, dry_run=True)
     out = capsys.readouterr().out
-    assert f"would write {tmp_path / 'bootstrap' / 'company.yaml'} (1 records)" in out
-    assert (
-        f"would write {tmp_path / 'setup' / '10-financial-year.yaml'} (1 records)"
-        in out
-    )
+    company = tmp_path / "config" / "bootstrap" / "company.yaml"
+    fin_year = tmp_path / "config" / "setup" / "10-financial-year.yaml"
+    features = tmp_path / "config" / "bootstrap" / "features.yaml"
+    assert f"would write {company} (1 records)" in out
+    assert f"would write {fin_year} (1 records)" in out
     # 8 = the built-in six + SubAccount + Multicurrency (Currency produces
     # records under the packaged full company contract — T81)
-    assert f"would write {tmp_path / 'bootstrap' / 'features.yaml'} (8 records)" in out
+    assert f"would write {features} (8 records)" in out
     assert list(tmp_path.iterdir()) == []
 
 
@@ -516,7 +539,7 @@ def test_run_only_filters_entity_name_or_file_stem(
     capsys: pytest.CaptureFixture[str],
 ) -> None:
     _run(instance, server, tmp_path, only=frozenset({"Ledger", "20-accounts"}))
-    written = sorted(p.name for p in (tmp_path / "baseline").iterdir())
+    written = sorted(p.name for p in (tmp_path / "config" / "baseline").iterdir())
     assert written == ["20-accounts.yaml", "40-ledger.yaml"]
     assert "company.yaml" not in capsys.readouterr().out
 
@@ -551,9 +574,9 @@ def test_b9_fallback_selects_keys_then_key_urls(
         ),
         ("Bootstrap/1.0.0/Currency/EUR", {}),
     ]
-    text = (out / "baseline" / "30-currencies.yaml").read_text()
+    text = (out / "config" / "baseline" / "30-currencies.yaml").read_text()
     assert "RealGainAcctID" in text  # the key-URL GET returned full records
-    assert "TranslationGainAcctID" not in text  # manifest strip still applies
+    assert "TranslationGainAcctID" not in text  # catalog strip still applies
     assert "JPY" not in text  # the filter narrowed the fallback path
     # symbolic endpoint survives extract so a version bump never rewrites
     assert "endpoint: bootstrap" in text
@@ -603,7 +626,9 @@ def test_synthesized_financial_year(
     instance: Instance, server: FakeServer, tmp_path: Path
 ) -> None:
     _run(instance, server, tmp_path, only=frozenset({"financial-year"}))
-    doc = yaml.safe_load((tmp_path / "setup" / "10-financial-year.yaml").read_text())
+    doc = yaml.safe_load(
+        (tmp_path / "config" / "setup" / "10-financial-year.yaml").read_text()
+    )
     assert doc == {
         "action": "GeneratePeriods",
         "entity": "FinancialYearSettings",
@@ -618,7 +643,9 @@ def test_synthesized_master_calendar_spans_year_range(
     instance: Instance, server: FakeServer, tmp_path: Path
 ) -> None:
     _run(instance, server, tmp_path, only=frozenset({"master-calendar"}))
-    doc = yaml.safe_load((tmp_path / "setup" / "20-master-calendar.yaml").read_text())
+    doc = yaml.safe_load(
+        (tmp_path / "config" / "setup" / "20-master-calendar.yaml").read_text()
+    )
     assert doc == {
         "action": "GenerateCalendar",
         "entity": "MasterCalendar",
@@ -636,7 +663,9 @@ def test_synthesized_open_periods_sources_company_org(
 ) -> None:
     """OrganizationID = the extracted Company AcctCD (V22 in-set closure)."""
     _run(instance, server, tmp_path, only=frozenset({"open-periods"}))
-    doc = yaml.safe_load((tmp_path / "setup" / "30-open-periods.yaml").read_text())
+    doc = yaml.safe_load(
+        (tmp_path / "config" / "setup" / "30-open-periods.yaml").read_text()
+    )
     assert doc == {
         "action": "ProcessAll",
         "entity": "ManagePeriods",
@@ -667,7 +696,7 @@ def test_open_periods_none_open_skips_with_warn(
     }
     _run(instance, server, tmp_path, only=frozenset({"open-periods"}))
     captured = capsys.readouterr()
-    target = tmp_path / "setup" / "30-open-periods.yaml"
+    target = tmp_path / "config" / "setup" / "30-open-periods.yaml"
     assert f"skip {target} (no open periods)" in captured.out
     assert "no open periods on tenant" in captured.err
     assert not target.exists()
@@ -708,7 +737,7 @@ def test_features_closure_counts_preexisting_files(
 ) -> None:
     """A prior run's file is in the output set even when this run skips it."""
     server.tables = server.tables | {"Subaccount": []}
-    target = tmp_path / "baseline" / "10-subaccounts.yaml"
+    target = tmp_path / "config" / "baseline" / "10-subaccounts.yaml"
     target.parent.mkdir(parents=True)
     target.write_text("operator-edited\n")
     _run(instance, server, tmp_path)
@@ -778,9 +807,9 @@ def test_row_failure_reported_and_run_continues(
     assert "No entity satisfies" in captured.err
     assert "Subaccount" not in captured.out  # failures are process, not data (V9)
     # rows past the failure all ran: entities, setup synths, features
-    assert (tmp_path / "baseline" / "20-accounts.yaml").is_file()
-    assert (tmp_path / "setup" / "30-open-periods.yaml").is_file()
-    assert (tmp_path / "bootstrap" / "features.yaml").is_file()
+    assert (tmp_path / "config" / "baseline" / "20-accounts.yaml").is_file()
+    assert (tmp_path / "config" / "setup" / "30-open-periods.yaml").is_file()
+    assert (tmp_path / "config" / "bootstrap" / "features.yaml").is_file()
     # 8 surviving entities + 3 synths + features; Subaccount failed (T81:
     # Currency writes under packaged full company)
     assert "x 12 written, 0 skipped, 1 failed" in captured.err
@@ -797,7 +826,7 @@ def test_setup_not_entered_500_skips_clean(
     failed = _run(instance, server, tmp_path, only=frozenset({"Ledger"}))
     assert failed == 0
     captured = capsys.readouterr()
-    target = tmp_path / "baseline" / "40-ledger.yaml"
+    target = tmp_path / "config" / "baseline" / "40-ledger.yaml"
     assert f"skip {target} (screen setup not entered)" in captured.out
     assert not target.exists()
     assert "+ 0 written, 1 skipped" in captured.err
@@ -820,10 +849,10 @@ def test_duplicate_key_tuple_is_row_failure_and_run_continues(
     assert failed == 1
     captured = capsys.readouterr()
     assert "x Subaccount: records duplicate key tuple [000000]" in captured.err
-    assert not (tmp_path / "baseline" / "10-subaccounts.yaml").exists()
+    assert not (tmp_path / "config" / "baseline" / "10-subaccounts.yaml").exists()
     # rows past the failure all ran; the failed file never gates them
-    assert (tmp_path / "baseline" / "20-accounts.yaml").is_file()
-    assert (tmp_path / "bootstrap" / "features.yaml").is_file()
+    assert (tmp_path / "config" / "baseline" / "20-accounts.yaml").is_file()
+    assert (tmp_path / "config" / "bootstrap" / "features.yaml").is_file()
     # Currency writes; Subaccount failed (T81)
     assert "x 12 written, 0 skipped, 1 failed" in captured.err
 
@@ -845,7 +874,7 @@ def test_setup_synth_failure_isolated(
     assert failed == 1
     captured = capsys.readouterr()
     assert "x master-calendar: " in captured.err
-    assert (tmp_path / "setup" / "30-open-periods.yaml").is_file()
+    assert (tmp_path / "config" / "setup" / "30-open-periods.yaml").is_file()
 
 
 # the B19 live repro (issue #5): a clean tenant's reads split by server
@@ -890,12 +919,12 @@ def test_virgin_tenant_dry_run_walks_full_manifest_exit_0(
     assert result.output.count("(entity not in active Bootstrap contract)") == 0
     assert result.output.count("(no financial year setup)") == 1
     assert (
-        f"would write {tmp_path / 'baseline' / '90-uoms.yaml'} (2 records)"
+        f"would write {tmp_path / 'config' / 'baseline' / '90-uoms.yaml'} (2 records)"
         in result.output
     )
     # features closure = the built-in six: only the gate-free UoM row produced
     assert (
-        f"would write {tmp_path / 'bootstrap' / 'features.yaml'} (6 records)"
+        f"would write {tmp_path / 'config' / 'bootstrap' / 'features.yaml'} (6 records)"
         in result.output
     )
     assert "+ 2 written, 11 skipped (dry run)" in result.stderr

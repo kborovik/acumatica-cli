@@ -78,8 +78,8 @@ def test_completion_rejected_after_subcommand() -> None:
 
 
 def test_extract_only_completes_manifest_entity_names() -> None:
-    # I.cmd: --only values come from the packaged extract manifest - package
-    # data (V23), matching the manifest's entity spelling exactly
+    # I.cmd: --only values come from the packaged seed catalog - package
+    # data (V23), matching the catalog's entity spelling exactly
     values = _completions(["extract", "--only"], "")
 
     assert "Company" in values

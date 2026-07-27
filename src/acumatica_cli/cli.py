@@ -864,9 +864,9 @@ def run_cmd(inst: Instance, files: tuple[Path, ...], dry_run: bool) -> None:
 def _complete_only(
     _ctx: click.Context, _param: click.Parameter, incomplete: str
 ) -> list[str]:
-    """--only value completion: entity names off the packaged manifest.
+    """--only value completion: entity names off the packaged seed catalog.
 
-    Fires per keystroke, so it stays local-only (V23): the manifest is
+    Fires per keystroke, so it stays local-only (V23): the catalog is
     package data - never REST, never SSH, never a live instance.
     """
     return [
@@ -888,7 +888,7 @@ def _complete_only(
     "--only",
     multiple=True,
     shell_complete=_complete_only,
-    help="Limit to matching manifest rows (entity name or file stem); repeatable",
+    help="Limit to matching catalog rows (entity name or file stem); repeatable",
 )
 @click.option("--force", is_flag=True, help="Overwrite existing files")
 @click.option(
@@ -904,14 +904,14 @@ def extract_cmd(
 ) -> None:
     """Extract live tenant state into seed YAML files (the inverse of apply).
 
-    Manifest-driven (the packaged extract manifest carries the verified
+    Catalog-driven (packaged ``seed_catalog.yaml`` carries the verified
     entity set): each entity is read from the live tenant and written as a
-    seed file under bootstrap/ or baseline/ that apply and diff consume
-    unchanged. Existing files are skipped unless --force; an entity with
-    no live records produces no file. A failing row is reported and the
-    run continues to the next (a virgin tenant extracts whole). Exit 0
-    when every row wrote or skipped clean, 1 when any row failed - drift
-    detection stays with diff.
+    seed file under ``config/{bootstrap,baseline,setup,master}/`` (hard-cut;
+    V30) that apply and diff consume unchanged. Existing files are skipped
+    unless --force; an entity with no live records produces no file. A
+    failing row is reported and the run continues to the next (a virgin
+    tenant extracts whole). Exit 0 when every row wrote or skipped clean,
+    1 when any row failed - drift detection stays with diff.
     """
     assert_target_compatible(inst)
     with AcumaticaClient(inst) as client:

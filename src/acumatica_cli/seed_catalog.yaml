@@ -1,5 +1,6 @@
-# extract_manifest.yaml - what `acu extract` reads off a live tenant and
+# seed_catalog.yaml - what `acu extract` reads off a live tenant and
 # how each entity becomes a seed file (the inverse of apply).
+# Hard-cut emit under config/{bootstrap,baseline,setup,master}/ (V30/V34).
 #
 # Per entity row:
 #   entity    contract entity name (the GET source and the emitted `entity:`)
@@ -19,10 +20,10 @@
 #             GET and the B9 $select fallback), so the per-key walk only
 #             visits filtered keys; narrows extraction to configured
 #             records when the entity serves tenant-native noise (T52)
-#   file      destination path; the numbered prefix encodes apply order
-#             (V22: dir expansion sorts alphabetically, so a record that
-#             references another entity must sort after the file that
-#             creates it - B10)
+#   file      destination path under the data root; numbered prefix encodes
+#             apply order (V22: dir expansion sorts alphabetically, so a
+#             record that references another entity must sort after the
+#             file that creates it - B10). Extract hard-cut: config/ only.
 #   strip     deny-list: live fields dropped from extracted records; the
 #             inline reasons are load-bearing (B10/B11 knowledge as code)
 #   include   allow-list: the only non-key fields kept (mutually
@@ -38,26 +39,26 @@
 
 entities:
 
-# bootstrap/ - the virgin-tenant phase via the custom Bootstrap endpoint:
-# built-in endpoints cannot create the first organization (C).
+# config/bootstrap/ - the virgin-tenant phase via the custom Bootstrap
+# endpoint: built-in endpoints cannot create the first organization (C).
 
 - entity: Company
   endpoint: bootstrap
   keys: [AcctCD]
-  file: bootstrap/company.yaml
+  file: config/bootstrap/company.yaml
 
 - entity: CreditTerms
   endpoint: bootstrap
   keys: [TermsID]
-  file: bootstrap/credit-terms.yaml
+  file: config/bootstrap/credit-terms.yaml
 
-# baseline/ - numbered prefixes encode the V22 reference chain:
+# config/baseline/ - numbered prefixes encode the V22 reference chain:
 # subaccounts < accounts < currencies < ledger < GL preferences <
 # org-ledger link; units of measure reference nothing and sort last.
 
 - entity: Subaccount
   keys: [SubaccountCD]
-  file: baseline/10-subaccounts.yaml
+  file: config/baseline/10-subaccounts.yaml
   features: [SubAccount] # GL203000 is feature-gated (B15)
   strip:
   # server-assigned surrogate identity (instance-global sequence) - a
@@ -70,7 +71,7 @@ entities:
 
 - entity: Account
   keys: [AccountCD]
-  file: baseline/20-accounts.yaml
+  file: config/baseline/20-accounts.yaml
   strip:
   # references PM account groups outside the baseline set - absent on a
   # fresh tenant, PUT 422s (B10)
@@ -90,7 +91,7 @@ entities:
 - entity: Currency
   endpoint: bootstrap
   keys: [CuryID]
-  file: baseline/30-currencies.yaml
+  file: config/baseline/30-currencies.yaml
   features: [Multicurrency] # CM202000 financial currency (B6/B8)
   # Bootstrap Currency serves the whole tenant-native ISO list (~172
   # rows); IsFinancial marks the configured set (T50 archaeology) -
@@ -108,7 +109,7 @@ entities:
 
 - entity: Ledger
   keys: [LedgerID]
-  file: baseline/40-ledger.yaml
+  file: config/baseline/40-ledger.yaml
   strip:
   # the server derives an Actual ledger's currency from the company base
   # currency - a sourced value is redundant or a rejected write (T34)
@@ -119,7 +120,7 @@ entities:
 - entity: GLPreferences
   endpoint: bootstrap
   keys: [RetEarnAccountID]
-  file: baseline/50-gl-preferences.yaml
+  file: config/baseline/50-gl-preferences.yaml
 
 - entity: LedgerCompany
   endpoint: bootstrap
@@ -130,23 +131,23 @@ entities:
   # (B14) - so LedgerCD (the primary-view field) sits first: diff's
   # read-back filters on it alone and matches OrganizationID client-side
   keys: [LedgerCD, OrganizationID]
-  file: baseline/60-ledger-company.yaml
+  file: config/baseline/60-ledger-company.yaml
 
 - entity: UnitsOfMeasure
   keys: [UnitID]
-  file: baseline/90-uoms.yaml
+  file: config/baseline/90-uoms.yaml
 
-# setup/ - the GL action chain (T36/T37): financial-year setup, then
-# calendar generation, then period activation; numbered prefixes mirror
-# the verified apply order.
+# config/setup/ - the GL action chain (T36/T37): financial-year setup,
+# then calendar generation, then period activation; numbered prefixes
+# mirror the verified apply order.
 
 setup:
 
 - kind: financial-year
-  file: setup/10-financial-year.yaml
+  file: config/setup/10-financial-year.yaml
 
 - kind: master-calendar
-  file: setup/20-master-calendar.yaml
+  file: config/setup/20-master-calendar.yaml
 
 - kind: open-periods
-  file: setup/30-open-periods.yaml
+  file: config/setup/30-open-periods.yaml
