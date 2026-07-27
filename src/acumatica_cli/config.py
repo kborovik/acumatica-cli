@@ -118,8 +118,8 @@ INIT_TEMPLATES = (
         "config/master/85-kit-specifications.yaml",
     ),
     (
-        "config/snapshot/10-trial-balance.yaml",
-        "config/snapshot/10-trial-balance.yaml",
+        "config/views/10-trial-balance.yaml",
+        "config/views/10-trial-balance.yaml",
     ),
     ("scenario/10-seed-capital.yaml", "scenario/10-seed-capital.yaml"),
     ("scenario/20-buy.yaml", "scenario/20-buy.yaml"),

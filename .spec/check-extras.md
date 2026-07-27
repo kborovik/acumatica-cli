@@ -63,7 +63,7 @@ for granular /sdd:check runs.
 - `tenant` = control plane resource; `create` alone chains a data-plane bootstrap publish after the SSH create — §V.1 module split intact
 - `bootstrap` = data plane verb: publish AcuBootstrap (`/CustomizationApi`); optional post-publish recycle when `ACU_SSH` set; `--export` local-only zip write (no REST, no SSH)
 - `config` = configuration ops: `init` local write, `show` local read, `check` live read-only preflight
-- `snapshot` = data plane verb: capture derived state (balances/qty) → `state/`; views in `config/snapshot/`; never seed/apply path (V32)
+- `state` = data plane verb: capture derived state (balances/qty) → `state/`; views in `config/views/`; never seed/apply path (V32); hard-cut no `snapshot` alias
 
 ## §V.17 — spec-state dependency recipe (extracted from SPEC.md §V.17)
 
@@ -87,7 +87,7 @@ for granular /sdd:check runs.
 ## §V.3 — discovery resolution matrix (extracted from SPEC.md §V.3)
 
 - required keys post-merge: `ACU_BASE_URL`, `ACU_PASSWORD` — unresolved → hard error naming key(s)
-- `ACU_SSH` ? — control plane; absent fine for data-plane cmds (apply/diff/run/extract/schema/snapshot/config show|init)
+- `ACU_SSH` ? — control plane; absent fine for data-plane cmds (apply/diff/run/extract/schema/state/config show|init)
 - tenant CRUD hard-errors when `ACU_SSH` unresolved, names key
 
 ## §V.20 — seed endpoint resolution (extracted from SPEC.md §V.20)
@@ -110,7 +110,7 @@ for granular /sdd:check runs.
 
 ## §V.27 — dataset-target gate (extracted from SPEC.md §V.27)
 
-- allowlisted data-plane cmds: `apply`/`diff`/`run`/`extract`/`schema`/`bootstrap`/`snapshot` + `config check`
+- allowlisted data-plane cmds: `apply`/`diff`/`run`/`extract`/`schema`/`bootstrap`/`state` + `config check`
 - present target → match `default_api` vs `Instance.api_version` else hard error naming dataset vs configured
 - missing → warn on `config check` unless `--strict`; invalid → hard fail any loader
 - gate ! inside bare `_resolve_instance`/`pass_instance` (tenant cmds + `config show` ungated)
@@ -136,19 +136,19 @@ for granular /sdd:check runs.
 ## §V.28 — init-template recipe (extracted from SPEC.md §V.28)
 
 - `config init` single full seed — no `--flavor`
-- layout `config/{bootstrap,baseline,setup,master}/` + observer `config/snapshot/10-trial-balance.yaml` (numeric EndingBalance-class via `inquire:` or `gi:`; `snapshot` ! SEED_DIRS)
+- layout `config/{bootstrap,baseline,setup,master}/` + observer `config/views/10-trial-balance.yaml` (numeric EndingBalance-class via `inquire:` or `gi:`; `config/views/` ! SEED_DIRS)
 - package templates ! derive from sibling `acumatica-gitops` seed trees; prune non-seed extras (`demo/`, Makefile, live `.env`, committed `state/`)
 - full company contract identity `Bootstrap/1.0.0` — not a second Bootstrap identity
-- `config/snapshot/` TB only w/ EndingBalance-class numeric money capture (V33)
+- `config/views/` TB only w/ EndingBalance-class numeric money capture (V33)
 - inventory-summary ! golden this pass
 - golden `scenario/` lifecycle: `10-seed-capital` (once+present) + `20-buy` + `30-build` + `40-sell` + README (gitops names)
 - monoscenario `buy-sell` forbidden; skip-if-exists unchanged
 - root SEED_DIRS ! default scaffold; V30 dual-layout still honors legacy root data repos
 
-## §V.32 — snapshot-observation recipe (extracted from SPEC.md §V.32)
+## §V.32 — derived-state-observation recipe (extracted from SPEC.md §V.32)
 
-- views `config/snapshot/*.yaml`, captures `state/<name>.yaml`
-- bare defaults hard-cut those paths (no root `snapshot/` or `snapshots/` fallback)
+- views `config/views/*.yaml`, captures `state/<name>.yaml`
+- bare defaults hard-cut those paths (no `config/snapshot/` fallback)
 - never SEED_DIRS/seed shape; never `endpoint:` symbols; `apply`/`diff` never load them
 - `capture:` allowlist only; money = Decimal → fixed-point string @ `decimals` (default 2)
 - sort by `key` always; key-tuple collision → exit 1; no body timestamps
@@ -156,13 +156,14 @@ for granular /sdd:check runs.
 - one-row-per-line flow YAML
 - exit 0 write or compare (change fine bare); exit 1 op fail; exit 2 only `--assert-unchanged` when moved
 - `--diff` write nothing; `--dry-run` local only
+- CLI verb `state` only — hard-cut drop `snapshot` alias (T112)
 
-## §V.33 — snapshot-source recipe (extracted from SPEC.md §V.33)
+## §V.33 — observation-source recipe (extracted from SPEC.md §V.33)
 
 - each view exactly one of `gi:`|`entity:`|`inquire:`
 - `entity:` → contract REST list GET `Default/<Instance.api_version>` (no per-view `endpoint:` pin v1)
 - `gi:` → OData (`/t/<tenant>/api/odata/gi/<Name>` 24R2+, legacy form ok); Expose via OData required; `params` fail-closed vs `$metadata` @ load
-- GI definition = seed under `master` when GenericInquiry surface V12-verified (`apply` creates, `snapshot` reads)
+- GI definition = seed under `master` when GenericInquiry surface V12-verified (`apply` creates, `state` reads)
 - `inquire:` → contract inquiry PUT `$expand=Results` (same idiom as `run` expect/present; `params` pinned in view YAML; optional row `match` filter)
 - stem `trial-balance` ! capture ≥1 numeric money field (fixed-point @ `decimals`) — roster-only `entity: Account` forbidden for that stem
 - distribution golden: TB → EndingBalance-class (`inquire: AccountSummaryInquiry` or `gi:` LAB5-TrialBalance)

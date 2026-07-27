@@ -30,7 +30,7 @@ acu tenant create --id 3 --login DEV     # create the tenant + bootstrap it (nee
 acu --tenant DEV apply config/           # seed config/{bootstrap,baseline,setup,master}/
 acu --tenant DEV run scenario/           # once capital → buy → build → sell
 acu --tenant DEV diff config/            # prove zero drift (exit 2 on drift)
-acu --tenant DEV snapshot                # capture state/ trial-balance
+acu --tenant DEV state                   # capture state/ trial-balance
 # warm: capital once-skips; Owner Capital stays 50000 (not 100000)
 acu --tenant DEV run scenario/
 ```
@@ -67,7 +67,7 @@ acu [--tenant NAME] [--url URL] [--ssh USER@HOST] [--api-version V]
 ├── apply [--dry-run] [FILES...]      push YAML via REST (idempotent PUT upserts)
 ├── diff  [FILES...]                  drift check vs the live tenant (exit 2 on drift)
 ├── run   [--dry-run] [FILES...]      execute transaction scenario YAML (exit 1 on any miss)
-├── snapshot [--out DIR] [--diff] [--assert-unchanged] [--dry-run] [FILES...]
+├── state [--out DIR] [--diff] [--assert-unchanged] [--dry-run] [FILES...]
 │                                     capture derived state into state/ (not seed)
 ├── extract [--out DIR] [--only NAME]... [--force] [--dry-run]
 │                                     dump live tenant state as seed YAML (inverse of apply)
@@ -82,14 +82,14 @@ acu [--tenant NAME] [--url URL] [--ssh USER@HOST] [--api-version V]
 `apply` and `diff` without FILES prefer `config/<name>/` when any seed child exists under `config/`; otherwise root `bootstrap/`, `baseline/`, `setup/`, then `master/` when present.
 A path like `config/` expands nested seed dirs in that fixed order.
 `run` without FILES defaults to `scenario/`.
-`snapshot` without FILES defaults to `config/snapshot/`; writes go to `state/` (`--out`).
+`state` without FILES defaults to `config/views/`; writes go to `state/` (`--out`).
 `acu --completion` emits a completion script for bash, zsh, or fish — source it from your shell profile.
 Run `acu <command> --help` for details on any command.
 
 ## The data repo
 
 Your configuration lives in its own git repo.
-`acu config init` scaffolds a **single full seed** under `config/` (Bootstrap `project.xml` at `Bootstrap/1.0.0`, expanded COA, masters) plus lifecycle `scenario/`, observer `config/snapshot/`, and README. There is no `--flavor`.
+`acu config init` scaffolds a **single full seed** under `config/` (Bootstrap `project.xml` at `Bootstrap/1.0.0`, expanded COA, masters) plus lifecycle `scenario/`, observer `config/views/`, and README. There is no `--flavor`.
 
 | Path | What it holds |
 | ---- | ------------- |
@@ -98,7 +98,7 @@ Your configuration lives in its own git repo.
 | `config/setup/` | one-time actions: financial year, master calendar, open periods |
 | `config/master/` | inventory/distribution masters (prefs, warehouse, items, parties) |
 | `scenario/` | lifecycle txns for `acu run`: once capital, then buy, build, sell |
-| `config/snapshot/` | observer views for `acu snapshot` (`inquire:` / `entity:` / `gi:`; not SEED_DIRS) |
+| `config/views/` | observer views for `acu state` (`inquire:` / `entity:` / `gi:`; not SEED_DIRS) |
 | `state/` | committed derived-state observations (evidence, not seed; money/qty fixed-point) |
 | `target.yaml` | committed verified matrix: `erp` + `default_api` (what, not where) |
 | `.env` | where to apply and who signs in, every key an `ACU_*` variable |
@@ -114,9 +114,9 @@ Scenario YAML is different — it describes transactions that flow forward.
 `acu run` executes each step in order (`put`, `action`, `wait`, `get`), captures server-assigned document numbers into `${var}` references for later steps, and checks `expect:` assertions as deltas against a pre-run snapshot, so additive scenarios re-run safely on a warm tenant.
 `once: true` scenarios declare a `present` inquire-absolute gate; when the probe already holds, the CLI prints `skip <path> (once: already present)` and runs neither steps nor expects (Owner Capital does not restack).
 
-`acu snapshot` is the third observation path: it captures live derived state (balances) into `state/` for git review. It is not `extract` (config seed) and not `diff` (desired vs actual config). Packaged golden is trial-balance via contract `inquire:` (`EndingBalance` fixed-point); inventory-summary is not golden this pass. `gi:` stays optional when a GI is V12-verified and **Expose via OData** is on (`params` fail-closed vs `$metadata`). After a cold `acu run scenario/ && acu snapshot`, warm `acu run scenario/10-seed-capital.yaml && acu snapshot --assert-unchanged` is the once-class gate (full scenario re-run is additive and moves cash observations on the TB).
+`acu state` is the third observation path: it captures live derived state (balances) into `state/` for git review. It is not `extract` (config seed) and not `diff` (desired vs actual config). Packaged golden is trial-balance via contract `inquire:` (`EndingBalance` fixed-point); inventory-summary is not golden this pass. `gi:` stays optional when a GI is V12-verified and **Expose via OData** is on (`params` fail-closed vs `$metadata`). After a cold `acu run scenario/ && acu state`, warm `acu run scenario/10-seed-capital.yaml && acu state --assert-unchanged` is the once-class gate (full scenario re-run is additive and moves cash observations on the TB).
 
-**Migration (path hard-cut):** bare defaults are `config/snapshot/` (views) and `state/` (observations). Root `snapshot/` and `snapshots/` are no longer defaulted — move files or pass explicit path args.
+**Migration (T112–T114 hard-cut):** CLI verb is `state` only (no `snapshot` alias). Bare defaults are `config/views/` (views) and `state/` (observations). Prior `config/snapshot/` and root `snapshot/` / `snapshots/` are not fallbacks — move views to `config/views/` or pass explicit path args.
 
 ### Seed `endpoint:` symbols
 
@@ -290,7 +290,7 @@ The packaged full `config init` seed (under `config/`) is the only scaffold.
 ```sh
 gmake e2e                                # whole tier, about 20 minutes
 gmake e2e FILE=test_provision_lifecycle  # apply/diff focus
-gmake e2e FILE=test_scenario_lifecycle   # scenario + snapshot focus
+gmake e2e FILE=test_scenario_lifecycle   # scenario + state focus
 ```
 
 ## License

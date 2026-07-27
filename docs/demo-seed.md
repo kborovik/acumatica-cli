@@ -20,27 +20,27 @@ acu bootstrap                 # publishes Bootstrap + features from config/boots
 acu apply config/             # config/{bootstrap,baseline,setup,master}/ fixed order
 acu run scenario/             # 10-seed-capital → 20-buy → 30-build → 40-sell
 acu diff config/              # expect exit 0 (no drift)
-acu snapshot                  # write state/ from config/snapshot/ (EndingBalance TB)
+acu state                     # write state/ from config/views/ (EndingBalance TB)
 # warm gate: once-capital only — additive buy/sell would move numeric observations
-acu run scenario/10-seed-capital.yaml && acu snapshot --assert-unchanged
+acu run scenario/10-seed-capital.yaml && acu state --assert-unchanged
 ```
 
 Bare `apply` / `diff` (no path args) also prefer `config/<name>/` when those trees exist (V30).
 
 Legacy data repos may still use root `bootstrap/`…`master/`; init no longer scaffolds that layout.
 
-## Snapshot observations
+## State observations
 
-`acu snapshot` captures **derived state** (not seed config):
+`acu state` captures **derived state** (not seed config):
 
 | Artifact | Path | Role |
 | -------- | ---- | ---- |
-| View defs | `config/snapshot/*.yaml` | Observer config (`inquire:` / `entity:` / `gi:`, keys, capture allowlist; not SEED_DIRS) |
+| View defs | `config/views/*.yaml` | Observer config (`inquire:` / `entity:` / `gi:`, keys, capture allowlist; not SEED_DIRS) |
 | Observations | `state/*.yaml` | Committed evidence; flow-style one row per line; money/qty = fixed-point strings |
 
-Unlike `extract` / `diff`, snapshot never writes seed trees, never carries `endpoint:` symbols, and never participates in apply. Exit codes invert `diff`'s default: bare capture treats change as normal (exit 0); exit 2 only under `--assert-unchanged` when state moved.
+Unlike `extract` / `diff`, `state` never writes seed trees, never carries `endpoint:` symbols, and never participates in apply. Exit codes invert `diff`'s default: bare capture treats change as normal (exit 0); exit 2 only under `--assert-unchanged` when state moved.
 
-**Migration:** bare defaults hard-cut to `config/snapshot/` and `state/`. Root `snapshot/` / `snapshots/` are not fallbacks — move files or pass explicit paths.
+**Migration (T112–T114):** CLI verb is `state` only (no `snapshot` alias). Bare defaults hard-cut to `config/views/` and `state/`. Prior `config/snapshot/` is not a fallback — move views or pass explicit paths.
 
 Default scaffold golden is **trial-balance only** (V28/V33):
 
@@ -55,7 +55,7 @@ Roster-only `entity: Account` is forbidden for that stem.
 `gi:` stays optional when a GenericInquiry is V12-verified: enable **Expose via
 OData** on SM208000, seed the GI under `config/master/`, point `source.gi:` with
 params pinned in YAML (`$metadata` fail-closed). See [rest-api.md](rest-api.md)
-snapshot sources.
+state view sources.
 
 Warm `--assert-unchanged` after a full `run scenario/` fails on purpose when
 buy/sell re-stack cash on the TB — re-run only once-class capital (skip path)
@@ -81,7 +81,7 @@ acu --tenant DEV run scenario/    # warm: skip 10-seed-capital; capital stays 50
 
 Offline unit tests cover the once skip path (`tests/test_run.py::test_once_skip_when_present`).
 
-Live virgin-tenant scenario + snapshot chain: `make e2e FILE=test_scenario_lifecycle`.
+Live virgin-tenant scenario + state chain: `make e2e FILE=test_scenario_lifecycle`.
 
 ## Apply-order and dependency notes
 

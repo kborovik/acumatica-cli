@@ -1,13 +1,13 @@
-"""Derived-state observations: config/snapshot/*.yaml views -> state/*.yaml.
+"""Derived-state observations: config/views/*.yaml views -> state/*.yaml.
 
-`acu snapshot` captures live balances, quantities, and totals as committed
+`acu state` captures live balances, quantities, and totals as committed
 evidence (SPEC I.cmd / V32). Not a seed inverse: never writes seed trees,
 never carries endpoint: symbols, never participates in apply/diff. Views
-configure the observer under config/snapshot/ (not SEED_DIRS); observations
+configure the observer under config/views/ (not SEED_DIRS); observations
 are git-diffable flow-style YAML under state/. Bare defaults hard-cut those
-paths (no root snapshot/ or snapshots/ fallback).
+paths (no config/snapshot/ fallback).
 
-View file format (I.data config/snapshot/*):
+View file format (I.data config/views/*):
 
     name: trial-balance
     source:
@@ -89,7 +89,7 @@ class SourceSpec(Model):
 
 
 class ViewDef(Model):
-    """Observer config for one capture (I.data config/snapshot/*; V32/V33)."""
+    """Observer config for one capture (I.data config/views/*; V32/V33)."""
 
     name: str
     source: SourceSpec
@@ -132,7 +132,7 @@ class Observation(Model):
 
 
 def load_view(path: Path) -> ViewDef:
-    """Parse one snapshot view definition; hard error on invalid shape."""
+    """Parse one view definition; hard error on invalid shape."""
     try:
         raw = yaml.safe_load(path.read_text(encoding="utf-8"))
     except yaml.YAMLError as exc:
@@ -333,7 +333,7 @@ def expand_view_files(files: tuple[Path, ...]) -> list[Path]:
         if path.is_dir():
             found = sorted(path.glob("*.yaml"))
             if not found:
-                raise SystemExit(f"{path}: no snapshot *.yaml files in directory")
+                raise SystemExit(f"{path}: no view *.yaml files in directory")
             paths += found
         else:
             paths.append(path)
@@ -547,7 +547,7 @@ def run_views(
     out_dir: Path,
     mode: Literal["write", "diff", "assert", "dry"] = "write",
 ) -> int:
-    """Execute snapshot for views; return process exit code (V32 exit matrix).
+    """Execute state capture for views; return process exit code (V32 exit matrix).
 
     0 = ok (write or compare; change fine unless assert)
     1 = operational failure

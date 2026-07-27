@@ -12,7 +12,7 @@ import click
 import httpx
 from click.shell_completion import get_completion_class
 
-from . import bootstrap, extract, firstlogin, output, run, seed, snapshot
+from . import bootstrap, extract, firstlogin, output, run, seed, state
 from .client import AcumaticaClient
 from .config import (
     Instance,
@@ -419,7 +419,7 @@ def config_init(host: str | None, directory: Path | None) -> None:
     Templates ship with the package; every value is a placeholder or a
     verified example - no secrets. Single full seed under ``config/``
     (bootstrap/baseline/setup/master) + lifecycle ``scenario/`` +
-    ``config/snapshot/`` + README; full company ``project.xml``
+    ``config/views/`` + README; full company ``project.xml``
     (Bootstrap/1.0.0). No ``--flavor`` (V28/T108). Existing files are
     never overwritten (reported as skipped). DIRECTORY defaults to the
     current directory and is created if absent. No git init, no gpg.
@@ -437,6 +437,7 @@ def config_init(host: str | None, directory: Path | None) -> None:
     output.data("  4. acu apply config/")
     output.data("  5. acu run scenario/")
     output.data("  6. acu diff config/")
+    output.data("  7. acu state")
 
 
 @config_group.command("show")
@@ -935,7 +936,7 @@ def _exit_on_drift(inst: Instance, drifts: list[str], files: int) -> None:
     output.success(f"no drift on {inst.tenant} ({inst.base_url}, {files} file(s))")
 
 
-@cli.command("snapshot")
+@cli.command("state")
 @click.argument(
     "files", nargs=-1, required=False, type=click.Path(exists=True, path_type=Path)
 )
@@ -963,7 +964,7 @@ def _exit_on_drift(inst: Instance, drifts: list[str], files: int) -> None:
     help="Resolve views and validate sources without HTTP",
 )
 @pass_instance
-def snapshot_cmd(
+def state_cmd(
     inst: Instance,
     files: tuple[Path, ...],
     out_dir: Path | None,
@@ -973,39 +974,36 @@ def snapshot_cmd(
 ) -> None:
     """Capture live derived state into committed observation files.
 
-    FILES are snapshot view YAML files or directories. Omitted, they default
-    to the data repo's config/snapshot/ directory (hard-cut; no root
-    snapshot/ fallback). Default write target is state/ (--out; no
-    snapshots/ fallback). Bare capture writes observations (change is
-    fine). --diff compares live to disk without writing.
-    --assert-unchanged is the warm-run idempotence gate (exit 2 when
-    moved). Never writes seed trees or endpoint: symbols (V32). Exit 0
+    FILES are view YAML files or directories. Omitted, they default to the
+    data repo's config/views/ directory (hard-cut; no config/snapshot/
+    fallback). Default write target is state/ (--out). Bare capture writes
+    observations (change is fine). --diff compares live to disk without
+    writing. --assert-unchanged is the warm-run idempotence gate (exit 2
+    when moved). Never writes seed trees or endpoint: symbols (V32). Exit 0
     ok, 1 op fail, 2 only under --assert-unchanged when state moved.
     """
     assert_target_compatible(inst)
     if not files:
-        default = data_root() / "config" / "snapshot"
+        default = data_root() / "config" / "views"
         if not default.is_dir():
-            raise SystemExit(f"{default}: snapshot directory does not exist")
+            raise SystemExit(f"{default}: views directory does not exist")
         files = (Path(os.path.relpath(default)),)
-    paths = snapshot.expand_view_files(files)
-    views = [snapshot.load_view(path) for path in paths]
+    paths = state.expand_view_files(files)
+    views = [state.load_view(path) for path in paths]
     dest = out_dir if out_dir is not None else Path("state")
     if dry_run:
-        code = snapshot.run_views(None, views, out_dir=dest, mode="dry")
+        code = state.run_views(None, views, out_dir=dest, mode="dry")
     else:
         mode = "assert" if assert_unchanged else "diff" if do_diff else "write"
         with AcumaticaClient(inst) as client:
-            code = snapshot.run_views(client, views, out_dir=dest, mode=mode)
+            code = state.run_views(client, views, out_dir=dest, mode=mode)
     if code:
         raise SystemExit(code)
     if dry_run:
         return
     if assert_unchanged:
-        output.success(f"{len(views)} snapshot(s) unchanged on {inst.tenant}")
+        output.success(f"{len(views)} view(s) unchanged on {inst.tenant}")
     elif do_diff:
-        output.success(f"{len(views)} snapshot(s) compared on {inst.tenant}")
+        output.success(f"{len(views)} view(s) compared on {inst.tenant}")
     else:
-        output.success(
-            f"{len(views)} snapshot(s) written under {dest} on {inst.tenant}"
-        )
+        output.success(f"{len(views)} view(s) written under {dest} on {inst.tenant}")

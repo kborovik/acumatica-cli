@@ -24,9 +24,9 @@ acu run scenario/
 acu diff config/
 
 # 6. Capture derived-state observations (EndingBalance trial-balance)
-acu snapshot
+acu state
 # warm gate: once-capital only — additive buy/sell moves numeric observations
-acu run scenario/10-seed-capital.yaml && acu snapshot --assert-unchanged
+acu run scenario/10-seed-capital.yaml && acu state --assert-unchanged
 ```
 
 Bare `acu apply` / `acu diff` also prefer `config/` when those trees exist.
@@ -43,7 +43,7 @@ Bare `acu apply` / `acu diff` also prefer `config/` when those trees exist.
 | `scenario/20-buy.yaml` | Additive component PO → receipt → bill → AP pay |
 | `scenario/30-build.yaml` | Additive kit assembly |
 | `scenario/40-sell.yaml` | Additive SO → ship → invoice → AR pay |
-| `config/snapshot/10-trial-balance.yaml` | Observer view (EndingBalance inquire; not SEED_DIRS) |
-| `state/` | Written by `acu snapshot` (derived-state observations) |
+| `config/views/10-trial-balance.yaml` | Observer view (EndingBalance inquire; not SEED_DIRS) |
+| `state/` | Written by `acu state` (derived-state observations) |
 
 Monoscenario `buy-sell` is not part of this package.

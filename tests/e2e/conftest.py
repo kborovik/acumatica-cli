@@ -51,7 +51,7 @@ def data_repo(tmp_path_factory: pytest.TempPathFactory) -> Path:
     whole company definition under ``config/``: bootstrap (company, credit
     terms, features), baseline GL chart, setup action chain, master
     inventory/distribution, plus lifecycle ``scenario/`` and observer
-    ``config/snapshot/``. The scaffolded placeholder .env is replaced by
+    ``config/views/``. The scaffolded placeholder .env is replaced by
     the real repo-root one so the subprocess walk-up resolves the live
     instance; with no decrypted .env the placeholder is dropped instead
     and resolution rides the process environment alone (V3) -

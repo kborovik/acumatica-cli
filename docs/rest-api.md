@@ -13,9 +13,9 @@ Newest Default contract endpoint on this build (from `GET /entity`):
 /AcumaticaERP/entity/Default/25.200.001/
 ```
 
-### Snapshot view sources (`acu snapshot`)
+### State view sources (`acu state`)
 
-Each `config/snapshot/*.yaml` view picks **exactly one** source kind (V33):
+Each `config/views/*.yaml` view picks **exactly one** source kind (V33):
 
 | Kind | HTTP | Notes |
 | ---- | ---- | ----- |
@@ -41,7 +41,7 @@ GenericInquiry surface is V12-verified; seed GI defs under `config/master/` and
 point `source.gi:` at the name. Observations land under `state/<name>.yaml`
 (flow-style rows; money/qty always fixed-point strings, never bare float).
 
-### OData Generic Inquiry (`acu snapshot` `gi:` source)
+### OData Generic Inquiry (`acu state` `gi:` source)
 
 24R2+ service root (verified path form):
 

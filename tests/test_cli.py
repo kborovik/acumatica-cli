@@ -662,7 +662,7 @@ def test_url_flag_rejected_after_subcommand(wired: Instance) -> None:
 
 def test_config_init_scaffolds_data_repo(tmp_path: Path) -> None:
     # I.cmd config init / V28/T108: single full seed under config/ + scenario/
-    # (T82: project.xml always scaffolded; T101: config/snapshot observer);
+    # (T82: project.xml always scaffolded; T113: config/views observer);
     # runs where V3 discovery finds no .env (tmp_path has none up-tree)
     repo = tmp_path / "repo"
     result = CliRunner().invoke(
@@ -689,7 +689,7 @@ def test_config_init_scaffolds_data_repo(tmp_path: Path) -> None:
         "config/setup/20-master-calendar.yaml",
         "config/setup/30-open-periods.yaml",
         "config/master/20-in-preferences.yaml",
-        "config/snapshot/10-trial-balance.yaml",
+        "config/views/10-trial-balance.yaml",
         "scenario/10-seed-capital.yaml",
         "scenario/20-buy.yaml",
         "config/baseline/91-company-packaging.yaml",
@@ -716,13 +716,13 @@ def test_config_init_scaffolds_data_repo(tmp_path: Path) -> None:
     assert "ACU_BASE_URL=http://erp.test/AcumaticaERP" in env
     assert "ACU_SSH=Administrator@erp.test" in env
     # T104/V28/V33: TB is EndingBalance-class inquire, not roster Account
-    tb = (repo / "config" / "snapshot" / "10-trial-balance.yaml").read_text()
+    tb = (repo / "config" / "views" / "10-trial-balance.yaml").read_text()
     assert "inquire: AccountSummaryInquiry" in tb
     assert "EndingBalance" in tb
     assert "entity: Account" not in tb
     assert "erp.example.com" not in env
     # T107/V33: inventory-summary not golden
-    assert not (repo / "config" / "snapshot" / "20-inventory-summary.yaml").exists()
+    assert not (repo / "config" / "views" / "20-inventory-summary.yaml").exists()
 
 
 def test_config_init_defaults_to_cwd_with_placeholder_host(

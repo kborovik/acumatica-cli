@@ -138,9 +138,9 @@ T108|x|drop `--flavor` CLI + dual `templates_for` / `INIT_FLAVORS`; single templ
 T109|x|package templates from `acumatica-gitops` seed trees (`config/*` + `scenario/` + snapshot + meta); drop `templates/finance` + `templates/distribution` split; align scenario `20-buy`; prune non-seed extras|V28,V29,I.data,T108
 T110|x|offline tests + e2e: single full scaffold; drop flavor-param coverage; e2e still green|V13,V28,T108,T109
 T111|x|docs sweep: README + retire/merge distribution flavor docs + help text; next-step cmds `apply config/`|V12,V28,T108,T109
-T112|.|rename CLI verb `snapshot`→`state`; module `snapshot.py`→`state.py`; hard-cut drop `snapshot` alias|V15,V32,I.cmd,T94
-T113|.|defaults `config/views/` + `state/`; package template rehome `config/snapshot`→`config/views`; init map + scaffold path|V28,V32,I.data,I.cmd,T112
-T114|.|check-extras V15/V27/V28/V32/V33 verb+path; tests + e2e + docs README migration note hard-cut|V9,V12,V13,V15,T112,T113
+T112|x|rename CLI verb `snapshot`→`state`; module `snapshot.py`→`state.py`; hard-cut drop `snapshot` alias|V15,V32,I.cmd,T94
+T113|x|defaults `config/views/` + `state/`; package template rehome `config/snapshot`→`config/views`; init map + scaffold path|V28,V32,I.data,I.cmd,T112
+T114|x|check-extras V15/V27/V28/V32/V33 verb+path; tests + e2e + docs README migration note hard-cut|V9,V12,V13,V15,T112,T113
 
 ## §B BUGS
 

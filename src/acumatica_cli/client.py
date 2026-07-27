@@ -539,7 +539,7 @@ class AcumaticaClient:
             self._http.post("/CustomizationApi/publishEnd", json={})
         ).json()
 
-    # -- OData Generic Inquiry (snapshot gi: source; V33) --
+    # -- OData Generic Inquiry (state gi: source; V33) --
 
     def _odata_gi_root(self) -> str:
         """24R2+ OData GI service root ``/t/<tenant>/api/odata/gi`` (V33)."""

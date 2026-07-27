@@ -1,8 +1,8 @@
-"""Live virgin-tenant scenario + snapshot lifecycle (SPEC T80/T98/T110).
+"""Live virgin-tenant scenario + state lifecycle (SPEC T80/T98/T110/T114).
 
 Self-contained: scaffolds the packaged full ``config init`` seed into a tmp
 data repo, creates a scratch tenant, then apply → run scenario/ → warm
-once-skip → diff clean → snapshot write → assert-unchanged. Parallel to
+once-skip → diff clean → state write → assert-unchanged. Parallel to
 ``test_provision_lifecycle`` (apply/diff focus) on a separate tenant login
 so the two modules do not share session tenant state.
 
@@ -112,7 +112,7 @@ def scenario_tenant(
 
 
 def test_full_scaffold_layout(scenario_repo: Path) -> None:
-    """T80/T110/V28: config/ umbrella + lifecycle + TB snapshot + README."""
+    """T80/T110/T113/V28: config/ umbrella + lifecycle + TB views + README."""
     assert (scenario_repo / "config" / "bootstrap" / "project.xml").is_file()
     assert (scenario_repo / "config" / "master").is_dir()
     assert (scenario_repo / "scenario" / "10-seed-capital.yaml").is_file()
@@ -120,12 +120,12 @@ def test_full_scaffold_layout(scenario_repo: Path) -> None:
     assert (scenario_repo / "scenario" / "30-build.yaml").is_file()
     assert (scenario_repo / "scenario" / "40-sell.yaml").is_file()
     assert not (scenario_repo / "scenario" / "buy-sell.yaml").exists()
-    assert (scenario_repo / "config" / "snapshot" / "10-trial-balance.yaml").is_file()
+    assert (scenario_repo / "config" / "views" / "10-trial-balance.yaml").is_file()
     # T107/V28/V33: golden state/ = trial-balance only (B25)
     assert not (
-        scenario_repo / "config" / "snapshot" / "20-inventory-summary.yaml"
+        scenario_repo / "config" / "views" / "20-inventory-summary.yaml"
     ).exists()
-    assert not (scenario_repo / "snapshot").exists()
+    assert not (scenario_repo / "config" / "snapshot").exists()
     assert (scenario_repo / "README.md").is_file()
     assert list((scenario_repo / "config" / "master").glob("*.yaml"))
 
@@ -180,10 +180,10 @@ def test_scenario_diff_clean(
     assert "no drift" in _combined(proc)
 
 
-def test_scenario_snapshot_write(
+def test_scenario_state_write(
     scenario_acu: RunAcu, scenario_tenant: ScratchTenant, scenario_repo: Path
 ) -> None:
-    """T98/T102/T105/T107/V32/V33: after scenario, state/ TB is numeric fixed-point.
+    """T98/T105/T107/T112/V32/V33: after scenario, state/ TB is numeric fixed-point.
 
     Golden inquire view projects EndingBalance as fixed-point strings at
     view decimals — not a roster-only entity list. Inventory-summary is
@@ -193,7 +193,7 @@ def test_scenario_snapshot_write(
 
     import yaml
 
-    proc = scenario_acu("--tenant", scenario_tenant.login, "snapshot")
+    proc = scenario_acu("--tenant", scenario_tenant.login, "state")
     assert proc.returncode == 0, _combined(proc)
     combined = _combined(proc)
     assert "trial-balance" in combined or "wrote" in combined
@@ -216,12 +216,12 @@ def test_scenario_snapshot_write(
     assert float(capital["EndingBalance"]) >= 50000.0
 
 
-def test_scenario_snapshot_assert_unchanged(
+def test_scenario_state_assert_unchanged(
     scenario_acu: RunAcu, scenario_tenant: ScratchTenant
 ) -> None:
-    """T98/T105/T107/V4/V32: warm once-capital + snapshot --assert-unchanged exits 0.
+    """T98/T105/T112/V4/V32: warm once-capital + state --assert-unchanged exits 0.
 
-    Depends on prior cold snapshot write. Re-run only once-guard capital
+    Depends on prior cold state write. Re-run only once-guard capital
     (skip path) so EndingBalance stays byte-stable — additive buy/sell
     legs would move TB cash/inventory observations.
     """
@@ -235,6 +235,6 @@ def test_scenario_snapshot_assert_unchanged(
     assert run.returncode == 0, combined
     assert "once: already present" in combined
     proc = scenario_acu(
-        "--tenant", scenario_tenant.login, "snapshot", "--assert-unchanged"
+        "--tenant", scenario_tenant.login, "state", "--assert-unchanged"
     )
     assert proc.returncode == 0, _combined(proc)

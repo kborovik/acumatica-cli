@@ -1,4 +1,4 @@
-"""Snapshot engine + CLI - fully offline (T93-T96, V32/V33)."""
+"""State engine + CLI - fully offline (T93-T96/T112-T114, V32/V33)."""
 
 from __future__ import annotations
 
@@ -11,7 +11,7 @@ import httpx
 import pytest
 from click.testing import CliRunner
 
-from acumatica_cli import cli, snapshot
+from acumatica_cli import cli, state
 from acumatica_cli.client import AcumaticaClient, wrap
 from acumatica_cli.config import Instance
 
@@ -68,7 +68,7 @@ def _write_view(tmp_path: Path, text: str, name: str = "10-view.yaml") -> Path:
 
 
 def test_load_view_entity(tmp_path: Path) -> None:
-    view = snapshot.load_view(_write_view(tmp_path, VIEW_ENTITY))
+    view = state.load_view(_write_view(tmp_path, VIEW_ENTITY))
     assert view.name == "trial-balance"
     assert view.source.kind == "entity"
     assert view.source.entity == "Account"
@@ -78,7 +78,7 @@ def test_load_view_entity(tmp_path: Path) -> None:
 
 def test_load_view_inquire(tmp_path: Path) -> None:
     # T103/V33: inquire: is a first-class source kind
-    view = snapshot.load_view(_write_view(tmp_path, VIEW_INQUIRE))
+    view = state.load_view(_write_view(tmp_path, VIEW_INQUIRE))
     assert view.source.kind == "inquire"
     assert view.source.inquire == "AccountSummaryInquiry"
     assert view.source.params == {"Ledger": "ACTUAL", "Period": "072026"}
@@ -96,7 +96,7 @@ source:
 key: [Account]
 capture: [EndingBalance]
 """
-    view = snapshot.load_view(_write_view(tmp_path, text))
+    view = state.load_view(_write_view(tmp_path, text))
     assert view.source.match == {"Account": "30000"}
 
 
@@ -110,7 +110,7 @@ key: [A]
 capture: [B]
 """
     with pytest.raises(SystemExit, match="exactly one of gi, entity, inquire"):
-        snapshot.load_view(_write_view(tmp_path, text))
+        state.load_view(_write_view(tmp_path, text))
 
 
 def test_load_view_rejects_inquire_plus_entity(tmp_path: Path) -> None:
@@ -123,7 +123,7 @@ key: [A]
 capture: [B]
 """
     with pytest.raises(SystemExit, match="exactly one of gi, entity, inquire"):
-        snapshot.load_view(_write_view(tmp_path, text))
+        state.load_view(_write_view(tmp_path, text))
 
 
 def test_load_view_rejects_neither_source(tmp_path: Path) -> None:
@@ -134,7 +134,7 @@ key: [A]
 capture: [B]
 """
     with pytest.raises(SystemExit, match="exactly one of gi, entity, inquire"):
-        snapshot.load_view(_write_view(tmp_path, text))
+        state.load_view(_write_view(tmp_path, text))
 
 
 def test_load_view_match_requires_inquire(tmp_path: Path) -> None:
@@ -147,20 +147,20 @@ key: [AccountCD]
 capture: [Description]
 """
     with pytest.raises(SystemExit, match="match requires inquire"):
-        snapshot.load_view(_write_view(tmp_path, text))
+        state.load_view(_write_view(tmp_path, text))
 
 
 def test_format_cell_fixed_point() -> None:
     # T96: float formats collapse to fixed-point strings
-    assert snapshot.format_cell(54192.0, 2) == "54192.00"
-    assert snapshot.format_cell(54192, 2) == "54192.00"
-    assert snapshot.format_cell("54192.00", 2) == "54192.00"
-    assert snapshot.format_cell("54192.000000000001", 2) == "54192.00"
-    assert snapshot.format_cell(54192.006, 2) == "54192.01"
+    assert state.format_cell(54192.0, 2) == "54192.00"
+    assert state.format_cell(54192, 2) == "54192.00"
+    assert state.format_cell("54192.00", 2) == "54192.00"
+    assert state.format_cell("54192.000000000001", 2) == "54192.00"
+    assert state.format_cell(54192.006, 2) == "54192.01"
 
 
 def test_project_rows_allowlist_and_sort(tmp_path: Path) -> None:
-    view = snapshot.load_view(_write_view(tmp_path, VIEW_ENTITY))
+    view = state.load_view(_write_view(tmp_path, VIEW_ENTITY))
     live = [
         {
             "AccountCD": "20000",
@@ -175,7 +175,7 @@ def test_project_rows_allowlist_and_sort(tmp_path: Path) -> None:
             "ServerOnly": 1,
         },
     ]
-    rows = snapshot.project_rows(live, view)
+    rows = state.project_rows(live, view)
     assert [r["AccountCD"] for r in rows] == ["10000", "20000"]
     assert "Extra" not in rows[0]
     assert "ServerOnly" not in rows[1]
@@ -183,25 +183,25 @@ def test_project_rows_allowlist_and_sort(tmp_path: Path) -> None:
 
 
 def test_project_rows_key_collision(tmp_path: Path) -> None:
-    view = snapshot.load_view(_write_view(tmp_path, VIEW_ENTITY))
+    view = state.load_view(_write_view(tmp_path, VIEW_ENTITY))
     live = [
         {"AccountCD": "10000", "Description": "A", "Type": "Asset"},
         {"AccountCD": "10000", "Description": "B", "Type": "Asset"},
     ]
     with pytest.raises(SystemExit, match="key collision"):
-        snapshot.project_rows(live, view)
+        state.project_rows(live, view)
 
 
 def test_render_byte_identical_twice(tmp_path: Path) -> None:
-    view = snapshot.load_view(_write_view(tmp_path, VIEW_ENTITY))
+    view = state.load_view(_write_view(tmp_path, VIEW_ENTITY))
     live = [
         {"AccountCD": "10100", "Description": "Checking", "Type": "Asset"},
         {"AccountCD": "11000", "Description": "AR", "Type": "Asset"},
     ]
-    rows = snapshot.project_rows(live, view)
-    obs = snapshot.Observation(view=view.name, erp="26.101.0225", rows=rows)
-    a = snapshot.render_observation(obs)
-    b = snapshot.render_observation(obs)
+    rows = state.project_rows(live, view)
+    obs = state.Observation(view=view.name, erp="26.101.0225", rows=rows)
+    a = state.render_observation(obs)
+    b = state.render_observation(obs)
     assert a == b
     assert "rows:\n  - {" in a
     # one row per line
@@ -209,41 +209,41 @@ def test_render_byte_identical_twice(tmp_path: Path) -> None:
 
 
 def test_render_order_shuffle_stable(tmp_path: Path) -> None:
-    view = snapshot.load_view(_write_view(tmp_path, VIEW_ENTITY))
+    view = state.load_view(_write_view(tmp_path, VIEW_ENTITY))
     a = [
         {"AccountCD": "20000", "Description": "AP", "Type": "Liability"},
         {"AccountCD": "10000", "Description": "Cash", "Type": "Asset"},
     ]
     b = list(reversed(a))
-    ra = snapshot.render_observation(
-        snapshot.Observation(
-            view=view.name, erp="26.101.0225", rows=snapshot.project_rows(a, view)
+    ra = state.render_observation(
+        state.Observation(
+            view=view.name, erp="26.101.0225", rows=state.project_rows(a, view)
         )
     )
-    rb = snapshot.render_observation(
-        snapshot.Observation(
-            view=view.name, erp="26.101.0225", rows=snapshot.project_rows(b, view)
+    rb = state.render_observation(
+        state.Observation(
+            view=view.name, erp="26.101.0225", rows=state.project_rows(b, view)
         )
     )
     assert ra == rb
 
 
 def test_compare_observations_detects_change(tmp_path: Path) -> None:
-    view = snapshot.load_view(_write_view(tmp_path, VIEW_ENTITY))
-    rows = snapshot.project_rows(
+    view = state.load_view(_write_view(tmp_path, VIEW_ENTITY))
+    rows = state.project_rows(
         [{"AccountCD": "10000", "Description": "Cash", "Type": "Asset"}], view
     )
-    live = snapshot.Observation(view=view.name, erp="26.101.0225", rows=rows)
-    disk = snapshot.Observation(
+    live = state.Observation(view=view.name, erp="26.101.0225", rows=rows)
+    disk = state.Observation(
         view=view.name,
         erp="26.101.0225",
-        rows=snapshot.project_rows(
+        rows=state.project_rows(
             [{"AccountCD": "10000", "Description": "CashX", "Type": "Asset"}], view
         ),
     )
-    drifts = snapshot.compare_observations(live, disk)
+    drifts = state.compare_observations(live, disk)
     assert drifts
-    assert snapshot.compare_observations(live, live) == []
+    assert state.compare_observations(live, live) == []
 
 
 def test_validate_gi_params_fail_closed() -> None:
@@ -260,22 +260,22 @@ def test_validate_gi_params_fail_closed() -> None:
   </edmx:DataServices>
 </edmx:Edmx>
 """
-    snapshot.validate_gi_params(meta, "LAB5-InventorySummary", {"Period": "072026"})
+    state.validate_gi_params(meta, "LAB5-InventorySummary", {"Period": "072026"})
     with pytest.raises(SystemExit, match="unknown params"):
-        snapshot.validate_gi_params(
+        state.validate_gi_params(
             meta, "LAB5-InventorySummary", {"Period": "072026", "Bogus": "1"}
         )
 
 
 def test_validate_gi_params_empty_metadata_with_params() -> None:
     with pytest.raises(SystemExit, match="no discoverable parameter"):
-        snapshot.validate_gi_params("<root/>", "X", {"Period": "1"})
+        state.validate_gi_params("<root/>", "X", {"Period": "1"})
 
 
 def test_dry_run_no_http(tmp_path: Path) -> None:
     path = _write_view(tmp_path, VIEW_ENTITY)
-    view = snapshot.load_view(path)
-    code = snapshot.run_views(None, [view], out_dir=tmp_path / "state", mode="dry")
+    view = state.load_view(path)
+    code = state.run_views(None, [view], out_dir=tmp_path / "state", mode="dry")
     assert code == 0
     assert not (tmp_path / "state").exists()
 
@@ -402,17 +402,17 @@ def test_entity_backend_capture(
         {"AccountCD": "10100", "Description": "Checking", "Type": "Asset"},
         {"AccountCD": "11000", "Description": "AR", "Type": "Asset"},
     ]
-    view = snapshot.load_view(_write_view(tmp_path, VIEW_ENTITY))
+    view = state.load_view(_write_view(tmp_path, VIEW_ENTITY))
     with make_client() as client:
-        obs = snapshot.capture_view(client, view)
+        obs = state.capture_view(client, view)
     assert obs.erp == "26.101.0225"
     assert len(obs.rows) == 2
     assert obs.rows[0]["AccountCD"] == "10100"
-    text = snapshot.render_observation(obs)
+    text = state.render_observation(obs)
     # second capture byte-identical
     with make_client() as client:
-        obs2 = snapshot.capture_view(client, view)
-    assert snapshot.render_observation(obs2) == text
+        obs2 = state.capture_view(client, view)
+    assert state.render_observation(obs2) == text
 
 
 def test_gi_backend_params_and_rows(
@@ -429,9 +429,9 @@ def test_gi_backend_params_and_rows(
             "Noise": "x",
         }
     ]
-    view = snapshot.load_view(_write_view(tmp_path, VIEW_GI, "20-inv.yaml"))
+    view = state.load_view(_write_view(tmp_path, VIEW_GI, "20-inv.yaml"))
     with make_client() as client:
-        obs = snapshot.capture_view(client, view)
+        obs = state.capture_view(client, view)
     assert obs.rows[0]["OnHand"] == "10.00"
     assert "Noise" not in obs.rows[0]
 
@@ -442,9 +442,9 @@ def test_gi_unknown_param_exits(
     server: _Server,
 ) -> None:
     text = VIEW_GI.replace('Period: "072026"', 'Period: "072026"\n    Bogus: x')
-    view = snapshot.load_view(_write_view(tmp_path, text, "20-inv.yaml"))
+    view = state.load_view(_write_view(tmp_path, text, "20-inv.yaml"))
     with make_client() as client, pytest.raises(SystemExit, match="unknown params"):
-        snapshot.capture_view(client, view)
+        state.capture_view(client, view)
 
 
 def test_inquire_backend_capture(
@@ -468,9 +468,9 @@ def test_inquire_backend_capture(
             "EndingBalance": 50000,
         },
     ]
-    view = snapshot.load_view(_write_view(tmp_path, VIEW_INQUIRE))
+    view = state.load_view(_write_view(tmp_path, VIEW_INQUIRE))
     with make_client() as client:
-        obs = snapshot.capture_view(client, view)
+        obs = state.capture_view(client, view)
     assert server.last_inquire_expand == "Results"
     # params pinned in YAML become the value-wrapped PUT body
     assert server.last_inquire_body is not None
@@ -504,9 +504,9 @@ key: [Account]
 capture: [EndingBalance]
 decimals: 2
 """
-    view = snapshot.load_view(_write_view(tmp_path, text))
+    view = state.load_view(_write_view(tmp_path, text))
     with make_client() as client:
-        obs = snapshot.capture_view(client, view)
+        obs = state.capture_view(client, view)
     assert len(obs.rows) == 1
     assert obs.rows[0]["Account"] == "30000"
     assert obs.rows[0]["EndingBalance"] == "50000.00"
@@ -518,9 +518,9 @@ def test_inquire_empty_results(
     server: _Server,
 ) -> None:
     server.inquire_results = []
-    view = snapshot.load_view(_write_view(tmp_path, VIEW_INQUIRE))
+    view = state.load_view(_write_view(tmp_path, VIEW_INQUIRE))
     with make_client() as client:
-        obs = snapshot.capture_view(client, view)
+        obs = state.capture_view(client, view)
     assert obs.rows == []
 
 
@@ -543,9 +543,9 @@ def test_inquire_inventory_qty_fixed_point(
             "QtyOnHand": 5,
         },
     ]
-    view = snapshot.load_view(_write_view(tmp_path, VIEW_INQUIRE_INV, "20-inv.yaml"))
+    view = state.load_view(_write_view(tmp_path, VIEW_INQUIRE_INV, "20-inv.yaml"))
     with make_client() as client:
-        obs = snapshot.capture_view(client, view)
+        obs = state.capture_view(client, view)
     assert server.last_inquire_entity == "InventorySummaryInquiry"
     assert server.last_inquire_expand == "Results"
     assert server.last_inquire_body is not None
@@ -569,10 +569,10 @@ def test_packaged_inquire_views_write_state_fixed_point(
     """
     from importlib import resources
 
-    pkg = resources.files("acumatica_cli") / "templates" / "config" / "snapshot"
+    pkg = resources.files("acumatica_cli") / "templates" / "config" / "views"
     tb_src = (pkg / "10-trial-balance.yaml").read_text(encoding="utf-8")
     assert not (pkg / "20-inventory-summary.yaml").is_file()
-    views_dir = tmp_path / "config" / "snapshot"
+    views_dir = tmp_path / "config" / "views"
     views_dir.mkdir(parents=True)
     (views_dir / "10-trial-balance.yaml").write_text(tb_src)
 
@@ -596,18 +596,18 @@ def test_packaged_inquire_views_write_state_fixed_point(
     ]
 
     views = [
-        snapshot.load_view(views_dir / "10-trial-balance.yaml"),
+        state.load_view(views_dir / "10-trial-balance.yaml"),
     ]
     out = tmp_path / "state"
     with make_client() as client:
-        code = snapshot.run_views(client, views, out_dir=out, mode="write")
+        code = state.run_views(client, views, out_dir=out, mode="write")
     assert code == 0
 
     tb_path = out / "trial-balance.yaml"
     assert tb_path.is_file()
     assert not (out / "inventory-summary.yaml").exists()
 
-    tb = snapshot.load_observation(tb_path)
+    tb = state.load_observation(tb_path)
     # EndingBalance-class fixed-point (not bare float / int)
     ending = [r["EndingBalance"] for r in tb.rows]
     assert ending == ["46910.00", "50000.00"]
@@ -615,7 +615,7 @@ def test_packaged_inquire_views_write_state_fixed_point(
 
     # warm re-capture unchanged (V4/V32 idempotence of observation path)
     with make_client() as client:
-        code = snapshot.run_views(client, views, out_dir=out, mode="assert")
+        code = state.run_views(client, views, out_dir=out, mode="assert")
     assert code == 0
 
 
@@ -627,10 +627,10 @@ def test_run_views_write_and_assert(
     server.entity_rows = [
         {"AccountCD": "10100", "Description": "Checking", "Type": "Asset"},
     ]
-    view = snapshot.load_view(_write_view(tmp_path, VIEW_ENTITY))
+    view = state.load_view(_write_view(tmp_path, VIEW_ENTITY))
     out = tmp_path / "state"
     with make_client() as client:
-        code = snapshot.run_views(client, [view], out_dir=out, mode="write")
+        code = state.run_views(client, [view], out_dir=out, mode="write")
     assert code == 0
     dest = out / "trial-balance.yaml"
     assert dest.is_file()
@@ -639,31 +639,31 @@ def test_run_views_write_and_assert(
     assert "10100" in body
 
     with make_client() as client:
-        code = snapshot.run_views(client, [view], out_dir=out, mode="assert")
+        code = state.run_views(client, [view], out_dir=out, mode="assert")
     assert code == 0
 
     server.entity_rows = [
         {"AccountCD": "10100", "Description": "Checking MOD", "Type": "Asset"},
     ]
     with make_client() as client:
-        code = snapshot.run_views(client, [view], out_dir=out, mode="assert")
+        code = state.run_views(client, [view], out_dir=out, mode="assert")
     assert code == 2
 
     with make_client() as client:
-        code = snapshot.run_views(client, [view], out_dir=out, mode="diff")
+        code = state.run_views(client, [view], out_dir=out, mode="diff")
     assert code == 0  # --diff: change is fine
 
 
-def test_cli_snapshot_dry_run(
+def test_cli_state_dry_run(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, instance: Instance
 ) -> None:
     (tmp_path / ".env").write_text(
         "ACU_BASE_URL=http://acu.test/AcumaticaERP\nACU_PASSWORD=pw\n"
     )
-    # T100/V32: bare default hard-cut config/snapshot/ (not root snapshot/)
-    snap = tmp_path / "config" / "snapshot"
-    snap.mkdir(parents=True)
-    (snap / "10-tb.yaml").write_text(VIEW_ENTITY)
+    # T100/T113/V32: bare default hard-cut config/views/ (no config/snapshot/)
+    views_dir = tmp_path / "config" / "views"
+    views_dir.mkdir(parents=True)
+    (views_dir / "10-tb.yaml").write_text(VIEW_ENTITY)
     monkeypatch.chdir(tmp_path)
     monkeypatch.setenv("ACU_PASSWORD", "pw")
     monkeypatch.setenv("ACU_TENANT", "T1")
@@ -683,7 +683,7 @@ def test_cli_snapshot_dry_run(
             "pw",
             "--tenant",
             "T1",
-            "snapshot",
+            "state",
             "--dry-run",
         ],
     )
@@ -692,9 +692,7 @@ def test_cli_snapshot_dry_run(
     assert "(dry run)" in result.output
 
 
-def test_cli_snapshot_missing_dir(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
+def test_cli_state_missing_dir(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     (tmp_path / ".env").write_text(
         "ACU_BASE_URL=http://acu.test/AcumaticaERP\nACU_PASSWORD=pw\n"
     )
@@ -708,25 +706,25 @@ def test_cli_snapshot_missing_dir(
             "pw",
             "--tenant",
             "T1",
-            "snapshot",
+            "state",
             "--dry-run",
         ],
     )
     assert result.exit_code == 1
-    assert "snapshot directory does not exist" in result.output
-    # T100/T102: missing-dir names hard-cut config/snapshot (not root snapshot/)
-    assert "config/snapshot" in result.output or "config\\snapshot" in result.output
+    assert "views directory does not exist" in result.output
+    # T100/T113: missing-dir names hard-cut config/views (no config/snapshot/)
+    assert "config/views" in result.output or "config\\views" in result.output
 
 
-def test_cli_snapshot_no_root_snapshot_fallback(
+def test_cli_state_no_config_snapshot_fallback(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """T100/V32: root snapshot/ alone is not a bare-default fallback."""
+    """T113/V32: config/snapshot/ alone is not a bare-default fallback."""
     (tmp_path / ".env").write_text(
         "ACU_BASE_URL=http://acu.test/AcumaticaERP\nACU_PASSWORD=pw\n"
     )
-    legacy = tmp_path / "snapshot"
-    legacy.mkdir()
+    legacy = tmp_path / "config" / "snapshot"
+    legacy.mkdir(parents=True)
     (legacy / "10-tb.yaml").write_text(VIEW_ENTITY)
     monkeypatch.chdir(tmp_path)
     result = CliRunner().invoke(
@@ -738,23 +736,23 @@ def test_cli_snapshot_no_root_snapshot_fallback(
             "pw",
             "--tenant",
             "T1",
-            "snapshot",
+            "state",
             "--dry-run",
         ],
     )
     assert result.exit_code == 1
-    assert "snapshot directory does not exist" in result.output
+    assert "views directory does not exist" in result.output
 
 
 def test_observation_roundtrip_parse(tmp_path: Path) -> None:
-    view = snapshot.load_view(_write_view(tmp_path, VIEW_ENTITY))
-    rows = snapshot.project_rows(
+    view = state.load_view(_write_view(tmp_path, VIEW_ENTITY))
+    rows = state.project_rows(
         [{"AccountCD": "10100", "Description": "Checking", "Type": "Asset"}], view
     )
-    obs = snapshot.Observation(view=view.name, erp="26.101.0225", rows=rows)
+    obs = state.Observation(view=view.name, erp="26.101.0225", rows=rows)
     path = tmp_path / "state" / "trial-balance.yaml"
-    snapshot.write_observation(path, obs)
-    loaded = snapshot.load_observation(path)
+    state.write_observation(path, obs)
+    loaded = state.load_observation(path)
     assert loaded.view == obs.view
     assert loaded.erp == obs.erp
     assert loaded.rows == obs.rows
