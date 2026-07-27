@@ -138,6 +138,8 @@ for granular /sdd:check runs.
 - `config init` single full seed — no `--flavor`
 - layout `config/{bootstrap,baseline,setup,master}/` + observer `config/views/10-trial-balance.yaml` (numeric EndingBalance-class via `inquire:` or `gi:`; `config/views/` ! SEED_DIRS)
 - package templates ! derive from sibling `acumatica-gitops` seed trees; prune non-seed extras (`demo/`, Makefile, live `.env`, committed `state/`)
+- package `templates/**/*.yaml` ! data only — no `#` comments (full-line `^\s*#` or trailing `\s#\s`); unit gate offline
+- narrative/docs comments ! sibling `acumatica-gitops` separate files, never inlined package YAML
 - full company contract identity `Bootstrap/1.0.0` — not a second Bootstrap identity
 - `config/views/` TB only w/ EndingBalance-class numeric money capture (V33)
 - inventory-summary ! golden this pass
