@@ -45,14 +45,12 @@ entities:
 
 # config/bootstrap/ - the virgin-tenant phase via the custom Bootstrap
 # endpoint: built-in endpoints cannot create the first organization (C).
-# Company identity only here; packaging UOMs are a later baseline PUT
-# (91-company-packaging) once UnitsOfMeasure exist.
+# Company packaging WeightUOM/VolumeUOM not claimed (B26: GET never returns).
 
 - entity: Company
   endpoint: bootstrap
   keys: [AcctCD]
   file: config/bootstrap/company.yaml
-  # field-partition vs 91-company-packaging (same live row, no OData split)
   include:
   - AcctName
   - OrganizationType
@@ -73,9 +71,8 @@ entities:
 
 # config/baseline/ - numbered prefixes encode the V22 reference chain:
 # subaccounts < accounts < ledger < GL preferences < org-ledger link;
-# units of measure; second Company PUT for packaging after UOMs.
-# Multicurrency Currency is not in the LAB5 template set (features.yaml
-# omits Multicurrency) — V34 equality keeps it out of the catalog.
+# units of measure. Multicurrency Currency is not in the LAB5 template
+# set (features.yaml omits Multicurrency) - V34 equality keeps it out.
 
 - entity: Subaccount
   keys: [SubaccountCD]
@@ -143,19 +140,6 @@ entities:
   include:
   - Description
   - L3Code
-
-# Second Company PUT after UOMs exist (CS101500 packaging Weight/Volume).
-# Same AcctCD as bootstrap/company — include-only packaging fields so
-# extract does not re-emit org identity into this apply-order slot.
-# WeightUOM/VolumeUOM GET may not return (B26) — T118 drops seed claims.
-
-- entity: Company
-  endpoint: bootstrap
-  keys: [AcctCD]
-  file: config/baseline/91-company-packaging.yaml
-  include:
-  - WeightUOM
-  - VolumeUOM
 
 # config/master/ - full packaged seed (T117). Multi-file Warehouse uses
 # include field-partition (same live warehouse row, three apply phases).
@@ -410,8 +394,8 @@ entities:
 
 # StockItem filter-split (V34): ItemClass partitions parts vs kits so
 # each numbered file gets its apply-order set only. Include drops the
-# huge IN202500 surface (costs, warehouse details, cross-refs).
-# WeightUOM/VolumeUOM claimed in templates but may not GET (B26 → T118).
+# huge IN202500 surface (costs, warehouse details, packaging UOMs that
+# GET never returns - B26).
 
 - entity: StockItem
   keys: [InventoryID]
@@ -422,8 +406,6 @@ entities:
   - ItemClass
   - ItemStatus
   - DefaultWarehouseID
-  - WeightUOM
-  - VolumeUOM
 
 - entity: StockItem
   keys: [InventoryID]
@@ -436,8 +418,6 @@ entities:
   - DefaultWarehouseID
   - IsAKit
   - DefaultPrice
-  - WeightUOM
-  - VolumeUOM
 
 - entity: KitSpecification
   keys: [KitInventoryID, RevisionID]

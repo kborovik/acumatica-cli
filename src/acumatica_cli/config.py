@@ -61,10 +61,6 @@ INIT_TEMPLATES = (
         "config/baseline/60-ledger-company.yaml",
     ),
     ("config/baseline/90-uoms.yaml", "config/baseline/90-uoms.yaml"),
-    (
-        "config/baseline/91-company-packaging.yaml",
-        "config/baseline/91-company-packaging.yaml",
-    ),
     ("config/setup/10-financial-year.yaml", "config/setup/10-financial-year.yaml"),
     ("config/setup/20-master-calendar.yaml", "config/setup/20-master-calendar.yaml"),
     ("config/setup/30-open-periods.yaml", "config/setup/30-open-periods.yaml"),

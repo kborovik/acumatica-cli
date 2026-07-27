@@ -124,8 +124,8 @@ def _client(instance: Instance, server: FakeServer) -> AcumaticaClient:
 
 
 # -- canned live state for the packaged catalog (GL + master, T117) --
-# Multi-file StockItem is filter-split (ItemClass); Company packaging and
-# Warehouse phases share the live row and partition via include.
+# Multi-file StockItem is filter-split (ItemClass); Warehouse phases share
+# the live row and partition via include. Packaging UOMs not claimed (B26).
 
 TABLES: dict[str, list[dict[str, Any]]] = {
     "Company": [
@@ -135,9 +135,6 @@ TABLES: dict[str, list[dict[str, Any]]] = {
             "OrganizationType": "Without Branches",
             "BaseCuryID": "USD",
             "CountryID": "US",
-            # packaging fields (91-company-packaging include partition)
-            "WeightUOM": "KG",
-            "VolumeUOM": "LITER",
             # noise dropped by include
             "LastModifiedDateTime": "2026-07-11T00:00:00+00:00",
         }
@@ -466,8 +463,7 @@ TABLES: dict[str, list[dict[str, Any]]] = {
             "ItemClass": "PARTS",
             "ItemStatus": "Active",
             "DefaultWarehouseID": "WH01",
-            "WeightUOM": "KG",
-            "VolumeUOM": "LITER",
+            # WeightUOM/VolumeUOM absent on live GET (B26) - never claim
             "AverageCost": 22.0,
             "LastModifiedDateTime": "2026-07-11T00:00:00+00:00",
         },
@@ -479,8 +475,6 @@ TABLES: dict[str, list[dict[str, Any]]] = {
             "DefaultWarehouseID": "WH01",
             "IsAKit": True,
             "DefaultPrice": 299.0,
-            "WeightUOM": "KG",
-            "VolumeUOM": "LITER",
             "AverageCost": 139.0,
             "LastModifiedDateTime": "2026-07-11T00:00:00+00:00",
         },
@@ -531,8 +525,8 @@ DELEGATE_VIEW = frozenset({"Currency"})
 # Catalog row counts (V34 path set): entity + setup (+ features outside catalog).
 _CATALOG_ENTITY_ROWS = len(extract.load_manifest().entities)
 _CATALOG_SETUP_ROWS = len(extract.load_manifest().setup)
-_CATALOG_SEED_ROWS = _CATALOG_ENTITY_ROWS + _CATALOG_SETUP_ROWS  # 37
-# Full canned TABLES: every entity row writes (Company x2, Warehouse x3, StockItem x2).
+_CATALOG_SEED_ROWS = _CATALOG_ENTITY_ROWS + _CATALOG_SETUP_ROWS  # 36 after T118
+# Full canned TABLES: every entity row writes (Warehouse x3, StockItem x2).
 _FULL_WRITES = _CATALOG_ENTITY_ROWS + _CATALOG_SETUP_ROWS + 1  # + features
 _FULL_ROWS = _CATALOG_SEED_ROWS + 1  # + features pass
 # Feature gates present when master rows produce (V22 closure).
@@ -557,7 +551,7 @@ def test_packaged_manifest_is_self_consistent() -> None:
     """Packaged catalog: GL chain + master path rows, endpoint-explicit, keyed."""
     manifest = extract.load_manifest()
     files = [s.file for s in manifest.entities]
-    assert files[:9] == [
+    assert files[:8] == [
         "config/bootstrap/company.yaml",
         "config/bootstrap/credit-terms.yaml",
         "config/baseline/10-subaccounts.yaml",
@@ -566,8 +560,8 @@ def test_packaged_manifest_is_self_consistent() -> None:
         "config/baseline/50-gl-preferences.yaml",
         "config/baseline/60-ledger-company.yaml",
         "config/baseline/90-uoms.yaml",
-        "config/baseline/91-company-packaging.yaml",
     ]
+    assert "config/baseline/91-company-packaging.yaml" not in files  # B26/T118
     assert "config/baseline/30-currencies.yaml" not in files  # V34: not in templates
     assert "config/master/10-reason-codes.yaml" in files
     assert "config/master/85-kit-specifications.yaml" in files
@@ -851,8 +845,8 @@ def test_rerun_skips_every_emitted_file(
     lines = [ln for ln in capsys.readouterr().out.splitlines() if ln]
     assert len(lines) == _FULL_ROWS
     assert sum(1 for ln in lines if ln.startswith("write ")) == _FULL_WRITES
-    assert any("91-company-packaging" in ln and ln.startswith("write ") for ln in lines)
     assert any("80-stock-items-parts" in ln and ln.startswith("write ") for ln in lines)
+    assert not any("91-company-packaging" in ln for ln in lines)
 
 
 def test_run_only_filters_entity_name_or_file_stem(
@@ -962,16 +956,13 @@ def test_filter_split_stock_item_itemclass(
     assert "AverageCost" not in kits["records"][0]
 
 
-def test_company_include_partitions_identity_vs_packaging(
+def test_company_include_drops_audit_noise(
     instance: Instance, server: FakeServer, tmp_path: Path
 ) -> None:
-    """Same live Company row: identity file vs packaging field-partition."""
+    """Company include: identity fields only; packaging UOMs not claimed (B26)."""
     _run(instance, server, tmp_path, only=frozenset({"Company"}))
     identity = yaml.safe_load(
         (tmp_path / "config" / "bootstrap" / "company.yaml").read_text()
-    )
-    packaging = yaml.safe_load(
-        (tmp_path / "config" / "baseline" / "91-company-packaging.yaml").read_text()
     )
     assert identity["records"] == [
         {
@@ -982,11 +973,9 @@ def test_company_include_partitions_identity_vs_packaging(
             "OrganizationType": "Without Branches",
         }
     ]
-    assert packaging["records"] == [
-        {"AcctCD": "COMPANY", "VolumeUOM": "LITER", "WeightUOM": "KG"}
-    ]
     assert "LastModifiedDateTime" not in identity["records"][0]
-    assert "LastModifiedDateTime" not in packaging["records"][0]
+    assert "WeightUOM" not in identity["records"][0]
+    assert not (tmp_path / "config" / "baseline" / "91-company-packaging.yaml").exists()
 
 
 def test_warehouse_include_partitions_bootstrap_locations_defaults(
@@ -1066,18 +1055,34 @@ def test_catalog_filter_split_and_include_rows_declared() -> None:
     assert by_file["config/master/82-stock-items-kits.yaml"].filter == (
         "ItemClass eq 'KITS'"
     )
+    assert "WeightUOM" not in by_file["config/master/80-stock-items-parts.yaml"].include
+    assert "VolumeUOM" not in by_file["config/master/82-stock-items-kits.yaml"].include
     assert by_file["config/bootstrap/company.yaml"].include
-    assert by_file["config/baseline/91-company-packaging.yaml"].include == [
-        "WeightUOM",
-        "VolumeUOM",
-    ]
+    assert "config/baseline/91-company-packaging.yaml" not in by_file
     assert "MainContact" in by_file["config/master/75-vendors.yaml"].include
     assert "Locations" in by_file["config/master/51-warehouse-locations.yaml"].include
-    # multi-file same entity counts
+    # multi-file same entity counts (Company packaging row dropped T118/B26)
     entities = [s.entity for s in manifest.entities]
-    assert entities.count("Company") == 2
+    assert entities.count("Company") == 1
     assert entities.count("Warehouse") == 3
     assert entities.count("StockItem") == 2
+
+
+def test_templates_do_not_claim_packaging_uoms() -> None:
+    """B26/V34: golden seed never claims WeightUOM/VolumeUOM (not returned)."""
+    root = Path(__file__).resolve().parents[1] / "src" / "acumatica_cli" / "templates"
+    claims: list[str] = []
+    for path in root.rglob("*.yaml"):
+        text = path.read_text(encoding="utf-8")
+        for i, line in enumerate(text.splitlines(), 1):
+            stripped = line.lstrip()
+            if stripped.startswith("#"):
+                continue
+            if re.match(r"WeightUOM\s*:", stripped) or re.match(
+                r"VolumeUOM\s*:", stripped
+            ):
+                claims.append(f"{path.relative_to(root)}:{i}:{stripped}")
+    assert claims == []
 
 
 def test_b9_non_optimization_500_never_takes_fallback(

@@ -36,7 +36,7 @@ Bare `acu apply` / `acu diff` also prefer `config/` when those trees exist.
 | Path | Role |
 |------|------|
 | `config/bootstrap/` | Company, features, credit terms, Bootstrap `project.xml` (Bootstrap/1.0.0) |
-| `config/baseline/` | GL foundation (COA, ledger, subaccounts, UOMs, packaging) |
+| `config/baseline/` | GL foundation (COA, ledger, subaccounts, UOMs) |
 | `config/setup/` | Financial year, master calendar, open periods |
 | `config/master/` | Inventory, warehouse, items, vendors, customers, module prefs |
 | `scenario/10-seed-capital.yaml` | Once-class owner capital JE (skip-if-present when present) |

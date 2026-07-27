@@ -10,9 +10,8 @@
 # carried it keep their creation-time default (MAIN, the transit
 # warehouse - PO lines then fail, P5 probe); explicit beats derived.
 #
-# WeightUOM/VolumeUOM: Packaging tab (company base UOMs are KG + LITER
-# in baseline/91-company-packaging.yaml); set on each item so existing
-# rows are not left with blank Weight/Volume UOM warnings.
+# Packaging WeightUOM/VolumeUOM omitted: endpoint GET does not
+# return them (B26/B11 class) - claiming them permanent-red diffs.
 #
 # APPLY ORDER (dir expansion sorts *.yaml alphabetically; numbered
 # prefixes encode order): after 54-item-classes.yaml; before
@@ -25,61 +24,43 @@ records:
   ItemClass: PARTS
   ItemStatus: Active
   DefaultWarehouseID: WH01
-  WeightUOM: KG
-  VolumeUOM: LITER
 - InventoryID: ENCL-DIN
   Description: DIN-rail enclosure
   ItemClass: PARTS
   ItemStatus: Active
   DefaultWarehouseID: WH01
-  WeightUOM: KG
-  VolumeUOM: LITER
 - InventoryID: MB-CM4
   Description: Gateway mainboard
   ItemClass: PARTS
   ItemStatus: Active
   DefaultWarehouseID: WH01
-  WeightUOM: KG
-  VolumeUOM: LITER
 - InventoryID: MOD-LTE
   Description: LTE modem module
   ItemClass: PARTS
   ItemStatus: Active
   DefaultWarehouseID: WH01
-  WeightUOM: KG
-  VolumeUOM: LITER
 - InventoryID: ANT-LORA
   Description: LoRa antenna
   ItemClass: PARTS
   ItemStatus: Active
   DefaultWarehouseID: WH01
-  WeightUOM: KG
-  VolumeUOM: LITER
 - InventoryID: ANT-LTE
   Description: LTE antenna
   ItemClass: PARTS
   ItemStatus: Active
   DefaultWarehouseID: WH01
-  WeightUOM: KG
-  VolumeUOM: LITER
 - InventoryID: PSU-12V
   Description: 12V power supply
   ItemClass: PARTS
   ItemStatus: Active
   DefaultWarehouseID: WH01
-  WeightUOM: KG
-  VolumeUOM: LITER
 - InventoryID: SD-32GB
   Description: 32GB industrial SD card
   ItemClass: PARTS
   ItemStatus: Active
   DefaultWarehouseID: WH01
-  WeightUOM: KG
-  VolumeUOM: LITER
 - InventoryID: CBL-PWR
   Description: Power cable
   ItemClass: PARTS
   ItemStatus: Active
   DefaultWarehouseID: WH01
-  WeightUOM: KG
-  VolumeUOM: LITER

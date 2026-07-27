@@ -8,9 +8,8 @@
 # carried it keep their creation-time default (MAIN, the transit
 # warehouse - PO lines then fail, P5 probe); explicit beats derived.
 #
-# WeightUOM/VolumeUOM: Packaging tab inherits company base UOMs
-# (baseline/91-company-packaging.yaml KG + LITER) but existing items
-# keep blank fields unless set here - empty Weight/Volume UOM warns.
+# Packaging WeightUOM/VolumeUOM omitted: endpoint GET does not
+# return them (B26/B11 class) - claiming them permanent-red diffs.
 #
 # APPLY ORDER (dir expansion sorts *.yaml alphabetically; numbered
 # prefixes encode order): after 54-item-classes.yaml; before
@@ -25,8 +24,6 @@ records:
   DefaultWarehouseID: WH01
   IsAKit: true
   DefaultPrice: 299.00
-  WeightUOM: KG
-  VolumeUOM: LITER
 - InventoryID: GW-CELL
   Description: Cellular IoT Gateway
   ItemClass: KITS
@@ -34,8 +31,6 @@ records:
   DefaultWarehouseID: WH01
   IsAKit: true
   DefaultPrice: 449.00
-  WeightUOM: KG
-  VolumeUOM: LITER
 - InventoryID: GW-RAIL
   Description: DIN-Rail Industrial Gateway
   ItemClass: KITS
@@ -43,5 +38,3 @@ records:
   DefaultWarehouseID: WH01
   IsAKit: true
   DefaultPrice: 349.00
-  WeightUOM: KG
-  VolumeUOM: LITER

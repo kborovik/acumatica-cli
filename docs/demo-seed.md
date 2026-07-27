@@ -117,7 +117,6 @@ Paths are under `config/` for seed trees (except `scenario/` at the data-repo ro
 | `config/baseline/50-gl-preferences.yaml` | GLPreferences | bootstrap | GL102000 |
 | `config/baseline/60-ledger-company.yaml` | LedgerCompany | bootstrap | GL201500 |
 | `config/baseline/90-uoms.yaml` | UnitsOfMeasure | default | CS203500 |
-| `config/baseline/91-company-packaging.yaml` | Company (Weight/Volume UOM) | bootstrap | CS101500 |
 | `config/setup/10-financial-year.yaml` | FinancialYearSettings / GeneratePeriods | bootstrap | GL101000 |
 | `config/setup/20-master-calendar.yaml` | MasterCalendar / GenerateCalendar | bootstrap | GL201000 |
 | `config/setup/30-open-periods.yaml` | ManagePeriods / ProcessAll | bootstrap | GL503000 |

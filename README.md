@@ -94,7 +94,7 @@ Your configuration lives in its own git repo.
 | Path | What it holds |
 | ---- | ------------- |
 | `config/bootstrap/` | virgin-tenant config: features, company, credit terms, `project.xml` |
-| `config/baseline/` | reference data: subaccounts, COA, ledger, UOMs, packaging |
+| `config/baseline/` | reference data: subaccounts, COA, ledger, UOMs |
 | `config/setup/` | one-time actions: financial year, master calendar, open periods |
 | `config/master/` | inventory/distribution masters (prefs, warehouse, items, parties) |
 | `scenario/` | lifecycle txns for `acu run`: once capital, then buy, build, sell |
