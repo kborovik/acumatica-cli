@@ -90,7 +90,8 @@ Run `acu <command> --help` for details on any command.
 ## The data repo
 
 Your configuration lives in its own git repo.
-`acu config init` scaffolds a **single full seed** under `config/` (Bootstrap `project.xml` at `Bootstrap/1.0.0`, expanded COA, masters) plus lifecycle `scenario/`, observer `config/views/`, and README. There is no `--flavor`.
+`acu config init` scaffolds a **single full seed** under `config/` (Bootstrap `project.xml` at `Bootstrap/1.0.0`, expanded COA, masters) plus lifecycle `scenario/`, observer `config/views/`, and README.
+There is no `--flavor`.
 
 | Path | What it holds |
 | ---- | ------------- |
@@ -111,7 +112,10 @@ The scaffolded `.gitignore` keeps `.env` out of git — store it encrypted (for 
 Commit `target.yaml` with the seeds so every clone knows the verified ERP line and Default API generation.
 
 Seed YAML is state: `apply` upserts it, `diff` proves it.
-`acu extract` is the inverse of `apply`: GET live tenant rows into seed YAML under `config/{bootstrap,baseline,setup,master}/` (hard-cut). Packaged `seed_catalog.yaml` is the sole extract registry (entity, endpoint, keys, file, strip/include, filter-split); the demo entity map in [docs/demo-seed.md](docs/demo-seed.md) mirrors those catalog paths. Features synthesize to `config/bootstrap/features.yaml`. Existing files skip unless `--force`; empty live sets skip; row failures continue (exit 1 only if any row failed — drift stays with `diff`).
+`acu extract` is the inverse of `apply`: GET live tenant rows into seed YAML under `config/{bootstrap,baseline,setup,master}/` (hard-cut).
+Packaged `seed_catalog.yaml` is the sole extract registry (entity, endpoint, keys, file, strip/include, filter-split); the demo entity map in [docs/demo-seed.md](docs/demo-seed.md) mirrors those catalog paths.
+Features synthesize to `config/bootstrap/features.yaml`.
+Existing files skip unless `--force`; empty live sets skip; row failures continue (exit 1 only if any row failed — drift stays with `diff`).
 
 ```sh
 acu --tenant DEV extract --out . --force   # refresh config/** from live tenant
@@ -120,15 +124,24 @@ acu --tenant DEV apply config/             # replay extracted seed
 acu --tenant DEV diff config/              # expect exit 0
 ```
 
-**Migration (T115–T120 extract hard-cut):** extract no longer writes root `bootstrap/` / `baseline/` / `setup/` / `master/`. Paths are always `config/…`. There is no `--layout`. Move any root-layout extract output under `config/`, or re-extract into a modern data repo. Catalog rename: `extract_manifest.yaml` becomes `seed_catalog.yaml` (package data only; operators do not author it).
+**Migration (T115–T120 extract hard-cut):** extract no longer writes root `bootstrap/` / `baseline/` / `setup/` / `master/`.
+Paths are always `config/…`.
+There is no `--layout`.
+Move any root-layout extract output under `config/`, or re-extract into a modern data repo.
+Catalog rename: `extract_manifest.yaml` becomes `seed_catalog.yaml` (package data only; operators do not author it).
 
 Scenario YAML is different — it describes transactions that flow forward (not extractable seed).
 `acu run` executes each step in order (`put`, `action`, `wait`, `get`), captures server-assigned document numbers into `${var}` references for later steps, and checks `expect:` assertions as deltas against a pre-run snapshot, so additive scenarios re-run safely on a warm tenant.
 `once: true` scenarios declare a `present` inquire-absolute gate; when the probe already holds, the CLI prints `skip <path> (once: already present)` and runs neither steps nor expects (Owner Capital does not restack).
 
-`acu state` is the third observation path: it captures live derived state (balances) into `state/` for git review. It is not `extract` (config seed) and not `diff` (desired vs actual config). Packaged golden is trial-balance via contract `inquire:` (`EndingBalance` fixed-point); inventory-summary is not golden this pass. `gi:` stays optional when a GI is V12-verified and **Expose via OData** is on (`params` fail-closed vs `$metadata`). After a cold `acu run scenario/ && acu state`, warm `acu run scenario/10-seed-capital.yaml && acu state --assert-unchanged` is the once-class gate (full scenario re-run is additive and moves cash observations on the TB).
+`acu state` is the third observation path: it captures live derived state (balances) into `state/` for git review.
+It is not `extract` (config seed) and not `diff` (desired vs actual config).
+Packaged golden is trial-balance via contract `inquire:` (`EndingBalance` fixed-point); inventory-summary is not golden this pass. `gi:` stays optional when a GI is V12-verified and **Expose via OData** is on (`params` fail-closed vs `$metadata`).
+After a cold `acu run scenario/ && acu state`, warm `acu run scenario/10-seed-capital.yaml && acu state --assert-unchanged` is the once-class gate (full scenario re-run is additive and moves cash observations on the TB).
 
-**Migration (T112–T114 hard-cut):** CLI verb is `state` only (no `snapshot` alias). Bare defaults are `config/views/` (views) and `state/` (observations). Prior `config/snapshot/` and root `snapshot/` / `snapshots/` are not fallbacks — move views to `config/views/` or pass explicit path args.
+**Migration (T112–T114 hard-cut):** CLI verb is `state` only (no `snapshot` alias).
+Bare defaults are `config/views/` (views) and `state/` (observations).
+Prior `config/snapshot/` and root `snapshot/` / `snapshots/` are not fallbacks — move views to `config/views/` or pass explicit path args.
 
 ### Seed `endpoint:` symbols
 
@@ -151,7 +164,8 @@ Requires Python 3.14 or newer.
 uv tool install acumatica-cli
 ```
 
-`pipx install acumatica-cli` and `pip install acumatica-cli` work too. For the latest development version straight from the main branch:
+`pipx install acumatica-cli` and `pip install acumatica-cli` work too.
+For the latest development version straight from the main branch:
 
 ```sh
 uv tool install git+https://github.com/kborovik/acumatica-cli.git
@@ -219,10 +233,13 @@ On a hosted instance, publish AcuBootstrap with `acu bootstrap`, then seed with 
 
 ## SSH setup (control plane)
 
-`acu tenant` runs commands on the Windows guest through plain `ssh`. Two things about this setup are not obvious, and both are hard requirements.
+`acu tenant` runs commands on the Windows guest through plain `ssh`.
+Two things about this setup are not obvious, and both are hard requirements.
 
-**1. The default SSH shell on the Windows guest must be PowerShell.**
-`acu` sends PowerShell syntax over the wire, and every one of those commands fails under `cmd.exe`, the Windows OpenSSH default. Switch it once, in an elevated PowerShell on the guest:
+**1.
+The default SSH shell on the Windows guest must be PowerShell.**
+`acu` sends PowerShell syntax over the wire, and every one of those commands fails under `cmd.exe`, the Windows OpenSSH default.
+Switch it once, in an elevated PowerShell on the guest:
 
 ```powershell
 New-ItemProperty -Path "HKLM:\SOFTWARE\OpenSSH" -Name DefaultShell `
@@ -230,9 +247,11 @@ New-ItemProperty -Path "HKLM:\SOFTWARE\OpenSSH" -Name DefaultShell `
   -PropertyType String -Force
 ```
 
-**2. Authentication must be key-based and non-interactive.**
+**2.
+Authentication must be key-based and non-interactive.**
 `acu` connects with `BatchMode=yes`, so it will never answer a password prompt.
-Because the default user is `Administrator` (an administrators-group member), Windows OpenSSH reads the key from the *machine-wide* file `C:\ProgramData\ssh\administrators_authorized_keys` — **not** from `~\.ssh\authorized_keys` like on Linux. On the guest:
+Because the default user is `Administrator` (an administrators-group member), Windows OpenSSH reads the key from the *machine-wide* file `C:\ProgramData\ssh\administrators_authorized_keys` — **not** from `~\.ssh\authorized_keys` like on Linux.
+On the guest:
 
 Install + start the server (once):
 
