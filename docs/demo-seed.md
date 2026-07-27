@@ -40,7 +40,7 @@ Legacy data repos may still use root `bootstrap/`…`master/`; init no longer sc
 | Features | Synthesized `config/bootstrap/features.yaml` from catalog `features:` gates (not a catalog entity row) |
 | Setup | Catalog `kind:` synthesizers rebuild action files (not raw record dumps) |
 | Multi-file same entity | Filter-split or include-partition (one catalog row per numbered file) |
-| Skip / fail | Exists → skip unless `--force`; zero records → skip; row fail → report + continue; exit 1 if any fail |
+| Skip / fail | Exists: skip unless `--force`; zero records: skip; row fail: report and continue; exit 1 if any fail |
 | Not seed | `scenario/` and `config/views/` are never extract targets |
 
 ```sh
@@ -49,7 +49,7 @@ acu extract --only StockItem --force # catalog rows matching entity or file stem
 acu apply config/ && acu diff config/  # round-trip: expect clean diff after apply
 ```
 
-**Migration (root emit → `config/`):** older extract wrote `bootstrap/`…`master/` at the data-repo root. That path is gone (no `--layout`). Re-extract into a `config/` data repo, or move root trees under `config/` before the next apply. Package data renamed `extract_manifest.yaml` → `seed_catalog.yaml`.
+**Migration (root emit to `config/`):** older extract wrote `bootstrap/`…`master/` at the data-repo root. That path is gone (no `--layout`). Re-extract into a `config/` data repo, or move root trees under `config/` before the next apply. Package data renamed `extract_manifest.yaml` becomes `seed_catalog.yaml`.
 
 ## State observations
 
@@ -72,7 +72,7 @@ Default scaffold golden is **trial-balance only** (V28/V33):
 
 Roster-only `entity: Account` is forbidden for that stem.
 `inventory-summary` / `QtyOnHand` is not packaged this pass (B25:
-`InventorySummaryInquiry` warehouse-only → empty Results). Custom views via
+`InventorySummaryInquiry` warehouse-only yields empty Results). Custom views via
 `inquire:` or `gi:` remain supported when a V12-verified path is known.
 `gi:` stays optional when a GenericInquiry is V12-verified: enable **Expose via
 OData** on SM208000, seed the GI under `config/master/`, point `source.gi:` with
@@ -109,14 +109,14 @@ Live virgin-tenant scenario + state chain: `make e2e FILE=test_scenario_lifecycl
 
 Numbered file prefixes encode order within each directory (alphabetical expansion).
 
-Cross-directory order is fixed: bootstrap → baseline → setup → master (umbrella expand under `config/`).
+Cross-directory order is fixed: bootstrap, then baseline, then setup, then master (umbrella expand under `config/`).
 
 | Phase | Must exist before later files |
 | ----- | ----------------------------- |
 | Features | `config/bootstrap/features.yaml` enables Inventory, DistributionModule, Warehouse, WarehouseLocation, KitAssemblies, SubAccount, … |
 | Company | Org CD **LAB5** (single placeholder across ledger link, open periods, TransitBranchID, cash BranchID) |
 | COA / GL | Expanded accounts for inventory, in-transit, PO accrual, PPV/LCV, freight, discounts |
-| Setup calendar | Financial year → master calendar → open periods for LAB5 |
+| Setup calendar | Financial year, then master calendar, then open periods for LAB5 |
 | Master prefs | Reason codes and IN prefs before warehouse; warehouse before item classes and stock items |
 | Parties | Vendor/customer classes before vendors/customers |
 | Scenario | Runs only after master apply; capital once-guard then additive buy/build/sell |

@@ -70,7 +70,7 @@ acu [--tenant NAME] [--url URL] [--ssh USER@HOST] [--api-version V]
 ├── state [--out DIR] [--diff] [--assert-unchanged] [--dry-run] [FILES...]
 │                                     capture derived state into state/ (not seed)
 ├── extract [--out DIR] [--only NAME]... [--force] [--dry-run]
-│                                     inverse of apply → config/{bootstrap,baseline,setup,master}/
+│                                     inverse of apply into config/{bootstrap,baseline,setup,master}/
 ├── schema [--out DIR]                dump the endpoint's OpenAPI schema (swagger.json)
 │
 └── config                            configuration ops
@@ -111,7 +111,7 @@ The scaffolded `.gitignore` keeps `.env` out of git — store it encrypted (for 
 Commit `target.yaml` with the seeds so every clone knows the verified ERP line and Default API generation.
 
 Seed YAML is state: `apply` upserts it, `diff` proves it.
-`acu extract` is the inverse of `apply`: GET live tenant rows → seed YAML under `config/{bootstrap,baseline,setup,master}/` (hard-cut). Packaged `seed_catalog.yaml` is the sole extract registry (entity, endpoint, keys, file, strip/include, filter-split); the demo entity map in [docs/demo-seed.md](docs/demo-seed.md) mirrors those catalog paths. Features synthesize to `config/bootstrap/features.yaml`. Existing files skip unless `--force`; empty live sets skip; row failures continue (exit 1 only if any row failed — drift stays with `diff`).
+`acu extract` is the inverse of `apply`: GET live tenant rows into seed YAML under `config/{bootstrap,baseline,setup,master}/` (hard-cut). Packaged `seed_catalog.yaml` is the sole extract registry (entity, endpoint, keys, file, strip/include, filter-split); the demo entity map in [docs/demo-seed.md](docs/demo-seed.md) mirrors those catalog paths. Features synthesize to `config/bootstrap/features.yaml`. Existing files skip unless `--force`; empty live sets skip; row failures continue (exit 1 only if any row failed — drift stays with `diff`).
 
 ```sh
 acu --tenant DEV extract --out . --force   # refresh config/** from live tenant
@@ -120,7 +120,7 @@ acu --tenant DEV apply config/             # replay extracted seed
 acu --tenant DEV diff config/              # expect exit 0
 ```
 
-**Migration (T115–T120 extract hard-cut):** extract no longer writes root `bootstrap/` / `baseline/` / `setup/` / `master/`. Paths are always `config/…`. There is no `--layout`. Move any root-layout extract output under `config/`, or re-extract into a modern data repo. Catalog rename: `extract_manifest.yaml` → `seed_catalog.yaml` (package data only; operators do not author it).
+**Migration (T115–T120 extract hard-cut):** extract no longer writes root `bootstrap/` / `baseline/` / `setup/` / `master/`. Paths are always `config/…`. There is no `--layout`. Move any root-layout extract output under `config/`, or re-extract into a modern data repo. Catalog rename: `extract_manifest.yaml` becomes `seed_catalog.yaml` (package data only; operators do not author it).
 
 Scenario YAML is different — it describes transactions that flow forward (not extractable seed).
 `acu run` executes each step in order (`put`, `action`, `wait`, `get`), captures server-assigned document numbers into `${var}` references for later steps, and checks `expect:` assertions as deltas against a pre-run snapshot, so additive scenarios re-run safely on a warm tenant.
