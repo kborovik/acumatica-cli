@@ -28,6 +28,28 @@ acu run scenario/10-seed-capital.yaml && acu state --assert-unchanged
 Bare `apply` / `diff` (no path args) also prefer `config/<name>/` when those trees exist (V30).
 
 Legacy data repos may still use root `bootstrap/`…`master/`; init no longer scaffolds that layout.
+`acu extract` never writes that root layout — emit is hard-cut to `config/` only (see [Extract](#extract)).
+
+## Extract
+
+`acu extract` is the **inverse of apply** for seed trees: read the live tenant, write seed YAML under `config/{bootstrap,baseline,setup,master}/` that `apply` / `diff` consume unchanged.
+
+| Concern | Rule |
+| ------- | ---- |
+| Registry | Packaged `seed_catalog.yaml` (not operator-authored); every catalog `file:` path is under `config/` |
+| Features | Synthesized `config/bootstrap/features.yaml` from catalog `features:` gates (not a catalog entity row) |
+| Setup | Catalog `kind:` synthesizers rebuild action files (not raw record dumps) |
+| Multi-file same entity | Filter-split or include-partition (one catalog row per numbered file) |
+| Skip / fail | Exists → skip unless `--force`; zero records → skip; row fail → report + continue; exit 1 if any fail |
+| Not seed | `scenario/` and `config/views/` are never extract targets |
+
+```sh
+acu extract --out . --force          # full catalog → config/**
+acu extract --only StockItem --force # catalog rows matching entity or file stem
+acu apply config/ && acu diff config/  # round-trip: expect clean diff after apply
+```
+
+**Migration (root emit → `config/`):** older extract wrote `bootstrap/`…`master/` at the data-repo root. That path is gone (no `--layout`). Re-extract into a `config/` data repo, or move root trees under `config/` before the next apply. Package data renamed `extract_manifest.yaml` → `seed_catalog.yaml`.
 
 ## State observations
 
@@ -105,50 +127,54 @@ Reference closure: every foreign key must resolve to a tenant-native row or an e
 
 ## Entity map
 
-Paths are under `config/` for seed trees (except `scenario/` at the data-repo root).
+**Catalog mirror:** seed-file paths and entity/endpoint pairs below match packaged
+`seed_catalog.yaml` (templates ↔ catalog ↔ extract emit; V34). Screen IDs are
+operator notes only (not catalog fields). `scenario/` rows are `acu run` only —
+not in the catalog, not extracted.
 
-| Seed file | Entity / action | Endpoint | Screen |
-| -------- | --------------- | -------- | ------ |
-| `config/bootstrap/company.yaml` | Company | bootstrap | CS101500 |
-| `config/bootstrap/credit-terms.yaml` | CreditTerms | bootstrap | CS206500 |
-| `config/baseline/10-subaccounts.yaml` | Subaccount | default | GL203000 |
-| `config/baseline/20-accounts.yaml` | Account | default | GL202500 |
-| `config/baseline/40-ledger.yaml` | Ledger | default | GL201500 |
-| `config/baseline/50-gl-preferences.yaml` | GLPreferences | bootstrap | GL102000 |
-| `config/baseline/60-ledger-company.yaml` | LedgerCompany | bootstrap | GL201500 |
-| `config/baseline/90-uoms.yaml` | UnitsOfMeasure | default | CS203500 |
-| `config/setup/10-financial-year.yaml` | FinancialYearSettings / GeneratePeriods | bootstrap | GL101000 |
-| `config/setup/20-master-calendar.yaml` | MasterCalendar / GenerateCalendar | bootstrap | GL201000 |
-| `config/setup/30-open-periods.yaml` | ManagePeriods / ProcessAll | bootstrap | GL503000 |
-| `config/master/10-reason-codes.yaml` | ReasonCode | bootstrap | CS211000 |
-| `config/master/20-in-preferences.yaml` | INPreferences | bootstrap | IN101000 |
-| `config/master/30-availability-rules.yaml` | AvailabilityCalculationRule | bootstrap | IN201500 |
-| `config/master/40-posting-classes.yaml` | PostingClass | bootstrap | IN206000 |
-| `config/master/50-warehouse.yaml` | Warehouse | bootstrap | IN204000 |
-| `config/master/51-warehouse-locations.yaml` | Warehouse (locations) | default | IN204000 |
-| `config/master/52-warehouse-defaults.yaml` | Warehouse (receive/ship/RMA bins) | default | IN204000 |
-| `config/master/53-tax-categories.yaml` | TaxCategory | default | TX205500 |
-| `config/master/54-item-classes.yaml` | ItemClass | default | IN201000 |
-| `config/master/56-so-preferences.yaml` | SOPreferences | bootstrap | SO101000 |
-| `config/master/57-po-preferences.yaml` | POPreferences | bootstrap | PO101000 |
-| `config/master/58-order-types.yaml` | OrderType | bootstrap | SO201000 |
-| `config/master/60-ar-preferences.yaml` | ARPreferences | bootstrap | AR101000 |
-| `config/master/61-ap-preferences.yaml` | APPreferences | bootstrap | AP101000 |
-| `config/master/62-ca-preferences.yaml` | CAPreferences | bootstrap | CA101000 |
-| `config/master/63-cash-account.yaml` | CashAccount | bootstrap | CA202000 |
-| `config/master/64-payment-methods.yaml` | PaymentMethod | default | CA204000 |
-| `config/master/65-statement-cycles.yaml` | StatementCycle | bootstrap | AR202800 |
-| `config/master/70-vendor-classes.yaml` | VendorClass | bootstrap | AP201000 |
-| `config/master/71-customer-classes.yaml` | CustomerClass | default | AR201000 |
-| `config/master/75-vendors.yaml` | Vendor | default | AP303000 |
-| `config/master/76-customers.yaml` | Customer | default | AR303000 |
-| `config/master/80-stock-items-parts.yaml` | StockItem | default | IN202500 |
-| `config/master/82-stock-items-kits.yaml` | StockItem | default | IN202500 |
-| `config/master/85-kit-specifications.yaml` | KitSpecification | default | IN209500 |
-| `scenario/10-seed-capital.yaml` | JournalTransaction (once) | default | GL301000 |
-| `scenario/20-buy.yaml` | PO / receipt / AP bill+pay | default | PO/IN/AP |
-| `scenario/30-build.yaml` | KitAssembly | default | IN307000 |
-| `scenario/40-sell.yaml` | SO / ship / invoice / AR pay | default | SO/IN/AR |
+| Seed file | Entity / action | Endpoint | Screen | Extract |
+| -------- | --------------- | -------- | ------ | ------- |
+| `config/bootstrap/company.yaml` | Company | bootstrap | CS101500 | catalog |
+| `config/bootstrap/credit-terms.yaml` | CreditTerms | bootstrap | CS206500 | catalog |
+| `config/bootstrap/features.yaml` | FeaturesSet gates (synthesized) | — | CS100000 | synth |
+| `config/baseline/10-subaccounts.yaml` | Subaccount | default | GL203000 | catalog |
+| `config/baseline/20-accounts.yaml` | Account | default | GL202500 | catalog |
+| `config/baseline/40-ledger.yaml` | Ledger | default | GL201500 | catalog |
+| `config/baseline/50-gl-preferences.yaml` | GLPreferences | bootstrap | GL102000 | catalog |
+| `config/baseline/60-ledger-company.yaml` | LedgerCompany | bootstrap | GL201500 | catalog |
+| `config/baseline/90-uoms.yaml` | UnitsOfMeasure | default | CS203500 | catalog |
+| `config/setup/10-financial-year.yaml` | FinancialYearSettings / GeneratePeriods | bootstrap | GL101000 | setup synth |
+| `config/setup/20-master-calendar.yaml` | MasterCalendar / GenerateCalendar | bootstrap | GL201000 | setup synth |
+| `config/setup/30-open-periods.yaml` | ManagePeriods / ProcessAll | bootstrap | GL503000 | setup synth |
+| `config/master/10-reason-codes.yaml` | ReasonCode | bootstrap | CS211000 | catalog |
+| `config/master/20-in-preferences.yaml` | INPreferences | bootstrap | IN101000 | catalog |
+| `config/master/30-availability-rules.yaml` | AvailabilityCalculationRule | bootstrap | IN201500 | catalog |
+| `config/master/40-posting-classes.yaml` | PostingClass | bootstrap | IN206000 | catalog |
+| `config/master/50-warehouse.yaml` | Warehouse | bootstrap | IN204000 | catalog |
+| `config/master/51-warehouse-locations.yaml` | Warehouse (locations) | default | IN204000 | catalog |
+| `config/master/52-warehouse-defaults.yaml` | Warehouse (receive/ship/RMA bins) | default | IN204000 | catalog |
+| `config/master/53-tax-categories.yaml` | TaxCategory | default | TX205500 | catalog |
+| `config/master/54-item-classes.yaml` | ItemClass | default | IN201000 | catalog |
+| `config/master/56-so-preferences.yaml` | SOPreferences | bootstrap | SO101000 | catalog |
+| `config/master/57-po-preferences.yaml` | POPreferences | bootstrap | PO101000 | catalog |
+| `config/master/58-order-types.yaml` | OrderType | bootstrap | SO201000 | catalog |
+| `config/master/60-ar-preferences.yaml` | ARPreferences | bootstrap | AR101000 | catalog |
+| `config/master/61-ap-preferences.yaml` | APPreferences | bootstrap | AP101000 | catalog |
+| `config/master/62-ca-preferences.yaml` | CAPreferences | bootstrap | CA101000 | catalog |
+| `config/master/63-cash-account.yaml` | CashAccount | bootstrap | CA202000 | catalog |
+| `config/master/64-payment-methods.yaml` | PaymentMethod | default | CA204000 | catalog |
+| `config/master/65-statement-cycles.yaml` | StatementCycle | bootstrap | AR202800 | catalog |
+| `config/master/70-vendor-classes.yaml` | VendorClass | bootstrap | AP201000 | catalog |
+| `config/master/71-customer-classes.yaml` | CustomerClass | default | AR201000 | catalog |
+| `config/master/75-vendors.yaml` | Vendor | default | AP303000 | catalog |
+| `config/master/76-customers.yaml` | Customer | default | AR303000 | catalog |
+| `config/master/80-stock-items-parts.yaml` | StockItem | default | IN202500 | catalog |
+| `config/master/82-stock-items-kits.yaml` | StockItem | default | IN202500 | catalog |
+| `config/master/85-kit-specifications.yaml` | KitSpecification | default | IN209500 | catalog |
+| `scenario/10-seed-capital.yaml` | JournalTransaction (once) | default | GL301000 | run only |
+| `scenario/20-buy.yaml` | PO / receipt / AP bill+pay | default | PO/IN/AP | run only |
+| `scenario/30-build.yaml` | KitAssembly | default | IN307000 | run only |
+| `scenario/40-sell.yaml` | SO / ship / invoice / AR pay | default | SO/IN/AR | run only |
 
 `endpoint: bootstrap` resolves to the active Bootstrap package version from `config/bootstrap/project.xml` (or root `bootstrap/project.xml` on legacy layout).
 

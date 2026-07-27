@@ -902,16 +902,17 @@ def extract_cmd(
     force: bool,
     dry_run: bool,
 ) -> None:
-    """Extract live tenant state into seed YAML files (the inverse of apply).
+    """Extract live tenant state into seed YAML under config/ (inverse of apply).
 
-    Catalog-driven (packaged ``seed_catalog.yaml`` carries the verified
-    entity set): each entity is read from the live tenant and written as a
-    seed file under ``config/{bootstrap,baseline,setup,master}/`` (hard-cut;
-    V30) that apply and diff consume unchanged. Existing files are skipped
-    unless --force; an entity with no live records produces no file. A
-    failing row is reported and the run continues to the next (a virgin
-    tenant extracts whole). Exit 0 when every row wrote or skipped clean,
-    1 when any row failed - drift detection stays with diff.
+    Catalog-driven (packaged ``seed_catalog.yaml`` is the verified entity
+    registry): each row is read from the live tenant and written under
+    ``config/{bootstrap,baseline,setup,master}/`` (hard-cut; never root
+    SEED_DIRS; no ``--layout``). Apply and diff consume those files
+    unchanged. Features synthesize to ``config/bootstrap/features.yaml``.
+    Existing files are skipped unless --force; an entity with no live
+    records produces no file. A failing row is reported and the run
+    continues (a virgin tenant extracts whole). Exit 0 when every row
+    wrote or skipped clean, 1 when any row failed - drift stays with diff.
     """
     assert_target_compatible(inst)
     with AcumaticaClient(inst) as client:

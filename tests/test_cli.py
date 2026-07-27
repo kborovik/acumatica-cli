@@ -404,6 +404,16 @@ def test_tenant_create_help_lists_exact_dataset_names(wired: Instance) -> None:
     assert "SalesDemo|T100|U100" in result.output
 
 
+def test_extract_help_documents_config_hard_cut(wired: Instance) -> None:
+    # T120/V12: extract is inverse of apply under config/ only (no root emit)
+    result = CliRunner().invoke(cli.cli, ["extract", "--help"])
+
+    assert result.exit_code == 0
+    assert "inverse of apply" in result.output
+    assert "config/" in result.output
+    assert "seed_catalog.yaml" in result.output
+
+
 def test_provision_cmd_is_gone(wired: Instance) -> None:
     # T45: tenant create chains the bootstrap publish itself; the separate
     # provision command must not exist

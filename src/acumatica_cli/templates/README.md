@@ -27,9 +27,13 @@ acu diff config/
 acu state
 # warm gate: once-capital only — additive buy/sell moves numeric observations
 acu run scenario/10-seed-capital.yaml && acu state --assert-unchanged
+
+# Optional: re-seed from live (inverse of apply; always under config/)
+# acu extract --out . --force
 ```
 
 Bare `acu apply` / `acu diff` also prefer `config/` when those trees exist.
+`acu extract` hard-cuts emit to `config/{bootstrap,baseline,setup,master}/` (never root SEED_DIRS).
 
 ## Layout
 
