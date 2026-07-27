@@ -145,7 +145,7 @@ T113|x|defaults `config/views/` + `state/`; package template rehome `config/snap
 T114|x|check-extras V15/V27/V28/V32/V33 verb+path; tests + e2e + docs README migration note hard-cut|V9,V12,V13,V15,T112,T113
 T115|x|extract hard-cut emit `config/`; rename `extract_manifest.yaml`→`seed_catalog.yaml`; rehome catalog file paths; offline path tests|V30,V34,I.cmd,I.data
 T116|x|catalog completeness offline: template seed set equals catalog file set; unit gate|V34
-T117|.|catalog rows for full packaged seed incl master; filter-split multi-file entities; include/strip archaeology large Default surfaces|V34,V22,I.data
+T117|x|catalog rows for full packaged seed incl master; filter-split multi-file entities; include/strip archaeology large Default surfaces|V34,V22,I.data
 T118|.|drop WeightUOM/VolumeUOM + other not-returned packaging claims from templates/seed; prove `diff config/` green path on LAB5-class|V22,V34,B26
 T119|.|e2e full extract round-trip: apply → extract → apply on B → `diff config/` clean → re-extract byte-identical incl master|V4,V22,V24,V34,T115,T117,T118
 T120|.|docs + help + changelog: extract inverse of apply under `config/`; entity map = catalog mirror; root-emit migration note|V12,I.cmd,T115

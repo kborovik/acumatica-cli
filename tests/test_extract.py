@@ -123,9 +123,9 @@ def _client(instance: Instance, server: FakeServer) -> AcumaticaClient:
     return AcumaticaClient(instance, transport=httpx.MockTransport(server))
 
 
-# -- canned live state for the packaged GL-chain catalog entities --
-# Master-surface rows (T116 path completeness) default empty: offline
-# extract skips (no records) until T117 filter-split fixtures land.
+# -- canned live state for the packaged catalog (GL + master, T117) --
+# Multi-file StockItem is filter-split (ItemClass); Company packaging and
+# Warehouse phases share the live row and partition via include.
 
 TABLES: dict[str, list[dict[str, Any]]] = {
     "Company": [
@@ -135,6 +135,11 @@ TABLES: dict[str, list[dict[str, Any]]] = {
             "OrganizationType": "Without Branches",
             "BaseCuryID": "USD",
             "CountryID": "US",
+            # packaging fields (91-company-packaging include partition)
+            "WeightUOM": "KG",
+            "VolumeUOM": "LITER",
+            # noise dropped by include
+            "LastModifiedDateTime": "2026-07-11T00:00:00+00:00",
         }
     ],
     "CreditTerms": [
@@ -146,6 +151,7 @@ TABLES: dict[str, list[dict[str, Any]]] = {
             "DayDue00": 30,
             "DiscType": "Fixed Number of Days",
             "DiscPercent": 0.0,
+            "LastModifiedDateTime": "2026-07-11T00:00:00+00:00",
         }
     ],
     "Subaccount": [
@@ -227,6 +233,270 @@ TABLES: dict[str, list[dict[str, Any]]] = {
         {"UnitID": "PIECE", "Description": "Piece", "L3Code": "PCB"},
         {"UnitID": "HOUR", "Description": "Hour", "L3Code": "HUR"},
     ],
+    # -- master surface (T117 filter-split + include archaeology) --
+    "ReasonCode": [
+        {
+            "ReasonCodeID": "INISSUE",
+            "Descr": "Inventory issue",
+            "Usage": "Issue",
+            "AccountID": "50300",
+            "SubID": "000000",
+            "LastModifiedDateTime": "2026-07-11T00:00:00+00:00",
+        }
+    ],
+    "INPreferences": [
+        {
+            "HoldEntry": False,
+            "INProgressAcctID": "12300",
+            "INProgressSubID": "000000",
+            "INTransitAcctID": "12400",
+            "INTransitSubID": "000000",
+            "TransitBranchID": "LAB5",
+            "UpdateGL": True,
+            "IssuesReasonCode": "INISSUE",
+            "ReceiptReasonCode": "INRECEIPT",
+            "AdjustmentReasonCode": "INADJUST",
+            "PIReasonCode": "INPI",
+        }
+    ],
+    "AvailabilityCalculationRule": [
+        {"AvailabilitySchemeID": "DEFAULT", "Description": "Default rule"}
+    ],
+    "PostingClass": [
+        {
+            "PostClassID": "PARTS",
+            "Descr": "Purchased components",
+            "InvtAcctID": "12100",
+            "InvtSubID": "000000",
+            "SalesAcctID": "40000",
+            "SalesSubID": "000000",
+            "COGSAcctID": "50000",
+            "COGSSubID": "000000",
+            "POAccrualAcctID": "20200",
+            "POAccrualSubID": "000000",
+            "PPVAcctID": "50100",
+            "PPVSubID": "000000",
+            "LCVarianceAcctID": "50200",
+            "LCVarianceSubID": "000000",
+        }
+    ],
+    # one live warehouse; SiteCD (bootstrap) + WarehouseID (default) both set
+    "Warehouse": [
+        {
+            "SiteCD": "WH01",
+            "WarehouseID": "WH01",
+            "Descr": "Main warehouse",
+            "Active": True,
+            "CountryID": "US",
+            "ReceivingLocationID": "MAIN",
+            "ShippingLocationID": "MAIN",
+            "RMALocationID": "MAIN",
+            "Locations": [
+                {
+                    "LocationID": "MAIN",
+                    "Description": "Main storage",
+                    "Active": True,
+                    "ReceiptsAllowed": True,
+                    "SalesAllowed": True,
+                    "TransfersAllowed": True,
+                    "AssemblyAllowed": True,
+                }
+            ],
+            "LastModifiedDateTime": "2026-07-11T00:00:00+00:00",
+        }
+    ],
+    "TaxCategory": [{"TaxCategoryID": "EXEMPT", "Description": "Tax exempt"}],
+    "ItemClass": [
+        {
+            "ClassID": "PARTS",
+            "Description": "Purchased components",
+            "StockItem": True,
+            "ItemType": "Finished Good",
+            "ValuationMethod": "Average",
+            "BaseUOM": "EA",
+            "AvailabilityCalculationRule": "DEFAULT",
+            "PostingClass": "PARTS",
+            "TaxCategoryID": "EXEMPT",
+            "DefaultWarehouseID": "WH01",
+            # B11: equal BaseUOM → not returned on live; never claim
+            "PurchaseUOM": "EA",
+            "SalesUOM": "EA",
+            "LastModifiedDateTime": "2026-07-11T00:00:00+00:00",
+        },
+        {
+            "ClassID": "KITS",
+            "Description": "Assembled gateway kits",
+            "StockItem": True,
+            "ItemType": "Finished Good",
+            "ValuationMethod": "Average",
+            "BaseUOM": "EA",
+            "AvailabilityCalculationRule": "DEFAULT",
+            "PostingClass": "KITS",
+            "TaxCategoryID": "EXEMPT",
+            "DefaultWarehouseID": "WH01",
+        },
+    ],
+    "SOPreferences": [
+        {
+            "DefaultOrderType": "SO",
+            "HoldShipments": False,
+            "RequireShipmentTotal": False,
+            "AutoReleaseIN": True,
+        }
+    ],
+    "POPreferences": [
+        {
+            "HoldReceipts": False,
+            "RCReturnReasonCodeID": "PORETURN",
+            "AutoReleaseIN": True,
+        }
+    ],
+    "OrderType": [
+        {
+            "OrderType": "SO",
+            "Active": True,
+            "FreightAcctID": "40100",
+            "FreightSubID": "000000",
+        }
+    ],
+    "ARPreferences": [{"HoldEntry": False}],
+    "APPreferences": [{"HoldEntry": False}],
+    "CAPreferences": [
+        {"TransitAcctId": "10200", "TransitSubID": "000000", "HoldEntry": False}
+    ],
+    "CashAccount": [
+        {
+            "CashAccountCD": "10100",
+            "Descr": "Checking Account",
+            "AccountID": "10100",
+            "SubID": "000000",
+            "BranchID": "LAB5",
+            "Active": True,
+        }
+    ],
+    "PaymentMethod": [
+        {
+            "PaymentMethodID": "WIRE",
+            "Description": "Wire transfer",
+            "Active": True,
+            "MeansOfPayment": "Cash/Check",
+            "UseInAP": True,
+            "UseInAR": True,
+            "AllowedCashAccounts": [
+                {
+                    "CashAccount": "10100",
+                    "UseInAP": True,
+                    "UseInAR": True,
+                    "APDefault": True,
+                    "ARDefault": True,
+                }
+            ],
+            "LastModifiedDateTime": "2026-07-11T00:00:00+00:00",
+        }
+    ],
+    "StatementCycle": [
+        {
+            "StatementCycleId": "MONTHLY",
+            "Descr": "Monthly statements",
+            "PrepareOn": "Fixed Day of Month",
+            "Day00": 1,
+            "AgeDays00": 30,
+            "AgeDays01": 60,
+            "AgeDays02": 90,
+        }
+    ],
+    "VendorClass": [
+        {
+            "VendorClassID": "SUPPLIER",
+            "Descr": "Component suppliers",
+            "TermsID": "NET30",
+            "APAcctID": "20100",
+            "APSubID": "000000",
+            "DiscTakenAcctID": "49100",
+            "DiscTakenSubID": "000000",
+            "ExpenseAcctID": "50000",
+            "ExpenseSubID": "000000",
+            "POAccrualAcctID": "20200",
+            "POAccrualSubID": "000000",
+        }
+    ],
+    "CustomerClass": [
+        {
+            "ClassID": "B2B",
+            "Description": "B2B customers",
+            "Terms": "NET30",
+            "CurrencyID": "USD",
+            "ARAccount": "11000",
+            "ARSubaccount": "000000",
+            "SalesAccount": "40000",
+            "SalesSubaccount": "000000",
+            "CashDiscountAccount": "49000",
+            "CashDiscountSubaccount": "000000",
+            "StatementCycleID": "MONTHLY",
+        }
+    ],
+    "Vendor": [
+        {
+            "VendorID": "SHENZHEN",
+            "VendorName": "Shenzhen Circuit Supply",
+            "VendorClass": "SUPPLIER",
+            "Terms": "NET30",
+            "PrintOrders": False,
+            "SendOrdersbyEmail": False,
+            "MainContact": {"Address": {"Country": "US"}},
+            # large-surface noise
+            "Status": "Active",
+            "LastModifiedDateTime": "2026-07-11T00:00:00+00:00",
+        }
+    ],
+    "Customer": [
+        {
+            "CustomerID": "ACMEMFG",
+            "CustomerName": "Acme Manufacturing",
+            "CustomerClass": "B2B",
+            "MainContact": {"Address": {"Country": "US"}},
+            "Status": "Active",
+            "LastModifiedDateTime": "2026-07-11T00:00:00+00:00",
+        }
+    ],
+    "StockItem": [
+        {
+            "InventoryID": "ENCL-STD",
+            "Description": "Standard enclosure",
+            "ItemClass": "PARTS",
+            "ItemStatus": "Active",
+            "DefaultWarehouseID": "WH01",
+            "WeightUOM": "KG",
+            "VolumeUOM": "LITER",
+            "AverageCost": 22.0,
+            "LastModifiedDateTime": "2026-07-11T00:00:00+00:00",
+        },
+        {
+            "InventoryID": "GW-EDGE",
+            "Description": "Edge IoT Gateway",
+            "ItemClass": "KITS",
+            "ItemStatus": "Active",
+            "DefaultWarehouseID": "WH01",
+            "IsAKit": True,
+            "DefaultPrice": 299.0,
+            "WeightUOM": "KG",
+            "VolumeUOM": "LITER",
+            "AverageCost": 139.0,
+            "LastModifiedDateTime": "2026-07-11T00:00:00+00:00",
+        },
+    ],
+    "KitSpecification": [
+        {
+            "KitInventoryID": "GW-EDGE",
+            "RevisionID": "V1",
+            "Description": "Edge IoT Gateway bill of components",
+            "Active": True,
+            "StockComponents": [
+                {"StockInventoryID": "ENCL-STD", "ComponentQty": 1, "UOM": "EA"}
+            ],
+            "LastModifiedDateTime": "2026-07-11T00:00:00+00:00",
+        }
+    ],
     # -- setup/ synthesis sources (T49): the state the GL action chain left --
     "FinancialYearSettings": [
         {
@@ -248,8 +518,11 @@ TABLES: dict[str, list[dict[str, Any]]] = {
     ],
 }
 # Last-wins keys per entity name (multi-file Warehouse/StockItem share names).
+# Bootstrap Warehouse keys SiteCD; Default rows use WarehouseID — records
+# carry both so FakeServer key-URL lookups work either way.
 KEYS = {spec.entity: spec.keys for spec in extract.load_manifest().entities}
 KEYS["Currency"] = ["CuryID"]  # synthetic B9 fixture entity
+KEYS["Warehouse"] = ["WarehouseID"]  # Default last; bootstrap rows also set SiteCD
 # Empty tables for every catalog entity without canned live state → skip clean
 for row in extract.load_manifest().entities:
     TABLES.setdefault(row.entity, [])
@@ -259,25 +532,17 @@ DELEGATE_VIEW = frozenset({"Currency"})
 _CATALOG_ENTITY_ROWS = len(extract.load_manifest().entities)
 _CATALOG_SETUP_ROWS = len(extract.load_manifest().setup)
 _CATALOG_SEED_ROWS = _CATALOG_ENTITY_ROWS + _CATALOG_SETUP_ROWS  # 37
-# GL-chain rows that write under default TABLES (Company appears twice).
-_GL_WRITE_ENTITIES = frozenset(
-    {
-        "Company",
-        "CreditTerms",
-        "Subaccount",
-        "Account",
-        "Ledger",
-        "GLPreferences",
-        "LedgerCompany",
-        "UnitsOfMeasure",
-    }
-)
-_GL_ENTITY_WRITES = sum(
-    1 for s in extract.load_manifest().entities if s.entity in _GL_WRITE_ENTITIES
-)  # Company x2 + 7 = 9
-_MASTER_SKIPS = _CATALOG_ENTITY_ROWS - _GL_ENTITY_WRITES  # empty master rows
-_FULL_WRITES = _GL_ENTITY_WRITES + _CATALOG_SETUP_ROWS + 1  # + features
+# Full canned TABLES: every entity row writes (Company x2, Warehouse x3, StockItem x2).
+_FULL_WRITES = _CATALOG_ENTITY_ROWS + _CATALOG_SETUP_ROWS + 1  # + features
 _FULL_ROWS = _CATALOG_SEED_ROWS + 1  # + features pass
+# Feature gates present when master rows produce (V22 closure).
+_EXPECTED_FEATURE_GATES = (
+    *bootstrap.DEFAULT_FEATURES,
+    "KitAssemblies",
+    "SubAccount",
+    "Warehouse",
+    "WarehouseLocation",
+)
 
 
 @pytest.fixture
@@ -476,6 +741,22 @@ def _run(
     return extract.run(_client(instance, server), out, **kwargs)
 
 
+def _filtered_count(spec: extract.EntitySpec) -> int:
+    """Offline expected record count for a catalog row (filter-split aware)."""
+    rows = TABLES.get(spec.entity) or []
+    if not rows or not spec.filter:
+        return len(rows)
+    # Mirror FakeServer $filter: Field eq 'quoted' | bare
+    kept = rows
+    for m in re.finditer(r"(\w+) eq (?:'([^']*)'|(\w+))", spec.filter):
+        field, quoted, literal = m.groups()
+        if quoted is not None:
+            kept = [r for r in kept if str(r.get(field)) == quoted]
+        else:
+            kept = [r for r in kept if str(r.get(field)).lower() == literal]
+    return len(kept)
+
+
 def test_run_writes_files_and_reports(
     instance: Instance,
     server: FakeServer,
@@ -491,13 +772,13 @@ def test_run_writes_files_and_reports(
     assert not (tmp_path / "setup").exists()
     for spec in extract.load_manifest().entities:
         target = tmp_path / spec.file
-        live = TABLES.get(spec.entity) or []
-        if not live:
+        n = _filtered_count(spec)
+        if n == 0:
             assert f"skip {target} (no records)" in out
             assert not target.exists()
             continue
         assert target.is_file()
-        assert f"write {target} ({len(live)} records)" in out
+        assert f"write {target} ({n} records)" in out
 
 
 def test_run_skip_exists_and_force_overwrites(
@@ -545,8 +826,8 @@ def test_run_dry_run_writes_nothing(
     features = tmp_path / "config" / "bootstrap" / "features.yaml"
     assert f"would write {company} (1 records)" in out
     assert f"would write {fin_year} (1 records)" in out
-    # built-in six + SubAccount (Warehouse/Kit gates only when those rows produce)
-    assert f"would write {features} (7 records)" in out
+    # built-in six + SubAccount + Warehouse + WarehouseLocation + KitAssemblies
+    assert f"would write {features} ({len(_EXPECTED_FEATURE_GATES)} records)" in out
     assert list(tmp_path.iterdir()) == []
 
 
@@ -561,17 +842,17 @@ def test_rerun_skips_every_emitted_file(
     capsys.readouterr()
     _run(instance, server, tmp_path)
     lines = [ln for ln in capsys.readouterr().out.splitlines() if ln]
-    # written destinations re-skip as (exists); empty master re-skips (no records)
+    # every catalog destination + features re-skips as (exists)
     exists_skips = [ln for ln in lines if ln.endswith("(exists)")]
-    no_rec_skips = [ln for ln in lines if ln.endswith("(no records)")]
     assert len(exists_skips) == _FULL_WRITES
-    assert len(no_rec_skips) == _MASTER_SKIPS
+    assert not any(ln.endswith("(no records)") for ln in lines)
     assert len(lines) == _FULL_ROWS
     _run(instance, server, tmp_path, force=True)
     lines = [ln for ln in capsys.readouterr().out.splitlines() if ln]
     assert len(lines) == _FULL_ROWS
     assert sum(1 for ln in lines if ln.startswith("write ")) == _FULL_WRITES
     assert any("91-company-packaging" in ln and ln.startswith("write ") for ln in lines)
+    assert any("80-stock-items-parts" in ln and ln.startswith("write ") for ln in lines)
 
 
 def test_run_only_filters_entity_name_or_file_stem(
@@ -660,6 +941,143 @@ def test_fetch_filter_narrows_plain_list_get(
 def test_entity_spec_filter_defaults_to_none() -> None:
     # no filter -> the plain list GET goes out with no params at all
     assert _spec().filter is None
+
+
+def test_filter_split_stock_item_itemclass(
+    instance: Instance, server: FakeServer, tmp_path: Path
+) -> None:
+    """V34: multi-file StockItem partitions on ItemClass OData filter."""
+    _run(instance, server, tmp_path, only=frozenset({"StockItem"}))
+    parts = yaml.safe_load(
+        (tmp_path / "config" / "master" / "80-stock-items-parts.yaml").read_text()
+    )
+    kits = yaml.safe_load(
+        (tmp_path / "config" / "master" / "82-stock-items-kits.yaml").read_text()
+    )
+    assert [r["InventoryID"] for r in parts["records"]] == ["ENCL-STD"]
+    assert parts["records"][0]["ItemClass"] == "PARTS"
+    assert "AverageCost" not in parts["records"][0]  # include drops cost noise
+    assert [r["InventoryID"] for r in kits["records"]] == ["GW-EDGE"]
+    assert kits["records"][0]["IsAKit"] is True
+    assert "AverageCost" not in kits["records"][0]
+
+
+def test_company_include_partitions_identity_vs_packaging(
+    instance: Instance, server: FakeServer, tmp_path: Path
+) -> None:
+    """Same live Company row: identity file vs packaging field-partition."""
+    _run(instance, server, tmp_path, only=frozenset({"Company"}))
+    identity = yaml.safe_load(
+        (tmp_path / "config" / "bootstrap" / "company.yaml").read_text()
+    )
+    packaging = yaml.safe_load(
+        (tmp_path / "config" / "baseline" / "91-company-packaging.yaml").read_text()
+    )
+    assert identity["records"] == [
+        {
+            "AcctCD": "COMPANY",
+            "AcctName": "Example Company",
+            "BaseCuryID": "USD",
+            "CountryID": "US",
+            "OrganizationType": "Without Branches",
+        }
+    ]
+    assert packaging["records"] == [
+        {"AcctCD": "COMPANY", "VolumeUOM": "LITER", "WeightUOM": "KG"}
+    ]
+    assert "LastModifiedDateTime" not in identity["records"][0]
+    assert "LastModifiedDateTime" not in packaging["records"][0]
+
+
+def test_warehouse_include_partitions_bootstrap_locations_defaults(
+    instance: Instance, server: FakeServer, tmp_path: Path
+) -> None:
+    """Warehouse x3: bootstrap site, locations+defaults, defaults-only phases."""
+    _run(instance, server, tmp_path, only=frozenset({"Warehouse"}))
+    site = yaml.safe_load(
+        (tmp_path / "config" / "master" / "50-warehouse.yaml").read_text()
+    )
+    locs = yaml.safe_load(
+        (tmp_path / "config" / "master" / "51-warehouse-locations.yaml").read_text()
+    )
+    defaults = yaml.safe_load(
+        (tmp_path / "config" / "master" / "52-warehouse-defaults.yaml").read_text()
+    )
+    assert site["endpoint"] == "bootstrap"
+    assert site["key"] == "SiteCD"
+    assert site["records"][0] == {
+        "SiteCD": "WH01",
+        "Active": True,
+        "CountryID": "US",
+        "Descr": "Main warehouse",
+    }
+    assert locs["endpoint"] == "default"
+    assert locs["detail_keys"] == {"Locations": "LocationID"}
+    assert "Locations" in locs["records"][0]
+    assert locs["records"][0]["ReceivingLocationID"] == "MAIN"
+    assert set(defaults["records"][0]) == {
+        "WarehouseID",
+        "ReceivingLocationID",
+        "ShippingLocationID",
+        "RMALocationID",
+    }
+    assert "Locations" not in defaults["records"][0]
+    assert "LastModifiedDateTime" not in site["records"][0]
+
+
+def test_vendor_include_drops_large_default_surface(
+    instance: Instance, server: FakeServer, tmp_path: Path
+) -> None:
+    """Vendor/Customer include allow-lists keep template fields only."""
+    _run(instance, server, tmp_path, only=frozenset({"Vendor", "Customer"}))
+    vendor = yaml.safe_load(
+        (tmp_path / "config" / "master" / "75-vendors.yaml").read_text()
+    )["records"][0]
+    customer = yaml.safe_load(
+        (tmp_path / "config" / "master" / "76-customers.yaml").read_text()
+    )["records"][0]
+    assert set(vendor) == {
+        "VendorID",
+        "VendorName",
+        "VendorClass",
+        "Terms",
+        "PrintOrders",
+        "SendOrdersbyEmail",
+        "MainContact",
+    }
+    assert "Status" not in vendor
+    assert "LastModifiedDateTime" not in vendor
+    assert set(customer) == {
+        "CustomerID",
+        "CustomerName",
+        "CustomerClass",
+        "MainContact",
+    }
+    assert "Status" not in customer
+
+
+def test_catalog_filter_split_and_include_rows_declared() -> None:
+    """Packaged catalog: StockItem filters + multi-file include partitions."""
+    manifest = extract.load_manifest()
+    by_file = {s.file: s for s in manifest.entities}
+    assert by_file["config/master/80-stock-items-parts.yaml"].filter == (
+        "ItemClass eq 'PARTS'"
+    )
+    assert by_file["config/master/82-stock-items-kits.yaml"].filter == (
+        "ItemClass eq 'KITS'"
+    )
+    assert by_file["config/bootstrap/company.yaml"].include
+    assert by_file["config/baseline/91-company-packaging.yaml"].include == [
+        "WeightUOM",
+        "VolumeUOM",
+    ]
+    assert "MainContact" in by_file["config/master/75-vendors.yaml"].include
+    assert "Locations" in by_file["config/master/51-warehouse-locations.yaml"].include
+    # multi-file same entity counts
+    entities = [s.entity for s in manifest.entities]
+    assert entities.count("Company") == 2
+    assert entities.count("Warehouse") == 3
+    assert entities.count("StockItem") == 2
 
 
 def test_b9_non_optimization_500_never_takes_fallback(
@@ -769,15 +1187,11 @@ def test_features_closure_unions_gates_of_record_producing_entities(
 ) -> None:
     """features.yaml = the built-in six + gates, and load_features parses it.
 
-    SubAccount rides Subaccount (produces under default FakeServer). Master
-    feature gates (Warehouse, KitAssemblies, …) stay off while those rows
-    skip empty offline.
+    SubAccount + Warehouse + WarehouseLocation + KitAssemblies ride master
+    rows that produce under the full T117 canned TABLES.
     """
     _run(instance, server, tmp_path)
-    assert bootstrap.load_features(tmp_path) == [
-        *bootstrap.DEFAULT_FEATURES,
-        "SubAccount",
-    ]
+    assert bootstrap.load_features(tmp_path) == list(_EXPECTED_FEATURE_GATES)
 
 
 def test_features_closure_drops_gate_when_no_records(
@@ -787,7 +1201,8 @@ def test_features_closure_drops_gate_when_no_records(
     _run(instance, server, tmp_path)
     names = bootstrap.load_features(tmp_path)
     assert "SubAccount" not in names
-    assert names == list(bootstrap.DEFAULT_FEATURES)
+    # other master gates still produce under full TABLES
+    assert names == [g for g in _EXPECTED_FEATURE_GATES if g != "SubAccount"]
 
 
 def test_features_closure_counts_preexisting_files(
@@ -819,7 +1234,7 @@ def test_round_trip_every_file_parses_and_diffs_clean(
     manifest = extract.load_manifest()
     for spec in manifest.entities:
         path = tmp_path / spec.file
-        if not (TABLES.get(spec.entity) or []):
+        if _filtered_count(spec) == 0:
             assert not path.exists(), spec.file  # empty → skip (no records)
             continue
         assert path.exists(), spec.entity
@@ -844,7 +1259,7 @@ def test_round_trip_is_byte_stable_under_permuted_server_order(
     _run(instance, FakeServer(permuted, KEYS, DELEGATE_VIEW), b)
     files = sorted(p.relative_to(a) for p in a.rglob("*.yaml"))
     assert files == sorted(p.relative_to(b) for p in b.rglob("*.yaml"))
-    # GL-chain entity writes + setup + features (master empty → skip)
+    # full catalog entity writes + setup + features (T117)
     assert len(files) == _FULL_WRITES
     for rel in files:
         assert (a / rel).read_bytes() == (b / rel).read_bytes(), str(rel)
@@ -871,9 +1286,9 @@ def test_row_failure_reported_and_run_continues(
     assert (tmp_path / "config" / "baseline" / "20-accounts.yaml").is_file()
     assert (tmp_path / "config" / "setup" / "30-open-periods.yaml").is_file()
     assert (tmp_path / "config" / "bootstrap" / "features.yaml").is_file()
-    # GL writes minus Subaccount + setup + features; empty master skips
+    # every other row wrote; Subaccount failed with no skip noise
     written = _FULL_WRITES - 1
-    assert f"x {written} written, {_MASTER_SKIPS} skipped, 1 failed" in captured.err
+    assert f"x {written} written, 0 skipped, 1 failed" in captured.err
 
 
 def test_setup_not_entered_500_skips_clean(
@@ -915,7 +1330,7 @@ def test_duplicate_key_tuple_is_row_failure_and_run_continues(
     assert (tmp_path / "config" / "baseline" / "20-accounts.yaml").is_file()
     assert (tmp_path / "config" / "bootstrap" / "features.yaml").is_file()
     written = _FULL_WRITES - 1
-    assert f"x {written} written, {_MASTER_SKIPS} skipped, 1 failed" in captured.err
+    assert f"x {written} written, 0 skipped, 1 failed" in captured.err
 
 
 def test_setup_synth_failure_isolated(

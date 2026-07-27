@@ -18,8 +18,10 @@
 #             200 [] (B14/B21)
 #   filter    OData $filter fragment riding both list reads (the plain
 #             GET and the B9 $select fallback), so the per-key walk only
-#             visits filtered keys; narrows extraction to configured
-#             records when the entity serves tenant-native noise (T52)
+#             visits filtered keys; multi-file same entity = filter-split
+#             (V34) when OData can partition; field-shape partition uses
+#             include when the live row set is the same (Company packaging,
+#             Warehouse location/default phases)
 #   file      destination path under the data root; numbered prefix encodes
 #             apply order (V22: dir expansion sorts alphabetically, so a
 #             record that references another entity must sort after the
@@ -27,7 +29,9 @@
 #   strip     deny-list: live fields dropped from extracted records; the
 #             inline reasons are load-bearing (B10/B11 knowledge as code)
 #   include   allow-list: the only non-key fields kept (mutually
-#             exclusive with strip); key fields always survive both
+#             exclusive with strip); key fields always survive both;
+#             preferred on large Default surfaces (Vendor/Customer/StockItem)
+#             so audit/server-derived noise never enters seed
 #   features  FeaturesSet gates the entity's screen needs (V22 feature
 #             closure; consumed by the features.yaml synthesis)
 #
@@ -41,20 +45,37 @@ entities:
 
 # config/bootstrap/ - the virgin-tenant phase via the custom Bootstrap
 # endpoint: built-in endpoints cannot create the first organization (C).
+# Company identity only here; packaging UOMs are a later baseline PUT
+# (91-company-packaging) once UnitsOfMeasure exist.
 
 - entity: Company
   endpoint: bootstrap
   keys: [AcctCD]
   file: config/bootstrap/company.yaml
+  # field-partition vs 91-company-packaging (same live row, no OData split)
+  include:
+  - AcctName
+  - OrganizationType
+  - BaseCuryID
+  - CountryID
 
 - entity: CreditTerms
   endpoint: bootstrap
   keys: [TermsID]
   file: config/bootstrap/credit-terms.yaml
+  include:
+  - Descr
+  - VisibleTo
+  - DueType
+  - DayDue00
+  - DiscType
+  - DiscPercent
 
 # config/baseline/ - numbered prefixes encode the V22 reference chain:
-# subaccounts < accounts < currencies < ledger < GL preferences <
-# org-ledger link; units of measure reference nothing and sort last.
+# subaccounts < accounts < ledger < GL preferences < org-ledger link;
+# units of measure; second Company PUT for packaging after UOMs.
+# Multicurrency Currency is not in the LAB5 template set (features.yaml
+# omits Multicurrency) — V34 equality keeps it out of the catalog.
 
 - entity: Subaccount
   keys: [SubaccountCD]
@@ -88,12 +109,6 @@ entities:
   - CreatedDateTime
   - LastModifiedDateTime
 
-# Multicurrency Currency (30-currencies) is not in the LAB5 template set
-# (features.yaml deliberately omits Multicurrency). V34 equality: catalog
-# file set = template seed set. Currency extract archaeology (B9 filter
-# IsFinancial, Translation* strip) returns with T117 when a multicurrency
-# seed is packaged.
-
 - entity: Ledger
   keys: [LedgerID]
   file: config/baseline/40-ledger.yaml
@@ -108,6 +123,8 @@ entities:
   endpoint: bootstrap
   keys: [RetEarnAccountID]
   file: config/baseline/50-gl-preferences.yaml
+  include:
+  - YtdNetIncAccountID
 
 - entity: LedgerCompany
   endpoint: bootstrap
@@ -123,85 +140,171 @@ entities:
 - entity: UnitsOfMeasure
   keys: [UnitID]
   file: config/baseline/90-uoms.yaml
+  include:
+  - Description
+  - L3Code
 
 # Second Company PUT after UOMs exist (CS101500 packaging Weight/Volume).
-# Strip/include archaeology for not-returned packaging fields is T118/B26;
-# filter-split vs company.yaml is T117.
+# Same AcctCD as bootstrap/company — include-only packaging fields so
+# extract does not re-emit org identity into this apply-order slot.
+# WeightUOM/VolumeUOM GET may not return (B26) — T118 drops seed claims.
+
 - entity: Company
   endpoint: bootstrap
   keys: [AcctCD]
   file: config/baseline/91-company-packaging.yaml
+  include:
+  - WeightUOM
+  - VolumeUOM
 
-# config/master/ - path rows for V34 completeness (T116). Filter-split for
-# multi-file Warehouse/StockItem and include/strip archaeology for large
-# Default surfaces land in T117.
+# config/master/ - full packaged seed (T117). Multi-file Warehouse uses
+# include field-partition (same live warehouse row, three apply phases).
+# Multi-file StockItem uses OData filter-split on ItemClass.
 
 - entity: ReasonCode
   endpoint: bootstrap
   keys: [ReasonCodeID]
   file: config/master/10-reason-codes.yaml
+  include:
+  - Descr
+  - Usage
+  - AccountID
+  - SubID
 
 - entity: INPreferences
   endpoint: bootstrap
   keys: [HoldEntry]
   file: config/master/20-in-preferences.yaml
   features: [Warehouse]
+  include:
+  - INProgressAcctID
+  - INProgressSubID
+  - INTransitAcctID
+  - INTransitSubID
+  - TransitBranchID
+  - UpdateGL
+  - IssuesReasonCode
+  - ReceiptReasonCode
+  - AdjustmentReasonCode
+  - PIReasonCode
 
 - entity: AvailabilityCalculationRule
   endpoint: bootstrap
   keys: [AvailabilitySchemeID]
   file: config/master/30-availability-rules.yaml
+  include:
+  - Description
 
 - entity: PostingClass
   endpoint: bootstrap
   keys: [PostClassID]
   file: config/master/40-posting-classes.yaml
+  include:
+  - Descr
+  - InvtAcctID
+  - InvtSubID
+  - SalesAcctID
+  - SalesSubID
+  - COGSAcctID
+  - COGSSubID
+  - POAccrualAcctID
+  - POAccrualSubID
+  - PPVAcctID
+  - PPVSubID
+  - LCVarianceAcctID
+  - LCVarianceSubID
+
+# Bootstrap Warehouse: site identity + address country (Default has no
+# address surface at insert). Locations/defaults ride Default below.
 
 - entity: Warehouse
   endpoint: bootstrap
   keys: [SiteCD]
   file: config/master/50-warehouse.yaml
   features: [Warehouse]
+  include:
+  - Descr
+  - Active
+  - CountryID
 
 - entity: Warehouse
   endpoint: default
   keys: [WarehouseID]
   file: config/master/51-warehouse-locations.yaml
   features: [WarehouseLocation]
+  detail_keys:
+    Locations: LocationID
+  # Locations tab + default bin pointers (same WH01 row as 52)
+  include:
+  - Locations
+  - ReceivingLocationID
+  - ShippingLocationID
+  - RMALocationID
 
 - entity: Warehouse
   endpoint: default
   keys: [WarehouseID]
   file: config/master/52-warehouse-defaults.yaml
   features: [WarehouseLocation]
+  # second PUT: defaults alone (Locations PUT leaves them empty live)
+  include:
+  - ReceivingLocationID
+  - ShippingLocationID
+  - RMALocationID
 
 - entity: TaxCategory
   keys: [TaxCategoryID]
   file: config/master/53-tax-categories.yaml
+  include:
+  - Description
 
 - entity: ItemClass
   keys: [ClassID]
   file: config/master/54-item-classes.yaml
+  # large Default surface; omit PurchaseUOM/SalesUOM (equal BaseUOM →
+  # not returned — B11 class, live 2026-07-13)
+  include:
+  - Description
+  - StockItem
+  - ItemType
+  - ValuationMethod
+  - BaseUOM
+  - AvailabilityCalculationRule
+  - PostingClass
+  - TaxCategoryID
+  - DefaultWarehouseID
 
 - entity: SOPreferences
   endpoint: bootstrap
   keys: [DefaultOrderType]
   file: config/master/56-so-preferences.yaml
+  include:
+  - HoldShipments
+  - RequireShipmentTotal
+  - AutoReleaseIN
 
 - entity: POPreferences
   endpoint: bootstrap
   keys: [HoldReceipts]
   file: config/master/57-po-preferences.yaml
+  include:
+  - AutoReleaseIN
+  - RCReturnReasonCodeID
 
 - entity: OrderType
   endpoint: bootstrap
   keys: [OrderType]
   file: config/master/58-order-types.yaml
+  include:
+  - Active
+  - FreightAcctID
+  - FreightSubID
 
 - entity: ARPreferences
   endpoint: bootstrap
   keys: [HoldEntry]
   file: config/master/60-ar-preferences.yaml
+  # singleton keyed by HoldEntry; seed claims HoldEntry only
 
 - entity: APPreferences
   endpoint: bootstrap
@@ -212,50 +315,140 @@ entities:
   endpoint: bootstrap
   keys: [TransitAcctId]
   file: config/master/62-ca-preferences.yaml
+  include:
+  - HoldEntry
+  - TransitSubID
 
 - entity: CashAccount
   endpoint: bootstrap
   keys: [CashAccountCD]
   file: config/master/63-cash-account.yaml
+  include:
+  - AccountID
+  - SubID
+  - BranchID
+  - Descr
+  - Active
 
 - entity: PaymentMethod
   keys: [PaymentMethodID]
   file: config/master/64-payment-methods.yaml
+  detail_keys:
+    AllowedCashAccounts: CashAccount
+  include:
+  - Description
+  - Active
+  - MeansOfPayment
+  - UseInAP
+  - UseInAR
+  - AllowedCashAccounts
 
 - entity: StatementCycle
   endpoint: bootstrap
   keys: [StatementCycleId]
   file: config/master/65-statement-cycles.yaml
+  include:
+  - Descr
+  - PrepareOn
+  - Day00
+  - AgeDays00
+  - AgeDays01
+  - AgeDays02
 
 - entity: VendorClass
   endpoint: bootstrap
   keys: [VendorClassID]
   file: config/master/70-vendor-classes.yaml
+  include:
+  - Descr
+  - TermsID
+  - APAcctID
+  - APSubID
+  - DiscTakenAcctID
+  - DiscTakenSubID
+  - ExpenseAcctID
+  - ExpenseSubID
+  - POAccrualAcctID
+  - POAccrualSubID
 
 - entity: CustomerClass
   keys: [ClassID]
   file: config/master/71-customer-classes.yaml
+  include:
+  - Description
+  - Terms
+  - CurrencyID
+  - ARAccount
+  - ARSubaccount
+  - SalesAccount
+  - SalesSubaccount
+  - CashDiscountAccount
+  - CashDiscountSubaccount
+  - StatementCycleID
+
+# Large Default party surfaces: include-only template fields so extract
+# never dumps the hundreds of contract fields (audit, dormant tabs).
 
 - entity: Vendor
   keys: [VendorID]
   file: config/master/75-vendors.yaml
+  include:
+  - VendorName
+  - VendorClass
+  - Terms
+  - PrintOrders
+  - SendOrdersbyEmail
+  - MainContact
 
 - entity: Customer
   keys: [CustomerID]
   file: config/master/76-customers.yaml
+  include:
+  - CustomerName
+  - CustomerClass
+  - MainContact
+
+# StockItem filter-split (V34): ItemClass partitions parts vs kits so
+# each numbered file gets its apply-order set only. Include drops the
+# huge IN202500 surface (costs, warehouse details, cross-refs).
+# WeightUOM/VolumeUOM claimed in templates but may not GET (B26 → T118).
 
 - entity: StockItem
   keys: [InventoryID]
   file: config/master/80-stock-items-parts.yaml
+  filter: ItemClass eq 'PARTS'
+  include:
+  - Description
+  - ItemClass
+  - ItemStatus
+  - DefaultWarehouseID
+  - WeightUOM
+  - VolumeUOM
 
 - entity: StockItem
   keys: [InventoryID]
   file: config/master/82-stock-items-kits.yaml
+  filter: ItemClass eq 'KITS'
+  include:
+  - Description
+  - ItemClass
+  - ItemStatus
+  - DefaultWarehouseID
+  - IsAKit
+  - DefaultPrice
+  - WeightUOM
+  - VolumeUOM
 
 - entity: KitSpecification
   keys: [KitInventoryID, RevisionID]
   file: config/master/85-kit-specifications.yaml
   features: [KitAssemblies]
+  detail_keys:
+    StockComponents: StockInventoryID
+  include:
+  - Description
+  - Active
+  - StockComponents
 
 # config/setup/ - the GL action chain (T36/T37): financial-year setup,
 # then calendar generation, then period activation; numbered prefixes

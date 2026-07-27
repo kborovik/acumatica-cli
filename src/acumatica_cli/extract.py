@@ -1,8 +1,9 @@
 """Live tenant state to seed YAML: the inverse of apply.
 
 Driven by the packaged seed_catalog.yaml - per entity: the source
-endpoint, key fields, destination file, an optional record filter, and a
-strip deny-list or include allow-list shaping the extracted records.
+endpoint, key fields, destination file, an optional record filter, a
+strip deny-list or include allow-list shaping the extracted records, and
+optional detail_keys for list fields (T60 load_baseline).
 Hard-cut emit under config/{bootstrap,baseline,setup,master}/ (V30/V34):
 no root SEED_DIRS paths, no --layout. Emitted files parse via
 seed.load_baseline by construction (V20: bootstrap-entity rows must
@@ -64,6 +65,9 @@ class EntitySpec(Model):
     strip: list[str] = Field(default_factory=list)
     include: list[str] = Field(default_factory=list)
     features: list[str] = Field(default_factory=list)
+    # {ListField: RowKeyField} — emitted into seed so load_baseline accepts
+    # detail arrays (T60); required when include/strip keeps a list field.
+    detail_keys: dict[str, str] | None = None
 
     @model_validator(mode="after")
     def _strip_include_exclusive(self) -> EntitySpec:
@@ -271,6 +275,8 @@ def _render(spec: EntitySpec, records: list[dict[str, Any]]) -> str:
     }
     if spec.endpoint is not None:
         doc["endpoint"] = spec.endpoint
+    if spec.detail_keys:
+        doc["detail_keys"] = dict(spec.detail_keys)
     doc["records"] = records
     return yaml.safe_dump(doc, sort_keys=False, default_flow_style=False)
 
