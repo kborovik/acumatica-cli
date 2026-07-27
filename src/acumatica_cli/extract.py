@@ -509,6 +509,11 @@ class _Extraction:
         """The --only filter: row name (entity or kind) or file stem."""
         return not self.only or name in self.only or Path(file).stem in self.only
 
+    def _progress(self, target: Path, name: str) -> None:
+        """Per-row progress banner matching apply/diff (V9 / I.cmd extract)."""
+        inst = self.client.instance
+        output.data(f"{target} -> {inst.tenant} on {inst.base_url} ({name})")
+
     def _skip(self, target: Path, reason: str) -> None:
         """Report one clean per-file skip and tally it."""
         output.data(f"skip {target} ({reason})")
@@ -553,6 +558,8 @@ class _Extraction:
             if not self._selected(spec.entity, spec.file):
                 continue
             target = self.out_dir / spec.file
+            # Banner before any outcome (write/skip/would write) — apply shape
+            self._progress(target, spec.entity)
             if self._skip_existing(target):
                 continue
             # Hybrid contract (T69/T81): a bootstrap-endpoint row for an
@@ -584,6 +591,7 @@ class _Extraction:
             if not self._selected(synth.kind, synth.file):
                 continue
             target = self.out_dir / synth.file
+            self._progress(target, synth.kind)
             if self._skip_existing(target):
                 continue
             synthesize, skip_reason = SYNTHESIZERS[synth.kind]
@@ -614,6 +622,7 @@ class _Extraction:
         if not self._selected("features", FEATURES_FILE):
             return
         target = self.out_dir / FEATURES_FILE
+        self._progress(target, "features")
         if self._skip_existing(target):
             return
         gates = [

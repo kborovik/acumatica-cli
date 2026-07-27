@@ -751,6 +751,11 @@ def _filtered_count(spec: extract.EntitySpec) -> int:
     return len(kept)
 
 
+def _progress_line(target: Path, name: str, instance: Instance) -> str:
+    """Apply-shaped extract progress banner (T121 / V9)."""
+    return f"{target} -> {instance.tenant} on {instance.base_url} ({name})"
+
+
 def test_run_writes_files_and_reports(
     instance: Instance,
     server: FakeServer,
@@ -767,12 +772,69 @@ def test_run_writes_files_and_reports(
     for spec in extract.load_manifest().entities:
         target = tmp_path / spec.file
         n = _filtered_count(spec)
+        assert _progress_line(target, spec.entity, instance) in out
         if n == 0:
             assert f"skip {target} (no records)" in out
             assert not target.exists()
             continue
         assert target.is_file()
         assert f"write {target} ({n} records)" in out
+
+
+def test_run_progress_banner_before_each_outcome(
+    instance: Instance,
+    server: FakeServer,
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """T121: path -> tenant on url (entity) before write/skip/would write."""
+    company = tmp_path / "config" / "bootstrap" / "company.yaml"
+    company.parent.mkdir(parents=True)
+    company.write_text("operator-edited\n")
+
+    # exists skip: banner then skip
+    _run(instance, server, tmp_path, only=frozenset({"Company"}))
+    lines = [ln for ln in capsys.readouterr().out.splitlines() if ln]
+    assert lines == [
+        _progress_line(company, "Company", instance),
+        f"skip {company} (exists)",
+    ]
+
+    # write: banner then write
+    _run(instance, server, tmp_path, only=frozenset({"Company"}), force=True)
+    lines = [ln for ln in capsys.readouterr().out.splitlines() if ln]
+    assert lines[0] == _progress_line(company, "Company", instance)
+    assert lines[1] == f"write {company} (1 records)"
+
+    # dry-run would write: banner then would write
+    empty = tmp_path / "dry"
+    _run(
+        instance,
+        server,
+        empty,
+        only=frozenset({"UnitsOfMeasure"}),
+        dry_run=True,
+    )
+    uoms = empty / "config" / "baseline" / "90-uoms.yaml"
+    lines = [ln for ln in capsys.readouterr().out.splitlines() if ln]
+    assert lines == [
+        _progress_line(uoms, "UnitsOfMeasure", instance),
+        f"would write {uoms} (2 records)",
+    ]
+
+    # setup kind + features name in the banner parenthetical
+    _run(
+        instance,
+        server,
+        empty,
+        only=frozenset({"financial-year", "features"}),
+        dry_run=True,
+    )
+    out = capsys.readouterr().out
+    fin = empty / "config" / "setup" / "10-financial-year.yaml"
+    feats = empty / "config" / "bootstrap" / "features.yaml"
+    assert _progress_line(fin, "financial-year", instance) in out
+    assert _progress_line(feats, "features", instance) in out
 
 
 def test_run_skip_exists_and_force_overwrites(
@@ -840,10 +902,11 @@ def test_rerun_skips_every_emitted_file(
     exists_skips = [ln for ln in lines if ln.endswith("(exists)")]
     assert len(exists_skips) == _FULL_WRITES
     assert not any(ln.endswith("(no records)") for ln in lines)
-    assert len(lines) == _FULL_ROWS
+    # T121: each row = progress banner + outcome
+    assert len(lines) == _FULL_ROWS * 2
     _run(instance, server, tmp_path, force=True)
     lines = [ln for ln in capsys.readouterr().out.splitlines() if ln]
-    assert len(lines) == _FULL_ROWS
+    assert len(lines) == _FULL_ROWS * 2
     assert sum(1 for ln in lines if ln.startswith("write ")) == _FULL_WRITES
     assert any("80-stock-items-parts" in ln and ln.startswith("write ") for ln in lines)
     assert not any("91-company-packaging" in ln for ln in lines)
@@ -1359,7 +1422,10 @@ def test_row_failure_reported_and_run_continues(
     captured = capsys.readouterr()
     assert "x Subaccount: " in captured.err
     assert "No entity satisfies" in captured.err
-    assert "Subaccount" not in captured.out  # failures are process, not data (V9)
+    # T121: progress banner names the entity on stdout; failure detail on stderr (V9)
+    sub_target = tmp_path / "config" / "baseline" / "10-subaccounts.yaml"
+    assert _progress_line(sub_target, "Subaccount", instance) in captured.out
+    assert "No entity satisfies" not in captured.out
     # rows past the failure all ran: entities, setup synths, features
     assert (tmp_path / "config" / "baseline" / "20-accounts.yaml").is_file()
     assert (tmp_path / "config" / "setup" / "30-open-periods.yaml").is_file()

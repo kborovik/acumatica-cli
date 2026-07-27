@@ -149,7 +149,7 @@ T117|x|catalog rows for full packaged seed incl master; filter-split multi-file 
 T118|x|drop WeightUOM/VolumeUOM + other not-returned packaging claims from templates/seed; prove `diff config/` green path on LAB5-class|V22,V34,B26
 T119|x|e2e full extract round-trip: apply → extract → apply on B → `diff config/` clean → re-extract byte-identical incl master|V4,V22,V24,V34,T115,T117,T118
 T120|x|docs + help + changelog: extract inverse of apply under `config/`; entity map = catalog mirror; root-emit migration note|V12,I.cmd,T115
-T121|.|extract per-row progress stdout matching apply banner (`path -> tenant on url (entity)`) + keep skip/write/would-write outcome + end summary|V9,I.cmd
+T121|x|extract per-row progress stdout matching apply banner (`path -> tenant on url (entity)`) + keep skip/write/would-write outcome + end summary|V9,I.cmd
 
 ## §B BUGS
 
