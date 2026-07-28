@@ -88,8 +88,8 @@ for granular /sdd:check runs.
 ## §V.3 — discovery resolution matrix (extracted from SPEC.md §V.3)
 
 - required keys post-merge: `ACU_BASE_URL`, `ACU_PASSWORD` — unresolved → hard error naming key(s)
-- `ACU_SSH` ? — control plane; absent fine for data-plane cmds (apply/diff/run/extract/schema/state/config show|init)
-- tenant CRUD hard-errors when `ACU_SSH` unresolved, names key
+- `ACU_SSH`: key absent + base_url host → default `Administrator@<host>`; key present blank → empty (hosted/data-plane only); flag/env explicit wins; empty post-default fine for data-plane cmds
+- tenant CRUD hard-errors when `ACU_SSH` empty post-default, names key
 
 ## §V.20 — seed endpoint resolution (extracted from SPEC.md §V.20)
 
