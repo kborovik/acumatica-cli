@@ -166,7 +166,7 @@ T126|x|docs sweep: README + rest-api + templates env/README + target template co
 T127|x|SnapshotArtifact IR parse — SM203520 XML ZIP + ac.exe export xml folder; reject .adb; deterministic table/row model + summary fields|V10,V35,V37,I.cmd,I.data
 T128|x|`acu inventory` CLI — artifact → inventory/ summary + tables; --out/--force/--dry-run; offline no session; exit 0/1; V15 verb map + V27 allowlist extras as needed|V9,V15,V16,V35,V37,I.cmd,T127
 T129|x|`acu reconcile` CLI — inventory + optional config/ → findings/ only; never write config/; unmapped + REST gaps + rest-vs-snapshot deltas|V9,V15,V16,V35,V36,I.cmd,I.data,T128
-T130|.|offline tests: parse fixtures ZIP+folder, inventory byte-stable, binary reject, version pin vs target.yaml, reconcile findings, apply/diff ignore inventory/findings paths|V13,V35,V36,V37,T127,T128,T129
+T130|x|offline tests: parse fixtures ZIP+folder, inventory byte-stable, binary reject, version pin vs target.yaml, reconcile findings, apply/diff ignore inventory/findings paths|V13,V35,V36,V37,T127,T128,T129
 T131|.|docs + help + changelog: inventory vs extract vs state; dual-reader layout; ac-exe export + SM203520 Settings XML note; README CLI map|V12,V35,I.cmd,T128,T129
 
 ## §B BUGS

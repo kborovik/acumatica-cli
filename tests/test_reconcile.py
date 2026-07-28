@@ -1,4 +1,4 @@
-"""acu reconcile — offline findings from inventory/ + optional config/ (T129)."""
+"""acu reconcile — offline findings from inventory/ + optional config/ (T129/T130)."""
 
 from __future__ import annotations
 

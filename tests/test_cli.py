@@ -964,6 +964,124 @@ def test_default_seed_dirs_prefer_config_over_root(
     assert not any("root.yaml" in s for s in seen)
 
 
+def test_seed_dirs_exclude_inventory_and_findings() -> None:
+    """V35/T130: inventory/ + findings/ are dual-reader trees, never SEED_DIRS."""
+    assert "inventory" not in cli.SEED_DIRS
+    assert "findings" not in cli.SEED_DIRS
+    assert cli.SEED_DIRS == ("bootstrap", "baseline", "setup", "master")
+
+
+def test_default_seed_dirs_ignore_inventory_and_findings(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """V35/T130: bare defaults prefer config/ SEED_DIRS; ignore dual-reader trees."""
+    (tmp_path / ".env").write_text(
+        "ACU_BASE_URL=http://acu.test/AcumaticaERP\nACU_PASSWORD=x\n"
+    )
+    seed = "entity: UnitsOfMeasure\nkey: UnitID\nrecords:\n- UnitID: HOUR\n"
+    (tmp_path / "config" / "baseline").mkdir(parents=True)
+    (tmp_path / "config" / "baseline" / "uoms.yaml").write_text(seed)
+    # dual-reader trees co-located at data-repo root (engagement output)
+    inv = tmp_path / "inventory"
+    (inv / "tables").mkdir(parents=True)
+    (inv / "summary.yaml").write_text(
+        "erp: 26.101.0225\nexport_mode: xml-zip\ntables: {Account: 1}\n",
+        encoding="utf-8",
+    )
+    (inv / "tables" / "Account.yaml").write_text(
+        "name: Account\ncolumns: []\nrows: []\n",
+        encoding="utf-8",
+    )
+    findings = tmp_path / "findings"
+    findings.mkdir()
+    (findings / "summary.yaml").write_text(
+        "inventory: inventory/\nfindings: {unmapped: 1}\n",
+        encoding="utf-8",
+    )
+    (findings / "unmapped.yaml").write_text(
+        "kind: unmapped\ntables: [{name: X, rows: 0}]\n",
+        encoding="utf-8",
+    )
+    monkeypatch.chdir(tmp_path)
+
+    dirs = [str(p).replace("\\", "/") for p in cli.default_seed_dirs()]
+    assert dirs == ["config/baseline"]
+    assert not any("inventory" in d or "findings" in d for d in dirs)
+
+    expanded = [
+        str(p).replace("\\", "/") for p in cli.expand_files(cli.default_seed_dirs())
+    ]
+    assert expanded == ["config/baseline/uoms.yaml"]
+    assert not any("inventory" in p or "findings" in p for p in expanded)
+
+
+def test_bare_apply_diff_ignore_inventory_findings(
+    wired: Instance, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """V35/T130: bare apply/diff never load inventory/ or findings/ YAML."""
+    (tmp_path / ".env").write_text(
+        "ACU_BASE_URL=http://acu.test/AcumaticaERP\nACU_PASSWORD=x\n"
+    )
+    seed = "entity: UnitsOfMeasure\nkey: UnitID\nrecords:\n- UnitID: HOUR\n"
+    (tmp_path / "config" / "baseline").mkdir(parents=True)
+    (tmp_path / "config" / "baseline" / "uoms.yaml").write_text(seed)
+    (tmp_path / "inventory").mkdir()
+    (tmp_path / "inventory" / "summary.yaml").write_text(
+        "erp: null\nexport_mode: xml-folder\ntables: {}\n",
+        encoding="utf-8",
+    )
+    (tmp_path / "findings").mkdir()
+    (tmp_path / "findings" / "summary.yaml").write_text(
+        "findings: {}\n", encoding="utf-8"
+    )
+    monkeypatch.chdir(tmp_path)
+
+    seen_diff: list[str] = []
+    monkeypatch.setattr(
+        cli.seed,
+        "diff",
+        lambda client, baseline: (
+            seen_diff.append(str(baseline.path).replace("\\", "/")) or []
+        ),
+    )
+    result = CliRunner().invoke(cli.cli, ["diff"])
+    assert result.exit_code == 0, result.output
+    assert seen_diff == ["config/baseline/uoms.yaml"]
+    assert "inventory" not in result.output
+    assert "findings" not in result.output
+
+    seen_apply: list[str] = []
+    monkeypatch.setattr(
+        cli.seed,
+        "apply",
+        lambda client, baseline, dry_run=False: (
+            seen_apply.append(str(baseline.path).replace("\\", "/")) or 1
+        ),
+    )
+    result = CliRunner().invoke(cli.cli, ["apply", "--dry-run"])
+    assert result.exit_code == 0, result.output
+    assert seen_apply == ["config/baseline/uoms.yaml"]
+    assert "inventory" not in result.output
+    assert "findings" not in result.output
+
+
+def test_only_inventory_findings_not_default_seed_dirs(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """V35/T130: dual-reader trees alone never satisfy bare apply/diff defaults."""
+    (tmp_path / ".env").write_text(
+        "ACU_BASE_URL=http://acu.test/AcumaticaERP\nACU_PASSWORD=x\n"
+    )
+    (tmp_path / "inventory").mkdir()
+    (tmp_path / "inventory" / "summary.yaml").write_text("tables: {}\n")
+    (tmp_path / "findings").mkdir()
+    (tmp_path / "findings" / "summary.yaml").write_text("findings: {}\n")
+    monkeypatch.chdir(tmp_path)
+
+    with pytest.raises(SystemExit, match=r"none of the seed directories exist"):
+        cli.default_seed_dirs()
+
+
 def test_expand_files_umbrella_config_seed_order(tmp_path: Path) -> None:
     # T84/V22/V30: acu apply config/ expands nested SEED_DIRS fixed order
     seed = "entity: UnitsOfMeasure\nkey: UnitID\nrecords:\n- UnitID: HOUR\n"

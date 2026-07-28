@@ -1,4 +1,4 @@
-"""SnapshotArtifact IR parse + inventory CLI emit — offline (T127/T128)."""
+"""SnapshotArtifact IR parse + inventory CLI emit — offline (T127/T128/T130)."""
 
 from __future__ import annotations
 
