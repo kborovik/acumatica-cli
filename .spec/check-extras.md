@@ -64,6 +64,7 @@ for granular /sdd:check runs.
 - `tenant` = control plane resource; `create` alone chains a data-plane bootstrap publish after the SSH create — §V.1 module split intact
 - `bootstrap` = data plane verb: publish AcuBootstrap (`/CustomizationApi`); optional post-publish recycle when `ACU_SSH` set; `--export` local-only zip write (no REST, no SSH)
 - `config` = configuration ops: `init` local write, `show` local read, `check` live read-only preflight
+- `inventory` = offline dual-reader verb: SnapshotArtifact → `inventory/` summary+tables; no REST/SSH/password (V35/V37); never seed/apply/`config/` write
 - `state` = data plane verb: capture derived state (balances/qty) → `state/`; views in `config/views/`; never seed/apply path (V32); hard-cut no `snapshot` alias
 
 ## §V.17 — spec-state dependency recipe (extracted from SPEC.md §V.17)

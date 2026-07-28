@@ -1,9 +1,9 @@
-"""SnapshotArtifact IR: offline parse of SM203520 XML ZIP or ac.exe export xml.
+"""SnapshotArtifact IR + offline emit under ``inventory/`` (V35/V37).
 
-Inventory is the dual-reader offline path (V35/V37): consume a tenant
-snapshot *artifact* and normalize it to one intermediate representation.
-No REST, no SSH, no password. Never writes ``config/`` (V35/V36); the
-CLI write path (``inventory/`` summary + tables) lands in T128.
+Inventory is the dual-reader offline path: consume a tenant snapshot
+*artifact*, normalize to one IR, and write ``summary.yaml`` +
+``tables/<Table>.yaml``. No REST, no SSH, no password. Never writes
+``config/`` (V35/V36); never seed shape / ``endpoint:`` (not an apply path).
 
 Accepted artifacts (V37):
 
@@ -26,7 +26,7 @@ Table XML shape (verified ac-exe export / dataset format, docs/ac-exe.md):
     </data>
 
 Both sources normalize to :class:`SnapshotArtifact` with deterministic
-table/row ordering so later emit is byte-stable.
+table/row ordering so emit is byte-stable.
 """
 
 from __future__ import annotations
@@ -36,12 +36,18 @@ import zipfile
 from pathlib import Path
 from typing import Any, Literal
 
+import yaml
 from pydantic import Field, field_validator
 
+from . import output
 from .models import Model
 
 # Artifact kinds after normalize (export_mode summary field).
 ExportMode = Literal["xml-zip", "xml-folder"]
+
+DEFAULT_OUT = "inventory"
+SUMMARY_NAME = "summary.yaml"
+TABLES_DIR = "tables"
 
 _MANIFEST_NAMES = frozenset({"manifest.xml", "Manifest.xml", "MANIFEST.XML"})
 
@@ -142,6 +148,97 @@ def assert_erp_matches(artifact: SnapshotArtifact, erp: str) -> None:
             f"snapshot erp/build {got!r} does not match target.yaml erp {want!r} "
             f"(source: {artifact.source})"
         )
+
+
+# ---------------------------------------------------------------------------
+# Emit: inventory/ summary + tables (I.data inventory/; V35)
+# ---------------------------------------------------------------------------
+
+
+def render_summary(artifact: SnapshotArtifact) -> str:
+    """Byte-stable ``summary.yaml``: erp, export_mode, table row counts."""
+    doc: dict[str, Any] = {
+        "erp": artifact.erp,
+        "export_mode": artifact.export_mode,
+        "tables": artifact.row_counts,
+    }
+    return yaml.safe_dump(doc, sort_keys=False, default_flow_style=False)
+
+
+def render_table(table: TableData) -> str:
+    """Byte-stable ``tables/<Table>.yaml``: columns + ordered row maps."""
+    col_names = [c.name for c in table.columns]
+    columns: list[dict[str, str | None]] = []
+    for c in table.columns:
+        entry: dict[str, str | None] = {"name": c.name}
+        if c.type is not None:
+            entry["type"] = c.type
+        columns.append(entry)
+    rows = [_ordered_row(row, col_names) for row in table.rows]
+    doc: dict[str, Any] = {
+        "name": table.name,
+        "columns": columns,
+        "rows": rows,
+    }
+    return yaml.safe_dump(doc, sort_keys=False, default_flow_style=False)
+
+
+def _ordered_row(row: dict[str, str], col_names: list[str]) -> dict[str, str]:
+    """Column-order keys first, then any extra attrs alpha (determinism)."""
+    ordered: dict[str, str] = {}
+    for name in col_names:
+        if name in row:
+            ordered[name] = row[name]
+    for key in sorted(k for k in row if k not in ordered):
+        ordered[key] = row[key]
+    return ordered
+
+
+def table_path(out_dir: Path, table_name: str) -> Path:
+    """Destination path for one table YAML under ``tables/``."""
+    return out_dir / TABLES_DIR / f"{table_name}.yaml"
+
+
+def emit(
+    artifact: SnapshotArtifact,
+    out_dir: Path,
+    *,
+    force: bool = False,
+    dry_run: bool = False,
+) -> None:
+    """Write inventory tree under ``out_dir`` (default layout: inventory/).
+
+    Emits ``summary.yaml`` + ``tables/<Table>.yaml`` for every IR table.
+    Skip-if-exists unless ``force``; dry-run reports would-write only.
+    Never writes SEED_DIRS / seed shape / ``endpoint:`` (V35). Exit status
+    is the caller's (parse/erp failures raise ``SystemExit`` before emit).
+    """
+    summary_path = out_dir / SUMMARY_NAME
+    targets: list[tuple[Path, str, int]] = [
+        (summary_path, render_summary(artifact), len(artifact.tables)),
+    ]
+    for table in artifact.tables:
+        targets.append(
+            (table_path(out_dir, table.name), render_table(table), len(table.rows))
+        )
+
+    written = 0
+    skipped = 0
+    for path, text, count in targets:
+        if path.exists() and not force:
+            output.data(f"skip {path} (exists)")
+            skipped += 1
+            continue
+        if dry_run:
+            output.data(f"would write {path} ({count})")
+        else:
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_text(text, encoding="utf-8")
+            output.data(f"write {path} ({count})")
+        written += 1
+
+    suffix = " (dry run)" if dry_run else ""
+    output.success(f"{written} written, {skipped} skipped{suffix}")
 
 
 # ---------------------------------------------------------------------------

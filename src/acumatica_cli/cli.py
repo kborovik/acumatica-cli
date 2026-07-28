@@ -12,7 +12,7 @@ import click
 import httpx
 from click.shell_completion import get_completion_class
 
-from . import bootstrap, extract, firstlogin, output, run, seed, state
+from . import bootstrap, extract, firstlogin, inventory, output, run, seed, state
 from .client import AcumaticaClient
 from .config import (
     Instance,
@@ -998,6 +998,53 @@ def _exit_on_drift(inst: Instance, drifts: list[str], files: int) -> None:
             output.data(f"  {line}")
         raise SystemExit(2)
     output.success(f"no drift on {inst.tenant} ({inst.base_url}, {files} file(s))")
+
+
+@cli.command("inventory")
+@click.argument(
+    "artifact",
+    type=click.Path(exists=True, path_type=Path),
+)
+@click.option(
+    "--out",
+    "out_dir",
+    type=click.Path(file_okay=False, path_type=Path),
+    default=None,
+    help="Output directory (default: inventory/)",
+)
+@click.option("--force", is_flag=True, help="Overwrite existing files")
+@click.option(
+    "--dry-run",
+    is_flag=True,
+    help="Show what would be written without writing",
+)
+def inventory_cmd(
+    artifact: Path,
+    out_dir: Path | None,
+    force: bool,
+    dry_run: bool,
+) -> None:
+    """Parse a snapshot artifact into inventory/ (offline dual-reader).
+
+    ARTIFACT is an SM203520 Settings XML ZIP (manifest.xml + table XML) or
+    an ac.exe export xml folder. Both normalize to one IR (V37). Binary
+    .adb is rejected. No REST, no SSH, no password. Writes summary.yaml
+    and tables/<Table>.yaml under --out (default inventory/). Existing
+    files are skipped unless --force. When data-repo target.yaml is
+    present and the artifact reports a build, erp must match or the run
+    fails. Exit 0 clean, 1 parse/format/version fail; never 2 (drift is
+    not this command). Not a seed path — never writes config/ (V35).
+    """
+    art = inventory.parse_artifact(artifact)
+    target = load_target()
+    if target is not None:
+        inventory.assert_erp_matches(art, target.erp)
+    dest = out_dir if out_dir is not None else Path(inventory.DEFAULT_OUT)
+    output.data(
+        f"{artifact} -> {dest} ({len(art.tables)} table(s)"
+        f"{f', erp={art.erp}' if art.erp else ''})"
+    )
+    inventory.emit(art, dest, force=force, dry_run=dry_run)
 
 
 @cli.command("state")

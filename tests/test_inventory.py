@@ -1,4 +1,4 @@
-"""SnapshotArtifact IR parse — offline (T127, V10/V35/V37)."""
+"""SnapshotArtifact IR parse + inventory CLI emit — offline (T127/T128)."""
 
 from __future__ import annotations
 
@@ -6,9 +6,11 @@ import zipfile
 from pathlib import Path
 
 import pytest
+import yaml
+from click.testing import CliRunner
 from pydantic import ValidationError
 
-from acumatica_cli import inventory
+from acumatica_cli import cli, inventory
 
 # Minimal ac.exe / SM203520 table XML (docs/ac-exe.md shape).
 ACCOUNT_XML = """\
@@ -318,7 +320,172 @@ def test_manifest_upsnapshot_row_attrs(tmp_path: Path) -> None:
 
 
 def test_parse_returns_snapshot_artifact(tmp_path: Path) -> None:
-    """Smoke: parse does not require writing inventory/ (T128 owns emit)."""
+    """Smoke: parse alone does not write inventory/."""
     folder = _write_folder(tmp_path, {"Account.xml": ACCOUNT_XML})
     art = inventory.parse_artifact(folder)
     assert isinstance(art, inventory.SnapshotArtifact)
+    assert not (tmp_path / "inventory").exists()
+
+
+# -- emit (T128 / V9 / V35) --
+
+
+def test_emit_writes_summary_and_tables(tmp_path: Path) -> None:
+    """I.data inventory/: summary.yaml + tables/<Table>.yaml, no endpoint:."""
+    folder = _write_folder(
+        tmp_path / "src",
+        {"Currency.xml": CURRENCY_XML, "Account.xml": ACCOUNT_XML},
+    )
+    art = inventory.parse_artifact(folder)
+    out = tmp_path / "inventory"
+    inventory.emit(art, out)
+
+    summary = yaml.safe_load((out / "summary.yaml").read_text(encoding="utf-8"))
+    assert summary["export_mode"] == "xml-folder"
+    assert summary["erp"] is None
+    assert summary["tables"] == {"Account": 2, "Currency": 2}
+    assert "endpoint" not in summary
+
+    account = yaml.safe_load(
+        (out / "tables" / "Account.yaml").read_text(encoding="utf-8")
+    )
+    assert account["name"] == "Account"
+    assert [c["name"] for c in account["columns"]] == ["AccountCD", "Description"]
+    assert [r["AccountCD"] for r in account["rows"]] == ["10100", "20000"]
+    assert "endpoint" not in account
+    assert "entity" not in account
+    assert "records" not in account
+
+
+def test_emit_byte_stable_twice(tmp_path: Path) -> None:
+    """Re-emit same IR → identical file bytes (V37 determinism)."""
+    folder = _write_folder(tmp_path / "src", {"Account.xml": ACCOUNT_XML})
+    art = inventory.parse_artifact(folder)
+    a = tmp_path / "a"
+    b = tmp_path / "b"
+    inventory.emit(art, a)
+    inventory.emit(art, b)
+    assert (a / "summary.yaml").read_bytes() == (b / "summary.yaml").read_bytes()
+    assert (a / "tables" / "Account.yaml").read_bytes() == (
+        b / "tables" / "Account.yaml"
+    ).read_bytes()
+
+
+def test_emit_skip_if_exists_unless_force(tmp_path: Path) -> None:
+    folder = _write_folder(tmp_path / "src", {"Account.xml": ACCOUNT_XML})
+    art = inventory.parse_artifact(folder)
+    out = tmp_path / "inventory"
+    inventory.emit(art, out)
+    first = (out / "summary.yaml").read_text(encoding="utf-8")
+    (out / "summary.yaml").write_text("erp: dirty\n", encoding="utf-8")
+    inventory.emit(art, out)  # skip existing
+    assert (out / "summary.yaml").read_text(encoding="utf-8") == "erp: dirty\n"
+    inventory.emit(art, out, force=True)
+    assert (out / "summary.yaml").read_text(encoding="utf-8") == first
+
+
+def test_emit_dry_run_writes_nothing(tmp_path: Path) -> None:
+    folder = _write_folder(tmp_path / "src", {"Account.xml": ACCOUNT_XML})
+    art = inventory.parse_artifact(folder)
+    out = tmp_path / "inventory"
+    inventory.emit(art, out, dry_run=True)
+    assert not out.exists()
+
+
+# -- CLI (T128 / V9 / V15 / V16 / offline) --
+
+
+def test_inventory_help_documents_offline_path() -> None:
+    result = CliRunner().invoke(cli.cli, ["inventory", "--help"])
+    assert result.exit_code == 0
+    assert "offline" in result.output.lower() or "No REST" in result.output
+    assert "--out" in result.output
+    assert "--force" in result.output
+    assert "--dry-run" in result.output
+    assert "inventory/" in result.output
+
+
+def test_cli_inventory_folder_to_default_out(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """V9/V35: offline CLI needs no password; writes inventory/ under cwd."""
+    folder = _write_folder(
+        tmp_path,
+        {"Account.xml": ACCOUNT_XML, "Currency.xml": CURRENCY_XML},
+    )
+    monkeypatch.chdir(tmp_path)
+    # No .env, no ACU_PASSWORD — must still succeed
+    result = CliRunner().invoke(cli.cli, ["inventory", str(folder)])
+    assert result.exit_code == 0, result.output
+    assert (tmp_path / "inventory" / "summary.yaml").is_file()
+    assert (tmp_path / "inventory" / "tables" / "Account.yaml").is_file()
+    assert "write" in result.output
+
+
+def test_cli_inventory_dry_run(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    folder = _write_folder(tmp_path, {"Account.xml": ACCOUNT_XML})
+    monkeypatch.chdir(tmp_path)
+    result = CliRunner().invoke(cli.cli, ["inventory", "--dry-run", str(folder)])
+    assert result.exit_code == 0, result.output
+    assert "would write" in result.output
+    assert not (tmp_path / "inventory").exists()
+
+
+def test_cli_inventory_custom_out_and_zip(tmp_path: Path) -> None:
+    zpath = _write_zip(
+        tmp_path,
+        {
+            "manifest.xml": MANIFEST_XML,
+            "Account.xml": ACCOUNT_XML,
+        },
+    )
+    out = tmp_path / "out-inv"
+    result = CliRunner().invoke(cli.cli, ["inventory", "--out", str(out), str(zpath)])
+    assert result.exit_code == 0, result.output
+    summary = yaml.safe_load((out / "summary.yaml").read_text(encoding="utf-8"))
+    assert summary["erp"] == "26.101.0225"
+    assert summary["export_mode"] == "xml-zip"
+
+
+def test_cli_inventory_erp_mismatch_exit_1(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """V37: target.yaml erp pin fails when artifact build differs."""
+    zpath = _write_zip(
+        tmp_path,
+        {"manifest.xml": MANIFEST_XML, "Account.xml": ACCOUNT_XML},
+    )
+    (tmp_path / ".env").write_text("ACU_BASE_URL=http://x/\n", encoding="utf-8")
+    (tmp_path / "target.yaml").write_text(
+        "erp: 25.200.001\ndefault_api: 25.200.001\n",
+        encoding="utf-8",
+    )
+    monkeypatch.chdir(tmp_path)
+    result = CliRunner().invoke(cli.cli, ["inventory", str(zpath)])
+    assert result.exit_code == 1
+    assert "does not match target.yaml erp" in result.output
+
+
+def test_cli_inventory_erp_match_ok(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    zpath = _write_zip(
+        tmp_path,
+        {"manifest.xml": MANIFEST_XML, "Account.xml": ACCOUNT_XML},
+    )
+    (tmp_path / ".env").write_text("ACU_BASE_URL=http://x/\n", encoding="utf-8")
+    (tmp_path / "target.yaml").write_text(
+        "erp: 26.101.0225\ndefault_api: 25.200.001\n",
+        encoding="utf-8",
+    )
+    monkeypatch.chdir(tmp_path)
+    result = CliRunner().invoke(cli.cli, ["inventory", str(zpath)])
+    assert result.exit_code == 0, result.output
+
+
+def test_cli_inventory_rejects_adb(tmp_path: Path) -> None:
+    adb = tmp_path / "tenant.adb"
+    adb.write_bytes(b"\x00")
+    result = CliRunner().invoke(cli.cli, ["inventory", str(adb)])
+    assert result.exit_code == 1
+    assert ".adb" in result.output
