@@ -89,6 +89,7 @@ for granular /sdd:check runs.
 
 - required keys post-merge: `ACU_BASE_URL`, `ACU_PASSWORD` — unresolved → hard error naming key(s)
 - `ACU_SSH`: key absent + base_url host → default `Administrator@<host>`; key present blank → empty (hosted/data-plane only); flag/env explicit wins; empty post-default fine for data-plane cmds
+- `api_version`: never from env (`ACU_API_VERSION` ignored if present); `--api-version` flag ? → else `target.yaml` `default_api` when present → else code default `25.200.001` (V27)
 - tenant CRUD hard-errors when `ACU_SSH` empty post-default, names key
 
 ## §V.20 — seed endpoint resolution (extracted from SPEC.md §V.20)
@@ -112,9 +113,11 @@ for granular /sdd:check runs.
 ## §V.27 — dataset-target gate (extracted from SPEC.md §V.27)
 
 - allowlisted data-plane cmds: `apply`/`diff`/`run`/`extract`/`schema`/`bootstrap`/`state` + `config check`
-- present target → match `default_api` vs `Instance.api_version` else hard error naming dataset vs configured
-- missing → warn on `config check` unless `--strict`; invalid → hard fail any loader
-- gate ! inside bare `_resolve_instance`/`pass_instance` (tenant cmds + `config show` ungated)
+- present target → `load_instance` sets `Instance.api_version` = `default_api` when `--api-version` flag absent (source-merge; dual-source match gate retired); invalid → hard fail any loader
+- missing → warn on `config check` unless `--strict`; api_version stays flag or code default `25.200.001`
+- never `ACU_API_VERSION` env pin; unknown `ACU_*` ignored
+- gate ! inside bare `_resolve_instance`/`pass_instance` for hard-fail-on-mismatch (retired); target still loadable for erp claim + config check/show surface
+- `config check` target line: present → `ok target (api_version from default_api=…; erp=… claimed)`; no mismatch fail
 - `erp` live when `GET /entity` wrapper has `version.acumaticaBuildVersion` → major.minor match `target.erp` else fail; bare array / no build id → skip (claimed still on target line); never SSH/sqlcmd (V1)
 
 ## §V.19 — release-pipeline recipe (extracted from SPEC.md §V.19)
