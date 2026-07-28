@@ -23,7 +23,6 @@ FULL_ENV = """\
 ACU_BASE_URL=https://edge.example/AcumaticaERP/
 ACU_SSH=user@jump.example
 ACU_TENANT=T1
-ACU_API_VERSION=/24.200.001/
 ACU_USER=api
 ACU_PASSWORD=secret
 """
@@ -57,25 +56,57 @@ def test_env_file_values_override_defaults(data_root: Path) -> None:
     (data_root / ".env").write_text(FULL_ENV)
     inst = load_instance()
     assert inst.base_url == "https://edge.example/AcumaticaERP"  # trailing / stripped
-    assert inst.api_version == "24.200.001"  # surrounding slashes stripped
+    assert inst.api_version == "25.200.001"  # V27: code default, not env
     assert inst.ssh == "user@jump.example"
     assert inst.tenant == "T1"
     assert inst.user == "api"
 
 
-def test_api_version_rejects_default_path_prefix(data_root: Path) -> None:
-    # V11/T72: version half only — Default/… nests as /entity/Default/Default/…
-    (data_root / ".env").write_text(
-        MINIMAL_ENV + "ACU_API_VERSION=Default/25.200.001\n"
+def test_api_version_flag_rejects_default_path_prefix(data_root: Path) -> None:
+    # V11: version half only — Default/… nests as /entity/Default/Default/…
+    # Flag path still validates; ACU_API_VERSION env is ignored (V27/T125).
+    with pytest.raises(SystemExit, match=r"version half only"):
+        load_instance({"api_version": "Default/25.200.001"})
+
+
+def test_api_version_flag_rejects_embedded_slash(data_root: Path) -> None:
+    with pytest.raises(SystemExit, match=r"version half only"):
+        load_instance({"api_version": "25/200/001"})
+
+
+def test_acu_api_version_env_is_ignored(
+    data_root: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # V27/T125: ACU_API_VERSION is not a config key — unknown ACU_* ignored;
+    # code default (or target.yaml) wins even when env spells a different pin
+    (data_root / ".env").write_text(MINIMAL_ENV + "ACU_API_VERSION=24.200.001\n")
+    monkeypatch.setenv("ACU_API_VERSION", "23.200.001")
+    inst = load_instance()
+    assert inst.api_version == "25.200.001"
+
+
+def test_api_version_from_target_yaml(data_root: Path) -> None:
+    # V27/T125: present target.yaml default_api sources Instance.api_version
+    (data_root / "target.yaml").write_text(
+        'erp: "26.101.0225"\ndefault_api: "24.200.001"\n'
     )
-    with pytest.raises(SystemExit, match=r"version half only"):
-        load_instance()
+    inst = load_instance()
+    assert inst.api_version == "24.200.001"
 
 
-def test_api_version_rejects_embedded_slash(data_root: Path) -> None:
-    (data_root / ".env").write_text(MINIMAL_ENV + "ACU_API_VERSION=25/200/001\n")
-    with pytest.raises(SystemExit, match=r"version half only"):
-        load_instance()
+def test_api_version_flag_beats_target_yaml(data_root: Path) -> None:
+    # V27: --api-version overrides target for ad-hoc probes
+    (data_root / "target.yaml").write_text(
+        'erp: "26.101.0225"\ndefault_api: "24.200.001"\n'
+    )
+    inst = load_instance({"api_version": "23.200.001"})
+    assert inst.api_version == "23.200.001"
+
+
+def test_api_version_flag_half_only_strips_slashes(data_root: Path) -> None:
+    # V11: surrounding slashes stripped on flag value
+    inst = load_instance({"api_version": "/24.200.001/"})
+    assert inst.api_version == "24.200.001"
 
 
 def test_install_layout_values_are_constants(data_root: Path) -> None:

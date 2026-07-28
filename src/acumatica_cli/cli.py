@@ -480,7 +480,7 @@ def config_init(host: str | None, directory: Path | None) -> None:
     # next-step cmds: operator rebuild order after scaffold (V28)
     output.data("")
     output.data("next:")
-    output.data("  1. edit .env (set ACU_PASSWORD, ACU_TENANT; keep ACU_API_VERSION)")
+    output.data("  1. edit .env (set ACU_PASSWORD, ACU_TENANT)")
     output.data("  2. acu config check")
     output.data("  3. acu bootstrap          # or: acu tenant create ... (SSH)")
     output.data("  4. acu apply config/")
@@ -498,23 +498,35 @@ def config_show(inst: Instance) -> None:
     so the printed values are exactly what a live command would trust -
     global flag overrides (--url, --ssh, ...) included. The password is
     never emitted in any form (V2): no ACU_PASSWORD key, no value.
-    When target.yaml is present, surfaces erp/default_api as comments
-    (mismatch noted, still exit 0 — no hard gate). Redirect to a file and
-    edit: the output loads back through load_instance unchanged, the
-    password supplied out of band.
+    ``ACU_API_VERSION`` is never emitted (V27/T125 — api pin is not env;
+    source is target.yaml ``default_api`` or ``--api-version``). When
+    target.yaml is present, surfaces erp/default_api as comments and notes
+    the api_version source (still exit 0 — no hard gate). Redirect to a
+    file and edit: the output loads back through load_instance unchanged,
+    the password supplied out of band.
     """
     output.data("# resolved by `acu config show` - a complete .env")
     output.data("# ACU_PASSWORD comes from .env or the environment, never from here")
-    for field, value in inst.model_dump(exclude={"password"}).items():
+    # V27: api pin is not an env key — never emit ACU_API_VERSION
+    for field, value in inst.model_dump(exclude={"password", "api_version"}).items():
         output.data(f"ACU_{field.upper()}={value}")
     target = load_target()
     if target is not None:
         output.data(f"# target.yaml: erp={target.erp} default_api={target.default_api}")
-        if target.default_api != inst.api_version:
+        if inst.api_version == target.default_api:
             output.data(
-                f"# warn: default_api={target.default_api} != "
-                f"ACU_API_VERSION={inst.api_version}"
+                f"# api_version={inst.api_version} (from target.yaml default_api)"
             )
+        else:
+            output.data(
+                f"# api_version={inst.api_version} (from --api-version; "
+                f"target default_api={target.default_api})"
+            )
+    else:
+        output.data(
+            f"# api_version={inst.api_version} "
+            f"(code default or --api-version; no target.yaml)"
+        )
 
 
 @config_group.command("check")
@@ -658,16 +670,18 @@ def _probe_target(
         )
         output.data(f"{'fail' if strict else 'warn'} {msg}")
         return strict, None
-    if target.default_api != inst.api_version:
+    # V27/T125: source-merge — api_version already from default_api unless
+    # --api-version; surface source, never dual-source mismatch fail
+    if inst.api_version == target.default_api:
         output.data(
-            f"fail target: dataset default_api={target.default_api} vs "
-            f"configured {inst.api_version}"
+            f"ok target (api_version from default_api={target.default_api}; "
+            f"erp={target.erp} claimed)"
         )
-        return True, None
-    output.data(
-        f"ok target (default_api={target.default_api} matches configured; "
-        f"erp={target.erp} claimed)"
-    )
+    else:
+        output.data(
+            f"ok target (api_version={inst.api_version} from --api-version; "
+            f"default_api={target.default_api}; erp={target.erp} claimed)"
+        )
     return False, target.erp
 
 

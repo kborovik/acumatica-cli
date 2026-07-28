@@ -566,7 +566,8 @@ def test_config_show_emits_env_without_password(wired: Instance) -> None:
     assert "ACU_BASE_URL=http://acu.test/AcumaticaERP" in result.output
     assert "ACU_SSH=user@acu.test" in result.output
     assert "ACU_TENANT=T1" in result.output
-    assert "ACU_API_VERSION=25.200.001" in result.output
+    # V27/T125: api pin is not env — never emit ACU_API_VERSION
+    assert "ACU_API_VERSION" not in result.output
     assert "ACU_USER=admin" in result.output
     assert "pw" not in result.output  # the password value, in no form
     key_lines = [
@@ -722,10 +723,12 @@ def test_config_init_scaffolds_data_repo(tmp_path: Path) -> None:
     target = (repo / "target.yaml").read_text()
     assert "default_api:" in target
     assert "erp:" in target
-    # --host substitutes into ACU_BASE_URL only; ACU_SSH assignment omitted (T124)
+    # --host substitutes into ACU_BASE_URL only; ACU_SSH + ACU_API_VERSION
+    # omitted (T124/T125)
     env = (repo / ".env").read_text()
     assert "ACU_BASE_URL=http://erp.test/AcumaticaERP" in env
     assert not any(ln.startswith("ACU_SSH=") for ln in env.splitlines())
+    assert not any(ln.startswith("ACU_API_VERSION=") for ln in env.splitlines())
     # T104/V28/V33: TB is EndingBalance-class inquire, not roster Account
     tb = (repo / "config" / "views" / "10-trial-balance.yaml").read_text()
     assert "inquire: AccountSummaryInquiry" in tb

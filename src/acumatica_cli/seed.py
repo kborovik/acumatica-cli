@@ -70,7 +70,7 @@ BOOTSTRAP_ENDPOINT, BOOTSTRAP_ENTITIES = bootstrap.parse_endpoint(
     bootstrap.packaged_contract_xml()
 )
 # Dual-serve error text prefers the symbolic Default form (V20) so operators
-# do not read the code-default version as their configured ACU_API_VERSION.
+# do not read the code-default version as their configured api_version.
 _DEFAULT_ENDPOINT_NAME = "Default"
 _SYMBOLIC_BOOTSTRAP = "bootstrap"
 _SYMBOLIC_DEFAULT = "default"
@@ -113,7 +113,7 @@ def resolve_endpoint(
         if not api_version:
             raise SystemExit(
                 "endpoint: default requires a configured api_version "
-                "(ACU_API_VERSION or --api-version)"
+                "(target.yaml default_api or --api-version)"
             )
         return f"{_DEFAULT_ENDPOINT_NAME}/{api_version}"
     return endpoint
@@ -233,7 +233,7 @@ def load_baseline(path: Path) -> BaselineFile | ActionFile:
     elif parsed.endpoint is None and parsed.entity in entities:
         raise SystemExit(
             f"{path}: entity '{parsed.entity}' is served by both "
-            f"Default (use endpoint: default -> Default/<ACU_API_VERSION>) "
+            f"Default (use endpoint: default -> Default/<api_version>) "
             f"and the active {name} - add an explicit 'endpoint:' line to "
             f"pick one (literal or symbolic 'bootstrap' | 'default')"
         )

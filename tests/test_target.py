@@ -1,4 +1,4 @@
-"""Dataset target.yaml: load, gate, config check warn/strict (V27)."""
+"""Dataset target.yaml: load, source-merge, config check (V27/T125)."""
 
 from pathlib import Path
 from types import TracebackType
@@ -7,14 +7,16 @@ import pytest
 from click.testing import CliRunner
 
 from acumatica_cli import cli
-from acumatica_cli.config import load_instance
+from acumatica_cli.config import Instance, load_instance
 from acumatica_cli.target import assert_target_compatible, load_target
 from acumatica_cli.tenant import TenantManager
 
 
 class DummyClient:
     def __init__(self, *args: object, **kwargs: object) -> None:
-        self.instance = args[0] if args else None
+        self.instance: Instance | None = (
+            args[0] if args and isinstance(args[0], Instance) else None
+        )
 
     def list_endpoints(self) -> list[tuple[str, str]]:
         return self.entity_root()[0]
@@ -43,7 +45,6 @@ def data_root(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
         "ACU_SSH=Administrator@acu.test\n"
         "ACU_TENANT=T1\n"
         "ACU_PASSWORD=secret\n"
-        "ACU_API_VERSION=25.200.001\n"
     )
     monkeypatch.chdir(tmp_path)
     return tmp_path
@@ -77,16 +78,22 @@ def test_load_target_rejects_default_path(data_root: Path) -> None:
         load_target()
 
 
-def test_assert_target_compatible_mismatch(data_root: Path) -> None:
+def test_assert_target_compatible_invalid_still_fails(data_root: Path) -> None:
+    # T125: mismatch gate retired; invalid target still hard-fails any loader
+    (data_root / "target.yaml").write_text("")
+    with pytest.raises(SystemExit, match=r"target.yaml is empty"):
+        assert_target_compatible(load_instance())
+
+
+def test_assert_target_compatible_present_is_noop_on_versions(
+    data_root: Path,
+) -> None:
+    # T125: source-merge — different default_api no longer mismatch-fails;
+    # load_instance already applied default_api as api_version
     (data_root / "target.yaml").write_text('erp: "26.101"\ndefault_api: "24.200.001"\n')
     inst = load_instance()
-    with pytest.raises(SystemExit, match=r"Default API version mismatch"):
-        assert_target_compatible(inst)
-
-
-def test_assert_target_compatible_match(data_root: Path) -> None:
-    (data_root / "target.yaml").write_text('erp: "26.101"\ndefault_api: "25.200.001"\n')
-    assert_target_compatible(load_instance())
+    assert inst.api_version == "24.200.001"
+    assert_target_compatible(inst)  # no SystemExit
 
 
 def test_assert_target_compatible_missing_is_noop(data_root: Path) -> None:
@@ -106,7 +113,7 @@ def test_config_check_ok_target(
 
     assert result.exit_code == 0
     assert (
-        "ok target (default_api=25.200.001 matches configured; erp=26.101.0225 claimed)"
+        "ok target (api_version from default_api=25.200.001; erp=26.101.0225 claimed)"
     ) in result.output
     # T92: no build id on DummyClient → still skip after endpoints
     assert "ok endpoints (Default/25.200.001 present)" in result.output
@@ -114,7 +121,7 @@ def test_config_check_ok_target(
     # order: target → rest → endpoints → erp (live id needs REST session)
     lines = result.output.splitlines()
     assert lines.index(
-        "ok target (default_api=25.200.001 matches configured; erp=26.101.0225 claimed)"
+        "ok target (api_version from default_api=25.200.001; erp=26.101.0225 claimed)"
     ) < lines.index("ok rest (http://acu.test/AcumaticaERP, tenant T1)")
     assert lines.index("ok endpoints (Default/25.200.001 present)") < lines.index(
         "skip erp (live probe not available; claimed 26.101.0225)"
@@ -197,41 +204,73 @@ def test_config_check_strict_missing_target(
     assert "fail target: no target.yaml under " in result.output
 
 
-def test_config_check_mismatch_fails(
+def test_config_check_target_sources_api_version(
     data_root: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
+    # T125: non-default default_api is sourced, not a mismatch fail
     (data_root / "target.yaml").write_text('erp: "26.101"\ndefault_api: "24.200.001"\n')
     monkeypatch.setattr(cli, "AcumaticaClient", DummyClient)
     monkeypatch.setattr(TenantManager, "ping", lambda self: None)
 
     result = CliRunner().invoke(cli.cli, ["config", "check"])
 
-    assert result.exit_code == 1
-    assert "fail target: dataset default_api=24.200.001" in result.output
+    assert result.exit_code == 0
+    assert (
+        "ok target (api_version from default_api=24.200.001; erp=26.101 claimed)"
+    ) in result.output
+    assert "ok endpoints (Default/24.200.001 present)" in result.output
 
 
-def test_apply_gates_on_target_mismatch(
+def test_config_check_flag_override_notes_source(
     data_root: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
+    # T125: --api-version ad-hoc override still ok; line notes flag source
+    (data_root / "target.yaml").write_text('erp: "26.101"\ndefault_api: "25.200.001"\n')
+    monkeypatch.setattr(cli, "AcumaticaClient", DummyClient)
+    monkeypatch.setattr(TenantManager, "ping", lambda self: None)
+
+    result = CliRunner().invoke(
+        cli.cli, ["--api-version", "24.200.001", "config", "check"]
+    )
+
+    assert result.exit_code == 0
+    assert (
+        "ok target (api_version=24.200.001 from --api-version; "
+        "default_api=25.200.001; erp=26.101 claimed)"
+    ) in result.output
+
+
+def test_apply_sources_target_api_version(
+    data_root: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # T125: apply no longer dual-source mismatch-fails; uses target pin
     (data_root / "target.yaml").write_text('erp: "26.101"\ndefault_api: "24.200.001"\n')
     (data_root / "baseline").mkdir()
     (data_root / "baseline" / "uom.yaml").write_text(
         "entity: UnitsOfMeasure\nkey: UOM\nrecords:\n  - UOM: KG\n"
     )
-    entered: list[str] = []
+    seen: list[str] = []
 
     class TrackingClient(DummyClient):
         def __enter__(self) -> TrackingClient:
-            entered.append("enter")
+            inst = self.instance
+            assert inst is not None
+            seen.append(inst.api_version)
             return self
+
+        def put(self, *args: object, **kwargs: object) -> dict[str, object]:
+            return {}
+
+        def get(self, *args: object, **kwargs: object) -> list[object]:
+            return []
 
     monkeypatch.setattr(cli, "AcumaticaClient", TrackingClient)
 
     result = CliRunner().invoke(cli.cli, ["apply", "baseline/uom.yaml"])
 
-    assert result.exit_code != 0
-    assert "Default API version mismatch" in result.output
-    assert entered == []  # gate before HTTP
+    # may fail for other reasons after gate; gate itself must not mismatch
+    assert "Default API version mismatch" not in result.output
+    assert seen == ["24.200.001"]
 
 
 def test_config_show_surfaces_target(data_root: Path) -> None:
@@ -242,11 +281,18 @@ def test_config_show_surfaces_target(data_root: Path) -> None:
 
     assert result.exit_code == 0
     assert "# target.yaml: erp=26.101.0225 default_api=25.200.001" in result.output
+    assert "# api_version=25.200.001 (from target.yaml default_api)" in result.output
+    assert "ACU_API_VERSION" not in result.output
 
 
-def test_config_show_notes_mismatch_still_ok(data_root: Path) -> None:
-    (data_root / "target.yaml").write_text('erp: "26.101"\ndefault_api: "24.200.001"\n')
-    result = CliRunner().invoke(cli.cli, ["config", "show"])
+def test_config_show_notes_flag_override(data_root: Path) -> None:
+    (data_root / "target.yaml").write_text('erp: "26.101"\ndefault_api: "25.200.001"\n')
+    result = CliRunner().invoke(
+        cli.cli, ["--api-version", "24.200.001", "config", "show"]
+    )
 
     assert result.exit_code == 0
-    assert "# warn: default_api=24.200.001" in result.output
+    assert (
+        "# api_version=24.200.001 (from --api-version; target default_api=25.200.001)"
+    ) in result.output
+    assert "ACU_API_VERSION" not in result.output

@@ -1,9 +1,10 @@
 """Dataset target matrix: committed verified ERP + Default API versions (V27).
 
 ``target.yaml`` is *what* (V2) — co-located with the data-repo root found by
-``.env`` discovery. Never secrets. Present → hard-match ``default_api`` to
-``Instance.api_version`` on allowlisted data-plane cmds and ``config check``;
-missing → warn on check unless ``--strict``; invalid → hard-fail any loader.
+``.env`` discovery. Never secrets. Present → ``load_instance`` sources
+``Instance.api_version`` from ``default_api`` when ``--api-version`` is
+absent (source-merge; dual-source match gate retired — T125); missing →
+warn on check unless ``--strict``; invalid → hard-fail any loader.
 """
 
 from pathlib import Path
@@ -81,20 +82,13 @@ def load_target(root: Path | None = None) -> DatasetTarget | None:
 
 
 def assert_target_compatible(inst: Instance, root: Path | None = None) -> None:
-    """Hard-fail when target.yaml present and default_api mismatches api_version.
+    """Load target when present; invalid → hard-fail (V27).
 
-    Missing target is not an error here (config check --strict owns that).
-    Invalid target always SystemExit. Call only from the allowlisted
-    data-plane commands (V27) — never from bare pass_instance.
+    Version mismatch gate retired (T125): ``load_instance`` source-merges
+    ``default_api`` into ``api_version`` when the flag is absent; flag
+    override is intentional for ad-hoc probes. Missing target is not an
+    error here (config check --strict owns that). Call only from the
+    allowlisted data-plane commands — never from bare pass_instance.
     """
-    target = load_target(root)
-    if target is None:
-        return
-    if target.default_api != inst.api_version:
-        raise SystemExit(
-            "Default API version mismatch:\n"
-            f"  dataset target (target.yaml): default_api={target.default_api}\n"
-            f"  configured (ACU_API_VERSION/--api-version): {inst.api_version}\n"
-            f"Fix: set ACU_API_VERSION={target.default_api} to match this "
-            f"dataset, or use a dataset verified for {inst.api_version}."
-        )
+    del inst  # kept for call-site stability; version match no longer used
+    load_target(root)

@@ -5,8 +5,11 @@ env prefix ``ACU_``, and the sole config file is ``.env`` (found by walking
 up from cwd) carrying where + secrets as ``ACU_*`` vars. The file is
 optional - flags plus the process environment can supply the full config.
 Per key the first set value wins: flag, ``ACU_*`` var (process environment
-over a found ``.env``), code default. ``base_url`` is the only required
-address (REST data plane). ``ssh`` defaults to ``Administrator@`` + the
+over a found ``.env``), code default — exclusion ``api_version`` (V27/T125):
+``--api-version`` flag ? → else data-repo ``target.yaml`` ``default_api``
+when present → else code default ``25.200.001``; never ``ACU_API_VERSION``
+(unknown ``ACU_*`` ignored). ``base_url`` is the only required address
+(REST data plane). ``ssh`` defaults to ``Administrator@`` + the
 ``base_url`` hostname when the key is absent (V3/T124); a present blank
 key is the hosted opt-out (empty = data-plane only; tenant cmds hard-error
 when empty post-default — V1/V3). The password must resolve via
@@ -26,6 +29,7 @@ from .models import validation_summary
 
 PLACEHOLDER_HOST = "erp.example.com"
 DEFAULT_SSH_USER = "Administrator"
+DEFAULT_API_VERSION = "25.200.001"
 
 ACU_INSTANCE_NAME = "AcumaticaERP"  # ac.exe -iname; IIS app-pool name
 ACU_INSTANCE_PATH = "C:\\Acumatica\\AcumaticaERP"  # ac.exe -h
@@ -161,7 +165,10 @@ class Instance(BaseSettings):
     base_url: str  # REST root: scheme + host + site path
     ssh: str = ""  # control plane: full user@host; empty post-default = data-plane only
     tenant: str = ""
-    api_version: str = "25.200.001"  # V11: /entity/Default/<api_version>/
+    # V11/V27: version half only; resolved in load_instance (flag → target →
+    # code default), never ACU_API_VERSION env. Default here is the code pin
+    # only; env values for this field are discarded post-build (T125).
+    api_version: str = DEFAULT_API_VERSION  # V11: /entity/Default/<api_version>/
     user: str = "admin"  # ACU_USER; the --username flag maps here
     # required, but enforced in load_instance so a blank scaffolded
     # ACU_PASSWORD= placeholder and a missing var raise the same named error
@@ -277,14 +284,27 @@ def load_instance(overrides: Mapping[str, str | None] | None = None) -> Instance
 
     ``overrides`` carries the global flags keyed by Instance field name;
     per key the first set value wins (flag, ACU_* var - process environment
-    over a found .env - code default). No .env is fine (V3): the hard error
-    comes only when a required value (base_url, password) is still
-    unresolved after the merge, naming the missing key. ``ssh`` defaults
-    from the base_url host when the key is absent; blank key = hosted path;
-    tenant cmds hard-error when empty post-default.
+    over a found .env - code default). Exclusion ``api_version`` (V27/T125):
+    ``--api-version`` flag ? → else ``target.yaml`` ``default_api`` when
+    present → else ``DEFAULT_API_VERSION``; ``ACU_API_VERSION`` is ignored.
+    No .env is fine (V3): the hard error comes only when a required value
+    (base_url, password) is still unresolved after the merge, naming the
+    missing key. ``ssh`` defaults from the base_url host when the key is
+    absent; blank key = hosted path; tenant cmds hard-error when empty
+    post-default.
     """
     flags = {k: v for k, v in dict(overrides or {}).items() if v is not None}
     root = find_data_root()
+    # V27/T125: resolve api_version outside env. Init kwargs beat dotenv/env,
+    # so always inject — ACU_API_VERSION (valid or invalid) is ignored.
+    if "api_version" not in flags:
+        # Local import avoids config↔target cycle (target imports Instance).
+        from .target import load_target
+
+        target = load_target(root)
+        flags["api_version"] = (
+            target.default_api if target is not None else DEFAULT_API_VERSION
+        )
     env_file = root / ".env" if root is not None else None
     try:
         # _env_file is a real BaseSettings init override; the synthesized

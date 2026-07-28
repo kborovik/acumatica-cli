@@ -6,13 +6,11 @@
 # ACU_BASE_URL hostname (SSH boxes). Hosted / data-plane-only opt-out: add
 # the SSH key with an empty value. Tenant CRUD still needs a non-empty
 # value post-default.
-# ACU_API_VERSION is the Default contract version half only (e.g. 25.200.001),
-# never "Default/25.200.001". Must match target.yaml default_api when that
-# file exists (see acu config check).
+# Default contract API pin lives in committed target.yaml (default_api),
+# not here — never ACU_API_VERSION (see acu config check / --api-version).
 # Keep this file out of git (the scaffolded .gitignore already lists it;
 # encrypt at rest, e.g. .env.gpg).
 ACU_BASE_URL=http://erp.example.com/AcumaticaERP
 ACU_TENANT=
-ACU_API_VERSION=25.200.001
 ACU_USER=admin
 ACU_PASSWORD=
