@@ -12,7 +12,17 @@ import click
 import httpx
 from click.shell_completion import get_completion_class
 
-from . import bootstrap, extract, firstlogin, inventory, output, run, seed, state
+from . import (
+    bootstrap,
+    extract,
+    firstlogin,
+    inventory,
+    output,
+    reconcile,
+    run,
+    seed,
+    state,
+)
 from .client import AcumaticaClient
 from .config import (
     Instance,
@@ -1045,6 +1055,74 @@ def inventory_cmd(
         f"{f', erp={art.erp}' if art.erp else ''})"
     )
     inventory.emit(art, dest, force=force, dry_run=dry_run)
+
+
+@cli.command("reconcile")
+@click.option(
+    "--inventory",
+    "inventory_dir",
+    type=click.Path(file_okay=False, path_type=Path),
+    default=None,
+    help="Inventory tree directory (default: inventory/)",
+)
+@click.option(
+    "--config",
+    "config_dir",
+    type=click.Path(file_okay=False, path_type=Path),
+    default=None,
+    help="Optional config/ seed tree (default: config/ when present)",
+)
+@click.option(
+    "--out",
+    "out_dir",
+    type=click.Path(file_okay=False, path_type=Path),
+    default=None,
+    help="Findings output directory (default: findings/)",
+)
+@click.option("--force", is_flag=True, help="Overwrite existing findings files")
+@click.option(
+    "--dry-run",
+    is_flag=True,
+    help="Show what would be written without writing",
+)
+def reconcile_cmd(
+    inventory_dir: Path | None,
+    config_dir: Path | None,
+    out_dir: Path | None,
+    force: bool,
+    dry_run: bool,
+) -> None:
+    """Compare inventory/ to optional config/ and write findings/ (offline).
+
+    Dual-reader cross-check (V35/V36): reads an inventory tree from
+    `acu inventory` plus an optional prior-extract config/ seed tree;
+    emits FindingsBundle under --out (default findings/). Never writes
+    config/ — unmapped tables, REST gaps, rest-vs-snapshot field deltas,
+    and Usr* custom columns land in findings files only. No REST, no
+    SSH, no password. Exit 0 clean, 1 IO/parse fail; never 2 (conflicts
+    are findings, not drift). Optional snapshot_map.yaml maps DAC tables
+    to catalog entities; absent → identity match on entity name.
+    """
+    inv = (
+        inventory_dir
+        if inventory_dir is not None
+        else Path(reconcile.DEFAULT_INVENTORY)
+    )
+    if config_dir is not None:
+        cfg: Path | None = config_dir
+    else:
+        default_cfg = Path(reconcile.DEFAULT_CONFIG)
+        cfg = default_cfg if default_cfg.is_dir() else None
+    dest = out_dir if out_dir is not None else Path(reconcile.DEFAULT_OUT)
+    cfg_label = str(cfg) if cfg is not None else "(none)"
+    output.data(f"{inv} + {cfg_label} -> {dest}")
+    reconcile.run(
+        inventory_dir=inv,
+        config_dir=cfg,
+        out_dir=dest,
+        force=force,
+        dry_run=dry_run,
+    )
 
 
 @cli.command("state")
