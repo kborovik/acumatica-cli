@@ -607,9 +607,7 @@ def _probe_entity_root(
     try:
         endpoints, live_build = client.entity_root()
     except (RuntimeError, httpx.HTTPError) as exc:
-        output.data(
-            f"fail endpoints: {_format_failure(exc, target=inst.base_url)}"
-        )
+        output.data(f"fail endpoints: {_format_failure(exc, target=inst.base_url)}")
         endpoints, live_build = [], None
         ok = False
     else:

@@ -1464,9 +1464,7 @@ def test_main_maps_connect_error_to_friendly_line(
     capsys: pytest.CaptureFixture[str],
 ) -> None:
     """Transport connect → class + target + hint; never raw errno dump (V9/T123)."""
-    req = httpx.Request(
-        "GET", "https://erp.example.com/AcumaticaERP/entity/auth/login"
-    )
+    req = httpx.Request("GET", "https://erp.example.com/AcumaticaERP/entity/auth/login")
 
     def fake_list(self: TenantManager) -> list[Tenant]:
         raise httpx.ConnectError("[Errno 61] Connection refused", request=req)
@@ -1544,7 +1542,9 @@ def test_main_maps_tls_error_to_friendly_line(
 def test_format_failure_uses_explicit_target() -> None:
     req = httpx.Request("GET", "https://other.example/path")
     exc = httpx.ConnectError("refused", request=req)
-    msg = cli._format_failure(exc, target="https://erp.example.com/AcumaticaERP")
+    msg = cli._format_failure(  # pyright: ignore[reportPrivateUsage]
+        exc, target="https://erp.example.com/AcumaticaERP"
+    )
     assert msg == (
         "cannot connect to https://erp.example.com/AcumaticaERP "
         "(check ACU_BASE_URL / network / instance up)"
