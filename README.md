@@ -132,7 +132,8 @@ Dual-served entities (on both Bootstrap and Default) need an explicit `endpoint:
 | `default` | `Default/<api_version>` — tracks the resolved API version |
 | `Bootstrap/1.0.0` or `Default/25.200.001` | literal pin (ignores the resolved Default version) |
 
-`api_version` resolves as `--api-version` flag, else `target.yaml` `default_api` when present, else code default `25.200.001` (never `ACU_API_VERSION` in `.env`). Prefer symbolic `default` over a pinned `Default/25.200.001` so the seed tree travels with the dataset pin.
+`api_version` resolves as `--api-version` flag, else `target.yaml` `default_api` when present, else code default `25.200.001` (never `ACU_API_VERSION` in `.env`).
+Prefer symbolic `default` over a pinned `Default/25.200.001` so the seed tree travels with the dataset pin.
 
 ## Installation
 
@@ -154,7 +155,8 @@ Verify with `acu --version`.
 ## Configuration
 
 Everything lives in one `.env` file: *where* to apply and *who* signs in
-(`ACU_*` vars only). The Default contract API pin is **not** in `.env` — it
+(`ACU_*` vars only).
+The Default contract API pin is **not** in `.env` — it
 lives in committed `target.yaml` (`default_api`).
 
 ```sh
@@ -187,7 +189,9 @@ Worth knowing:
 
 - The file is found by walking up from the current directory, so any subdirectory of the data repo works.
 - Without a `.env`, global flags plus the process environment supply the full configuration.
-- When `ACU_SSH` is **absent**, acu defaults to `Administrator@` + the `ACU_BASE_URL` hostname. A **present blank** `ACU_SSH=` is the hosted opt-out. Only `acu tenant` requires a non-empty value post-default.
+- When `ACU_SSH` is **absent**, acu defaults to `Administrator@` + the `ACU_BASE_URL` hostname.
+  A **present blank** `ACU_SSH=` is the hosted opt-out.
+  Only `acu tenant` requires a non-empty value post-default.
 - `acu config show` prints the resolved `.env` (password excluded; never `ACU_API_VERSION`) and comments `erp` / `default_api` plus the `api_version` source when `target.yaml` is present.
 - Redirect it to turn resolved state into a working config: `acu config show > .env`.
 
