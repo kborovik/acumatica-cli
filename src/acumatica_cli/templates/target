@@ -1,6 +1,7 @@
 # scaffolded by `acu config init` — verified target matrix for this dataset.
 # Edit when you re-verify against a new ERP build or Default API generation.
-# default_api is the version half only (ACU_API_VERSION spelling), not Default/<ver>.
-# Must match ACU_API_VERSION / --api-version (default 25.200.001) or live cmds fail.
+# default_api is the sole data-repo Default contract pin (version half only,
+# never Default/<ver>). It sources Instance.api_version when --api-version is
+# absent. There is no ACU_API_VERSION env pin.
 erp: "26.101.0225"
 default_api: "25.200.001"

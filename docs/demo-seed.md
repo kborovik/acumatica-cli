@@ -13,7 +13,7 @@ Do not apply onto a half-configured company.
 ```sh
 acu config init --host erp.example.com my-erp
 cd my-erp
-# edit .env: ACU_PASSWORD, ACU_TENANT; keep ACU_API_VERSION aligned with target.yaml
+# edit .env: ACU_PASSWORD, ACU_TENANT (Default API pin = target.yaml default_api)
 
 acu config check
 acu bootstrap                 # publishes Bootstrap + features from config/bootstrap/
@@ -178,7 +178,7 @@ not in the catalog, not extracted.
 
 `endpoint: bootstrap` resolves to the active Bootstrap package version from `config/bootstrap/project.xml` (or root `bootstrap/project.xml` on legacy layout).
 
-`endpoint: default` (or omitted on Default-only entities) resolves to `Default/<ACU_API_VERSION>`.
+`endpoint: default` (or omitted on Default-only entities) resolves to `Default/<api_version>` where `api_version` comes from `--api-version`, else `target.yaml` `default_api`, else the code default.
 
 ## Non-goals
 

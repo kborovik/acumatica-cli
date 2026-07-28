@@ -21,7 +21,7 @@ uv tool install acumatica-cli
 
 acu config init --host erp.example.com my-erp
 cd my-erp                                # edit .env: set ACU_PASSWORD, ACU_TENANT
-                                         # keep ACU_API_VERSION in sync with target.yaml
+                                         # Default API pin = target.yaml default_api
                                          # start from a brand-new empty tenant
 
 acu config check                         # read-only preflight (incl. target.yaml)
@@ -31,8 +31,7 @@ acu --tenant DEV apply config/           # seed config/{bootstrap,baseline,setup
 acu --tenant DEV run scenario/           # once capital → buy → build → sell
 acu --tenant DEV diff config/            # prove zero drift (exit 2 on drift)
 acu --tenant DEV state                   # capture state/ trial-balance
-# warm: capital once-skips; Owner Capital stays 50000 (not 100000)
-acu --tenant DEV run scenario/
+acu --tenant DEV run scenario/           # replay transaction scenarios
 ```
 
 Bare `apply` / `diff` (no path args) also prefer `config/` when those trees exist.
@@ -108,7 +107,6 @@ There is no `--flavor`.
 Legacy data repos may still keep root `bootstrap/`…`master/`; bare `apply`/`diff` prefer `config/` when present and never merge both trees.
 
 Files in each directory apply alphabetically; the numbered prefixes (`10-`, `20-`, and so on) encode dependency order.
-The scaffolded `.gitignore` keeps `.env` out of git — store it encrypted (for example as `.env.gpg`) and decrypt once per clone.
 Commit `target.yaml` with the seeds so every clone knows the verified ERP line and Default API generation.
 
 Seed YAML is state: `apply` upserts it, `diff` proves it.
@@ -123,38 +121,18 @@ git diff config/                           # review extract delta before commit
 acu --tenant DEV apply config/             # replay extracted seed
 acu --tenant DEV diff config/              # expect exit 0
 ```
-
-**Migration (T115–T120 extract hard-cut):** extract no longer writes root `bootstrap/` / `baseline/` / `setup/` / `master/`.
-Paths are always `config/…`.
-There is no `--layout`.
-Move any root-layout extract output under `config/`, or re-extract into a modern data repo.
-Catalog rename: `extract_manifest.yaml` becomes `seed_catalog.yaml` (package data only; operators do not author it).
-
-Scenario YAML is different — it describes transactions that flow forward (not extractable seed).
-`acu run` executes each step in order (`put`, `action`, `wait`, `get`), captures server-assigned document numbers into `${var}` references for later steps, and checks `expect:` assertions as deltas against a pre-run snapshot, so additive scenarios re-run safely on a warm tenant.
-`once: true` scenarios declare a `present` inquire-absolute gate; when the probe already holds, the CLI prints `skip <path> (once: already present)` and runs neither steps nor expects (Owner Capital does not restack).
-
-`acu state` is the third observation path: it captures live derived state (balances) into `state/` for git review.
-It is not `extract` (config seed) and not `diff` (desired vs actual config).
-Packaged golden is trial-balance via contract `inquire:` (`EndingBalance` fixed-point); inventory-summary is not golden this pass. `gi:` stays optional when a GI is V12-verified and **Expose via OData** is on (`params` fail-closed vs `$metadata`).
-After a cold `acu run scenario/ && acu state`, warm `acu run scenario/10-seed-capital.yaml && acu state --assert-unchanged` is the once-class gate (full scenario re-run is additive and moves cash observations on the TB).
-
-**Migration (T112–T114 hard-cut):** CLI verb is `state` only (no `snapshot` alias).
-Bare defaults are `config/views/` (views) and `state/` (observations).
-Prior `config/snapshot/` and root `snapshot/` / `snapshots/` are not fallbacks — move views to `config/views/` or pass explicit path args.
-
 ### Seed `endpoint:` symbols
 
 Dual-served entities (on both Bootstrap and Default) need an explicit `endpoint:` line.
 
 | Value | Resolves to |
 | ----- | ----------- |
-| omitted | `Default/<ACU_API_VERSION>` for Default-only entities |
+| omitted | `Default/<api_version>` for Default-only entities |
 | `bootstrap` | active `Bootstrap/<ver>` from `bootstrap/project.xml` or the packaged contract |
-| `default` | `Default/<ACU_API_VERSION>` — tracks the operator API version |
-| `Bootstrap/1.0.0` or `Default/25.200.001` | literal pin (ignores `ACU_API_VERSION` for Default) |
+| `default` | `Default/<api_version>` — tracks the resolved API version |
+| `Bootstrap/1.0.0` or `Default/25.200.001` | literal pin (ignores the resolved Default version) |
 
-Prefer symbolic `default` over a pinned `Default/25.200.001` so the seed tree travels with the configured API generation.
+`api_version` resolves as `--api-version` flag, else `target.yaml` `default_api` when present, else code default `25.200.001` (never `ACU_API_VERSION` in `.env`). Prefer symbolic `default` over a pinned `Default/25.200.001` so the seed tree travels with the dataset pin.
 
 ## Installation
 
@@ -175,42 +153,42 @@ Verify with `acu --version`.
 
 ## Configuration
 
-Everything lives in one `.env` file: *where* to apply and *who* signs in.
-Three values are required; everything else has a code default matching a stock Acumatica install:
+Everything lives in one `.env` file: *where* to apply and *who* signs in
+(`ACU_*` vars only). The Default contract API pin is **not** in `.env` — it
+lives in committed `target.yaml` (`default_api`).
 
 ```sh
 ACU_BASE_URL=http://acu-dev1.vm.internal/AcumaticaERP  # required: REST root
 ACU_TENANT=LAB5                                        # sign-in name of the tenant API sessions use
 # ACU_SSH omitted → defaults to Administrator@acu-dev1.vm.internal
 # ACU_SSH=                                         # hosted opt-out (blank key)
-# ACU_SSH=jump@bastion.example                     # override when not Administrator@host
-ACU_API_VERSION=25.200.001                             # Default contract version half only
 ACU_USER=admin                                         # optional, defaults to admin
 ACU_PASSWORD=...                                       # required for live commands
 ```
 
-`ACU_API_VERSION` is the version half only (`25.200.001`), never `Default/25.200.001`.
-A full path would nest as `/entity/Default/Default/...`.
+There is no `ACU_API_VERSION` env key (unknown `ACU_*` vars are ignored).
+Ad-hoc override: `acu --api-version 24.200.001 …` (version half only, never
+`Default/25.200.001` — a full path would nest as `/entity/Default/Default/...`).
 
-The committed `target.yaml` next to `.env` declares the verified matrix (what, not where):
+The committed `target.yaml` next to `.env` declares the verified matrix (what, not where) and is the **sole data-repo Default pin**:
 
 ```yaml
-erp: "26.101.0225"           # claimed product line/build (README-level detail)
-default_api: "25.200.001"    # must match ACU_API_VERSION
+erp: "26.101.0225"           # claimed product line/build
+default_api: "25.200.001"    # sources Instance.api_version when --api-version absent
 ```
 
-When `target.yaml` is present, `apply` / `diff` / `run` / `extract` / `schema` / `bootstrap` hard-fail if `default_api` does not match the configured API version.
-`acu config check` reports the same match as a probe line.
-Missing `target.yaml` only warns on check unless you pass `--strict`.
+When `target.yaml` is present, live commands resolve `api_version` from
+`default_api` (source-merge). `acu config check` reports
+`ok target (api_version from default_api=…; erp=… claimed)`.
+Missing `target.yaml` only warns on check unless you pass `--strict` (then
+the code default `25.200.001` is used).
 
 Worth knowing:
 
 - The file is found by walking up from the current directory, so any subdirectory of the data repo works.
 - Without a `.env`, global flags plus the process environment supply the full configuration.
-- When `ACU_SSH` is **absent**, acu defaults to `Administrator@` + the `ACU_BASE_URL` hostname (SSH-box path). A **present blank** `ACU_SSH=` is the hosted / data-plane-only opt-out. Only `acu tenant` requires a non-empty value post-default.
-- Explicit `ACU_SSH` / `--ssh` always wins (jump hosts, non-Administrator users).
-- `acu config show` prints the fully resolved configuration as a complete, valid `.env` — including the derived `ACU_SSH`, password excluded.
-- When `target.yaml` is present, `config show` also comments `erp` / `default_api`.
+- When `ACU_SSH` is **absent**, acu defaults to `Administrator@` + the `ACU_BASE_URL` hostname. A **present blank** `ACU_SSH=` is the hosted opt-out. Only `acu tenant` requires a non-empty value post-default.
+- `acu config show` prints the resolved `.env` (password excluded; never `ACU_API_VERSION`) and comments `erp` / `default_api` plus the `api_version` source when `target.yaml` is present.
 - Redirect it to turn resolved state into a working config: `acu config show > .env`.
 
 Verify before touching anything live:
@@ -219,65 +197,6 @@ Verify before touching anything live:
 acu config check           # discovery, secrets, target, REST, endpoints, SSH
 acu config check --strict  # missing target.yaml becomes fail
 acu apply --dry-run        # show what would be written, write nothing
-```
-
-## Control and Data Planes
-
-`acu` talks to an instance over two independent channels:
-
-- **Control plane (SSH):** `acu tenant` runs `ac.exe -cm:CompanyConfig` and `sqlcmd` on the Windows guest — see [`docs/ac-exe.md`](docs/ac-exe.md).
-- **Data plane (REST):** `acu bootstrap`, `apply`, `diff`, `run`, `extract`, and `schema` use the contract-based API and CustomizationApi — see [`docs/rest-api.md`](docs/rest-api.md).
-
-If you never touch `acu tenant`, you never need SSH.
-On a hosted instance, publish AcuBootstrap with `acu bootstrap`, then seed with `apply`.
-`acu bootstrap --export PATH` writes the package zip for manual import on the Customization Projects screen (SM204505) when you cannot call the API.
-
-## SSH setup (control plane)
-
-`acu tenant` runs commands on the Windows guest through plain `ssh`.
-Two things about this setup are not obvious, and both are hard requirements.
-
-**1.
-The default SSH shell on the Windows guest must be PowerShell.**
-`acu` sends PowerShell syntax over the wire, and every one of those commands fails under `cmd.exe`, the Windows OpenSSH default.
-Switch it once, in an elevated PowerShell on the guest:
-
-```powershell
-New-ItemProperty -Path "HKLM:\SOFTWARE\OpenSSH" -Name DefaultShell `
-  -Value "C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe" `
-  -PropertyType String -Force
-```
-
-**2.
-Authentication must be key-based and non-interactive.**
-`acu` connects with `BatchMode=yes`, so it will never answer a password prompt.
-Because the default user is `Administrator` (an administrators-group member), Windows OpenSSH reads the key from the *machine-wide* file `C:\ProgramData\ssh\administrators_authorized_keys` — **not** from `~\.ssh\authorized_keys` like on Linux.
-On the guest:
-
-Install + start the server (once):
-
-```powershell
-Add-WindowsCapability -Online -Name OpenSSH.Server~~~~0.0.1.0
-Set-Service sshd -StartupType Automatic
-Start-Service sshd
-```
-
-Authorize your public key for administrators:
-
-```powershell
-Add-Content -Path C:\ProgramData\ssh\administrators_authorized_keys -Value "ssh-ed25519 AAAA... you@laptop"
-```
-
-The file must be readable by SYSTEM/Administrators only, or sshd ignores it:
-
-```powershell
-icacls C:\ProgramData\ssh\administrators_authorized_keys /inheritance:r /grant "Administrators:F" /grant "SYSTEM:F"
-```
-
-Then verify from your workstation — this one test proves both requirements at once (key auth works, and the shell is PowerShell):
-
-```sh
-ssh -o BatchMode=yes Administrator@acu-dev1.vm.internal '$PSVersionTable.PSVersion'
 ```
 
 ## Development
@@ -311,7 +230,7 @@ GitHub Actions re-runs the check on the tag, then publishes the GitHub release a
 
 `gmake e2e` runs the opt-in live tier against a real Acumatica instance (pytest marker `e2e`, deselected by the default suite).
 
-Configuration is one file: a decrypted `.env` at the repo root names the instance — `ACU_BASE_URL`, `ACU_TENANT`, `ACU_PASSWORD` (and optional `ACU_SSH`; omitted → `Administrator@` + base-url host).
+Configuration is one file: a decrypted `.env` at the repo root names the instance — `ACU_BASE_URL`, `ACU_TENANT`, `ACU_PASSWORD` (and optional `ACU_SSH`; omitted defaults to `Administrator@` + base-url host).
 `gmake e2e` refuses to start without it.
 
 The tier is self-contained.

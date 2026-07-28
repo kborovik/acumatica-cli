@@ -4,6 +4,12 @@
 
 ### Changed
 
+- **Default API pin from `target.yaml` (T125–T126):** `Instance.api_version`
+  resolves as `--api-version` flag, else `target.yaml` `default_api`, else
+  code default `25.200.001`. `ACU_API_VERSION` is no longer a config key
+  (ignored if present); scaffolded `.env` omits it; `acu config show` never
+  emits it. Dual-source match gate retired (source-merge). `config check`
+  reports `api_version from default_api=…` instead of a mismatch fail.
 - **`acu extract` layout hard-cut (T115–T120):** extract always writes under
   `config/{bootstrap,baseline,setup,master}/`. Root `bootstrap/`…`master/`
   emit is gone; there is no `--layout`. Re-extract into a modern data repo or
@@ -14,7 +20,8 @@
   filter-split multi-file entities.
 - Docs: README + [docs/demo-seed.md](docs/demo-seed.md) treat extract as the
   inverse of apply under `config/`; entity map mirrors the catalog; CLI help
-  documents the hard-cut.
+  documents the hard-cut. Sole data-repo Default pin = `target.yaml`
+  `default_api` (no operator `ACU_API_VERSION` pin).
 
 ### Fixed
 

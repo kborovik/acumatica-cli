@@ -112,6 +112,21 @@ raw hint — never silent skip (V12).
 `acu config check` requires a `Default` row whose `version` equals
 `Instance.api_version` (exact string).
 
+### `Instance.api_version` resolution (V27)
+
+The Default contract version half is **not** an env pin. Resolution:
+
+1. `--api-version` global flag (ad-hoc override; version half only)
+2. else data-repo `target.yaml` `default_api` when the file is present
+3. else code default `25.200.001`
+
+There is no `ACU_API_VERSION` key — unknown `ACU_*` vars are ignored.
+`acu config show` never emits `ACU_API_VERSION`; when `target.yaml` is
+present it comments `erp` / `default_api` and notes the `api_version`
+source. Dual-source match-gate (env pin must equal `default_api`) is
+retired: source-merge means a present target *is* the configured version
+unless the flag overrides.
+
 ### Live ERP build probe
 
 `target.yaml` field `erp` is the claimed dataset matrix line (V27).

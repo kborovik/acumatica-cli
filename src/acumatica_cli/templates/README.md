@@ -8,7 +8,8 @@ Tenant Factory class). Single full seed — no `--flavor`.
 ## Rebuild order
 
 ```sh
-# 1. Credentials in .env (ACU_PASSWORD, ACU_TENANT, …); keep ACU_API_VERSION in sync with target.yaml
+# 1. Credentials in .env (ACU_PASSWORD, ACU_TENANT, …)
+#    Default API pin = committed target.yaml default_api (not .env)
 acu config check
 
 # 2. Publish Bootstrap (features + contract from config/bootstrap/)
