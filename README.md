@@ -87,14 +87,15 @@ A path like `config/` expands nested seed dirs in that fixed order.
 `run` without FILES defaults to `scenario/`.
 `state` without FILES defaults to `config/views/`; writes go to `state/` (`--out`).
 `extract` always writes under `config/{bootstrap,baseline,setup,master}/` (catalog-driven; never root SEED_DIRS).
-`inventory` is offline (no REST/SSH/password): SM203520 Settings XML ZIP or `ac.exe export xml` folder → `inventory/`.
-`reconcile` is offline: compare `inventory/` to optional `config/` → `findings/` only (never writes seed).
+`inventory` is offline (no REST/SSH/password): SM203520 Settings XML ZIP or `ac.exe export xml` folder writes to `inventory/`.
+`reconcile` is offline: compare `inventory/` to optional `config/` and write `findings/` only (never writes seed).
 `acu --completion` emits a completion script for bash, zsh, or fish — source it from your shell profile.
 Run `acu <command> --help` for details on any command.
 
 ### Dual readers, one writer
 
-Two read paths, one mutator (V35). Do not confuse them with each other or with `state`:
+Two read paths, one mutator (V35).
+Do not confuse them with each other or with `state`:
 
 | Command | Plane | Input | Writes | Role |
 | ------- | ----- | ----- | ------ | ---- |
@@ -104,7 +105,9 @@ Two read paths, one mutator (V35). Do not confuse them with each other or with `
 | `state` | REST (live) | `config/views/` | `state/` | Derived balances/totals — not seed, not inventory |
 | `apply` | REST (live) | seed YAML under `config/` | tenant | **Sole** tenant writer (keyed PUT) |
 
-`inventory/` and `findings/` are engagement outputs: not SEED_DIRS, never loaded by `apply`/`diff`, not scaffolded by `config init`. Binary `.adb` snapshots are rejected (XML only). See [docs/ac-exe.md](docs/ac-exe.md) for export / SM203520 notes and [docs/demo-seed.md](docs/demo-seed.md) for the extract/state/inventory map.
+`inventory/` and `findings/` are engagement outputs: not SEED_DIRS, never loaded by `apply`/`diff`, not scaffolded by `config init`.
+Binary `.adb` snapshots are rejected (XML only).
+See [docs/ac-exe.md](docs/ac-exe.md) for export / SM203520 notes and [docs/demo-seed.md](docs/demo-seed.md) for the extract/state/inventory map.
 
 ## The data repo
 
