@@ -403,6 +403,11 @@ def test_inventory_help_documents_offline_path() -> None:
     assert "--force" in result.output
     assert "--dry-run" in result.output
     assert "inventory/" in result.output
+    # T131/V35: dual-reader vs extract (seed) vs state (balances)
+    out_l = result.output.lower()
+    assert "sm203520" in out_l or "export xml" in out_l
+    assert "not extract" in out_l or "never writes config" in out_l
+    assert "not state" in out_l or "state/" in out_l
 
 
 def test_cli_inventory_folder_to_default_out(

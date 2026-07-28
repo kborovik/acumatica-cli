@@ -64,6 +64,39 @@ Unlike `extract` / `diff`, `state` never writes seed trees, never carries `endpo
 
 **Migration (T112–T114):** CLI verb is `state` only (no `snapshot` alias). Bare defaults hard-cut to `config/views/` and `state/`. Prior `config/snapshot/` is not a fallback — move views or pass explicit paths.
 
+## Dual readers: inventory vs extract vs state
+
+Three different products — same tenant, different jobs (V35 dual-reader single-writer):
+
+| | `extract` | `inventory` | `state` |
+| - | --------- | ----------- | ------- |
+| Needs live REST | yes | **no** (offline) | yes |
+| Input | contract entities (catalog) | SM203520 Settings XML ZIP or `ac.exe export xml` folder | `config/views/*.yaml` |
+| Output | seed under `config/**` | `inventory/summary.yaml` + `tables/<Table>.yaml` | `state/<view>.yaml` |
+| Shape | seed (`entity` / `key` / `records` / `endpoint:`) | raw DAC tables (columns + rows) | observations (keys + capture cols) |
+| Apply path? | yes — inverse of `apply` | **never** | **never** |
+| Who mutates tenant | — | — | — |
+
+Sole tenant mutator remains `apply` (keyed PUT). Snapshot restore / `ac.exe import` / binary `.adb` are out of scope.
+
+```sh
+# Live seed inverse (REST)
+acu --tenant DEV extract --out . --force
+
+# Offline full-table read (artifact from SM203520 Settings export XML or ac.exe)
+acu inventory ./tenant-export.xml.zip          # or a folder from: ac.exe export xml …
+acu inventory --dry-run ./company2-export/     # would-write only
+acu reconcile                                  # inventory/ + config/ → findings/
+acu reconcile --inventory inv/ --config config/ --out findings/
+
+# Derived balances (REST observers; not inventory)
+acu --tenant DEV state
+```
+
+`reconcile` never writes `config/` (V36): unmapped tables, REST gaps, rest-vs-snapshot field deltas, and custom `Usr*` columns land under `findings/` only. When `target.yaml` is present and the artifact reports a build, `inventory` requires `erp` match (sibling of V27). `config init` does not scaffold `inventory/` or `findings/` — engagement-generated.
+
+Artifact notes and the SM203520 / `ac.exe export xml` distinction: [ac-exe.md](ac-exe.md).
+
 Default scaffold golden is **trial-balance only** (V28/V33):
 
 | Stem | Source | Capture (must be numeric money) |

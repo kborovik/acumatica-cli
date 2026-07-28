@@ -261,6 +261,9 @@ def test_reconcile_help_documents_offline() -> None:
     assert "--force" in result.output
     assert "--dry-run" in result.output
     assert "findings/" in result.output
+    # T131/V35/V36: findings only — not extract promote, not state capture
+    out_l = result.output.lower()
+    assert "never writes config" in out_l or "not extract" in out_l
 
 
 def test_cli_reconcile_defaults(

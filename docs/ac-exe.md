@@ -182,22 +182,57 @@ bypass all business logic (no defaults, validations, or side effects run,
 unlike REST). The schema header is version-coupled to the build. `import`
 is **unverified** (it mutates; test on a scratch tenant first).
 
-## Snapshots: NOT supported by ac.exe — verified finding
+### Offline dual-reader: `acu inventory` consumes this folder
+
+The `export xml` **folder** is a first-class input to `acu inventory`
+(V35/V37 dual-reader). The CLI normalizes it to one IR and writes
+`inventory/summary.yaml` + `inventory/tables/<Table>.yaml` — **not** seed
+under `config/`, never an apply path. Binary `export adb` / `.adb` files
+are **rejected** (fail-closed named error). Example:
+
+```sh
+# on the Windows box (or after scp of the folder):
+acu inventory "$env:TEMP\company2-export"
+acu inventory --dry-run ./company2-export
+acu reconcile   # optional: inventory/ + config/ → findings/ only
+```
+
+See also SM203520 Settings **XML** ZIP below (same IR after normalize).
+
+## Snapshots: NOT created/restored by ac.exe — verified finding
 
 Neither the 26.101 binary help nor the current parameter docs expose any
 snapshot save/restore operation. The Part 1 spec's assumption ("ac.exe
 creates the tenant, then load a snapshot" with a CLI flag) **does not hold**.
+`acu` never creates, restores, or imports SM203520 snapshots or `.adb`
+binaries (V35 sole mutator = REST `apply`).
+
 Options, in order of preference for this repo:
 
 1. **Reference data as code (primary)** — seed config through the REST API
    (see [rest-api.md](rest-api.md)); fully scriptable, diffable, no snapshot
-   needed for the baseline.
-2. **Snapshot via the Tenants screen (SM203520)** — supported but UI-driven
-   (create/restore/import/export). Community attempts to automate it through
-   extended endpoints invoking the screen's actions are reported unreliable
+   needed for the baseline. Live inverse = `acu extract` → `config/**`.
+2. **Offline table dump for audit / gap analysis** — either:
+   - **`ac.exe export xml` folder** (above) — preferred automation-friendly
+     artifact when you have SSH to the box; feed `acu inventory`.
+   - **SM203520 Tenants screen → Settings export as XML ZIP** — UI path:
+     export a snapshot in **XML** (not binary `.adb`). The zip carries
+     `manifest.xml` plus per-table `*.xml` in the same table-XML shape as
+     `export xml`. `acu inventory path/to/settings.xml.zip` normalizes it
+     to the same IR. Restore/import of that snapshot remains UI-only and
+     is **out of scope** for this CLI (never `ac.exe import`, never
+     SM203520 restore).
+3. **Snapshot via SM203520 as backup/restore convenience** — create/restore
+   stay UI-driven. Community attempts to automate screen actions through
+   extended endpoints are reported unreliable
    ([community thread](https://community.acumatica.com/develop-customizations-288/snapshot-automation-32047)).
-   Treat snapshots as a manual backup/restore convenience, not an automation
-   building block.
+   Do not treat restore as a GitOps building block.
+
+| Artifact | How obtained | `acu inventory` | Mutates tenant? |
+| -------- | ------------ | --------------- | --------------- |
+| `ac.exe export xml` folder | SSH / `ac.exe` on box | yes (folder path) | no (read-only export) |
+| SM203520 Settings **XML** ZIP | UI export XML | yes (zip path) | no when only exporting |
+| SM203520 / `.adb` binary | UI export binary | **no** — rejected | restore is UI-only, out of scope |
 
 The deprecated `PXInstanceHelper` API (`CreateTenant`/`LoadSnapshot`) is gone
 in current builds — do not reference it.

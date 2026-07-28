@@ -1043,7 +1043,8 @@ def inventory_cmd(
     files are skipped unless --force. When data-repo target.yaml is
     present and the artifact reports a build, erp must match or the run
     fails. Exit 0 clean, 1 parse/format/version fail; never 2 (drift is
-    not this command). Not a seed path — never writes config/ (V35).
+    not this command). Not extract (REST seed into config/), not state
+    (derived balances) — never writes config/ or state/ (V35).
     """
     art = inventory.parse_artifact(artifact)
     target = load_target()
@@ -1097,11 +1098,12 @@ def reconcile_cmd(
     Dual-reader cross-check (V35/V36): reads an inventory tree from
     `acu inventory` plus an optional prior-extract config/ seed tree;
     emits FindingsBundle under --out (default findings/). Never writes
-    config/ — unmapped tables, REST gaps, rest-vs-snapshot field deltas,
-    and Usr* custom columns land in findings files only. No REST, no
-    SSH, no password. Exit 0 clean, 1 IO/parse fail; never 2 (conflicts
-    are findings, not drift). Optional snapshot_map.yaml maps DAC tables
-    to catalog entities; absent → identity match on entity name.
+    config/ (not extract promote) and never captures state/ — unmapped
+    tables, REST gaps, rest-vs-snapshot field deltas, and Usr* custom
+    columns land in findings files only. No REST, no SSH, no password.
+    Exit 0 clean, 1 IO/parse fail; never 2 (conflicts are findings, not
+    drift). Optional snapshot_map.yaml maps DAC tables to catalog
+    entities; absent → identity match on entity name.
     """
     inv = (
         inventory_dir

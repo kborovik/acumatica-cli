@@ -70,6 +70,10 @@ acu [--tenant NAME] [--url URL] [--ssh USER@HOST] [--api-version V]
 │                                     capture derived state into state/ (not seed)
 ├── extract [--out DIR] [--only NAME]... [--force] [--dry-run]
 │                                     inverse of apply into config/{bootstrap,baseline,setup,master}/
+├── inventory [--out DIR] [--force] [--dry-run] ARTIFACT
+│                                     offline snapshot artifact → inventory/ (not seed)
+├── reconcile [--inventory DIR] [--config DIR] [--out DIR] [--force] [--dry-run]
+│                                     inventory/ + optional config/ → findings/ only
 ├── schema [--out DIR]                dump the endpoint's OpenAPI schema (swagger.json)
 │
 └── config                            configuration ops
@@ -83,8 +87,24 @@ A path like `config/` expands nested seed dirs in that fixed order.
 `run` without FILES defaults to `scenario/`.
 `state` without FILES defaults to `config/views/`; writes go to `state/` (`--out`).
 `extract` always writes under `config/{bootstrap,baseline,setup,master}/` (catalog-driven; never root SEED_DIRS).
+`inventory` is offline (no REST/SSH/password): SM203520 Settings XML ZIP or `ac.exe export xml` folder → `inventory/`.
+`reconcile` is offline: compare `inventory/` to optional `config/` → `findings/` only (never writes seed).
 `acu --completion` emits a completion script for bash, zsh, or fish — source it from your shell profile.
 Run `acu <command> --help` for details on any command.
+
+### Dual readers, one writer
+
+Two read paths, one mutator (V35). Do not confuse them with each other or with `state`:
+
+| Command | Plane | Input | Writes | Role |
+| ------- | ----- | ----- | ------ | ---- |
+| `extract` | REST (live) | tenant via contract API | `config/{bootstrap,baseline,setup,master}/` | Inverse of `apply` — seed YAML |
+| `inventory` | Offline | SM203520 Settings XML ZIP or `ac.exe export xml` folder | `inventory/` (`summary.yaml` + `tables/`) | Full-table snapshot IR — not seed |
+| `reconcile` | Offline | `inventory/` + optional `config/` | `findings/` only | Cross-check gaps/deltas — never mutates seed or tenant |
+| `state` | REST (live) | `config/views/` | `state/` | Derived balances/totals — not seed, not inventory |
+| `apply` | REST (live) | seed YAML under `config/` | tenant | **Sole** tenant writer (keyed PUT) |
+
+`inventory/` and `findings/` are engagement outputs: not SEED_DIRS, never loaded by `apply`/`diff`, not scaffolded by `config init`. Binary `.adb` snapshots are rejected (XML only). See [docs/ac-exe.md](docs/ac-exe.md) for export / SM203520 notes and [docs/demo-seed.md](docs/demo-seed.md) for the extract/state/inventory map.
 
 ## The data repo
 
@@ -101,6 +121,8 @@ There is no `--flavor`.
 | `scenario/` | lifecycle txns for `acu run`: once capital, then buy, build, sell |
 | `config/views/` | observer views for `acu state` (`inquire:` / `entity:` / `gi:`; not SEED_DIRS) |
 | `state/` | committed derived-state observations (evidence, not seed; money/qty fixed-point) |
+| `inventory/` | engagement: offline snapshot tables from `acu inventory` (not seed; not SEED_DIRS) |
+| `findings/` | engagement: `acu reconcile` cross-check output (never apply path) |
 | `target.yaml` | committed verified matrix: `erp` + `default_api` (what, not where) |
 | `.env` | where to apply and who signs in, every key an `ACU_*` variable |
 

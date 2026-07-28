@@ -2,6 +2,23 @@
 
 ## Unreleased
 
+### Added
+
+- **Dual-reader offline path (T127–T131):** `acu inventory ARTIFACT` parses an
+  SM203520 Settings **XML** ZIP (`manifest.xml` + table XML) or an
+  `ac.exe export xml` folder into `inventory/` (`summary.yaml` +
+  `tables/<Table>.yaml`). Offline — no REST, SSH, or password. Binary `.adb`
+  is rejected. When `target.yaml` is present and the artifact reports a build,
+  `erp` must match.
+- **`acu reconcile`:** offline cross-check of `inventory/` against optional
+  `config/` seed; writes `findings/` only (unmapped tables, REST gaps,
+  rest-vs-snapshot deltas, custom columns). Never writes `config/` or mutates
+  the tenant (V35/V36).
+- Docs: README CLI map + dual-reader table (inventory vs extract vs state);
+  [docs/demo-seed.md](docs/demo-seed.md) dual-reader section;
+  [docs/ac-exe.md](docs/ac-exe.md) export-xml + SM203520 Settings XML notes
+  for the inventory input path.
+
 ### Changed
 
 - **Default API pin from `target.yaml` (T125–T126):** `Instance.api_version`
