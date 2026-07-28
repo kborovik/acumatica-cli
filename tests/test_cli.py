@@ -8,6 +8,7 @@ from pathlib import Path
 from types import TracebackType
 from typing import Any
 
+import httpx
 import pytest
 import yaml
 from click.testing import CliRunner
@@ -1457,6 +1458,99 @@ def test_main_maps_runtime_error_to_one_line_and_exit_1(
     assert "x remote command failed (255)" in capsys.readouterr().err
 
 
+def test_main_maps_connect_error_to_friendly_line(
+    wired: Instance,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """Transport connect → class + target + hint; never raw errno dump (V9/T123)."""
+    req = httpx.Request(
+        "GET", "https://erp.example.com/AcumaticaERP/entity/auth/login"
+    )
+
+    def fake_list(self: TenantManager) -> list[Tenant]:
+        raise httpx.ConnectError("[Errno 61] Connection refused", request=req)
+
+    monkeypatch.setattr(TenantManager, "list", fake_list)
+    monkeypatch.setattr(sys, "argv", ["acu", "tenant", "list"])
+    monkeypatch.delenv("ACU_DEBUG", raising=False)
+
+    with pytest.raises(SystemExit) as excinfo:
+        cli.main()
+
+    assert excinfo.value.code == 1
+    err = capsys.readouterr().err
+    assert "x cannot connect to " in err
+    assert "https://erp.example.com/AcumaticaERP/entity/auth/login" in err
+    assert "ACU_BASE_URL" in err
+    assert "Connection refused" not in err
+    assert "Errno 61" not in err
+
+
+def test_main_maps_timeout_to_friendly_line(
+    wired: Instance,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    req = httpx.Request(
+        "GET", "https://erp.example.com/AcumaticaERP/entity/Default/25.200.001"
+    )
+
+    def fake_list(self: TenantManager) -> list[Tenant]:
+        raise httpx.ConnectTimeout("timed out", request=req)
+
+    monkeypatch.setattr(TenantManager, "list", fake_list)
+    monkeypatch.setattr(sys, "argv", ["acu", "tenant", "list"])
+    monkeypatch.delenv("ACU_DEBUG", raising=False)
+
+    with pytest.raises(SystemExit) as excinfo:
+        cli.main()
+
+    assert excinfo.value.code == 1
+    err = capsys.readouterr().err
+    assert "x request timed out to " in err
+    assert "entity/Default/25.200.001" in err
+    assert "ACU_BASE_URL" in err
+    assert err.count("timed out") == 1  # kind only, not raw str(exc) dump
+
+
+def test_main_maps_tls_error_to_friendly_line(
+    wired: Instance,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    req = httpx.Request("GET", "https://erp.example.com/AcumaticaERP/")
+
+    def fake_list(self: TenantManager) -> list[Tenant]:
+        raise httpx.ConnectError(
+            "[SSL: CERTIFICATE_VERIFY_FAILED] certificate verify failed",
+            request=req,
+        )
+
+    monkeypatch.setattr(TenantManager, "list", fake_list)
+    monkeypatch.setattr(sys, "argv", ["acu", "tenant", "list"])
+    monkeypatch.delenv("ACU_DEBUG", raising=False)
+
+    with pytest.raises(SystemExit) as excinfo:
+        cli.main()
+
+    assert excinfo.value.code == 1
+    err = capsys.readouterr().err
+    assert "x TLS error to https://erp.example.com/AcumaticaERP/" in err
+    assert "ACU_BASE_URL" in err
+    assert "CERTIFICATE_VERIFY_FAILED" not in err
+
+
+def test_format_failure_uses_explicit_target() -> None:
+    req = httpx.Request("GET", "https://other.example/path")
+    exc = httpx.ConnectError("refused", request=req)
+    msg = cli._format_failure(exc, target="https://erp.example.com/AcumaticaERP")
+    assert msg == (
+        "cannot connect to https://erp.example.com/AcumaticaERP "
+        "(check ACU_BASE_URL / network / instance up)"
+    )
+
+
 def test_main_reraises_under_acu_debug(
     wired: Instance, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -1468,4 +1562,20 @@ def test_main_reraises_under_acu_debug(
     monkeypatch.setenv("ACU_DEBUG", "1")
 
     with pytest.raises(RuntimeError, match="boom"):
+        cli.main()
+
+
+def test_main_reraises_transport_under_acu_debug(
+    wired: Instance, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    req = httpx.Request("GET", "https://erp.example.com/")
+
+    def fake_list(self: TenantManager) -> list[Tenant]:
+        raise httpx.ConnectError("refused", request=req)
+
+    monkeypatch.setattr(TenantManager, "list", fake_list)
+    monkeypatch.setattr(sys, "argv", ["acu", "tenant", "list"])
+    monkeypatch.setenv("ACU_DEBUG", "1")
+
+    with pytest.raises(httpx.ConnectError, match="refused"):
         cli.main()

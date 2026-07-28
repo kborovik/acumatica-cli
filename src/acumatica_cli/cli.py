@@ -155,18 +155,67 @@ def pass_instance[**P, R](f: Callable[Concatenate[Instance, P], R]) -> Callable[
     return new_func
 
 
+def _transport_target(
+    exc: httpx.TransportError, *, target: str | None = None
+) -> str | None:
+    """Prefer explicit target (e.g. Instance.base_url); else request URL."""
+    if target:
+        return target
+    request = getattr(exc, "request", None)
+    if request is not None:
+        return str(request.url)
+    return None
+
+
+def _format_transport_error(
+    exc: httpx.TransportError, *, target: str | None = None
+) -> str:
+    """Friendly one-line body for connect/timeout/TLS (V9 / T123).
+
+    Never surface raw httpx/OS dumps (e.g. ``[Errno 61] Connection refused``).
+    """
+    raw = str(exc).lower()
+    if "ssl" in raw or "certificate" in raw or "tls" in raw:
+        kind = "TLS error"
+    elif isinstance(exc, httpx.TimeoutException):
+        kind = "request timed out"
+    elif isinstance(exc, httpx.ConnectError):
+        kind = "cannot connect"
+    elif isinstance(exc, httpx.NetworkError):
+        kind = "network error"
+    else:
+        kind = "transport error"
+    where = _transport_target(exc, target=target)
+    hint = "check ACU_BASE_URL / network / instance up"
+    if where:
+        return f"{kind} to {where} ({hint})"
+    return f"{kind} ({hint})"
+
+
+def _format_failure(exc: BaseException, *, target: str | None = None) -> str:
+    """Map expected failures to one greppable error line body (V9).
+
+    Transport/network class → friendly rewrite; other RuntimeError / HTTPError
+    keep ``str(exc)`` (server ``exceptionMessage`` path unchanged).
+    """
+    if isinstance(exc, httpx.TransportError):
+        return _format_transport_error(exc, target=target)
+    return str(exc)
+
+
 def main() -> None:
     """Entry point: run the CLI, mapping expected failures to one-line errors.
 
     RuntimeError (SSH/ac.exe, REST, first-login) and httpx transport errors
     print `x message` and exit 1; ACU_DEBUG=1 re-raises for the traceback.
+    Transport/network failures use a friendly rewrite (V9), not raw dumps.
     """
     try:
         cli()
     except (RuntimeError, httpx.HTTPError) as exc:
         if os.environ.get("ACU_DEBUG"):
             raise
-        output.error(str(exc))
+        output.error(_format_failure(exc))
         raise SystemExit(1) from exc
 
 
@@ -546,7 +595,7 @@ def _probe_rest(inst: Instance, claimed_erp: str | None) -> bool:
             output.data(f"ok rest ({inst.base_url}, tenant {inst.tenant})")
             return _probe_entity_root(client, inst, claimed_erp)
     except (RuntimeError, httpx.HTTPError) as exc:
-        output.data(f"fail rest: {exc}")
+        output.data(f"fail rest: {_format_failure(exc, target=inst.base_url)}")
         return False
 
 
@@ -558,7 +607,9 @@ def _probe_entity_root(
     try:
         endpoints, live_build = client.entity_root()
     except (RuntimeError, httpx.HTTPError) as exc:
-        output.data(f"fail endpoints: {exc}")
+        output.data(
+            f"fail endpoints: {_format_failure(exc, target=inst.base_url)}"
+        )
         endpoints, live_build = [], None
         ok = False
     else:
