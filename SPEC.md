@@ -54,7 +54,7 @@ V4: idempotence — `PUT` keyed upsert is the primitive; `diff` treats source as
 V5: tenant-map — tenant create ! `AcumaticaERP` app-pool recycle after `ac.exe`; always send explicit valid `tenant`; data-plane session ! post-login landed-tenant verify, refuse on mismatch; apply that creates Company mid-session ! re-login same client before later PUTs resolving branch selectors (virgin-tenant TransitBranchID class; warm Company re-PUT re-login-safe) (closes §B.24); symptom recipe → `.spec/check-extras.md` §V.5
 V6: `AcumaticaClient` ! context manager — logout even on failure (sessions count vs license API-user cap); logout ! `Content-Length: 0` (else IIS 411)
 V7: `CompanyConfig` ! `-h` beside `-iname` + `-dbnew:"False"`; delete uses `Deleted` sub-key + full spec (`ParentID` + `CompanyType`); create presets admin via `-aun`/`-aup`/`-auc` — contract API can't clear `PasswordChangeOnNextLogin`, `Login.aspx` screen flow = fallback only
-V9: output — everything through `output.py`, no bare `print()`; stdout = data, stderr = process; ASCII-only every path; exit 0 ok, 1 error, 2 drift; once-skip line `skip <path> (once: already present)` on stdout data path (gh #19); no `--json` — plain text = machine interface; full audit recipe → `.spec/check-extras.md` §V.9
+V9: output — everything through `output.py`, no bare `print()`; stdout = data, stderr = process; ASCII-only every path; exit 0 ok, 1 error, 2 drift; once-skip line `skip <path> (once: already present)` on stdout data path (gh #19); no `--json` — plain text = machine interface; transport/network fail (connect/timeout/TLS) → one `x` line naming class + target + reachability hint (check ACU_BASE_URL / instance up), never raw httpx/OS dump; ACU_DEBUG=1 re-raises; full audit recipe → `.spec/check-extras.md` §V.9
 V10: every model inherits `models.Model` (pydantic frozen, `extra="forbid"`) — validate at boundary, unknown fields error; mechanical form: `^class .*BaseModel` outside `models.py` = violation (`.spec/scripts/check-extras.sh` scan); class w/o pydantic base = not a model, exempt
 V11: REST targets versioned path only (`Default/25.200.001`), never unversioned alias
 V12: `docs/ac-exe.md` + `docs/rest-api.md` verified vs live 26.101.0225 — trust over training data, re-verify on upgrade; dumped schema (`acu schema`) = authoritative field reference
@@ -151,6 +151,7 @@ T119|x|e2e full extract round-trip: apply → extract → apply on B → `diff c
 T120|x|docs + help + changelog: extract inverse of apply under `config/`; entity map = catalog mirror; root-emit migration note|V12,I.cmd,T115
 T121|x|extract per-row progress stdout matching apply banner (`path -> tenant on url (entity)`) + keep skip/write/would-write outcome + end summary|V9,I.cmd
 T122|x|strip `#` comments from package template YAML — scope: `src/acumatica_cli/templates/**/*.yaml` grep `^\s*#` + trailing `\s#\s`; data only; offline unit gate no-comment; narrative stays sibling gitops separate files|V28
+T123|.|friendly network/transport errors — map httpx TransportError class @ main choke → one `x` line (class + base_url + reachability hint); covers all data-plane via main (apply/diff/run/state/extract/bootstrap/config-check REST); offline unit tests connect/timeout; ACU_DEBUG still re-raises|V9,I.cmd
 
 ## §B BUGS
 

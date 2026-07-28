@@ -31,6 +31,7 @@ for granular /sdd:check runs.
 - rich auto-degrades non-TTY; no manual TTY branching outside `output.py`
 - `NO_COLOR`/`FORCE_COLOR` respected; markup/emoji/highlighting off; table box ASCII; spinner ASCII
 - expected failure = one `x` line, no traceback (`ACU_DEBUG=1` re-raises); validation error → `SystemExit("msg")`
+- transport/network class (`httpx.TransportError` + subclasses: connect/timeout/TLS) @ `main` choke → rewrite to one friendly `x` line (class + `base_url` or host + action hint: check `ACU_BASE_URL` / network / instance); never `str(exc)` dump for that class; HTTP status + Acumatica `exceptionMessage` path unchanged; `config check` rest fail lines may reuse same rewrite; `ACU_DEBUG=1` re-raises full chain
 
 ## §V.16 — option-convention recipe (extracted from SPEC.md §V.16)
 
