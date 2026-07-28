@@ -456,8 +456,8 @@ def config_group() -> None:
 @click.option(
     "--host",
     default=None,
-    help="Hostname substituted into the scaffolded .env ACU_BASE_URL/ACU_SSH "
-    "values (default: a placeholder)",
+    help="Hostname substituted into the scaffolded .env ACU_BASE_URL "
+    "(default: a placeholder); ACU_SSH is omitted and defaults from that host",
 )
 @click.argument(
     "directory", required=False, type=click.Path(file_okay=False, path_type=Path)

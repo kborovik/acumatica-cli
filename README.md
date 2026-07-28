@@ -38,11 +38,11 @@ acu --tenant DEV run scenario/
 Bare `apply` / `diff` (no path args) also prefer `config/` when those trees exist.
 See [docs/demo-seed.md](docs/demo-seed.md) for the entity map, once-guard, and apply-order notes.
 
-**Hosted Acumatica (no SSH):** the tenant already exists; leave `ACU_SSH` blank.
+**Hosted Acumatica (no SSH):** the tenant already exists; set a blank `ACU_SSH=` in `.env` (scaffold omits the key — without it, acu defaults to `Administrator@<ACU_BASE_URL host>` for SSH boxes).
 
 ```sh
 acu config init --host customer.acumatica.com my-erp
-cd my-erp                                # edit .env: ACU_TENANT, ACU_PASSWORD; ACU_SSH=
+cd my-erp                                # edit .env: ACU_TENANT, ACU_PASSWORD; add ACU_SSH=
 acu config check                         # REST preflight; ssh probe is skipped
 acu --tenant DEV bootstrap               # publish AcuBootstrap via REST only
 acu --tenant DEV apply config/
@@ -181,7 +181,9 @@ Three values are required; everything else has a code default matching a stock A
 ```sh
 ACU_BASE_URL=http://acu-dev1.vm.internal/AcumaticaERP  # required: REST root
 ACU_TENANT=LAB5                                        # sign-in name of the tenant API sessions use
-ACU_SSH=Administrator@acu-dev1.vm.internal             # optional: control-plane user@host (tenant CRUD)
+# ACU_SSH omitted → defaults to Administrator@acu-dev1.vm.internal
+# ACU_SSH=                                         # hosted opt-out (blank key)
+# ACU_SSH=jump@bastion.example                     # override when not Administrator@host
 ACU_API_VERSION=25.200.001                             # Default contract version half only
 ACU_USER=admin                                         # optional, defaults to admin
 ACU_PASSWORD=...                                       # required for live commands
@@ -205,10 +207,9 @@ Worth knowing:
 
 - The file is found by walking up from the current directory, so any subdirectory of the data repo works.
 - Without a `.env`, global flags plus the process environment supply the full configuration.
-- `ACU_SSH` is optional.
-- Leave it blank on hosted instances; only `acu tenant` needs it.
-- Nothing is derived: split-horizon DNS, port forwards, and jump hosts are all handled by writing the address you actually want into the address keys.
-- `acu config show` prints the fully resolved configuration as a complete, valid `.env` — every knob visible, the password excluded.
+- When `ACU_SSH` is **absent**, acu defaults to `Administrator@` + the `ACU_BASE_URL` hostname (SSH-box path). A **present blank** `ACU_SSH=` is the hosted / data-plane-only opt-out. Only `acu tenant` requires a non-empty value post-default.
+- Explicit `ACU_SSH` / `--ssh` always wins (jump hosts, non-Administrator users).
+- `acu config show` prints the fully resolved configuration as a complete, valid `.env` — including the derived `ACU_SSH`, password excluded.
 - When `target.yaml` is present, `config show` also comments `erp` / `default_api`.
 - Redirect it to turn resolved state into a working config: `acu config show > .env`.
 
@@ -310,7 +311,7 @@ GitHub Actions re-runs the check on the tag, then publishes the GitHub release a
 
 `gmake e2e` runs the opt-in live tier against a real Acumatica instance (pytest marker `e2e`, deselected by the default suite).
 
-Configuration is one file: a decrypted `.env` at the repo root names the instance — `ACU_BASE_URL`, `ACU_SSH`, `ACU_TENANT`, `ACU_PASSWORD`.
+Configuration is one file: a decrypted `.env` at the repo root names the instance — `ACU_BASE_URL`, `ACU_TENANT`, `ACU_PASSWORD` (and optional `ACU_SSH`; omitted → `Administrator@` + base-url host).
 `gmake e2e` refuses to start without it.
 
 The tier is self-contained.

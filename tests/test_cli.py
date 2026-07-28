@@ -427,10 +427,11 @@ def test_provision_cmd_is_gone(wired: Instance) -> None:
 def test_bootstrap_publishes_without_ssh(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    # T68/I.cmd: hosted path — ACU_SSH unset; publish is pure REST; recycle
-    # is skipped with a warning (feature slot may stay stale until restart)
+    # T68/I.cmd: hosted path — blank ACU_SSH= opt-out (T124); publish is pure
+    # REST; recycle is skipped with a warning (feature slot may stay stale)
     (tmp_path / ".env").write_text(
         "ACU_BASE_URL=http://acu.test/AcumaticaERP\n"
+        "ACU_SSH=\n"
         "ACU_TENANT=Hosted\n"
         "ACU_PASSWORD=secret\n"
     )
@@ -721,10 +722,10 @@ def test_config_init_scaffolds_data_repo(tmp_path: Path) -> None:
     target = (repo / "target.yaml").read_text()
     assert "default_api:" in target
     assert "erp:" in target
-    # --host substitutes into both scaffolded address values (I.cmd config init)
+    # --host substitutes into ACU_BASE_URL only; ACU_SSH assignment omitted (T124)
     env = (repo / ".env").read_text()
     assert "ACU_BASE_URL=http://erp.test/AcumaticaERP" in env
-    assert "ACU_SSH=Administrator@erp.test" in env
+    assert not any(ln.startswith("ACU_SSH=") for ln in env.splitlines())
     # T104/V28/V33: TB is EndingBalance-class inquire, not roster Account
     tb = (repo / "config" / "views" / "10-trial-balance.yaml").read_text()
     assert "inquire: AccountSummaryInquiry" in tb
@@ -738,14 +739,15 @@ def test_config_init_scaffolds_data_repo(tmp_path: Path) -> None:
 def test_config_init_defaults_to_cwd_with_placeholder_host(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    # I.cmd config init: <dir> optional (cwd), --host optional (placeholder)
+    # I.cmd config init: <dir> optional (cwd), --host optional (placeholder);
+    # ACU_SSH line omitted — resolve-time default from base_url host (T124)
     monkeypatch.chdir(tmp_path)
     result = CliRunner().invoke(cli.cli, ["config", "init"])
 
     assert result.exit_code == 0
     env = (tmp_path / ".env").read_text()
     assert "ACU_BASE_URL=http://erp.example.com/AcumaticaERP" in env
-    assert "ACU_SSH=Administrator@erp.example.com" in env
+    assert not any(ln.startswith("ACU_SSH=") for ln in env.splitlines())
 
 
 def test_config_init_rerun_skips_and_never_overwrites(tmp_path: Path) -> None:
@@ -790,6 +792,8 @@ def test_config_init_scaffold_round_trips(
     shown = CliRunner().invoke(cli.cli, ["config", "show"])
     assert shown.exit_code == 0
     assert "ACU_BASE_URL=http://erp.test/AcumaticaERP" in shown.output
+    # T124: scaffold omits ACU_SSH; show emits derived Administrator@host
+    assert "ACU_SSH=Administrator@erp.test" in shown.output
 
     applied = CliRunner().invoke(cli.cli, ["apply", "--dry-run"])
     assert applied.exit_code == 0, applied.output
@@ -1164,13 +1168,14 @@ def test_config_check_ssh_fail_still_probes_rest(
     assert "fail ssh: remote command failed (255)" in result.output
 
 
-def test_config_check_skips_ssh_when_unset(
+def test_config_check_skips_ssh_when_blank(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    # T67/I.cmd: ACU_SSH optional — unset → skip ssh line, never fail; REST
-    # still probed; exit 0 when non-skipped probes pass
+    # T124/I.cmd: blank ACU_SSH= hosted opt-out → skip ssh line, never fail;
+    # REST still probed; exit 0 when non-skipped probes pass
     (tmp_path / ".env").write_text(
         "ACU_BASE_URL=http://acu.test/AcumaticaERP\n"
+        "ACU_SSH=\n"
         "ACU_TENANT=T1\n"
         "ACU_PASSWORD=secret\n"
     )
@@ -1195,9 +1200,10 @@ def test_config_check_skips_ssh_when_unset(
 def test_tenant_list_fails_without_ssh(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    # T67/I.cmd: tenant cmds hard-error naming ACU_SSH before any remote
+    # T124/I.cmd: blank ACU_SSH= → empty post-default; tenant cmds hard-error
+    # naming ACU_SSH before any remote
     (tmp_path / ".env").write_text(
-        "ACU_BASE_URL=http://acu.test/AcumaticaERP\nACU_PASSWORD=secret\n"
+        "ACU_BASE_URL=http://acu.test/AcumaticaERP\nACU_SSH=\nACU_PASSWORD=secret\n"
     )
     monkeypatch.chdir(tmp_path)
 

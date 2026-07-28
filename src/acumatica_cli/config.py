@@ -6,15 +6,18 @@ up from cwd) carrying where + secrets as ``ACU_*`` vars. The file is
 optional - flags plus the process environment can supply the full config.
 Per key the first set value wins: flag, ``ACU_*`` var (process environment
 over a found ``.env``), code default. ``base_url`` is the only required
-address (REST data plane); ``ssh`` is optional control-plane address
-(empty = data-plane only; tenant cmds hard-error when unresolved — V1/V3).
-The password must resolve via ``--password`` or ``ACU_PASSWORD``.
+address (REST data plane). ``ssh`` defaults to ``Administrator@`` + the
+``base_url`` hostname when the key is absent (V3/T124); a present blank
+key is the hosted opt-out (empty = data-plane only; tenant cmds hard-error
+when empty post-default — V1/V3). The password must resolve via
+``--password`` or ``ACU_PASSWORD``.
 """
 
 from collections.abc import Iterator, Mapping
 from importlib import resources
 from pathlib import Path
 from typing import Any
+from urllib.parse import urlparse
 
 from pydantic import ValidationError, field_validator, model_validator
 from pydantic_settings import BaseSettings, DotEnvSettingsSource, SettingsConfigDict
@@ -22,6 +25,7 @@ from pydantic_settings import BaseSettings, DotEnvSettingsSource, SettingsConfig
 from .models import validation_summary
 
 PLACEHOLDER_HOST = "erp.example.com"
+DEFAULT_SSH_USER = "Administrator"
 
 ACU_INSTANCE_NAME = "AcumaticaERP"  # ac.exe -iname; IIS app-pool name
 ACU_INSTANCE_PATH = "C:\\Acumatica\\AcumaticaERP"  # ac.exe -h
@@ -124,13 +128,26 @@ INIT_TEMPLATES = (
 )
 
 
+def default_ssh_for_base_url(base_url: str | None) -> str:
+    """``Administrator@<hostname>`` from a REST root, or empty when unparseable.
+
+    T124/V3 code default when ``ACU_SSH`` is absent. Blank key stays empty
+    (hosted opt-out) and never calls this.
+    """
+    if not base_url:
+        return ""
+    host = urlparse(base_url).hostname
+    return f"{DEFAULT_SSH_USER}@{host}" if host else ""
+
+
 class Instance(BaseSettings):
     """The resolved target: flags over ACU_* vars (.env or process) over defaults.
 
-    Explicit addresses, no derivation (V1): ``base_url`` is the REST root
-    (scheme + host + site path); ``ssh`` is the optional control-plane
-    ``user@host`` (empty = data-plane only). Install-layout values are
-    module constants, not fields. Unknown ``ACU_*`` vars are ignored,
+    ``base_url`` is the REST root (scheme + host + site path). ``ssh`` is the
+    control-plane ``user@host``: flag/env when the key is present win
+    (including blank = hosted/data-plane only); key absent → code default
+    ``Administrator@`` + base_url hostname (V3/T124). Install-layout values
+    are module constants, not fields. Unknown ``ACU_*`` vars are ignored,
     never errors - the environment and ``.env`` legitimately carry
     non-config vars (``ACU_DEBUG``).
     """
@@ -142,7 +159,7 @@ class Instance(BaseSettings):
     )
 
     base_url: str  # REST root: scheme + host + site path
-    ssh: str = ""  # control plane: full user@host; empty = data-plane only
+    ssh: str = ""  # control plane: full user@host; empty post-default = data-plane only
     tenant: str = ""
     api_version: str = "25.200.001"  # V11: /entity/Default/<api_version>/
     user: str = "admin"  # ACU_USER; the --username flag maps here
@@ -152,13 +169,15 @@ class Instance(BaseSettings):
 
     @model_validator(mode="before")
     @classmethod
-    def _blank_required_is_unset(cls, data: Any) -> Any:
-        # blank ACU_BASE_URL= / ACU_SSH= reads as unset (V3): base_url then
-        # fails required; ssh falls through to the empty default (optional)
+    def _blank_required_and_ssh_default(cls, data: Any) -> Any:
+        # blank ACU_BASE_URL= reads as unset (V3): base_url then fails required.
+        # ACU_SSH: key absent → Administrator@<base_url host>; key present blank
+        # stays empty (hosted opt-out) — do not strip blank ssh (T124).
         if isinstance(data, dict):
-            for key in ("base_url", "ssh"):
-                if data.get(key) == "":
-                    del data[key]
+            if data.get("base_url") == "":
+                del data["base_url"]
+            if "ssh" not in data:
+                data["ssh"] = default_ssh_for_base_url(data.get("base_url"))
         return data
 
     @field_validator("base_url")
@@ -188,11 +207,12 @@ def scaffold(directory: Path, host: str | None = None) -> Iterator[tuple[str, Pa
     """Write the data-repo template set into ``directory``, never overwriting.
 
     Yields ("write" | "skip", path) per template file. ``host`` replaces the
-    placeholder host inside the scaffolded .env ``ACU_BASE_URL``/``ACU_SSH``
-    values; secrets stay placeholders (V2). Single full seed under
-    ``config/`` + lifecycle ``scenario/`` (V28/T108; no flavor). The
-    directory is created if absent. No git init, no gpg - version control
-    and secret encryption stay the operator's call.
+    placeholder host inside the scaffolded .env ``ACU_BASE_URL`` only
+    (``ACU_SSH`` is omitted — defaults from the base_url host at resolve;
+    hosted opt-out = present blank ``ACU_SSH=``). Secrets stay placeholders
+    (V2). Single full seed under ``config/`` + lifecycle ``scenario/``
+    (V28/T108; no flavor). The directory is created if absent. No git init,
+    no gpg - version control and secret encryption stay the operator's call.
     """
     pkg = resources.files("acumatica_cli") / "templates"
     directory.mkdir(parents=True, exist_ok=True)
@@ -259,8 +279,9 @@ def load_instance(overrides: Mapping[str, str | None] | None = None) -> Instance
     per key the first set value wins (flag, ACU_* var - process environment
     over a found .env - code default). No .env is fine (V3): the hard error
     comes only when a required value (base_url, password) is still
-    unresolved after the merge, naming the missing key. ``ssh`` is optional
-    (hosted / data-plane-only path); tenant cmds hard-error when it is empty.
+    unresolved after the merge, naming the missing key. ``ssh`` defaults
+    from the base_url host when the key is absent; blank key = hosted path;
+    tenant cmds hard-error when empty post-default.
     """
     flags = {k: v for k, v in dict(overrides or {}).items() if v is not None}
     root = find_data_root()

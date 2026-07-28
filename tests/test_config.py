@@ -42,8 +42,8 @@ def data_root(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
 
 
 def test_minimal_env_resolves_code_defaults(data_root: Path) -> None:
-    # ACU_BASE_URL + ACU_PASSWORD are required; ACU_SSH optional (V3);
-    # the rest are code defaults (I.cfg); install layout = constants, not fields
+    # ACU_BASE_URL + ACU_PASSWORD are required; ACU_SSH may be explicit or
+    # defaulted from base_url host (V3/T124); install layout = constants
     inst = load_instance()
     assert inst.base_url == "http://acu.test/AcumaticaERP"
     assert inst.ssh == "Administrator@acu.test"
@@ -174,24 +174,50 @@ def test_blank_required_key_reads_as_missing(data_root: Path) -> None:
         load_instance()
 
 
-def test_missing_ssh_data_plane_resolves(data_root: Path) -> None:
-    # T67/V3: hosted path — base_url + password alone resolve; ssh defaults empty
+def test_missing_ssh_defaults_from_base_url_host(data_root: Path) -> None:
+    # T124/V3: key absent → Administrator@<ACU_BASE_URL host>; data-plane ok
     (data_root / ".env").write_text(
         "ACU_BASE_URL=http://acu.test/AcumaticaERP\nACU_PASSWORD=secret\n"
     )
     inst = load_instance()
     assert inst.base_url == "http://acu.test/AcumaticaERP"
-    assert inst.ssh == ""
+    assert inst.ssh == "Administrator@acu.test"
     assert inst.password == "secret"
 
 
-def test_blank_ssh_reads_as_unset(data_root: Path) -> None:
-    # T67/V3: blank ACU_SSH= is unset (empty default), not a required-field error
+def test_blank_ssh_is_hosted_opt_out(data_root: Path) -> None:
+    # T124/V3: key present blank → empty (hosted/data-plane only), not the
+    # Administrator@ host default; not a required-field error
     (data_root / ".env").write_text(
         "ACU_BASE_URL=http://acu.test/AcumaticaERP\nACU_SSH=\nACU_PASSWORD=secret\n"
     )
     inst = load_instance()
     assert inst.ssh == ""
+
+
+def test_flags_only_ssh_defaults_from_base_url(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # T124/V3: no .env, no ACU_SSH flag/env → default from flag base_url host
+    monkeypatch.chdir(tmp_path)
+    inst = load_instance(
+        {
+            "base_url": "https://edge.example:8443/AcumaticaERP",
+            "password": "flagpw",
+        }
+    )
+    assert inst.ssh == "Administrator@edge.example"
+
+
+def test_explicit_ssh_beats_default(data_root: Path) -> None:
+    # T124: flag/env explicit wins over the Administrator@ host default
+    (data_root / ".env").write_text(
+        "ACU_BASE_URL=http://acu.test/AcumaticaERP\n"
+        "ACU_SSH=jump@bastion.example\n"
+        "ACU_PASSWORD=secret\n"
+    )
+    inst = load_instance()
+    assert inst.ssh == "jump@bastion.example"
 
 
 def test_unknown_acu_vars_are_ignored(

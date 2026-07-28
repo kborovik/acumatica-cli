@@ -152,7 +152,7 @@ T120|x|docs + help + changelog: extract inverse of apply under `config/`; entity
 T121|x|extract per-row progress stdout matching apply banner (`path -> tenant on url (entity)`) + keep skip/write/would-write outcome + end summary|V9,I.cmd
 T122|x|strip `#` comments from package template YAML — scope: `src/acumatica_cli/templates/**/*.yaml` grep `^\s*#` + trailing `\s#\s`; data only; offline unit gate no-comment; narrative stays sibling gitops separate files|V28
 T123|x|friendly network/transport errors — map httpx TransportError class @ main choke → one `x` line (class + base_url + reachability hint); covers all data-plane via main (apply/diff/run/state/extract/bootstrap/config-check REST); offline unit tests connect/timeout; ACU_DEBUG still re-raises|V9,I.cmd
-T124|.|default ACU_SSH from ACU_BASE_URL host — `Administrator@<hostname>` when key absent; blank key = hosted opt-out; drop ACU_SSH from scaffold env; docs + tests + check-extras V3; verify make check|V3,I.cfg,I.cmd
+T124|x|default ACU_SSH from ACU_BASE_URL host — `Administrator@<hostname>` when key absent; blank key = hosted opt-out; drop ACU_SSH from scaffold env; docs + tests + check-extras V3; verify make check|V3,I.cfg,I.cmd
 
 ## §B BUGS
 
