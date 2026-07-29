@@ -157,7 +157,7 @@ class TableMapEntry(Model):
             if isinstance(target, dict):
                 raise ValueError(
                     f"keys/fields/resolves/enums[{s!r}]: expected string value "
-                    "(use resolves: for FK names; enums: for label→code tables)"
+                    "(use resolves: for FK names; enums: for label->code tables)"
                 )
             i = str(target).strip()
             if not s or not i:
