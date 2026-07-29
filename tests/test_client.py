@@ -180,7 +180,10 @@ def test_tenant_guard_refuses_mismatch_and_logs_out(instance: Instance) -> None:
     # wrong-tenant write or a false-green diff.
     recorder = Recorder({}, landed="Company")
     with (
-        pytest.raises(RuntimeError, match=r"asked for tenant 'T1'.*'Company'"),
+        pytest.raises(
+            RuntimeError,
+            match=r"asked for tenant 'T1'.*'Company'.*acu tenant recycle",
+        ),
         _client(instance, recorder),
     ):
         pytest.fail("session should have been refused on tenant mismatch")

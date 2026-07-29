@@ -95,8 +95,10 @@ More verified quirks:
   `AcumaticaERP` app-pool recycle after CompanyConfig fixes it (**verified
   2026-07-08**: `Restart-WebAppPool -Name AcumaticaERP` made tenant 3 appear
   on the sign-in page and route over REST). `acu tenant create` must run this
-  recycle itself after `ac.exe` returns. See `rest-api.md` for the
-  tenant-selection foot-gun that skipping the recycle causes.
+  recycle itself after `ac.exe` returns. Operators can also run
+  `acu tenant recycle` alone (same SSH pool restart; no tenant `--id`). See
+  `rest-api.md` for the tenant-selection foot-gun that skipping the recycle
+  causes.
 - Without the `-aup` admin-preset flags above, a newly created clean tenant
   seeds `admin` with password `setup` and `PasswordChangeOnNextLogin = 1`,
   which the contract REST endpoint can't clear (**verified 2026-07-08** — see

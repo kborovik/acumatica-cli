@@ -207,7 +207,9 @@ Verified quirks:
   startup. Recycling the `AcumaticaERP` app pool
   (`Restart-WebAppPool -Name AcumaticaERP`) fixed it: the tenant then appears
   on the sign-in page and routes over REST. `acu tenant create` must perform
-  this recycle itself after `ac.exe` returns.
+  this recycle itself after `ac.exe` returns. Standalone operator path:
+  `acu tenant recycle` (site-wide; kills all sessions and frees concurrent
+  API-user license slots as a side effect).
 - **First-login password change is a bootstrap step the contract API can't do
   (verified 2026-07-08).** A freshly created clean tenant seeds `admin` /
   **`setup`** with `PasswordChangeOnNextLogin = 1` (in `dbo.Users`). The

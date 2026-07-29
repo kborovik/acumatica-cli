@@ -60,7 +60,8 @@ acu [--tenant NAME] [--url URL] [--ssh USER@HOST] [--api-version V]
 │   ├── list                          CompanyID, sign-in name, internal CD, type
 │   ├── create --id N --login NAME    create + bootstrap; re-run to republish (SSH)
 │   │          [--type SalesDemo|T100|U100] [--parent N] [--hidden] [--no-init]
-│   └── delete --id N [--yes]         delete the tenant and its data, recycle app pool
+│   ├── delete --id N [--yes]         delete the tenant and its data, recycle app pool
+│   └── recycle [--yes]               restart site app pool (tenant map + free API slots)
 │
 ├── bootstrap [--export PATH]         publish AcuBootstrap (REST); --export = offline zip
 ├── apply [--dry-run] [FILES...]      push YAML via REST (idempotent PUT upserts)

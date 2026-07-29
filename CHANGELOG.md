@@ -4,6 +4,11 @@
 
 ### Added
 
+- **`acu tenant recycle` (T142–T144):** site-wide IIS app-pool restart over SSH
+  (`Restart-WebAppPool`). Reloads the tenant map (V5) and drops every session
+  so concurrent API-user license slots free up. Confirm prompt; `--yes` skips.
+  Empty `ACU_SSH` hard-errors like other tenant cmds. Landed-tenant mismatch
+  errors now point at `acu tenant recycle`.
 - **Dual-reader offline path (T127–T131):** `acu inventory ARTIFACT` parses an
   SM203520 Settings **XML** ZIP (`manifest.xml` + table XML) or an
   `ac.exe export xml` folder into `inventory/` (`summary.yaml` +

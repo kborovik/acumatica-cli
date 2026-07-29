@@ -224,7 +224,7 @@ class AcumaticaClient:
                 f"tenant guard: asked for tenant {self.instance.tenant!r} "
                 f"but the session landed on {landed!r} - the instance "
                 "tenant map is stale or the tenant does not exist; check "
-                "acu tenant list and recycle the app pool"
+                "acu tenant list and run acu tenant recycle"
             )
 
     def relogin(self) -> None:
