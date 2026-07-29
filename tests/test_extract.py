@@ -1257,8 +1257,8 @@ def test_catalog_role_user_membership_rows() -> None:
     assert files.index(role.file) < files.index(user.file)
 
 
-def test_package_role_user_templates_custom_only() -> None:
-    """T146: package templates seed custom roles only — never system roles."""
+def test_package_role_user_templates_prebuild_roles() -> None:
+    """T146: package roles = full pre-build set; soadmin membership on SO Admin."""
     root = Path(__file__).resolve().parents[1] / "src" / "acumatica_cli" / "templates"
     roles = seed.load_baseline(root / "config/master/90-roles.yaml")
     users = seed.load_baseline(root / "config/master/91-users.yaml")
@@ -1268,9 +1268,16 @@ def test_package_role_user_templates_custom_only() -> None:
     # load_baseline resolves symbolic bootstrap → Bootstrap/<version>
     assert roles.endpoint == seed.BOOTSTRAP_ENDPOINT
     role_names = {r["Rolename"] for r in roles.records}
-    assert role_names == {"SO Admin"}
-    system = {"Administrator", "Customizer", "Anonymous", "Guest"}
-    assert not (role_names & system)
+    # Pre-build CompanyID=1 surface (live 26.101): system + module roles
+    assert {"Administrator", "Customizer", "Anonymous", "Guest", "SO Admin"} <= (
+        role_names
+    )
+    assert len(roles.records) >= 100
+    # Sorted by Rolename; Descr present on product roles
+    names = [r["Rolename"] for r in roles.records]
+    assert names == sorted(names)
+    so = next(r for r in roles.records if r["Rolename"] == "SO Admin")
+    assert so["Descr"] == "Full access to SO functions and settings"
     assert users.entity == "User"
     assert users.detail_keys == {"Roles": "Rolename"}
     assert {r["Username"] for r in users.records} == {"soadmin"}

@@ -2,5 +2,213 @@ entity: Role
 key: Rolename
 endpoint: bootstrap
 records:
+- Rolename: AI Assistant User
+  Descr: A user that can access the AI Assistant Service
+- Rolename: AP Admin
+  Descr: Access to AP functions and settings
+- Rolename: AP Clerk
+  Descr: Access to AP functions
+- Rolename: AP Viewer
+  Descr: Read-only access to AP functions
+- Rolename: AR Admin
+  Descr: Access to AR functions and settings
+- Rolename: AR Clerk
+  Descr: Access to AR functions
+- Rolename: AR Viewer
+  Descr: Read-only access to AR functions
+- Rolename: AcumaticaSupport
+  Descr: Role for Acumatica Support. Access similar to Administrator except for User Management, Security Settings and Access Management.
+- Rolename: Administrator
+  Descr: System Administrator
+- Rolename: Anonymous
+  Descr: Anonymous
+- Rolename: Archivist
+  Descr: Archive Manager
+- Rolename: BI
+  Descr: Access to Business Intelligence Views
+- Rolename: BusinessDateOverride
+  Descr: Business Date Override
+- Rolename: CA Admin
+  Descr: Access to CA functions and settings
+- Rolename: CA Clerk
+  Descr: Access to CA functions
+- Rolename: CA Viewer
+  Descr: Read-only access to CA functions
+- Rolename: CM Admin
+  Descr: Access to CM functions and settings
+- Rolename: CM Viewer
+  Descr: Read-only access to CM functions
+- Rolename: CR Marketing Manager
+  Descr: Access to Marketing functions and settings
+- Rolename: CR Sales & Marketing Admin
+  Descr: Full access to  Sales and Marketing functions and settings
+- Rolename: CR Sales Representative
+  Descr: Access to Sales functions and settings
+- Rolename: CR Support Admin
+  Descr: Full access to Support functionality and settings
+- Rolename: CR Support Representative
+  Descr: Access to Support functionality and settings
+- Rolename: CR Viewer
+  Descr: Read-only access to marketing, sales and support forms
+- Rolename: CS Admin
+  Descr: Access to system functions and configuration items
+- Rolename: Customer Data Manager
+  Descr: Full access to data entry forms related to customers
+- Rolename: Customer Portal Case Manager
+  Descr: Access to support cases
+- Rolename: Customer Portal Company Manager
+  Descr: Access to manage company-level settings through the Company Profile screen, including company details and payment methods
+- Rolename: Customer Portal Contact Manager
+  Descr: Access to company contacts and their portal access through the Company Profile screen, including adding, updating, deactivating contacts and managing portal roles
+- Rolename: Customer Portal Financial Manager
+  Descr: Access to financial information, including invoices, balances, statements, and payments
+- Rolename: Customer Portal Manager
+  Descr: Full access for managing orders, cases, and financial documents
+- Rolename: Customer Portal Order Manager
+  Descr: Access to the cart, catalog, and orders
+- Rolename: Customizer
+  Descr: Customizer
+- Rolename: DR Admin
+  Descr: Access to DR functions and settings
+- Rolename: DR Viewer
+  Descr: Read-only access to DR functions
+- Rolename: DashboardDesigner
+  Descr: Dashboard Designer
+- Rolename: Data Privacy Controller
+  Descr: Data Privacy Controller
+- Rolename: ESign
+  Descr: Access to eSign Central and eSign Sync
+- Rolename: FA Admin
+  Descr: Access to FA functions and settings
+- Rolename: FA Clerk
+  Descr: Access to FA functions
+- Rolename: FA Viewer
+  Descr: Read-only access to FA functions
+- Rolename: Field-Level Audit
+  Descr: Role that can access Field-Level Audit
+- Rolename: Financial Supervisor
+  Descr: Financial Supervisor
+- Rolename: GL Admin
+  Descr: Access to GL functions and settings
+- Rolename: GL Clerk
+  Descr: Access to GL functions
+- Rolename: GL Viewer
+  Descr: Read-only access to GL functions
+- Rolename: Guest
+  Descr: External Guest Role
+- Rolename: IN Admin
+  Descr: Full access to IN functions and settings
+- Rolename: IN Clerk
+  Descr: Limited access to IN functions related to warehouse stock management
+- Rolename: IN Manager
+  Descr: Full access to IN functions
+- Rolename: IN Receiver
+  Descr: Access to IN functions related to receiving goods
+- Rolename: IN Shipper
+  Descr: Access to IN functions related to shipping goods
+- Rolename: IN Viewer
+  Descr: Read-only access to IN functions
+- Rolename: Internal Employee
+  Descr: Access to tasks and events, time card, expense receipts and claims, personal settings, and Help
+- Rolename: Internal User
+  Descr: Allows the user to change personal  settings, and view Help
+- Rolename: Inventory Data Manager
+  Descr: Full access to data entry forms related to inventory items
+- Rolename: LLM Prompt Engineer
+  Descr: Authorization to create LLM Prompts
+- Rolename: LLM Security Expert
+  Descr: Authorization to create LLM System Instructions
+- Rolename: MFG Admin
+  Descr: Access to all Manufacturing Module Settings
+- Rolename: MFG Cost Accountant
+  Descr: Manufacturing Cost Accountant
+- Rolename: MFG Engineer
+  Descr: Manufacturing Engineer
+- Rolename: MFG Engineering MGR
+  Descr: Manufacturing Engineering Manager
+- Rolename: MFG Planner
+  Descr: Manufacturing Planner
+- Rolename: MFG Planning MGR
+  Descr: Manufacturing Planning Manager
+- Rolename: MFG Production MGR
+  Descr: Manufacturing Production Manager
+- Rolename: MFG Sales Engineer
+  Descr: Manufacturing Sales Engineer
+- Rolename: MFG Scheduler
+  Descr: Manufacturing Scheduler
+- Rolename: MFG Scheduling MGR
+  Descr: Manufacturing Scheduling Manager
+- Rolename: MFG Shop Floor
+  Descr: Manufacturing Shop floor employee
+- Rolename: MFG Viewer
+  Descr: View Production Order Information Only
+- Rolename: MFG Warehouse
+  Descr: Manufacturing Warehouse
+- Rolename: ODatav4 User
+  Descr: Access to data exposed via DAC-based OData
+- Rolename: PDF Annotator
+  Descr: Access to PDF annotation
+- Rolename: PJ Admin
+  Descr: Access to construction management settings
+- Rolename: PM Admin
+  Descr: Access to project management settings
+- Rolename: PM Financial Controller
+  Descr: Access to project-related financial analytics
+- Rolename: PM Operations Manager
+  Descr: Access to project management analytics
+- Rolename: PM Project Manager
+  Descr: Access to project management functions and analytics
+- Rolename: PM Project Manager Assistant
+  Descr: Access to project administration functions and analytics
+- Rolename: PM Superintendent
+  Descr: Access to project site-related functions
+- Rolename: PM Viewer
+  Descr: Read-only access to projects
+- Rolename: PO Admin
+  Descr: Full access to PO functions and settings
+- Rolename: PO Buyer
+  Descr: Full access to PO functions related to orders and replenishment
+- Rolename: PO Clerk
+  Descr: Limited access to PO functions related to orders
+- Rolename: PO Manager
+  Descr: Full access to PO functions
+- Rolename: PO Viewer
+  Descr: Read-only access to PO functions
+- Rolename: PR Admin
+  Descr: Access to all PR functions and settings
+- Rolename: PR Clerk
+  Descr: Access to data entry PR functions and read-only access to PR settings
+- Rolename: PR Manager
+  Descr: Access to all PR functions and read-only access to PR settings
+- Rolename: PR Viewer
+  Descr: Read-Only access to all PR functions
+- Rolename: Portal Admin
+  Descr: Access to portal configuration
+- Rolename: Portal User
+  Descr: Portal user
+- Rolename: Project Accountant
+  Descr: Project Accountant
+- Rolename: ReportDesigner
+  Descr: Report Designer
+- Rolename: SFK App Access
+  Descr: Shop Floor Kiosk App Access
+- Rolename: SFK User
+  Descr: Shop Floor Kiosk User
 - Rolename: SO Admin
-  Descr: Sales order administration
+  Descr: Full access to SO functions and settings
+- Rolename: SO Clerk
+  Descr: Limited access to SO functions
+- Rolename: SO Manager
+  Descr: Full access to SO functions
+- Rolename: SO Viewer
+  Descr: Read-only access to SO functions
+- Rolename: TX Admin
+  Descr: Access to TX functions and settings
+- Rolename: TX Viewer
+  Descr: Read-only access to TX functions
+- Rolename: Vendor Data Manager
+  Descr: Full access to data entry forms related to vendors
+- Rolename: Wiki Admin
+  Descr: Wiki Administrator to set other users access rights to Wiki
+- Rolename: Wiki Author
+  Descr: Role provides access rights for creating Wiki articles

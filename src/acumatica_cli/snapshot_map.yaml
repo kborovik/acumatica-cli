@@ -169,8 +169,8 @@ tables:
   # T146 Role/User (+ membership detail). Tables from SM201005/SM201010 /
   # UsersInRoles inventory; entity names = Bootstrap contract (T145).
   # Membership is not a top-level seed entity — UsersInRoles joins to User
-  # (detail Roles); header Roles/Users map 1:1. Built-in system roles stay
-  # out of package seed templates (V34/T146).
+  # (detail Roles); header Roles/Users map 1:1. Package 90-roles = full
+  # pre-build CompanyID=1 role set.
   - table: Roles
     entity: Role
   - table: Users

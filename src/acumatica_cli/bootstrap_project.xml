@@ -33,8 +33,9 @@
 
   T145 Role/User (gh #24) - Default endpoint has no Role/User surface:
   - Role SM201005 -> RoleAccess, PrimaryView Roles (PX.SM.Roles):
-    key Rolename; Descr for display. Built-in system roles stay out of
-    mutable seed (Administrator, Customizer, …) - author custom roles only.
+    key Rolename; Descr for display. Package template 90-roles seeds the
+    full pre-build CompanyID=1 role set (system + module roles from live
+    dump) so apply/diff matches a virgin tenant role surface.
   - User SM201010 -> Access, PrimaryView UserList (PX.SM.Users): key
     Username; identity FirstName/LastName/Email + IsApproved +
     PasswordNeverExpires + PasswordChangeOnNextLogin; Password write-only

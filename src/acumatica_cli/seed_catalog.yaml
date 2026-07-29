@@ -436,8 +436,8 @@ entities:
 
 # config/master/ Role then User (V22 prefixes; T145/T146/T148). Bootstrap
 # only — Default has no Role/User surface. Membership = User detail Roles
-# (UserRole/AllowedRoles). Package templates author custom roles only —
-# never re-seed built-in system roles (Administrator, Customizer, …).
+# (UserRole/AllowedRoles). Package 90-roles = full pre-build CompanyID=1
+# Roles dump (system + module roles; live 26.x); 91-users demo soadmin.
 # Password is write-only on apply (V39/T147): include omits Password so
 # extract never emits hashes (b64__Password also out of include).
 
