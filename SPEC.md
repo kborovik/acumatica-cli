@@ -146,7 +146,7 @@ T138|x|M4 extend PostingClass *AcctID/*SubID + CashAccount Account/Sub/Branch + 
 T139|x|offline unit tests: enum Usage/bool/Type + PostingClass FK resolve + decimal trailing-zero norm; package map asserts; existing reconcile tests green|V13,V38,T137,T138
 T140|x|docs/changelog/help: enums layer on snapshot_map; package defaults cover LAB5 high-churn enums + PostingClass|V12,I.data,T137,T138
 T141|x|tenant list banner hostname-only + offline assert (no full URL in title)|V9,I.cmd,B27
-T142|.|`acu tenant recycle` CLI — wire TenantManager.recycle_app_pool; confirm + --yes; V15 verb map + help; stdout progress; exit 0/1|V1,V5,V6,V9,V15,V16,I.cmd
+T142|x|`acu tenant recycle` CLI — wire TenantManager.recycle_app_pool; confirm + --yes; V15 verb map + help; stdout progress; exit 0/1|V1,V5,V6,V9,V15,V16,I.cmd
 T143|.|offline tests: recycle invokes Restart-WebAppPool; empty ACU_SSH hard error; confirm/--yes; no REST|V13,V1,T142
 T144|.|docs + client mismatch hint → `acu tenant recycle`; changelog|V12,T142
 

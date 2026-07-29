@@ -61,7 +61,7 @@ for granular /sdd:check runs.
 
 ## §V.15 — cmd-grammar verb map (extracted from SPEC.md §V.15)
 
-- `tenant` = control plane resource; `create` alone chains a data-plane bootstrap publish after the SSH create — §V.1 module split intact
+- `tenant` = control plane resource; verbs `list|create|delete|recycle`; `create` alone chains a data-plane bootstrap publish after the SSH create — §V.1 module split intact; `recycle` = site-wide app-pool restart only (no REST, no `--id`)
 - `bootstrap` = data plane verb: publish AcuBootstrap (`/CustomizationApi`); optional post-publish recycle when `ACU_SSH` set; `--export` local-only zip write (no REST, no SSH)
 - `config` = configuration ops: `init` local write, `show` local read, `check` live read-only preflight
 - `inventory` = offline dual-reader verb: SnapshotArtifact → `inventory/` summary+tables; no REST/SSH/password (V35/V37); never seed/apply/`config/` write

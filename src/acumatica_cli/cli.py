@@ -470,6 +470,27 @@ def tenant_delete(inst: Instance, company_id: int) -> None:
         mgr.recycle_app_pool()
 
 
+@tenant_group.command("recycle")
+@click.confirmation_option(
+    prompt=(
+        "Recycle the site app pool? This kills all sessions and frees API-user slots."
+    )
+)
+@pass_instance
+def tenant_recycle(inst: Instance) -> None:
+    """Recycle the IIS app pool for the instance (site-wide; no tenant --id).
+
+    Control plane only (SSH): ``Restart-WebAppPool`` for the instance pool.
+    Reloads the tenant map (V5) and drops every in-flight session so concurrent
+    API-user license slots free up. Hosted / empty ACU_SSH hard-errors before
+    any remote (same as other tenant cmds).
+    """
+    mgr = TenantManager(inst)
+    with output.step("recycling app pool (tenant map + free API-user sessions)"):
+        mgr.recycle_app_pool()
+    output.success("app pool recycled")
+
+
 @cli.group("config")
 def config_group() -> None:
     """Configuration ops.
