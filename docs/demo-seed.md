@@ -93,7 +93,7 @@ acu reconcile --inventory inv/ --config config/ --out findings/
 acu --tenant DEV state
 ```
 
-`reconcile` never writes `config/` (V36): unmapped tables, REST gaps, rest-vs-snapshot field deltas, and custom `Usr*` columns land under `findings/` only. When `target.yaml` is present and the artifact reports a build, `inventory` requires `erp` match (sibling of V27). `config init` does not scaffold `inventory/` or `findings/` — engagement-generated.
+`reconcile` never writes `config/` (V36): unmapped tables, REST gaps, rest-vs-snapshot field deltas, and custom `Usr*` columns land under `findings/` only. When `target.yaml` is present and the artifact reports a build, `inventory` requires `erp` match (sibling of V27). `config init` does not scaffold `inventory/` or `findings/` — engagement-generated (gitignored by the scaffolded `.gitignore`).
 
 ### `snapshot_map.yaml` (table→entity + normalize)
 

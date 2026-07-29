@@ -780,6 +780,8 @@ def test_config_init_writes_no_secrets(tmp_path: Path) -> None:
     gitignore = (tmp_path / ".gitignore").read_text()
     assert ".env" in gitignore
     assert "schemas/" in gitignore
+    assert "inventory/" in gitignore
+    assert "findings/" in gitignore
 
 
 def test_config_init_scaffold_round_trips(

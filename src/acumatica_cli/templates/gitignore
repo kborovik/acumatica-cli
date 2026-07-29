@@ -1,2 +1,4 @@
 .env
 schemas/
+inventory/
+findings/
