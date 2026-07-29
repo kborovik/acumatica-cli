@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!--
   acu bootstrap customization package template - full company contract
-  (SPEC T81: single Bootstrap/1.0.0 line both flavors).
+  (SPEC T81 single full-company line; T145 bumps 1.0.0 -> 1.1.0 for Role/User).
 
   package_zip() (bootstrap.py) prefers data-repo bootstrap/project.xml when
   present; otherwise this packaged template is the fallback so config init,
@@ -29,15 +29,27 @@
   MasterCalendar, CompanyCalendar, CompanyPeriod, ManagePeriods,
   GLPreferences, INPreferences, ReasonCode, AP/AR/SO/PO/CA Preferences,
   AvailabilityCalculationRule, PostingClass, VendorClass, StatementCycle,
-  Warehouse, OrderType, CashAccount.
+  Warehouse, OrderType, CashAccount, Role, User (+ UserRole membership detail).
+
+  T145 Role/User (gh #24) - Default endpoint has no Role/User surface:
+  - Role SM201005 -> RoleAccess, PrimaryView Roles (PX.SM.Roles):
+    key Rolename; Descr for display. Built-in system roles stay out of
+    mutable seed (Administrator, Customizer, …) - author custom roles only.
+  - User SM201010 -> Access, PrimaryView UserList (PX.SM.Users): key
+    Username; identity FirstName/LastName/Email + IsApproved +
+    PasswordNeverExpires + PasswordChangeOnNextLogin; Password write-only
+    (extract/diff policy = V39/T147).
+  - membership = User detail Roles -> AllowedRoles (UsersInRoles/Roles
+    projection): Rolename + Selected (assign when true). Apply order
+    Role then User (V22 prefixes; T148).
 
   Contract field names = DAC property names verbatim (no rename layer).
   Features (CS100000) stays OUT of the endpoint - the plugin owns features.
   Shape change requires a version bump (V21).
 -->
-<Customization level="" description="acu bootstrap: CustomizationPlugin enables features on publish; Bootstrap endpoint exposes full company surface (company + credit terms + financial currency + GL chain + module preferences + vendor class + statement cycle + warehouse + order type + cash account)" product-version="26.101">
+<Customization level="" description="acu bootstrap: CustomizationPlugin enables features on publish; Bootstrap endpoint exposes full company surface (company + credit terms + financial currency + GL chain + module preferences + vendor class + statement cycle + warehouse + order type + cash account + role + user + membership)" product-version="26.101">
   <EntityEndpoint>
-    <Endpoint xmlns="http://www.acumatica.com/entity/maintenance/5.31" name="Bootstrap" version="1.0.0" systemContractVersion="4">
+    <Endpoint xmlns="http://www.acumatica.com/entity/maintenance/5.31" name="Bootstrap" version="1.1.0" systemContractVersion="4">
       <TopLevelEntity name="Company" screen="CS101500">
         <Fields>
           <Field name="AcctCD" type="StringValue" />
@@ -784,6 +796,76 @@
           </Mapping>
         </Mappings>
       </TopLevelEntity>
+      <TopLevelEntity name="Role" screen="SM201005">
+        <Fields>
+          <Field name="Rolename" type="StringValue" />
+          <Field name="Descr" type="StringValue" />
+        </Fields>
+        <Mappings>
+          <Mapping field="Rolename">
+            <To object="Roles" field="Rolename" />
+          </Mapping>
+          <Mapping field="Descr">
+            <To object="Roles" field="Descr" />
+          </Mapping>
+        </Mappings>
+      </TopLevelEntity>
+      <TopLevelEntity name="User" screen="SM201010">
+        <Fields>
+          <Field name="Username" type="StringValue" />
+          <Field name="FirstName" type="StringValue" />
+          <Field name="LastName" type="StringValue" />
+          <Field name="Email" type="StringValue" />
+          <Field name="IsApproved" type="BooleanValue" />
+          <Field name="PasswordNeverExpires" type="BooleanValue" />
+          <Field name="PasswordChangeOnNextLogin" type="BooleanValue" />
+          <Field name="Password" type="StringValue" />
+          <Field name="Roles" type="UserRole[]" />
+        </Fields>
+        <Mappings>
+          <Mapping field="Username">
+            <To object="UserList" field="Username" />
+          </Mapping>
+          <Mapping field="FirstName">
+            <To object="UserList" field="FirstName" />
+          </Mapping>
+          <Mapping field="LastName">
+            <To object="UserList" field="LastName" />
+          </Mapping>
+          <Mapping field="Email">
+            <To object="UserList" field="Email" />
+          </Mapping>
+          <Mapping field="IsApproved">
+            <To object="UserList" field="IsApproved" />
+          </Mapping>
+          <Mapping field="PasswordNeverExpires">
+            <To object="UserList" field="PasswordNeverExpires" />
+          </Mapping>
+          <Mapping field="PasswordChangeOnNextLogin">
+            <To object="UserList" field="PasswordChangeOnNextLogin" />
+          </Mapping>
+          <Mapping field="Password">
+            <To object="UserList" field="Password" />
+          </Mapping>
+          <Mapping field="Roles">
+            <To object="AllowedRoles" field="" />
+          </Mapping>
+        </Mappings>
+      </TopLevelEntity>
+      <Detail name="UserRole">
+        <Fields>
+          <Field name="Rolename" type="StringValue" />
+          <Field name="Selected" type="BooleanValue" />
+        </Fields>
+        <Mappings>
+          <Mapping field="Rolename">
+            <To object="AllowedRoles" field="Rolename" />
+          </Mapping>
+          <Mapping field="Selected">
+            <To object="AllowedRoles" field="Selected" />
+          </Mapping>
+        </Mappings>
+      </Detail>
     </Endpoint>
   </EntityEndpoint>
 </Customization>

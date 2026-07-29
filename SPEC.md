@@ -150,7 +150,7 @@ T141|x|tenant list banner hostname-only + offline assert (no full URL in title)|
 T142|x|`acu tenant recycle` CLI — wire TenantManager.recycle_app_pool; confirm + --yes; V15 verb map + help; stdout progress; exit 0/1|V1,V5,V6,V9,V15,V16,I.cmd
 T143|x|offline tests: recycle invokes Restart-WebAppPool; empty ACU_SSH hard error; confirm/--yes; no REST|V13,V1,T142
 T144|x|docs + client mismatch hint → `acu tenant recycle`; changelog|V12,T142
-T145|.|bootstrap contract Role (SM201005 key Rolename ≥ Rolename+Descr) + User (SM201010 key Username identity fields) + membership (User detail roles); version bump|V21,I.data
+T145|x|bootstrap contract Role (SM201005 key Rolename ≥ Rolename+Descr) + User (SM201010 key Username identity fields) + membership (User detail roles); version bump|V21,I.data
 T146|.|seed_catalog + snapshot_map rows Roles/Users/membership; optional package template master seed; ! built-in system roles as mutable seed|V34,V35,I.data,T145
 T147|.|password-seed pipeline: apply write-only when present; extract strip Password+b64__Password; diff ignore password; offline unit tests|V39,I.cmd,T145
 T148|.|apply order Role then User then membership (V22 prefixes); virgin+warm idempotent PUT; re-apply no password when user unchanged|V4,V22,V39,T145,T147

@@ -112,11 +112,12 @@ def test_load_features_prefers_config_bootstrap(tmp_path: Path) -> None:
 
 def test_load_contract_xml_prefers_config_bootstrap(tmp_path: Path) -> None:
     # T85/V30: config/bootstrap/project.xml wins over root bootstrap/
+    # version tracks packaged line so V21 parity greps stay clean
     root_contract = b"""\
 <Customization level="" description="root" product-version="26.101">
   <EntityEndpoint>
     <Endpoint xmlns="http://www.acumatica.com/entity/maintenance/5.31"
-              name="Bootstrap" version="1.0.0" systemContractVersion="4">
+              name="Bootstrap" version="1.1.0" systemContractVersion="4">
       <TopLevelEntity name="RootOnly" screen="CS000000">
         <Fields><Field name="ID" type="StringValue" /></Fields>
       </TopLevelEntity>
@@ -128,7 +129,7 @@ def test_load_contract_xml_prefers_config_bootstrap(tmp_path: Path) -> None:
 <Customization level="" description="config" product-version="26.101">
   <EntityEndpoint>
     <Endpoint xmlns="http://www.acumatica.com/entity/maintenance/5.31"
-              name="Bootstrap" version="1.0.0" systemContractVersion="4">
+              name="Bootstrap" version="1.1.0" systemContractVersion="4">
       <TopLevelEntity name="ConfigOnly" screen="CS000000">
         <Fields><Field name="ID" type="StringValue" /></Fields>
       </TopLevelEntity>
@@ -142,7 +143,7 @@ def test_load_contract_xml_prefers_config_bootstrap(tmp_path: Path) -> None:
     (tmp_path / "config" / "bootstrap" / "project.xml").write_bytes(cfg_contract)
 
     name, entities = bootstrap.parse_endpoint(bootstrap.load_contract_xml(tmp_path))
-    assert name == "Bootstrap/1.0.0"
+    assert name == "Bootstrap/1.1.0"
     assert entities == frozenset({"ConfigOnly"})
 
 
@@ -168,7 +169,7 @@ def test_package_zip_carries_the_bootstrap_endpoint() -> None:
     Verified vs 26.101.0225 by live import round-trip: the <Endpoint> child
     is the XmlSerializer form of Model.Endpoint in the entity/maintenance/5.31
     namespace; no .endpoint file is involved. Packaged contract is the single
-    full company surface (Bootstrap/1.0.0); data-repo bootstrap/project.xml
+    full company surface (Bootstrap/1.1.0); data-repo bootstrap/project.xml
     may still override when present (V2).
     """
     ns = "{http://www.acumatica.com/entity/maintenance/5.31}"
@@ -177,11 +178,11 @@ def test_package_zip_carries_the_bootstrap_endpoint() -> None:
     (item,) = root.findall("EntityEndpoint")
     (endpoint,) = item.findall(f"{ns}Endpoint")
     assert endpoint.get("name") == "Bootstrap"
-    assert endpoint.get("version") == "1.0.0"
+    assert endpoint.get("version") == "1.1.0"
     # SystemContracts.V4 is the build's only IsCurrent implementation
     assert endpoint.get("systemContractVersion") == "4"
     entities = {e.get("name"): e for e in endpoint.findall(f"{ns}TopLevelEntity")}
-    # T81: packaged contract is the full company surface (finance + distro)
+    # T81 full company + T145 Role/User membership
     assert set(entities) == {
         "Company",
         "CreditTerms",
@@ -207,11 +208,40 @@ def test_package_zip_carries_the_bootstrap_endpoint() -> None:
         "Warehouse",
         "OrderType",
         "CashAccount",
+        "Role",
+        "User",
     }
     # features stay OUT: contract-endpoint writes to CS100000 do not
     # persist (T3 verdict) - the CustomizationPlugin owns features
     assert entities["Company"].get("screen") == "CS101500"
     assert entities["CreditTerms"].get("screen") == "CS206500"
+    # T145: Role + User for apply-seedable membership (gh #24)
+    assert entities["Role"].get("screen") == "SM201005"
+    assert entities["User"].get("screen") == "SM201010"
+    role_fields = {
+        f.get("name") for f in entities["Role"].findall(f"{ns}Fields/{ns}Field")
+    }
+    assert {"Rolename", "Descr"} <= role_fields
+    user_fields = {
+        f.get("name") for f in entities["User"].findall(f"{ns}Fields/{ns}Field")
+    }
+    assert {
+        "Username",
+        "FirstName",
+        "LastName",
+        "Email",
+        "IsApproved",
+        "PasswordNeverExpires",
+        "PasswordChangeOnNextLogin",
+        "Password",
+        "Roles",
+    } <= user_fields
+    details = {d.get("name"): d for d in endpoint.findall(f"{ns}Detail")}
+    assert "UserRole" in details
+    membership_fields = {
+        f.get("name") for f in details["UserRole"].findall(f"{ns}Fields/{ns}Field")
+    }
+    assert {"Rolename", "Selected"} <= membership_fields
     # GL preferences = GL102000 on this build - GL105000 has no site-map
     # row at all (T34, verified vs the live SiteMap table)
     assert entities["GLPreferences"].get("screen") == "GL102000"
@@ -293,6 +323,20 @@ def test_package_zip_carries_the_bootstrap_endpoint() -> None:
             ("Action", "FromYear", "ToYear", "OrganizationID"),
             "Filter",
         ),
+        # T145 Role/User (gh #24): SM201005 Roles view; SM201010 UserList
+        # + AllowedRoles membership detail (Roles maps to empty To-field)
+        "Role": dict.fromkeys(("Rolename", "Descr"), "Roles"),
+        "User": {
+            "Username": "UserList",
+            "FirstName": "UserList",
+            "LastName": "UserList",
+            "Email": "UserList",
+            "IsApproved": "UserList",
+            "PasswordNeverExpires": "UserList",
+            "PasswordChangeOnNextLogin": "UserList",
+            "Password": "UserList",
+            "Roles": ("AllowedRoles", ""),
+        },
     }
     for entity, expected in views.items():
         fields = {
@@ -342,7 +386,7 @@ def test_package_zip_prefers_data_repo_contract(tmp_path: Path) -> None:
 <Customization level="" description="data-repo full" product-version="26.101">
   <EntityEndpoint>
     <Endpoint xmlns="http://www.acumatica.com/entity/maintenance/5.31"
-              name="Bootstrap" version="1.0.0" systemContractVersion="4">
+              name="Bootstrap" version="1.1.0" systemContractVersion="4">
       <TopLevelEntity name="Company" screen="CS101500">
         <Fields><Field name="AcctCD" type="StringValue" /></Fields>
       </TopLevelEntity>
