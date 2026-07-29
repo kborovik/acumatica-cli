@@ -1,0 +1,57 @@
+# snapshot_map.yaml — package defaults for `acu reconcile` (V38)
+#
+# table → catalog entity. Optional keys:/fields: rename seed names →
+# inventory columns so join/compare works when DAC names differ (M3).
+# Data-repo root snapshot_map.yaml wins over this package file.
+# v1 rows remain {table, entity} only — aliases optional.
+
+tables:
+  # Wave 1 renames — key/field aliases where seed ≠ DAC column
+  - table: Sub
+    entity: Subaccount
+    keys:
+      SubaccountCD: SubCD
+  - table: Terms
+    entity: CreditTerms
+  - table: UnitOfMeasure
+    entity: UnitsOfMeasure
+    keys:
+      UnitID: Unit
+    fields:
+      Description: Descr
+  - table: INAvailabilityScheme
+    entity: AvailabilityCalculationRule
+  - table: SOSetup
+    entity: SOPreferences
+  - table: POSetup
+    entity: POPreferences
+  - table: ARSetup
+    entity: ARPreferences
+  - table: APSetup
+    entity: APPreferences
+
+  # Wave 2 — table renames (field aliases / FK resolve = later M4+)
+  - table: INPostClass
+    entity: PostingClass
+  - table: INItemClass
+    entity: ItemClass
+  - table: INSite
+    entity: Warehouse
+  - table: InventoryItem
+    entity: StockItem
+  - table: INSetup
+    entity: INPreferences
+  - table: CASetup
+    entity: CAPreferences
+  - table: GLSetup
+    entity: GLPreferences
+
+  # Wave 3
+  - table: INKitSpecHdr
+    entity: KitSpecification
+  - table: SOOrderType
+    entity: OrderType
+  - table: ARStatementCycle
+    entity: StatementCycle
+  - table: OrganizationLedgerLink
+    entity: LedgerCompany

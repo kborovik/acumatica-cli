@@ -20,6 +20,9 @@ table → entity; absent → identity match on catalog entity name.
 
 Compare path pad-trims string keys and fields on both sides (V38) so
 fixed-width / trailing-space inventory values join and equal seed.
+Per-row optional ``keys:`` / ``fields:`` maps rename seed names →
+inventory column names (V38 M3) so e.g. SubaccountCD joins SubCD and
+UnitID joins Unit without false key-skips.
 """
 
 from __future__ import annotations
@@ -95,10 +98,16 @@ class SeedFile(Model):
 
 
 class TableMapEntry(Model):
-    """One optional snapshot_map row: DAC table → catalog entity."""
+    """One optional snapshot_map row: DAC table → catalog entity.
+
+    Optional ``keys`` / ``fields`` are seed-name → inventory-column aliases
+    (V38 M3). Absent → identity names. v1 rows are ``{table, entity}`` only.
+    """
 
     table: str
     entity: str
+    keys: dict[str, str] = Field(default_factory=dict)
+    fields: dict[str, str] = Field(default_factory=dict)
 
     @field_validator("table", "entity")
     @classmethod
@@ -108,6 +117,30 @@ class TableMapEntry(Model):
             raise ValueError("table/entity must be non-empty")
         return v
 
+    @field_validator("keys", "fields", mode="before")
+    @classmethod
+    def _alias_map(cls, v: object) -> object:
+        """Accept seed→inv string maps; reject empty names."""
+        if v is None:
+            return {}
+        if not isinstance(v, dict):
+            raise ValueError("keys/fields must be a mapping of seed->inventory names")
+        out: dict[str, str] = {}
+        for seed_name, inv_name in v.items():
+            s = str(seed_name).strip()
+            # dict form {inv: Col} is reserved for later transform rows (M4+);
+            # M3 is seed→inv string only. Reject non-scalar so authors fail closed.
+            if isinstance(inv_name, dict):
+                raise ValueError(
+                    f"keys/fields[{s!r}]: expected inventory column string "
+                    "(transform dicts are M4+; use seed: InvCol form)"
+                )
+            i = str(inv_name).strip()
+            if not s or not i:
+                raise ValueError("keys/fields names must be non-empty")
+            out[s] = i
+        return out
+
 
 class SnapshotMap(Model):
     """Optional table→entity map (package or data-repo ``snapshot_map.yaml``)."""
@@ -116,9 +149,14 @@ class SnapshotMap(Model):
 
     def entity_for(self, table: str) -> str | None:
         """Catalog entity name for a DAC table, or None when unmapped."""
+        entry = self.entry_for(table)
+        return entry.entity if entry is not None else None
+
+    def entry_for(self, table: str) -> TableMapEntry | None:
+        """Full map row for a DAC table (aliases + entity), or None."""
         for row in self.tables:
             if row.table == table:
-                return row.entity
+                return row
         return None
 
 
@@ -390,6 +428,7 @@ def reconcile(
                 seeds=seed_index,
             )
         )
+        map_entry = smap.entry_for(table.name)
         deltas.extend(
             _deltas_for_table(
                 entity=entity,
@@ -397,6 +436,7 @@ def reconcile(
                 specs=specs,
                 config_present=config_present,
                 seeds=seed_index,
+                map_entry=map_entry,
             )
         )
         _append_usr_custom(custom, table.name, entity, col_names)
@@ -487,14 +527,16 @@ def _rest_gaps_for_table(
     return gaps
 
 
-def _deltas_for_table(
+def _deltas_for_table(  # noqa: PLR0913 — keyword-only; map_entry is V38 M3
     *,
     entity: str,
     table: inventory.TableData,
     specs: list[extract.EntitySpec],
     config_present: bool,
     seeds: _SeedIndex,
+    map_entry: TableMapEntry | None = None,
 ) -> list[FieldDelta]:
+    """Per-spec field deltas for one inventory table (optional map aliases)."""
     if not config_present:
         return []
     out: list[FieldDelta] = []
@@ -504,7 +546,11 @@ def _deltas_for_table(
             continue
         out.extend(
             _compare_seed_table(
-                entity=entity, table=table, seed_file=seed_file, spec=spec
+                entity=entity,
+                table=table,
+                seed_file=seed_file,
+                spec=spec,
+                map_entry=map_entry,
             )
         )
     return out
@@ -546,23 +592,29 @@ def _compare_seed_table(
     table: inventory.TableData,
     seed_file: SeedFile,
     spec: extract.EntitySpec,
+    map_entry: TableMapEntry | None = None,
 ) -> list[FieldDelta]:
     """Field-level compare for rows that share a key tuple on both sides.
 
     Key fields come from the seed file (authoritative for CaC). Inventory
     column names often match contract field names; missing inventory key
-    → skip that seed row (no false delta). Join keys and field values are
+    → skip that seed row (no false delta). Optional map ``keys`` / ``fields``
+    rename seed names → inv columns (V38 M3). Join keys and field values are
     pad-trimmed on both sides (V38) so fixed-width / trailing-space DAC
     columns match seed natural keys. Detail lists skipped (not comparable
-    to flat snapshot rows).
+    to flat snapshot rows). Findings always report seed-side field names.
     """
     keys = seed_file.keys
-    inv_index = _index_inventory_rows(table.rows, keys)
+    key_alias = map_entry.keys if map_entry is not None else {}
+    field_alias = map_entry.fields if map_entry is not None else {}
+    inv_keys = [key_alias.get(k, k) for k in keys]
+    inv_index = _index_inventory_rows(table.rows, inv_keys)
     deltas: list[FieldDelta] = []
     for rec in seed_file.records:
         if not all(k in rec for k in keys):
             continue
         # V38: pad-trim key identity both sides so join is padding-invariant.
+        # Seed values are looked up under inv column names (alias or identity).
         ident = tuple(_norm(rec[k]) for k in keys)
         inv_row = inv_index.get(ident)
         if inv_row is None:
@@ -570,10 +622,11 @@ def _compare_seed_table(
         for field, seed_val in sorted(rec.items()):
             if field in keys or isinstance(seed_val, (list, dict)):
                 continue
-            if field not in inv_row:
+            inv_field = field_alias.get(field, field)
+            if inv_field not in inv_row:
                 continue
             left = _norm(seed_val)
-            right = _norm(inv_row[field])
+            right = _norm(inv_row[inv_field])
             if left != right:
                 deltas.append(
                     FieldDelta(
@@ -592,7 +645,10 @@ def _compare_seed_table(
 def _index_inventory_rows(
     rows: list[dict[str, str]], keys: list[str]
 ) -> dict[tuple[str, ...], dict[str, str]]:
-    """Index inventory rows by pad-trimmed key tuple (V38 join)."""
+    """Index inventory rows by pad-trimmed key tuple (V38 join).
+
+    ``keys`` are inventory column names (after seed→inv alias resolution).
+    """
     inv_index: dict[tuple[str, ...], dict[str, str]] = {}
     for row in rows:
         if all(k in row for k in keys):

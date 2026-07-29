@@ -230,6 +230,149 @@ def test_snapshot_map_overrides_identity(tmp_path: Path) -> None:
     assert any(g.entity == "Account" for g in bundle.rest_gaps)
 
 
+def test_snapshot_map_v1_rows_still_load() -> None:
+    """V38/T133: v1 {table, entity} only — keys/fields optional empty."""
+    smap = reconcile.SnapshotMap.model_validate(
+        {
+            "tables": [
+                {"table": "Sub", "entity": "Subaccount"},
+                {"table": "UnitOfMeasure", "entity": "UnitsOfMeasure"},
+            ]
+        }
+    )
+    assert smap.entity_for("Sub") == "Subaccount"
+    entry = smap.entry_for("Sub")
+    assert entry is not None
+    assert entry.keys == {}
+    assert entry.fields == {}
+
+
+def test_key_field_aliases_subaccount_and_uom(tmp_path: Path) -> None:
+    """V38/T133: SubaccountCD→SubCD + UnitID→Unit / Description→Descr join."""
+    sub_xml = """\
+<?xml version="1.0" encoding="utf-8"?>
+<data>
+  <table name="Sub">
+    <col name="SubCD" type="NVarChar(30)"/>
+    <col name="Description" type="NVarChar(255)"/>
+    <col name="Active" type="Bit"/>
+  </table>
+  <rows>
+    <row SubCD="000000    " Description="Default" Active="1"/>
+  </rows>
+</data>
+"""
+    uom_xml = """\
+<?xml version="1.0" encoding="utf-8"?>
+<data>
+  <table name="UnitOfMeasure">
+    <col name="Unit" type="NVarChar(6)"/>
+    <col name="Descr" type="NVarChar(6)"/>
+    <col name="L3Code" type="NVarChar(3)"/>
+  </table>
+  <rows>
+    <row Unit="EA" Descr="Each" L3Code="EA"/>
+    <row Unit="KG" Descr="Kilogram" L3Code="KGM"/>
+  </rows>
+</data>
+"""
+    inv = _inventory_tree(tmp_path, sub_xml, uom_xml)
+    tree = reconcile.load_inventory_tree(inv)
+
+    cfg = tmp_path / "config"
+    (cfg / "baseline").mkdir(parents=True)
+    (cfg / "baseline" / "10-subaccounts.yaml").write_text(
+        "entity: Subaccount\n"
+        "key: SubaccountCD\n"
+        "records:\n"
+        "  - SubaccountCD: '000000'\n"
+        "    Description: Default\n",
+        encoding="utf-8",
+    )
+    (cfg / "baseline" / "90-uoms.yaml").write_text(
+        "entity: UnitsOfMeasure\n"
+        "key: UnitID\n"
+        "records:\n"
+        "  - UnitID: EA\n"
+        "    Description: Each\n"
+        "    L3Code: EA\n"
+        "  - UnitID: KG\n"
+        "    Description: Kg\n"
+        "    L3Code: KGM\n",
+        encoding="utf-8",
+    )
+    seeds = reconcile.load_config_seeds(cfg)
+
+    # Without aliases: key names miss → rows skipped → no deltas (false quiet)
+    bare = reconcile.SnapshotMap.model_validate(
+        {
+            "tables": [
+                {"table": "Sub", "entity": "Subaccount"},
+                {"table": "UnitOfMeasure", "entity": "UnitsOfMeasure"},
+            ]
+        }
+    )
+    quiet = reconcile.reconcile(tree, seeds, config_dir=cfg, snapshot_map=bare)
+    assert quiet.deltas == []
+
+    smap = reconcile.SnapshotMap.model_validate(
+        {
+            "tables": [
+                {
+                    "table": "Sub",
+                    "entity": "Subaccount",
+                    "keys": {"SubaccountCD": "SubCD"},
+                },
+                {
+                    "table": "UnitOfMeasure",
+                    "entity": "UnitsOfMeasure",
+                    "keys": {"UnitID": "Unit"},
+                    "fields": {"Description": "Descr"},
+                },
+            ]
+        }
+    )
+    bundle = reconcile.reconcile(tree, seeds, config_dir=cfg, snapshot_map=smap)
+    # Sub joins; Description matches after pad-trim → no Subaccount delta
+    assert not any(d.entity == "Subaccount" for d in bundle.deltas)
+    # UOM EA Description matches via Descr alias → no delta
+    assert not any(
+        d.entity == "UnitsOfMeasure" and d.key == ["EA"] for d in bundle.deltas
+    )
+    # UOM KG Description seed "Kg" vs inv "Kilogram" → real delta on seed field name
+    assert any(
+        d.entity == "UnitsOfMeasure"
+        and d.field == "Description"
+        and d.key == ["KG"]
+        and d.seed == "Kg"
+        and d.inventory == "Kilogram"
+        for d in bundle.deltas
+    )
+
+
+def test_package_snapshot_map_loads_sub_and_uom_aliases(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Package defaults ship Sub + UnitOfMeasure aliases (T133)."""
+    # No data-repo map → load package snapshot_map.yaml
+    monkeypatch.chdir(tmp_path)
+    smap = reconcile.load_snapshot_map()
+    sub = smap.entry_for("Sub")
+    assert sub is not None
+    assert sub.entity == "Subaccount"
+    assert sub.keys == {"SubaccountCD": "SubCD"}
+    uom = smap.entry_for("UnitOfMeasure")
+    assert uom is not None
+    assert uom.entity == "UnitsOfMeasure"
+    assert uom.keys == {"UnitID": "Unit"}
+    assert uom.fields == {"Description": "Descr"}
+    # v1-only rows still present without aliases
+    terms = smap.entry_for("Terms")
+    assert terms is not None
+    assert terms.entity == "CreditTerms"
+    assert terms.keys == {}
+
+
 def test_models_forbid_extra() -> None:
     with pytest.raises(ValidationError):
         reconcile.UnmappedTable.model_validate({"name": "X", "rows": 0, "bogus": 1})
