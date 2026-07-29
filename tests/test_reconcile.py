@@ -558,6 +558,253 @@ def test_fk_resolve_reason_code_and_vendor_class(tmp_path: Path) -> None:
     assert bundle.deltas == []
 
 
+def test_lab5_style_trim_alias_and_fk_resolve(tmp_path: Path) -> None:
+    """V38/T135: combined pad-trim + aliases + Account/Sub FK → 0 when match."""
+    # Inventory mimics LAB5 snapshot: padded CDs, Sub/UnitOfMeasure renames,
+    # ReasonCode/VendorClass int FKs. Package map + resolve must zero false noise.
+    account_xml = """\
+<?xml version="1.0" encoding="utf-8"?>
+<data>
+  <table name="Account">
+    <col name="AccountID" type="Int"/>
+    <col name="AccountCD" type="NVarChar(10)"/>
+    <col name="Description" type="NVarChar(60)"/>
+  </table>
+  <rows>
+    <row AccountID="24" AccountCD="50300     " Description="COGS   "/>
+    <row AccountID="10" AccountCD="20100     " Description="AP"/>
+  </rows>
+</data>
+"""
+    sub_xml = """\
+<?xml version="1.0" encoding="utf-8"?>
+<data>
+  <table name="Sub">
+    <col name="SubID" type="Int"/>
+    <col name="SubCD" type="NVarChar(30)"/>
+    <col name="Description" type="NVarChar(255)"/>
+  </table>
+  <rows>
+    <row SubID="1" SubCD="000000    " Description="Default"/>
+  </rows>
+</data>
+"""
+    reason_xml = """\
+<?xml version="1.0" encoding="utf-8"?>
+<data>
+  <table name="ReasonCode">
+    <col name="ReasonCodeID" type="NVarChar(20)"/>
+    <col name="Descr" type="NVarChar(60)"/>
+    <col name="AccountID" type="Int"/>
+    <col name="SubID" type="Int"/>
+  </table>
+  <rows>
+    <row ReasonCodeID="INISSUE" Descr="Inventory issue" AccountID="24" SubID="1"/>
+  </rows>
+</data>
+"""
+    vendor_xml = """\
+<?xml version="1.0" encoding="utf-8"?>
+<data>
+  <table name="VendorClass">
+    <col name="VendorClassID" type="NVarChar(10)"/>
+    <col name="Descr" type="NVarChar(60)"/>
+    <col name="APAcctID" type="Int"/>
+    <col name="APSubID" type="Int"/>
+    <col name="DiscTakenAcctID" type="Int"/>
+    <col name="DiscTakenSubID" type="Int"/>
+    <col name="ExpenseAcctID" type="Int"/>
+    <col name="ExpenseSubID" type="Int"/>
+    <col name="POAccrualAcctID" type="Int"/>
+    <col name="POAccrualSubID" type="Int"/>
+  </table>
+  <rows>
+    <row VendorClassID="SUPPLIER" Descr="Component suppliers"
+         APAcctID="10" APSubID="1" DiscTakenAcctID="10" DiscTakenSubID="1"
+         ExpenseAcctID="24" ExpenseSubID="1" POAccrualAcctID="10" POAccrualSubID="1"/>
+  </rows>
+</data>
+"""
+    inv = _inventory_tree(tmp_path, account_xml, sub_xml, reason_xml, vendor_xml)
+    tree = reconcile.load_inventory_tree(inv)
+
+    cfg = tmp_path / "config"
+    (cfg / "baseline").mkdir(parents=True)
+    (cfg / "master").mkdir(parents=True)
+    (cfg / "baseline" / "10-subaccounts.yaml").write_text(
+        "entity: Subaccount\n"
+        "key: SubaccountCD\n"
+        "records:\n"
+        "  - SubaccountCD: '000000'\n"
+        "    Description: Default\n",
+        encoding="utf-8",
+    )
+    (cfg / "baseline" / "20-accounts.yaml").write_text(
+        "entity: Account\n"
+        "key: AccountCD\n"
+        "records:\n"
+        "  - AccountCD: '50300'\n"
+        "    Description: COGS\n"
+        "  - AccountCD: '20100'\n"
+        "    Description: AP\n",
+        encoding="utf-8",
+    )
+    (cfg / "master" / "10-reason-codes.yaml").write_text(
+        "entity: ReasonCode\n"
+        "key: ReasonCodeID\n"
+        "records:\n"
+        "  - ReasonCodeID: INISSUE\n"
+        "    Descr: Inventory issue\n"
+        "    AccountID: '50300'\n"
+        "    SubID: '000000'\n",
+        encoding="utf-8",
+    )
+    (cfg / "master" / "70-vendor-classes.yaml").write_text(
+        "entity: VendorClass\n"
+        "key: VendorClassID\n"
+        "records:\n"
+        "  - VendorClassID: SUPPLIER\n"
+        "    Descr: Component suppliers\n"
+        "    APAcctID: '20100'\n"
+        "    APSubID: '000000'\n"
+        "    DiscTakenAcctID: '20100'\n"
+        "    DiscTakenSubID: '000000'\n"
+        "    ExpenseAcctID: '50300'\n"
+        "    ExpenseSubID: '000000'\n"
+        "    POAccrualAcctID: '20100'\n"
+        "    POAccrualSubID: '000000'\n",
+        encoding="utf-8",
+    )
+    seeds = reconcile.load_config_seeds(cfg)
+    # Use package-shaped map (aliases + resolvers) without cwd package load
+    smap = reconcile.SnapshotMap.model_validate(
+        {
+            "resolvers": {
+                "account_cd": {
+                    "table": "Account",
+                    "id": "AccountID",
+                    "cd": "AccountCD",
+                },
+                "sub_cd": {"table": "Sub", "id": "SubID", "cd": "SubCD"},
+            },
+            "tables": [
+                {
+                    "table": "Sub",
+                    "entity": "Subaccount",
+                    "keys": {"SubaccountCD": "SubCD"},
+                },
+                {
+                    "table": "ReasonCode",
+                    "entity": "ReasonCode",
+                    "resolves": {
+                        "AccountID": "account_cd",
+                        "SubID": "sub_cd",
+                    },
+                },
+                {
+                    "table": "VendorClass",
+                    "entity": "VendorClass",
+                    "resolves": {
+                        "APAcctID": "account_cd",
+                        "APSubID": "sub_cd",
+                        "DiscTakenAcctID": "account_cd",
+                        "DiscTakenSubID": "sub_cd",
+                        "ExpenseAcctID": "account_cd",
+                        "ExpenseSubID": "sub_cd",
+                        "POAccrualAcctID": "account_cd",
+                        "POAccrualSubID": "sub_cd",
+                    },
+                },
+            ],
+        }
+    )
+    bundle = reconcile.reconcile(tree, seeds, config_dir=cfg, snapshot_map=smap)
+    assert bundle.deltas == [], [d.model_dump() for d in bundle.deltas]
+
+
+def test_fk_resolve_real_cd_mismatch_still_deltas(tmp_path: Path) -> None:
+    """V38: resolved CD that differs from seed is a real delta (not swallowed)."""
+    account_xml = """\
+<?xml version="1.0" encoding="utf-8"?>
+<data>
+  <table name="Account">
+    <col name="AccountID" type="Int"/>
+    <col name="AccountCD" type="NVarChar(10)"/>
+  </table>
+  <rows>
+    <row AccountID="24" AccountCD="99999"/>
+  </rows>
+</data>
+"""
+    sub_xml = """\
+<?xml version="1.0" encoding="utf-8"?>
+<data>
+  <table name="Sub">
+    <col name="SubID" type="Int"/>
+    <col name="SubCD" type="NVarChar(30)"/>
+  </table>
+  <rows>
+    <row SubID="1" SubCD="000000"/>
+  </rows>
+</data>
+"""
+    reason_xml = """\
+<?xml version="1.0" encoding="utf-8"?>
+<data>
+  <table name="ReasonCode">
+    <col name="ReasonCodeID" type="NVarChar(20)"/>
+    <col name="AccountID" type="Int"/>
+    <col name="SubID" type="Int"/>
+  </table>
+  <rows>
+    <row ReasonCodeID="INISSUE" AccountID="24" SubID="1"/>
+  </rows>
+</data>
+"""
+    inv = _inventory_tree(tmp_path, account_xml, sub_xml, reason_xml)
+    tree = reconcile.load_inventory_tree(inv)
+    cfg = tmp_path / "config"
+    (cfg / "master").mkdir(parents=True)
+    (cfg / "master" / "10-reason-codes.yaml").write_text(
+        "entity: ReasonCode\n"
+        "key: ReasonCodeID\n"
+        "records:\n"
+        "  - ReasonCodeID: INISSUE\n"
+        "    AccountID: '50300'\n"
+        "    SubID: '000000'\n",
+        encoding="utf-8",
+    )
+    seeds = reconcile.load_config_seeds(cfg)
+    smap = reconcile.SnapshotMap.model_validate(
+        {
+            "resolvers": {
+                "account_cd": {
+                    "table": "Account",
+                    "id": "AccountID",
+                    "cd": "AccountCD",
+                },
+                "sub_cd": {"table": "Sub", "id": "SubID", "cd": "SubCD"},
+            },
+            "tables": [
+                {
+                    "table": "ReasonCode",
+                    "entity": "ReasonCode",
+                    "resolves": {
+                        "AccountID": "account_cd",
+                        "SubID": "sub_cd",
+                    },
+                }
+            ],
+        }
+    )
+    bundle = reconcile.reconcile(tree, seeds, config_dir=cfg, snapshot_map=smap)
+    assert any(
+        d.field == "AccountID" and d.seed == "50300" and d.inventory == "99999"
+        for d in bundle.deltas
+    )
+    assert not any(d.field == "SubID" for d in bundle.deltas)
+
+
 def test_models_forbid_extra() -> None:
     with pytest.raises(ValidationError):
         reconcile.UnmappedTable.model_validate({"name": "X", "rows": 0, "bogus": 1})
