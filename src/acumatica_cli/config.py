@@ -121,6 +121,8 @@ INIT_TEMPLATES = (
         "config/master/85-kit-specifications.yaml",
         "config/master/85-kit-specifications.yaml",
     ),
+    ("config/master/90-roles.yaml", "config/master/90-roles.yaml"),
+    ("config/master/91-users.yaml", "config/master/91-users.yaml"),
     (
         "config/views/10-trial-balance.yaml",
         "config/views/10-trial-balance.yaml",

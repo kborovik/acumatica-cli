@@ -401,6 +401,24 @@ def test_package_snapshot_map_loads_sub_and_uom_aliases(
     assert acct.enums["Active"] == "bool_bit"
 
 
+def test_package_snapshot_map_roles_users_membership(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """T146: Roles/Users/UsersInRoles map to Bootstrap Role/User."""
+    monkeypatch.chdir(tmp_path)
+    smap = reconcile.load_snapshot_map()
+    roles = smap.entry_for("Roles")
+    assert roles is not None
+    assert roles.entity == "Role"
+    users = smap.entry_for("Users")
+    assert users is not None
+    assert users.entity == "User"
+    assert users.enums.get("IsApproved") == "bool_bit"
+    membership = smap.entry_for("UsersInRoles")
+    assert membership is not None
+    assert membership.entity == "User"
+
+
 def test_fk_resolve_reason_code_and_vendor_class(tmp_path: Path) -> None:
     """V38/T134: inv AccountID/SubID int → CD; match seed → 0 false deltas."""
     account_xml = """\

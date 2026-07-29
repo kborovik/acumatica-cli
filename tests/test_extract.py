@@ -491,6 +491,34 @@ TABLES: dict[str, list[dict[str, Any]]] = {
             "LastModifiedDateTime": "2026-07-11T00:00:00+00:00",
         }
     ],
+    # T146 Role/User (+ membership detail). Canned custom role only —
+    # package templates never seed built-in system roles.
+    "Role": [
+        {
+            "Rolename": "SO Admin",
+            "Descr": "Sales order administration",
+            "LastModifiedDateTime": "2026-07-11T00:00:00+00:00",
+        }
+    ],
+    "User": [
+        {
+            "Username": "soadmin",
+            "FirstName": "SO",
+            "LastName": "Admin",
+            "Email": "soadmin@example.com",
+            "IsApproved": True,
+            "PasswordNeverExpires": True,
+            "PasswordChangeOnNextLogin": False,
+            # password material must not land in seed (V39 include omits)
+            "Password": "hash-must-not-extract",
+            "b64__Password": "YmFk",
+            "Roles": [
+                {"Rolename": "SO Admin", "Selected": True},
+                {"Rolename": "Administrator", "Selected": False},
+            ],
+            "LastModifiedDateTime": "2026-07-11T00:00:00+00:00",
+        }
+    ],
     # -- setup/ synthesis sources (T49): the state the GL action chain left --
     "FinancialYearSettings": [
         {
@@ -565,6 +593,8 @@ def test_packaged_manifest_is_self_consistent() -> None:
     assert "config/baseline/30-currencies.yaml" not in files  # V34: not in templates
     assert "config/master/10-reason-codes.yaml" in files
     assert "config/master/85-kit-specifications.yaml" in files
+    assert "config/master/90-roles.yaml" in files
+    assert "config/master/91-users.yaml" in files
     assert len(manifest.entities) == _CATALOG_ENTITY_ROWS
     assert [(s.kind, s.file) for s in manifest.setup] == [
         ("financial-year", "config/setup/10-financial-year.yaml"),
@@ -1202,6 +1232,51 @@ def test_catalog_filter_split_and_include_rows_declared() -> None:
     assert entities.count("Company") == 1
     assert entities.count("Warehouse") == 3
     assert entities.count("StockItem") == 2
+
+
+def test_catalog_role_user_membership_rows() -> None:
+    """T146: Role then User catalog rows; membership via User detail_keys."""
+    manifest = extract.load_manifest()
+    by_file = {s.file: s for s in manifest.entities}
+    role = by_file["config/master/90-roles.yaml"]
+    user = by_file["config/master/91-users.yaml"]
+    assert role.entity == "Role"
+    assert role.keys == ["Rolename"]
+    assert role.endpoint == "bootstrap"
+    assert "Descr" in role.include
+    assert user.entity == "User"
+    assert user.keys == ["Username"]
+    assert user.endpoint == "bootstrap"
+    assert user.detail_keys == {"Roles": "Rolename"}
+    assert "Roles" in user.include
+    # V39: extract never seeds password material (include-only surface)
+    assert "Password" not in user.include
+    assert "b64__Password" not in user.include
+    # V22 apply order: Role file sorts before User
+    files = [s.file for s in manifest.entities]
+    assert files.index(role.file) < files.index(user.file)
+
+
+def test_package_role_user_templates_custom_only() -> None:
+    """T146: package templates seed custom roles only — never system roles."""
+    root = Path(__file__).resolve().parents[1] / "src" / "acumatica_cli" / "templates"
+    roles = seed.load_baseline(root / "config/master/90-roles.yaml")
+    users = seed.load_baseline(root / "config/master/91-users.yaml")
+    assert isinstance(roles, seed.BaselineFile)
+    assert isinstance(users, seed.BaselineFile)
+    assert roles.entity == "Role"
+    # load_baseline resolves symbolic bootstrap → Bootstrap/<version>
+    assert roles.endpoint == seed.BOOTSTRAP_ENDPOINT
+    role_names = {r["Rolename"] for r in roles.records}
+    assert role_names == {"SO Admin"}
+    system = {"Administrator", "Customizer", "Anonymous", "Guest"}
+    assert not (role_names & system)
+    assert users.entity == "User"
+    assert users.detail_keys == {"Roles": "Rolename"}
+    assert {r["Username"] for r in users.records} == {"soadmin"}
+    soadmin = users.records[0]
+    assert "Password" not in soadmin
+    assert soadmin["Roles"] == [{"Rolename": "SO Admin", "Selected": True}]
 
 
 def test_templates_do_not_claim_packaging_uoms() -> None:

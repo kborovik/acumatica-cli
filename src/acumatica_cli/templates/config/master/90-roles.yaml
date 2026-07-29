@@ -1,0 +1,6 @@
+entity: Role
+key: Rolename
+endpoint: bootstrap
+records:
+- Rolename: SO Admin
+  Descr: Sales order administration

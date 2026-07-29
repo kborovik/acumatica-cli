@@ -434,6 +434,35 @@ entities:
   - Active
   - StockComponents
 
+# config/master/ Role then User (V22 prefixes; T145/T146/T148). Bootstrap
+# only — Default has no Role/User surface. Membership = User detail Roles
+# (UserRole/AllowedRoles). Package templates author custom roles only —
+# never re-seed built-in system roles (Administrator, Customizer, …).
+# Password is write-only on apply (V39/T147): include omits Password so
+# extract never emits hashes (b64__Password also out of include).
+
+- entity: Role
+  endpoint: bootstrap
+  keys: [Rolename]
+  file: config/master/90-roles.yaml
+  include:
+  - Descr
+
+- entity: User
+  endpoint: bootstrap
+  keys: [Username]
+  file: config/master/91-users.yaml
+  detail_keys:
+    Roles: Rolename
+  include:
+  - FirstName
+  - LastName
+  - Email
+  - IsApproved
+  - PasswordNeverExpires
+  - PasswordChangeOnNextLogin
+  - Roles
+
 # config/setup/ - the GL action chain (T36/T37): financial-year setup,
 # then calendar generation, then period activation; numbered prefixes
 # mirror the verified apply order.

@@ -165,3 +165,19 @@ tables:
       BranchID: branch_cd
     enums:
       Active: bool_bit
+
+  # T146 Role/User (+ membership detail). Tables from SM201005/SM201010 /
+  # UsersInRoles inventory; entity names = Bootstrap contract (T145).
+  # Membership is not a top-level seed entity — UsersInRoles joins to User
+  # (detail Roles); header Roles/Users map 1:1. Built-in system roles stay
+  # out of package seed templates (V34/T146).
+  - table: Roles
+    entity: Role
+  - table: Users
+    entity: User
+    enums:
+      IsApproved: bool_bit
+      PasswordNeverExpires: bool_bit
+      PasswordChangeOnNextLogin: bool_bit
+  - table: UsersInRoles
+    entity: User

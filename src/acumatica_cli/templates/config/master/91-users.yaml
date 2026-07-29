@@ -1,0 +1,16 @@
+entity: User
+key: Username
+endpoint: bootstrap
+detail_keys:
+  Roles: Rolename
+records:
+- Username: soadmin
+  FirstName: SO
+  LastName: Admin
+  Email: soadmin@example.com
+  IsApproved: true
+  PasswordNeverExpires: true
+  PasswordChangeOnNextLogin: false
+  Roles:
+  - Rolename: SO Admin
+    Selected: true
