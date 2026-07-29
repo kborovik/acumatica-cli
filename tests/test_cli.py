@@ -157,7 +157,10 @@ def test_tenant_list_renders_table(
     # rich wraps the table title to the console width, so match the
     # fragments rather than the one-line concatenation
     assert "Tenants on" in result.output
-    assert "http://acu.test/AcumaticaERP" in result.output
+    # V9/B27: hostname only — never scheme or site path in the title
+    assert "acu.test" in result.output
+    assert "http://" not in result.output
+    assert "AcumaticaERP" not in result.output
     assert "Company" in result.output
 
 

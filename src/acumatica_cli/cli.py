@@ -7,6 +7,7 @@ from collections.abc import Callable
 from importlib.metadata import distribution
 from pathlib import Path
 from typing import Concatenate
+from urllib.parse import urlparse
 
 import click
 import httpx
@@ -239,8 +240,10 @@ def tenant_group() -> None:
 def tenant_list(inst: Instance) -> None:
     """List tenants: CompanyID, sign-in name, internal CD, type."""
     tenants = TenantManager(inst).list()
+    # V9/B27: control-plane identity is the host, never scheme+path
+    host = urlparse(inst.base_url).hostname or inst.base_url
     output.table(
-        f"Tenants on {inst.base_url}",
+        f"Tenants on {host}",
         ("ID", "Login", "CD", "Type"),
         (
             (str(t.company_id), t.login_name, t.company_cd, t.company_type)

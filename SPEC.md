@@ -145,7 +145,7 @@ T137|x|M5 declarative enums: global enums: + per-row field→enum; ReasonCode.Us
 T138|x|M4 extend PostingClass *AcctID/*SubID + CashAccount Account/Sub/Branch + OrderType Freight resolves in package map|V38,I.data,T134,T137
 T139|x|offline unit tests: enum Usage/bool/Type + PostingClass FK resolve + decimal trailing-zero norm; package map asserts; existing reconcile tests green|V13,V38,T137,T138
 T140|x|docs/changelog/help: enums layer on snapshot_map; package defaults cover LAB5 high-churn enums + PostingClass|V12,I.data,T137,T138
-T141|.|tenant list banner hostname-only + offline assert (no full URL in title)|V9,I.cmd,B27
+T141|x|tenant list banner hostname-only + offline assert (no full URL in title)|V9,I.cmd,B27
 
 ## §B BUGS
 
