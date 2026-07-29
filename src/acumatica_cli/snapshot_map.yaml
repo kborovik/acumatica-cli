@@ -2,8 +2,19 @@
 #
 # table → catalog entity. Optional keys:/fields: rename seed names →
 # inventory columns so join/compare works when DAC names differ (M3).
+# Global resolvers: + per-row resolves: map inv int FKs → CD (M4).
 # Data-repo root snapshot_map.yaml wins over this package file.
-# v1 rows remain {table, entity} only — aliases optional.
+# v1 rows remain {table, entity} only — aliases/resolves optional.
+
+resolvers:
+  account_cd:
+    table: Account
+    id: AccountID
+    cd: AccountCD
+  sub_cd:
+    table: Sub
+    id: SubID
+    cd: SubCD
 
 tables:
   # Wave 1 renames — key/field aliases where seed ≠ DAC column
@@ -30,7 +41,7 @@ tables:
   - table: APSetup
     entity: APPreferences
 
-  # Wave 2 — table renames (field aliases / FK resolve = later M4+)
+  # Wave 2 — table renames (field aliases / more FKs later)
   - table: INPostClass
     entity: PostingClass
   - table: INItemClass
@@ -55,3 +66,21 @@ tables:
     entity: StatementCycle
   - table: OrganizationLedgerLink
     entity: LedgerCompany
+
+  # Identity tables needing FK CD resolve (M4) — table name == entity
+  - table: ReasonCode
+    entity: ReasonCode
+    resolves:
+      AccountID: account_cd
+      SubID: sub_cd
+  - table: VendorClass
+    entity: VendorClass
+    resolves:
+      APAcctID: account_cd
+      APSubID: sub_cd
+      DiscTakenAcctID: account_cd
+      DiscTakenSubID: sub_cd
+      ExpenseAcctID: account_cd
+      ExpenseSubID: sub_cd
+      POAccrualAcctID: account_cd
+      POAccrualSubID: sub_cd

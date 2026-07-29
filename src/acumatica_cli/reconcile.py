@@ -22,7 +22,9 @@ Compare path pad-trims string keys and fields on both sides (V38) so
 fixed-width / trailing-space inventory values join and equal seed.
 Per-row optional ``keys:`` / ``fields:`` maps rename seed names →
 inventory column names (V38 M3) so e.g. SubaccountCD joins SubCD and
-UnitID joins Unit without false key-skips.
+UnitID joins Unit without false key-skips. Global ``resolvers:`` plus
+per-row ``resolves:`` map inv int FKs → CD strings before compare (V38 M4)
+so seed CD space matches inventory IDs (Account/Sub first).
 """
 
 from __future__ import annotations
@@ -97,17 +99,36 @@ class SeedFile(Model):
         return v if isinstance(v, list) else [v]
 
 
+class FkResolver(Model):
+    """Global inventory FK index: int id column → natural CD column (V38 M4)."""
+
+    table: str
+    id: str
+    cd: str
+
+    @field_validator("table", "id", "cd")
+    @classmethod
+    def _nonempty(cls, v: str) -> str:
+        v = v.strip()
+        if not v:
+            raise ValueError("resolver table/id/cd must be non-empty")
+        return v
+
+
 class TableMapEntry(Model):
     """One optional snapshot_map row: DAC table → catalog entity.
 
     Optional ``keys`` / ``fields`` are seed-name → inventory-column aliases
-    (V38 M3). Absent → identity names. v1 rows are ``{table, entity}`` only.
+    (V38 M3). Optional ``resolves`` maps seed field → global resolver name
+    (V38 M4): inventory value is looked up id→CD before compare. Absent
+    aliases → identity names. v1 rows are ``{table, entity}`` only.
     """
 
     table: str
     entity: str
     keys: dict[str, str] = Field(default_factory=dict)
     fields: dict[str, str] = Field(default_factory=dict)
+    resolves: dict[str, str] = Field(default_factory=dict)
 
     @field_validator("table", "entity")
     @classmethod
@@ -117,27 +138,25 @@ class TableMapEntry(Model):
             raise ValueError("table/entity must be non-empty")
         return v
 
-    @field_validator("keys", "fields", mode="before")
+    @field_validator("keys", "fields", "resolves", mode="before")
     @classmethod
-    def _alias_map(cls, v: object) -> object:
-        """Accept seed→inv string maps; reject empty names."""
+    def _str_map(cls, v: object) -> object:
+        """Accept seed→inv (or seed→resolver) string maps; reject empty names."""
         if v is None:
             return {}
         if not isinstance(v, dict):
-            raise ValueError("keys/fields must be a mapping of seed->inventory names")
+            raise ValueError("keys/fields/resolves must be a mapping of strings")
         out: dict[str, str] = {}
-        for seed_name, inv_name in v.items():
+        for seed_name, target in v.items():
             s = str(seed_name).strip()
-            # dict form {inv: Col} is reserved for later transform rows (M4+);
-            # M3 is seed→inv string only. Reject non-scalar so authors fail closed.
-            if isinstance(inv_name, dict):
+            if isinstance(target, dict):
                 raise ValueError(
-                    f"keys/fields[{s!r}]: expected inventory column string "
-                    "(transform dicts are M4+; use seed: InvCol form)"
+                    f"keys/fields/resolves[{s!r}]: expected string value "
+                    "(use resolves: for FK names; enums are M5)"
                 )
-            i = str(inv_name).strip()
+            i = str(target).strip()
             if not s or not i:
-                raise ValueError("keys/fields names must be non-empty")
+                raise ValueError("keys/fields/resolves names must be non-empty")
             out[s] = i
         return out
 
@@ -145,7 +164,17 @@ class TableMapEntry(Model):
 class SnapshotMap(Model):
     """Optional table→entity map (package or data-repo ``snapshot_map.yaml``)."""
 
+    resolvers: dict[str, FkResolver] = Field(default_factory=dict)
     tables: list[TableMapEntry] = Field(default_factory=list)
+
+    @field_validator("resolvers", mode="before")
+    @classmethod
+    def _resolvers_map(cls, v: object) -> object:
+        if v is None:
+            return {}
+        if not isinstance(v, dict):
+            raise ValueError("resolvers must be a mapping of name -> {table,id,cd}")
+        return v
 
     def entity_for(self, table: str) -> str | None:
         """Catalog entity name for a DAC table, or None when unmapped."""
@@ -402,6 +431,7 @@ def reconcile(
     by_entity = _catalog_by_entity(m)
     catalog_entities = set(by_entity)
     seed_index = _index_seeds(seeds)
+    fk_indexes = _build_fk_indexes(inv, smap.resolvers)
     config_present = config_dir is not None and config_dir.is_dir()
 
     unmapped: list[UnmappedTable] = []
@@ -437,6 +467,7 @@ def reconcile(
                 config_present=config_present,
                 seeds=seed_index,
                 map_entry=map_entry,
+                fk_indexes=fk_indexes,
             )
         )
         _append_usr_custom(custom, table.name, entity, col_names)
@@ -527,7 +558,7 @@ def _rest_gaps_for_table(
     return gaps
 
 
-def _deltas_for_table(  # noqa: PLR0913 — keyword-only; map_entry is V38 M3
+def _deltas_for_table(  # noqa: PLR0913 — keyword-only; map_entry + fk_indexes V38
     *,
     entity: str,
     table: inventory.TableData,
@@ -535,10 +566,12 @@ def _deltas_for_table(  # noqa: PLR0913 — keyword-only; map_entry is V38 M3
     config_present: bool,
     seeds: _SeedIndex,
     map_entry: TableMapEntry | None = None,
+    fk_indexes: dict[str, dict[str, str]] | None = None,
 ) -> list[FieldDelta]:
     """Per-spec field deltas for one inventory table (optional map aliases)."""
     if not config_present:
         return []
+    indexes = fk_indexes if fk_indexes is not None else {}
     out: list[FieldDelta] = []
     for spec in specs:
         seed_file = _find_seed_for_spec(spec, seeds)
@@ -551,6 +584,7 @@ def _deltas_for_table(  # noqa: PLR0913 — keyword-only; map_entry is V38 M3
                 seed_file=seed_file,
                 spec=spec,
                 map_entry=map_entry,
+                fk_indexes=indexes,
             )
         )
     return out
@@ -586,27 +620,69 @@ def _find_seed_for_spec(spec: extract.EntitySpec, seeds: _SeedIndex) -> SeedFile
     return None
 
 
-def _compare_seed_table(
+def _build_fk_indexes(
+    inv: InventoryTree, resolvers: dict[str, FkResolver]
+) -> dict[str, dict[str, str]]:
+    """Build resolver_name → {id_norm: cd_norm} from inventory tables (V38 M4)."""
+    indexes: dict[str, dict[str, str]] = {}
+    by_name = inv.by_name
+    for name, spec in resolvers.items():
+        table = by_name.get(spec.table)
+        if table is None:
+            indexes[name] = {}
+            continue
+        idx: dict[str, str] = {}
+        for row in table.rows:
+            if spec.id not in row or spec.cd not in row:
+                continue
+            idx[_norm(row[spec.id])] = _norm(row[spec.cd])
+        indexes[name] = idx
+    return indexes
+
+
+def _resolve_inv_value(
+    raw: str,
+    *,
+    field: str,
+    resolves: dict[str, str],
+    fk_indexes: dict[str, dict[str, str]],
+) -> str:
+    """Map inventory FK id → CD when field has a resolver; else return raw."""
+    resolver_name = resolves.get(field)
+    if resolver_name is None:
+        return raw
+    id_to_cd = fk_indexes.get(resolver_name)
+    if not id_to_cd:
+        return raw
+    return id_to_cd.get(raw, raw)
+
+
+def _compare_seed_table(  # noqa: PLR0913 — keyword-only compare bundle
     *,
     entity: str,
     table: inventory.TableData,
     seed_file: SeedFile,
     spec: extract.EntitySpec,
     map_entry: TableMapEntry | None = None,
+    fk_indexes: dict[str, dict[str, str]] | None = None,
 ) -> list[FieldDelta]:
     """Field-level compare for rows that share a key tuple on both sides.
 
     Key fields come from the seed file (authoritative for CaC). Inventory
     column names often match contract field names; missing inventory key
     → skip that seed row (no false delta). Optional map ``keys`` / ``fields``
-    rename seed names → inv columns (V38 M3). Join keys and field values are
-    pad-trimmed on both sides (V38) so fixed-width / trailing-space DAC
-    columns match seed natural keys. Detail lists skipped (not comparable
-    to flat snapshot rows). Findings always report seed-side field names.
+    rename seed names → inv columns (V38 M3). Optional ``resolves`` + global
+    FK indexes convert inv int IDs → CD before compare (V38 M4; prefer seed
+    CD space). Join keys and field values are pad-trimmed on both sides (V38)
+    so fixed-width / trailing-space DAC columns match seed natural keys.
+    Detail lists skipped (not comparable to flat snapshot rows). Findings
+    always report seed-side field names and resolved inventory values.
     """
     keys = seed_file.keys
     key_alias = map_entry.keys if map_entry is not None else {}
     field_alias = map_entry.fields if map_entry is not None else {}
+    resolves = map_entry.resolves if map_entry is not None else {}
+    indexes = fk_indexes if fk_indexes is not None else {}
     inv_keys = [key_alias.get(k, k) for k in keys]
     inv_index = _index_inventory_rows(table.rows, inv_keys)
     deltas: list[FieldDelta] = []
@@ -626,7 +702,12 @@ def _compare_seed_table(
             if inv_field not in inv_row:
                 continue
             left = _norm(seed_val)
-            right = _norm(inv_row[inv_field])
+            right = _resolve_inv_value(
+                _norm(inv_row[inv_field]),
+                field=field,
+                resolves=resolves,
+                fk_indexes=indexes,
+            )
             if left != right:
                 deltas.append(
                     FieldDelta(

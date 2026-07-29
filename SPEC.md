@@ -171,7 +171,7 @@ T130|x|offline tests: parse fixtures ZIP+folder, inventory byte-stable, binary r
 T131|x|docs + help + changelog: inventory vs extract vs state; dual-reader layout; ac-exe export + SM203520 Settings XML note; README CLI map|V12,V35,I.cmd,T128,T129
 T132|x|M2 pad-trim string keys+fields on reconcile join/compare both sides|V38,I.cmd,T129
 T133|x|M3 declarative seed→inv key/field aliases in snapshot_map; Subaccount+UnitsOfMeasure join inventory; v1 map loads|V38,I.data,T132
-T134|.|M4 FK CD↔ID resolvers from inventory (Account+Sub first); ReasonCode+VendorClass *AcctID/*SubID false deltas → 0 when live matches seed|V38,I.data,T133
+T134|x|M4 FK CD↔ID resolvers from inventory (Account+Sub first); ReasonCode+VendorClass *AcctID/*SubID false deltas → 0 when live matches seed|V38,I.data,T133
 T135|.|offline unit tests trim+alias join+Account/Sub resolve; LAB5-style fixture ReasonCode+VendorClass CD/ID pairs → 0 when match; existing reconcile tests green|V13,V38,T132,T133,T134
 T136|.|docs/changelog snapshot_map beyond table→entity (aliases+resolvers)|V12,I.data,T133,T134
 

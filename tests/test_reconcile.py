@@ -371,6 +371,191 @@ def test_package_snapshot_map_loads_sub_and_uom_aliases(
     assert terms is not None
     assert terms.entity == "CreditTerms"
     assert terms.keys == {}
+    # T134: Account/Sub resolvers + ReasonCode/VendorClass resolves
+    assert "account_cd" in smap.resolvers
+    assert smap.resolvers["account_cd"].table == "Account"
+    assert smap.resolvers["sub_cd"].cd == "SubCD"
+    rc = smap.entry_for("ReasonCode")
+    assert rc is not None
+    assert rc.resolves["AccountID"] == "account_cd"
+    assert rc.resolves["SubID"] == "sub_cd"
+    vc = smap.entry_for("VendorClass")
+    assert vc is not None
+    assert vc.resolves["APAcctID"] == "account_cd"
+    assert vc.resolves["ExpenseSubID"] == "sub_cd"
+
+
+def test_fk_resolve_reason_code_and_vendor_class(tmp_path: Path) -> None:
+    """V38/T134: inv AccountID/SubID int → CD; match seed → 0 false deltas."""
+    account_xml = """\
+<?xml version="1.0" encoding="utf-8"?>
+<data>
+  <table name="Account">
+    <col name="AccountID" type="Int"/>
+    <col name="AccountCD" type="NVarChar(10)"/>
+  </table>
+  <rows>
+    <row AccountID="24" AccountCD="50300     "/>
+    <row AccountID="10" AccountCD="20100     "/>
+    <row AccountID="20" AccountCD="49100     "/>
+    <row AccountID="21" AccountCD="50000     "/>
+    <row AccountID="11" AccountCD="20200     "/>
+  </rows>
+</data>
+"""
+    sub_xml = """\
+<?xml version="1.0" encoding="utf-8"?>
+<data>
+  <table name="Sub">
+    <col name="SubID" type="Int"/>
+    <col name="SubCD" type="NVarChar(30)"/>
+  </table>
+  <rows>
+    <row SubID="1" SubCD="000000    "/>
+  </rows>
+</data>
+"""
+    reason_xml = """\
+<?xml version="1.0" encoding="utf-8"?>
+<data>
+  <table name="ReasonCode">
+    <col name="ReasonCodeID" type="NVarChar(20)"/>
+    <col name="Descr" type="NVarChar(60)"/>
+    <col name="AccountID" type="Int"/>
+    <col name="SubID" type="Int"/>
+  </table>
+  <rows>
+    <row ReasonCodeID="INISSUE" Descr="Inventory issue" AccountID="24" SubID="1"/>
+    <row ReasonCodeID="INRECEIPT" Descr="Inventory receipt" AccountID="24" SubID="1"/>
+  </rows>
+</data>
+"""
+    vendor_xml = """\
+<?xml version="1.0" encoding="utf-8"?>
+<data>
+  <table name="VendorClass">
+    <col name="VendorClassID" type="NVarChar(10)"/>
+    <col name="Descr" type="NVarChar(60)"/>
+    <col name="APAcctID" type="Int"/>
+    <col name="APSubID" type="Int"/>
+    <col name="DiscTakenAcctID" type="Int"/>
+    <col name="DiscTakenSubID" type="Int"/>
+    <col name="ExpenseAcctID" type="Int"/>
+    <col name="ExpenseSubID" type="Int"/>
+    <col name="POAccrualAcctID" type="Int"/>
+    <col name="POAccrualSubID" type="Int"/>
+  </table>
+  <rows>
+    <row VendorClassID="SUPPLIER" Descr="Component suppliers"
+         APAcctID="10" APSubID="1" DiscTakenAcctID="20" DiscTakenSubID="1"
+         ExpenseAcctID="21" ExpenseSubID="1" POAccrualAcctID="11" POAccrualSubID="1"/>
+  </rows>
+</data>
+"""
+    inv = _inventory_tree(tmp_path, account_xml, sub_xml, reason_xml, vendor_xml)
+    tree = reconcile.load_inventory_tree(inv)
+
+    cfg = tmp_path / "config"
+    (cfg / "master").mkdir(parents=True)
+    (cfg / "master" / "10-reason-codes.yaml").write_text(
+        "entity: ReasonCode\n"
+        "key: ReasonCodeID\n"
+        "endpoint: bootstrap\n"
+        "records:\n"
+        "  - ReasonCodeID: INISSUE\n"
+        "    Descr: Inventory issue\n"
+        "    AccountID: '50300'\n"
+        "    SubID: '000000'\n"
+        "  - ReasonCodeID: INRECEIPT\n"
+        "    Descr: Inventory receipt\n"
+        "    AccountID: '50300'\n"
+        "    SubID: '000000'\n",
+        encoding="utf-8",
+    )
+    (cfg / "master" / "70-vendor-classes.yaml").write_text(
+        "entity: VendorClass\n"
+        "key: VendorClassID\n"
+        "endpoint: bootstrap\n"
+        "records:\n"
+        "  - VendorClassID: SUPPLIER\n"
+        "    Descr: Component suppliers\n"
+        "    APAcctID: '20100'\n"
+        "    APSubID: '000000'\n"
+        "    DiscTakenAcctID: '49100'\n"
+        "    DiscTakenSubID: '000000'\n"
+        "    ExpenseAcctID: '50000'\n"
+        "    ExpenseSubID: '000000'\n"
+        "    POAccrualAcctID: '20200'\n"
+        "    POAccrualSubID: '000000'\n",
+        encoding="utf-8",
+    )
+    seeds = reconcile.load_config_seeds(cfg)
+
+    # No resolvers → false CD-vs-int deltas
+    bare = reconcile.SnapshotMap()
+    false_deltas = reconcile.reconcile(tree, seeds, config_dir=cfg, snapshot_map=bare)
+    assert any(
+        d.entity == "ReasonCode" and d.field == "AccountID" and d.inventory == "24"
+        for d in false_deltas.deltas
+    )
+    assert any(
+        d.entity == "VendorClass" and d.field == "APAcctID" and d.inventory == "10"
+        for d in false_deltas.deltas
+    )
+
+    smap = reconcile.SnapshotMap.model_validate(
+        {
+            "resolvers": {
+                "account_cd": {
+                    "table": "Account",
+                    "id": "AccountID",
+                    "cd": "AccountCD",
+                },
+                "sub_cd": {"table": "Sub", "id": "SubID", "cd": "SubCD"},
+            },
+            "tables": [
+                {
+                    "table": "ReasonCode",
+                    "entity": "ReasonCode",
+                    "resolves": {
+                        "AccountID": "account_cd",
+                        "SubID": "sub_cd",
+                    },
+                },
+                {
+                    "table": "VendorClass",
+                    "entity": "VendorClass",
+                    "resolves": {
+                        "APAcctID": "account_cd",
+                        "APSubID": "sub_cd",
+                        "DiscTakenAcctID": "account_cd",
+                        "DiscTakenSubID": "sub_cd",
+                        "ExpenseAcctID": "account_cd",
+                        "ExpenseSubID": "sub_cd",
+                        "POAccrualAcctID": "account_cd",
+                        "POAccrualSubID": "sub_cd",
+                    },
+                },
+            ],
+        }
+    )
+    bundle = reconcile.reconcile(tree, seeds, config_dir=cfg, snapshot_map=smap)
+    # All *AcctID/*SubID false deltas gone when CD matches
+    fk_fields = {
+        "AccountID",
+        "SubID",
+        "APAcctID",
+        "APSubID",
+        "DiscTakenAcctID",
+        "DiscTakenSubID",
+        "ExpenseAcctID",
+        "ExpenseSubID",
+        "POAccrualAcctID",
+        "POAccrualSubID",
+    }
+    assert not any(d.field in fk_fields for d in bundle.deltas)
+    # Descr still compared; matches → no deltas at all
+    assert bundle.deltas == []
 
 
 def test_models_forbid_extra() -> None:
