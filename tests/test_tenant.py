@@ -104,9 +104,7 @@ def test_set_company_cd_updates_when_mismatched(
     run.results = [
         (
             0,
-            "1|System|  |System\n"
-            "2|Company|Company|Custom\n"
-            "4|Company3|LAB6|Custom\n",
+            "1|System|  |System\n2|Company|Company|Custom\n4|Company3|LAB6|Custom\n",
         ),
         (0, ""),
     ]
@@ -125,15 +123,11 @@ def test_set_company_cd_noop_when_already_aligned(
     assert len(run.commands) == 1  # list only; no UPDATE
 
 
-def test_set_company_cd_rejects_collision(
-    instance: Instance, run: FakeRun
-) -> None:
+def test_set_company_cd_rejects_collision(instance: Instance, run: FakeRun) -> None:
     run.results = [
         (
             0,
-            "2|Company|Company|Custom\n"
-            "3|LAB5|LAB5|Custom\n"
-            "4|Company3|LAB6|Custom\n",
+            "2|Company|Company|Custom\n3|LAB5|LAB5|Custom\n4|Company3|LAB6|Custom\n",
         ),
     ]
     with pytest.raises(RuntimeError, match=r"CompanyCD 'LAB5' already used"):
@@ -141,9 +135,7 @@ def test_set_company_cd_rejects_collision(
     assert len(run.commands) == 1  # list only
 
 
-def test_set_company_cd_escapes_sql_quotes(
-    instance: Instance, run: FakeRun
-) -> None:
+def test_set_company_cd_escapes_sql_quotes(instance: Instance, run: FakeRun) -> None:
     run.results = [(0, "4|Company3|O'Brien|Custom\n"), (0, "")]
     TenantManager(instance).set_company_cd(4, "O'Brien")
     assert "SET CompanyCD = N'O''Brien'" in run.commands[1]
