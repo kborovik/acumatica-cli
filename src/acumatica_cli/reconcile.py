@@ -17,6 +17,9 @@ Finding kinds (I.data findings/):
 
 Optional ``snapshot_map.yaml`` (package data or data-repo root) maps
 table → entity; absent → identity match on catalog entity name.
+
+Compare path pad-trims string keys and fields on both sides (V38) so
+fixed-width / trailing-space inventory values join and equal seed.
 """
 
 from __future__ import annotations
@@ -548,8 +551,10 @@ def _compare_seed_table(
 
     Key fields come from the seed file (authoritative for CaC). Inventory
     column names often match contract field names; missing inventory key
-    → skip that seed row (no false delta). Values compared as stripped
-    strings. Detail lists skipped (not comparable to flat snapshot rows).
+    → skip that seed row (no false delta). Join keys and field values are
+    pad-trimmed on both sides (V38) so fixed-width / trailing-space DAC
+    columns match seed natural keys. Detail lists skipped (not comparable
+    to flat snapshot rows).
     """
     keys = seed_file.keys
     inv_index = _index_inventory_rows(table.rows, keys)
@@ -557,7 +562,8 @@ def _compare_seed_table(
     for rec in seed_file.records:
         if not all(k in rec for k in keys):
             continue
-        ident = tuple(str(rec[k]) for k in keys)
+        # V38: pad-trim key identity both sides so join is padding-invariant.
+        ident = tuple(_norm(rec[k]) for k in keys)
         inv_row = inv_index.get(ident)
         if inv_row is None:
             continue
@@ -586,15 +592,22 @@ def _compare_seed_table(
 def _index_inventory_rows(
     rows: list[dict[str, str]], keys: list[str]
 ) -> dict[tuple[str, ...], dict[str, str]]:
+    """Index inventory rows by pad-trimmed key tuple (V38 join)."""
     inv_index: dict[tuple[str, ...], dict[str, str]] = {}
     for row in rows:
         if all(k in row for k in keys):
-            inv_index[tuple(str(row[k]) for k in keys)] = row
+            inv_index[tuple(_norm(row[k]) for k in keys)] = row
     return inv_index
 
 
 def _norm(value: Any) -> str:
-    """Comparable string form (bool/number/string), sibling of seed._norm spirit."""
+    """Pad-trim comparable form for join keys and field values (V38).
+
+    String sides strip leading/trailing whitespace (DAC/NVarChar padding).
+    Bools/numbers fold to a stable spelling so seed and inventory agree.
+    Sibling of ``seed._norm`` spirit; used on *both* key join and field
+    compare so padded inventory never misses a seed row or false-deltas.
+    """
     if isinstance(value, bool):
         return "true" if value else "false"
     if value is None:

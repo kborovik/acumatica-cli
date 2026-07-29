@@ -169,7 +169,7 @@ T128|x|`acu inventory` CLI — artifact → inventory/ summary + tables; --out/-
 T129|x|`acu reconcile` CLI — inventory + optional config/ → findings/ only; never write config/; unmapped + REST gaps + rest-vs-snapshot deltas|V9,V15,V16,V35,V36,I.cmd,I.data,T128
 T130|x|offline tests: parse fixtures ZIP+folder, inventory byte-stable, binary reject, version pin vs target.yaml, reconcile findings, apply/diff ignore inventory/findings paths|V13,V35,V36,V37,T127,T128,T129
 T131|x|docs + help + changelog: inventory vs extract vs state; dual-reader layout; ac-exe export + SM203520 Settings XML note; README CLI map|V12,V35,I.cmd,T128,T129
-T132|.|M2 pad-trim string keys+fields on reconcile join/compare both sides|V38,I.cmd,T129
+T132|x|M2 pad-trim string keys+fields on reconcile join/compare both sides|V38,I.cmd,T129
 T133|.|M3 declarative seed→inv key/field aliases in snapshot_map; Subaccount+UnitsOfMeasure join inventory; v1 map loads|V38,I.data,T132
 T134|.|M4 FK CD↔ID resolvers from inventory (Account+Sub first); ReasonCode+VendorClass *AcctID/*SubID false deltas → 0 when live matches seed|V38,I.data,T133
 T135|.|offline unit tests trim+alias join+Account/Sub resolve; LAB5-style fixture ReasonCode+VendorClass CD/ID pairs → 0 when match; existing reconcile tests green|V13,V38,T132,T133,T134

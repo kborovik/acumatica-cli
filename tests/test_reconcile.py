@@ -177,6 +177,47 @@ records:
     assert bundle.deltas == []
 
 
+def test_pad_trim_key_join_and_fields(tmp_path: Path) -> None:
+    """V38/T132: pad-trim both sides — padded inv keys join; field pad no delta."""
+    # NVarChar-class padding on AccountCD + Description (common in XML dumps).
+    padded_xml = """\
+<?xml version="1.0" encoding="utf-8"?>
+<data>
+  <table name="Account">
+    <col name="AccountCD" type="NVarChar(10)"/>
+    <col name="Description" type="NVarChar(60)"/>
+  </table>
+  <rows>
+    <row AccountCD="10100   " Description="Cash  "/>
+    <row AccountCD="20000   " Description="AP"/>
+  </rows>
+</data>
+"""
+    inv = _inventory_tree(tmp_path, padded_xml)
+    tree = reconcile.load_inventory_tree(inv)
+    # raw inventory still carries padding (IR preserves XML text)
+    assert tree.by_name["Account"].rows[0]["AccountCD"] == "10100   "
+    body = """\
+entity: Account
+key: AccountCD
+records:
+  - AccountCD: "10100"
+    Description: Cash
+  - AccountCD: "20000"
+    Description: Accounts Payable
+"""
+    cfg = _write_config_account(tmp_path, body)
+    seeds = reconcile.load_config_seeds(cfg)
+    bundle = reconcile.reconcile(tree, seeds, config_dir=cfg)
+    # join must succeed despite key padding; 10100 Description pad-equal → no delta
+    assert not any(d.key == ["10100"] for d in bundle.deltas)
+    # 20000 still real mismatch after trim
+    assert any(d.field == "Description" and d.key == ["20000"] for d in bundle.deltas)
+    # reported key identity is pad-trimmed (stable findings)
+    for d in bundle.deltas:
+        assert d.key == [k.strip() for k in d.key]
+
+
 def test_snapshot_map_overrides_identity(tmp_path: Path) -> None:
     """snapshot_map can rename a table onto a catalog entity."""
     inv = _inventory_tree(tmp_path, ORPHAN_XML)
