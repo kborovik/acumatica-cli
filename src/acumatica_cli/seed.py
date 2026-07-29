@@ -78,6 +78,10 @@ _SYMBOLIC_DEFAULT = "default"
 # the REST session pre-Company; INPreferences TransitBranchID (and kin)
 # 500 with this message until a fresh login sees the new branch.
 _BRANCH_EMPTY = "'Branch' cannot be empty"
+# User seed password material (V39): write-only on apply when present in
+# YAML; extract always strips; diff never compares (GET returns hashes
+# or nothing — never a re-seedable value).
+PASSWORD_FIELDS = frozenset({"Password", "b64__Password"})
 
 
 def active_bootstrap(root: Path | None = None) -> tuple[str, frozenset[str]]:
@@ -480,7 +484,9 @@ def diff(client: AcumaticaClient, baseline: BaselineFile | ActionFile) -> list[s
             drifts.append(f"{label}: missing on tenant")
             continue
         actual = unwrap(live)
-        for field, expected in record.items():
+        # V39: password write-only — never compare Password / b64__Password
+        fields = {k: v for k, v in record.items() if k not in PASSWORD_FIELDS}
+        for field, expected in fields.items():
             if isinstance(expected, list):
                 key = (baseline.detail_keys or {})[field]  # load-validated
                 live_rows = actual.get(field, [])
@@ -504,6 +510,8 @@ def _diff_nested(path: str, expected: dict[str, Any], live: Any) -> list[str]:
         return [f"{path}: not returned by endpoint"]
     drifts: list[str] = []
     for field, want in expected.items():
+        if field in PASSWORD_FIELDS:
+            continue
         if isinstance(want, dict):
             drifts.extend(_diff_nested(f"{path}.{field}", want, live.get(field)))
         elif field not in live:
@@ -536,6 +544,8 @@ def _diff_details(
             drifts.append(f"{label}.{field}[{row[key]}]: missing on tenant")
             continue
         for sub, want in row.items():
+            if sub in PASSWORD_FIELDS:
+                continue
             if sub not in live_row:
                 drifts.append(
                     f"{label}.{field}[{row[key]}].{sub}: not returned by endpoint"

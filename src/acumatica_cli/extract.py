@@ -43,7 +43,7 @@ from .client import (
     unwrap,
 )
 from .models import Model, validation_summary
-from .seed import active_bootstrap, resolve_endpoint
+from .seed import PASSWORD_FIELDS, active_bootstrap, resolve_endpoint
 
 # The one non-catalog destination: the feature-closure file (V22/B15).
 FEATURES_FILE = "config/bootstrap/features.yaml"
@@ -296,6 +296,10 @@ def _kept_fields(spec: EntitySpec, record: dict[str, Any]) -> dict[str, Any]:
             keep[field] = value
             continue
         if field in _SERVER_DERIVED:
+            continue
+        # V39: password hashes never enter seed (hard strip, even if
+        # catalog include mistakenly listed them).
+        if field in PASSWORD_FIELDS:
             continue
         if spec.include:
             if field not in spec.include:

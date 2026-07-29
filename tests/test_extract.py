@@ -735,6 +735,32 @@ def test_shape_include_allow_list_keeps_keys() -> None:
     assert shaped == [{"UnitID": "HOUR", "Description": "Hour"}]
 
 
+def test_shape_hard_strips_password_fields() -> None:
+    """V39/T147: Password + b64__Password never enter seed (even via include)."""
+    live = [
+        wrap(
+            {
+                "UnitID": "HOUR",
+                "Description": "Hour",
+                "Password": "hash-must-not-extract",
+                "b64__Password": "YmFk",
+            }
+        )
+    ]
+    # include allow-list mistakenly lists password material — still stripped
+    spec = _spec(include=["Description", "Password", "b64__Password"])
+    shaped = extract._shape(spec, live)  # pyright: ignore[reportPrivateUsage]
+    assert shaped == [{"UnitID": "HOUR", "Description": "Hour"}]
+    # strip-list path (no include): password still hard-stripped without
+    # needing an explicit deny entry
+    shaped2 = extract._shape(  # pyright: ignore[reportPrivateUsage]
+        _spec(strip=["Noise"]), live
+    )
+    assert "Password" not in shaped2[0]
+    assert "b64__Password" not in shaped2[0]
+    assert shaped2[0]["Description"] == "Hour"
+
+
 def test_shape_missing_key_field_is_a_hard_error() -> None:
     with pytest.raises(RuntimeError, match="missing key field"):
         extract._shape(  # pyright: ignore[reportPrivateUsage]

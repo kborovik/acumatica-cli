@@ -699,6 +699,82 @@ def test_diff_flags_field_not_returned(tmp_path: Path, instance: Instance) -> No
     assert drifts == ["UnitsOfMeasure [KG].Description: not returned by endpoint"]
 
 
+USER_PASSWORD_YAML = """\
+entity: User
+key: Username
+endpoint: bootstrap
+records:
+  - Username: soadmin
+    FirstName: SO
+    Password: secret-once
+    PasswordNeverExpires: true
+"""
+
+
+def test_apply_puts_password_when_present_in_seed(
+    tmp_path: Path, instance: Instance
+) -> None:
+    """V39/T147: Password is write-only — PUT carries it only when seed has it."""
+    baseline = seed.load_baseline(_write(tmp_path, USER_PASSWORD_YAML))
+    recorder = Recorder()
+    seed.apply(_client(instance, recorder), baseline)
+    body = json.loads(recorder.requests[-1].content)
+    assert body["Password"] == {"value": "secret-once"}
+    assert body["Username"] == {"value": "soadmin"}
+
+
+def test_apply_omits_password_when_absent_from_seed(
+    tmp_path: Path, instance: Instance
+) -> None:
+    text = USER_PASSWORD_YAML.replace("    Password: secret-once\n", "")
+    baseline = seed.load_baseline(_write(tmp_path, text))
+    recorder = Recorder()
+    seed.apply(_client(instance, recorder), baseline)
+    body = json.loads(recorder.requests[-1].content)
+    assert "Password" not in body
+    assert body["Username"] == {"value": "soadmin"}
+
+
+def test_diff_ignores_password_fields(tmp_path: Path, instance: Instance) -> None:
+    """V39/T147: seed Password vs missing/hash live is not drift."""
+    baseline = seed.load_baseline(_write(tmp_path, USER_PASSWORD_YAML))
+    # live has identity fields but no Password (or a hash) — either is fine
+    recorder = Recorder(
+        {
+            "/User": _live(
+                {
+                    "Username": "soadmin",
+                    "FirstName": "SO",
+                    "PasswordNeverExpires": True,
+                    "Password": "hash-not-seedable",
+                    "b64__Password": "YmFk",
+                }
+            )
+        }
+    )
+    assert seed.diff(_client(instance, recorder), baseline) == []
+
+
+def test_diff_still_flags_non_password_user_fields(
+    tmp_path: Path, instance: Instance
+) -> None:
+    baseline = seed.load_baseline(_write(tmp_path, USER_PASSWORD_YAML))
+    recorder = Recorder(
+        {
+            "/User": _live(
+                {
+                    "Username": "soadmin",
+                    "FirstName": "Other",
+                    "PasswordNeverExpires": True,
+                }
+            )
+        }
+    )
+    drifts = seed.diff(_client(instance, recorder), baseline)
+    assert drifts == ["User [soadmin].FirstName: source='SO' live='Other'"]
+    assert not any("Password" in d for d in drifts)
+
+
 def test_diff_normalizes_booleans(tmp_path: Path, instance: Instance) -> None:
     text = "entity: E\nkey: K\nrecords:\n  - K: A\n    Active: true\n"
     baseline = seed.load_baseline(_write(tmp_path, text))
