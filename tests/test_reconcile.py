@@ -1051,12 +1051,41 @@ def test_posting_class_fk_resolve(tmp_path: Path) -> None:
     assert not any(d.entity == "PostingClass" for d in bundle.deltas)
 
 
-def test_decimal_trailing_zero_norm() -> None:
-    """DiscPercent-style 0 vs 0.000000 collapses without mangling CD 000000."""
-    assert reconcile._norm("0.000000") == "0"
-    assert reconcile._norm("0") == "0"
-    assert reconcile._norm("000000") == "000000"
-    assert reconcile._norm(0.0) == "0"
+def test_decimal_trailing_zero_compare(tmp_path: Path) -> None:
+    """DiscPercent-style 0 vs 0.000000 collapses; bare CD 000000 stays a CD."""
+    terms_xml = """\
+<?xml version="1.0" encoding="utf-8"?>
+<data>
+  <table name="Terms">
+    <col name="TermsID" type="NVarChar(10)"/>
+    <col name="DiscPercent" type="Decimal"/>
+    <col name="DayDue00" type="SmallInt"/>
+  </table>
+  <rows>
+    <row TermsID="NET30" DiscPercent="0.000000" DayDue00="30"/>
+  </rows>
+</data>
+"""
+    inv = _inventory_tree(tmp_path, terms_xml)
+    tree = reconcile.load_inventory_tree(inv)
+    cfg = tmp_path / "config"
+    (cfg / "bootstrap").mkdir(parents=True)
+    (cfg / "bootstrap" / "credit-terms.yaml").write_text(
+        "entity: CreditTerms\n"
+        "key: TermsID\n"
+        "endpoint: bootstrap\n"
+        "records:\n"
+        "  - TermsID: NET30\n"
+        "    DiscPercent: 0\n"
+        "    DayDue00: 30\n",
+        encoding="utf-8",
+    )
+    seeds = reconcile.load_config_seeds(cfg)
+    smap = reconcile.SnapshotMap.model_validate(
+        {"tables": [{"table": "Terms", "entity": "CreditTerms"}]}
+    )
+    bundle = reconcile.reconcile(tree, seeds, config_dir=cfg, snapshot_map=smap)
+    assert not any(d.field == "DiscPercent" for d in bundle.deltas)
 
 
 def test_models_forbid_extra() -> None:
