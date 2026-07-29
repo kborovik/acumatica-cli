@@ -150,9 +150,7 @@ class TableMapEntry(Model):
         if v is None:
             return {}
         if not isinstance(v, dict):
-            raise ValueError(
-                "keys/fields/resolves/enums must be a mapping of strings"
-            )
+            raise ValueError("keys/fields/resolves/enums must be a mapping of strings")
         out: dict[str, str] = {}
         for seed_name, target in v.items():
             s = str(seed_name).strip()
@@ -163,9 +161,7 @@ class TableMapEntry(Model):
                 )
             i = str(target).strip()
             if not s or not i:
-                raise ValueError(
-                    "keys/fields/resolves/enums names must be non-empty"
-                )
+                raise ValueError("keys/fields/resolves/enums names must be non-empty")
             out[s] = i
         return out
 
@@ -840,25 +836,24 @@ def _norm(value: Any) -> str:
     or false-deltas.
     """
     if isinstance(value, bool):
-        return "true" if value else "false"
-    if value is None:
-        return ""
-    if isinstance(value, int) and not isinstance(value, bool):
-        return str(value)
-    if isinstance(value, float):
+        s = "true" if value else "false"
+    elif value is None:
+        s = ""
+    elif isinstance(value, int):
+        s = str(value)
+    elif isinstance(value, float):
         as_int = int(value)
-        if value == float(as_int):
-            return str(as_int)
-        return str(value)
-    s = str(value).strip()
-    if "." in s:
-        try:
-            f = float(s)
-        except ValueError:
-            return s
-        as_int = int(f)
-        if f == float(as_int):
-            return str(as_int)
+        s = str(as_int) if value == float(as_int) else str(value)
+    else:
+        s = str(value).strip()
+        if "." in s:
+            try:
+                f = float(s)
+            except ValueError:
+                return s
+            as_int = int(f)
+            if f == float(as_int):
+                s = str(as_int)
     return s
 
 
