@@ -97,6 +97,58 @@ def test_create_builds_full_company_spec(instance: Instance, run: FakeRun) -> No
     assert '-aun:"admin" -aup:"pw" -auc:"False"' in command
 
 
+def test_set_company_cd_updates_when_mismatched(
+    instance: Instance, run: FakeRun
+) -> None:
+    # ac.exe left CompanyCD as Company3; create path aligns it to the login
+    run.results = [
+        (
+            0,
+            "1|System|  |System\n"
+            "2|Company|Company|Custom\n"
+            "4|Company3|LAB6|Custom\n",
+        ),
+        (0, ""),
+    ]
+    changed = TenantManager(instance).set_company_cd(4, "LAB6")
+    assert changed is True
+    assert "UPDATE AcumaticaDB.dbo.Company SET CompanyCD = N'LAB6'" in run.commands[1]
+    assert "WHERE CompanyID = 4" in run.commands[1]
+
+
+def test_set_company_cd_noop_when_already_aligned(
+    instance: Instance, run: FakeRun
+) -> None:
+    run.results = [(0, "3|LAB5|LAB5|Custom\n")]
+    changed = TenantManager(instance).set_company_cd(3, "LAB5")
+    assert changed is False
+    assert len(run.commands) == 1  # list only; no UPDATE
+
+
+def test_set_company_cd_rejects_collision(
+    instance: Instance, run: FakeRun
+) -> None:
+    run.results = [
+        (
+            0,
+            "2|Company|Company|Custom\n"
+            "3|LAB5|LAB5|Custom\n"
+            "4|Company3|LAB6|Custom\n",
+        ),
+    ]
+    with pytest.raises(RuntimeError, match=r"CompanyCD 'LAB5' already used"):
+        TenantManager(instance).set_company_cd(4, "LAB5")
+    assert len(run.commands) == 1  # list only
+
+
+def test_set_company_cd_escapes_sql_quotes(
+    instance: Instance, run: FakeRun
+) -> None:
+    run.results = [(0, "4|Company3|O'Brien|Custom\n"), (0, "")]
+    TenantManager(instance).set_company_cd(4, "O'Brien")
+    assert "SET CompanyCD = N'O''Brien'" in run.commands[1]
+
+
 def test_delete_uses_deleted_subkey_with_full_spec(
     instance: Instance, run: FakeRun
 ) -> None:

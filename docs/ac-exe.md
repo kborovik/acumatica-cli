@@ -70,6 +70,10 @@ More verified quirks:
   `Company3`, …); `CompanyKey` holds the name you passed (`Scratch`) and **is**
   the value the sign-in page shows and the REST login's `tenant` field
   matches. So `acu tenant list` reads CompanyKey as the login name.
+  **`acu tenant create` aligns `CompanyCD` to the login after CompanyConfig**
+  (sqlcmd `UPDATE dbo.Company SET CompanyCD = …`) so list Login and CD match;
+  re-running create is idempotent when they already match. Collision with
+  another tenant's CD is a hard error.
 - **The delete sub-key is `Deleted`, not the documented `Delete`** (verified
   2026-07-08). `Delete=Yes` is silently ignored — worse, the run then treats
   the tenant as a data-insert target and *overwrites it*. And a delete must

@@ -14,8 +14,10 @@ class Tenant(Model):
     """One row of the instance's Company table.
 
     login_name is dbo.Company.CompanyKey — the name on the sign-in page and
-    the REST login's tenant value. company_cd is the internal auto-generated
-    code (ac.exe ignores LoginName for it; see docs/ac-exe.md).
+    the REST login's tenant value. company_cd is dbo.Company.CompanyCD; ac.exe
+    auto-generates it (Company2, Company3, …) and ignores LoginName for it
+    (docs/ac-exe.md). ``acu tenant create`` aligns CompanyCD to the login
+    after CompanyConfig so list Login and CD match.
     """
 
     company_id: int
@@ -131,6 +133,9 @@ class TenantManager:
         flags preset the tenant's admin to the instance credentials with no
         must-change flag, so the tenant is REST-loginable right after the
         app-pool recycle — no first-login dance (verified, docs/ac-exe.md).
+
+        Does not set CompanyCD (ac.exe auto-generates it). Call
+        :meth:`set_company_cd` after create to align CD with the login.
         """
         company = (
             f"CompanyID={company_id};ParentID={parent_id};"
@@ -141,6 +146,47 @@ class TenantManager:
             f' -aun:"{self.instance.user}" -aup:"{self.instance.password}" -auc:"False"'
         )
         return self._company_config(company, extra=admin)
+
+    def set_company_cd(self, company_id: int, company_cd: str) -> bool:
+        """Set ``dbo.Company.CompanyCD`` for a tenant (sqlcmd over SSH).
+
+        ac.exe CompanyConfig only writes LoginName into CompanyKey; CompanyCD
+        stays auto-generated (``Company2``, ``Company3``, …). Aligning CD to
+        the login makes ``acu tenant list`` show matching Login/CD columns and
+        matches the Companies-screen rename operators do by hand.
+
+        Returns True when an UPDATE ran, False when CD already matches.
+        Raises if the target id is missing or ``company_cd`` is already used
+        by a different CompanyID.
+        """
+        tenants = self.list()
+        target = next((t for t in tenants if t.company_id == company_id), None)
+        if target is None:
+            raise RuntimeError(f"no tenant with CompanyID={company_id}")
+        if target.company_cd == company_cd:
+            return False
+        conflict = next(
+            (
+                t
+                for t in tenants
+                if t.company_cd == company_cd and t.company_id != company_id
+            ),
+            None,
+        )
+        if conflict is not None:
+            raise RuntimeError(
+                f"CompanyCD {company_cd!r} already used by "
+                f"CompanyID={conflict.company_id}"
+            )
+        # company_id is int; company_cd is quoted with doubled single-quotes
+        escaped = company_cd.replace("'", "''")
+        query = (
+            f"UPDATE {DB_NAME}.dbo.Company "
+            f"SET CompanyCD = N'{escaped}' "
+            f"WHERE CompanyID = {company_id}"
+        )
+        self._ssh(f'sqlcmd -S "(local)" -E -C -Q "{query}"')
+        return True
 
     def delete(self, company_id: int) -> str:
         """Delete the tenant and all its data.

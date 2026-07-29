@@ -183,6 +183,12 @@ def create_env(
         "create",
         lambda self, *a, **k: calls.append("create") or "Company created",
     )
+    # post-create CompanyCD ← login align (ac.exe leaves Company2/Company3)
+    monkeypatch.setattr(
+        TenantManager,
+        "set_company_cd",
+        lambda self, cid, cd: calls.append(f"set_cd:{cd}") or True,
+    )
     monkeypatch.setattr(
         TenantManager, "recycle_app_pool", lambda self: calls.append("recycle")
     )
@@ -218,6 +224,7 @@ def test_tenant_create_chains_init_and_bootstrap(create_env: list[str]) -> None:
     # feature slot before the plugin's insert commits
     assert create_env == [
         "create",
+        "set_cd:Scratch",
         "recycle",
         "init:Scratch",
         "publish:Scratch:MultiCompany,Multicurrency",
@@ -230,13 +237,13 @@ def test_tenant_create_chains_init_and_bootstrap(create_env: list[str]) -> None:
 
 def test_tenant_create_no_init_skips_bootstrap(create_env: list[str]) -> None:
     # an unrecycled tenant is invisible to REST, so --no-init must skip the
-    # whole init + bootstrap chain, not just the recycle
+    # whole init + bootstrap chain, not just the recycle; CD align still runs
     result = CliRunner().invoke(
         cli.cli, ["tenant", "create", "--id", "3", "--login", "Scratch", "--no-init"]
     )
 
     assert result.exit_code == 0
-    assert create_env == ["create"]
+    assert create_env == ["create", "set_cd:Scratch"]
     assert "skipping init" in result.stderr
 
 
@@ -271,6 +278,7 @@ def test_tenant_create_recycles_even_when_already_published(
     assert result.exit_code == 0
     assert create_env == [
         "create",
+        "set_cd:Scratch",
         "recycle",
         "init:Scratch",
         "publish",
@@ -304,7 +312,9 @@ def test_tenant_create_exists_skips_create_and_still_chains(
 
     assert result.exit_code == 0
     assert "skip create: tenant Scratch exists (id 3)" in result.stdout
+    # set_cd still runs on exists-skip so a mismatched CompanyCD converges
     assert create_env == [
+        "set_cd:Scratch",
         "recycle",
         "init:Scratch",
         "publish:Scratch:MultiCompany,Multicurrency",

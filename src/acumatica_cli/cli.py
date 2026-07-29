@@ -309,6 +309,11 @@ def tenant_create(
     create is skipped and the init + digest-gated publish chain still runs,
     so re-running create is the republish route for existing tenants. --id
     must match the existing CompanyID, else hard error naming both.
+
+    After create (or on exists-skip), CompanyCD is set equal to --login.
+    ac.exe only writes LoginName into CompanyKey and auto-generates CD
+    (Company2, Company3, …); the align step matches what operators do on
+    the Companies screen so ``acu tenant list`` shows Login = CD.
     """
     mgr = TenantManager(inst)
     existing = next((t for t in mgr.list() if t.login_name == login_name), None)
@@ -329,6 +334,14 @@ def tenant_create(
                 company_id, login_name, parent_id, not hidden, company_type or ""
             )
         output.data(raw.splitlines()[-1] if raw.strip() else "created")
+    # ac.exe only sets CompanyKey from LoginName; CompanyCD stays auto-generated
+    # (Company2/Company3/…). Align CD → login so list shows matching columns.
+    # Idempotent on re-run / exists-skip (docs/ac-exe.md).
+    with output.step(f"aligning CompanyCD to login ({login_name})"):
+        if mgr.set_company_cd(company_id, login_name):
+            output.data(f"CompanyCD set to {login_name}")
+        else:
+            output.data(f"CompanyCD already {login_name}")
     if no_init:
         output.warn("skipping init: tenant is invisible until an app-pool recycle")
         return
