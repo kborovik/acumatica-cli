@@ -89,7 +89,7 @@ A path like `config/` expands nested seed dirs in that fixed order.
 `extract` always writes under `config/{bootstrap,baseline,setup,master}/` (catalog-driven; never root SEED_DIRS).
 `inventory` is offline (no REST/SSH/password): SM203520 Settings XML ZIP or `ac.exe export xml` folder writes to `inventory/`.
 `reconcile` is offline: compare `inventory/` to optional `config/` and write `findings/` only (never writes seed).
-Optional `snapshot_map.yaml` (data-repo root or package defaults) maps DAC tables to catalog entities and normalizes join (pad-trim, key/field aliases, Account/Sub FK CD resolve, enum label→code).
+Optional `snapshot_map.yaml` (data-repo root or package defaults) maps DAC tables to catalog entities and normalizes join (pad-trim, key/field aliases, Account/Sub FK CD resolve, enum label to code).
 See [docs/demo-seed.md](docs/demo-seed.md).
 `acu --completion` emits a completion script for bash, zsh, or fish — source it from your shell profile.
 Run `acu <command> --help` for details on any command.
