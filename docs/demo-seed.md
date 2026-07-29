@@ -95,6 +95,45 @@ acu --tenant DEV state
 
 `reconcile` never writes `config/` (V36): unmapped tables, REST gaps, rest-vs-snapshot field deltas, and custom `Usr*` columns land under `findings/` only. When `target.yaml` is present and the artifact reports a build, `inventory` requires `erp` match (sibling of V27). `config init` does not scaffold `inventory/` or `findings/` — engagement-generated.
 
+### `snapshot_map.yaml` (table→entity + normalize)
+
+Join is always **table↔entity** (never seed filename↔inventory filename). Load
+order: data-repo root `snapshot_map.yaml` if present, else package defaults,
+else empty → identity match on catalog entity name. v1 rows stay
+`{table, entity}` only.
+
+Beyond renames, the map (and package defaults) support V38 normalize:
+
+| Layer | YAML | Effect |
+| ----- | ---- | ------ |
+| Pad-trim | (always on) | string keys + fields strip both sides so NVarChar padding joins |
+| Key/field aliases | per-row `keys:` / `fields:` | seed name → inventory column (e.g. `SubaccountCD: SubCD`, `UnitID: Unit`, `Description: Descr`) |
+| FK CD resolve | global `resolvers:` + per-row `resolves:` | inv int id → CD via inventory index (prefer compare in seed CD space); package ships Account+Sub for ReasonCode/VendorClass `*AcctID`/`*SubID` |
+
+```yaml
+# snapshot_map.yaml (excerpt — package ships defaults)
+resolvers:
+  account_cd: { table: Account, id: AccountID, cd: AccountCD }
+  sub_cd:     { table: Sub,     id: SubID,     cd: SubCD }
+
+tables:
+  - table: Sub
+    entity: Subaccount
+    keys: { SubaccountCD: SubCD }
+  - table: UnitOfMeasure
+    entity: UnitsOfMeasure
+    keys: { UnitID: Unit }
+    fields: { Description: Descr }
+  - table: ReasonCode
+    entity: ReasonCode
+    resolves: { AccountID: account_cd, SubID: sub_cd }
+```
+
+Without aliases, renamed DACs clear **unmapped** but skip row compare (key
+names miss). Without resolvers, ReasonCode/VendorClass report false
+CD-vs-int deltas. Enums (e.g. Usage label vs char code) are still out of
+scope. Findings report seed-side field names and resolved inventory values.
+
 Artifact notes and the SM203520 / `ac.exe export xml` distinction: [ac-exe.md](ac-exe.md).
 
 Default scaffold golden is **trial-balance only** (V28/V33):

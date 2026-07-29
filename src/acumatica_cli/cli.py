@@ -1103,7 +1103,10 @@ def reconcile_cmd(
     columns land in findings files only. No REST, no SSH, no password.
     Exit 0 clean, 1 IO/parse fail; never 2 (conflicts are findings, not
     drift). Optional snapshot_map.yaml maps DAC tables to catalog
-    entities; absent → identity match on entity name.
+    entities (absent → identity match on entity name) and may declare
+    keys:/fields: seed→inv aliases plus resolvers:/resolves: for FK
+    int→CD compare (package defaults cover Sub, UnitOfMeasure,
+    ReasonCode/VendorClass Account+Sub). Compare always pad-trims strings.
     """
     inv = (
         inventory_dir

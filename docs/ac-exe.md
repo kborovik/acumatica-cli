@@ -195,6 +195,8 @@ are **rejected** (fail-closed named error). Example:
 acu inventory "$env:TEMP\company2-export"
 acu inventory --dry-run ./company2-export
 acu reconcile   # optional: inventory/ + config/ → findings/ only
+# Optional data-repo snapshot_map.yaml (or package defaults): table→entity,
+# key/field aliases, Account/Sub FK CD resolve — see docs/demo-seed.md
 ```
 
 See also SM203520 Settings **XML** ZIP below (same IR after normalize).
