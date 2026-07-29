@@ -164,6 +164,67 @@ def test_tenant_list_renders_table(
     assert "Company" in result.output
 
 
+def test_tenant_recycle_invokes_app_pool(
+    wired: Instance, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # T142/T143: site-wide recycle is control-plane only — wires
+    # TenantManager.recycle_app_pool (Restart-WebAppPool under the hood);
+    # --yes skips the destructive confirm (V16)
+    calls: list[str] = []
+    rest_opens = 0
+
+    class TrackingClient(DummyClient):
+        def __enter__(self) -> DummyClient:
+            nonlocal rest_opens
+            rest_opens += 1
+            return self
+
+    monkeypatch.setattr(cli, "AcumaticaClient", TrackingClient)
+    monkeypatch.setattr(
+        TenantManager,
+        "recycle_app_pool",
+        lambda self: calls.append("recycle"),
+    )
+    result = CliRunner().invoke(cli.cli, ["tenant", "recycle", "--yes"])
+
+    assert result.exit_code == 0
+    assert calls == ["recycle"]
+    assert rest_opens == 0  # V1: no data-plane session
+    assert "app pool recycled" in result.stderr
+
+
+def test_tenant_recycle_aborts_without_yes(wired: Instance) -> None:
+    # confirmation_option: default answer is no → exit 1, no remote
+    result = CliRunner().invoke(cli.cli, ["tenant", "recycle"], input="n\n")
+
+    assert result.exit_code == 1
+    assert "Aborted" in result.output
+
+
+def test_tenant_recycle_fails_without_ssh(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # T143/I.cmd: empty ACU_SSH post-default → hard error naming key before
+    # any remote (same class as tenant list)
+    (tmp_path / ".env").write_text(
+        "ACU_BASE_URL=http://acu.test/AcumaticaERP\nACU_SSH=\nACU_PASSWORD=secret\n"
+    )
+    monkeypatch.chdir(tmp_path)
+
+    result = CliRunner().invoke(cli.cli, ["tenant", "recycle", "--yes"])
+
+    assert result.exit_code != 0
+    assert "ACU_SSH not set" in result.output
+
+
+def test_tenant_recycle_help_lists_yes(wired: Instance) -> None:
+    result = CliRunner().invoke(cli.cli, ["tenant", "recycle", "--help"])
+
+    assert result.exit_code == 0
+    assert "--yes" in result.output
+    assert "app pool" in result.output.lower() or "recycle" in result.output.lower()
+
+
 @pytest.fixture
 def create_env(
     wired: Instance, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
