@@ -339,6 +339,10 @@ def apply(
     branch selectors resolve for later files (V5/B24). A PUT that still
     500s with ``'Branch' cannot be empty`` gets one re-login + retry.
 
+    Password fields (V39/T148): write-only on virgin create when present in
+    seed; warm re-apply (record already live) strips them so identity
+    re-PUT does not reset passwords.
+
     Returns the record count.
     """
     if isinstance(baseline, ActionFile):
@@ -348,9 +352,7 @@ def apply(
         if dry_run:
             output.data(f"  would PUT {baseline.entity} [{label}]")
         else:
-            body = record
-            if any(isinstance(v, list) for v in record.values()):
-                body = _with_detail_ids(client, baseline, record)
+            body = _put_body(client, baseline, record)
             _put(client, baseline.entity, body, baseline.endpoint)
             if baseline.entity == "Company":
                 client.refresh_after_company()
@@ -375,23 +377,43 @@ def _put(
         client.put(entity, body, endpoint=endpoint)
 
 
-def _with_detail_ids(
+def _put_body(
     client: AcumaticaClient, baseline: BaselineFile, record: dict[str, Any]
 ) -> dict[str, Any]:
-    """Source record + live detail-row ids — the detail upsert handle (T60).
+    """Build the PUT body: detail-id merge + warm password strip (T60/V39/T148).
+
+    One live fetch when the record has detail lists and/or password fields.
+    Virgin (no live) keeps seed Password; warm drops password material so
+    re-apply is identity-only (package User seed never needs a password).
+    """
+    has_details = any(isinstance(v, list) for v in record.values())
+    has_password = any(k in record for k in PASSWORD_FIELDS)
+    live: dict[str, Any] | None = None
+    if has_details or has_password:
+        live = _fetch(client, baseline, record)
+    if has_details and live is not None:
+        body = _merge_detail_ids(baseline, record, live)
+    else:
+        body = dict(record)
+    if live is not None and has_password:
+        body = {k: v for k, v in body.items() if k not in PASSWORD_FIELDS}
+    return body
+
+
+def _merge_detail_ids(
+    baseline: BaselineFile,
+    record: dict[str, Any],
+    live: dict[str, Any],
+) -> dict[str, Any]:
+    """Inject live detail-row GUIDs into a source record (T60).
 
     The contract API matches detail rows by row GUID only: a re-PUT
     without ids re-INSERTS every row (live-verified on KitSpecification —
-    500 "Component Item must be unique"). So apply pre-fetches the live
-    record, injects each matching live row's `id` (matched by the
-    detail_keys field), and appends `{id, delete: true}` rows for live
-    rows the source no longer claims — the record owns its list (V4
-    detail semantics), so apply converges exactly what diff would flag.
-    Record absent live → first PUT creates, rows travel id-less.
+    500 "Component Item must be unique"). Matched source rows gain the
+    live ``id``; live rows the source no longer claims ride as
+    ``{id, delete: true}`` — the record owns its list (V4 detail
+    semantics). Caller supplies the already-fetched live entity.
     """
-    live = _fetch(client, baseline, record)
-    if live is None:
-        return record
     out = dict(record)
     for field, rows in record.items():
         if not isinstance(rows, list):

@@ -714,11 +714,13 @@ records:
 def test_apply_puts_password_when_present_in_seed(
     tmp_path: Path, instance: Instance
 ) -> None:
-    """V39/T147: Password is write-only — PUT carries it only when seed has it."""
+    """V39/T147: Password is write-only — virgin PUT carries it when seed has it."""
     baseline = seed.load_baseline(_write(tmp_path, USER_PASSWORD_YAML))
-    recorder = Recorder()
+    # empty list → user missing → virgin create keeps Password
+    recorder = Recorder({"/User": httpx.Response(200, json=[])})
     seed.apply(_client(instance, recorder), baseline)
-    body = json.loads(recorder.requests[-1].content)
+    puts = [r for r in recorder.requests if r.method == "PUT"]
+    body = json.loads(puts[-1].content)
     assert body["Password"] == {"value": "secret-once"}
     assert body["Username"] == {"value": "soadmin"}
 
@@ -733,6 +735,154 @@ def test_apply_omits_password_when_absent_from_seed(
     body = json.loads(recorder.requests[-1].content)
     assert "Password" not in body
     assert body["Username"] == {"value": "soadmin"}
+
+
+def test_apply_warm_strips_password_when_user_exists(
+    tmp_path: Path, instance: Instance
+) -> None:
+    """V39/T148: warm re-apply drops Password — identity PUT does not reset it."""
+    baseline = seed.load_baseline(_write(tmp_path, USER_PASSWORD_YAML))
+    recorder = Recorder(
+        {
+            "/User": _live(
+                {
+                    "Username": "soadmin",
+                    "FirstName": "SO",
+                    "PasswordNeverExpires": True,
+                }
+            )
+        }
+    )
+    seed.apply(_client(instance, recorder), baseline)
+    puts = [r for r in recorder.requests if r.method == "PUT"]
+    body = json.loads(puts[-1].content)
+    assert "Password" not in body
+    assert body["Username"] == {"value": "soadmin"}
+    assert body["FirstName"] == {"value": "SO"}
+
+
+ROLE_USER_YAML = {
+    "role": """\
+entity: Role
+key: Rolename
+endpoint: bootstrap
+records:
+  - Rolename: SO Admin
+    Descr: Sales order administration
+""",
+    "user": """\
+entity: User
+key: Username
+endpoint: bootstrap
+detail_keys:
+  Roles: Rolename
+records:
+  - Username: soadmin
+    FirstName: SO
+    LastName: Admin
+    Email: soadmin@example.com
+    IsApproved: true
+    PasswordNeverExpires: true
+    PasswordChangeOnNextLogin: false
+    Roles:
+      - Rolename: SO Admin
+        Selected: true
+""",
+}
+
+
+def test_apply_role_then_user_membership_virgin(
+    tmp_path: Path, instance: Instance
+) -> None:
+    """T148/V22: Role PUT then User PUT with membership; virgin no password."""
+    role_path = tmp_path / "90-roles.yaml"
+    role_path.write_text(ROLE_USER_YAML["role"])
+    user_path = tmp_path / "91-users.yaml"
+    user_path.write_text(ROLE_USER_YAML["user"])
+    role = seed.load_baseline(role_path)
+    user = seed.load_baseline(user_path)
+    assert isinstance(role, seed.BaselineFile)
+    assert isinstance(user, seed.BaselineFile)
+    # empty Role/User lists → virgin creates
+    recorder = Recorder(
+        {
+            "/Role": httpx.Response(200, json=[]),
+            "/User": httpx.Response(200, json=[]),
+        }
+    )
+    client = _client(instance, recorder)
+    seed.apply(client, role)
+    seed.apply(client, user)
+    puts = [r for r in recorder.requests if r.method == "PUT"]
+    assert len(puts) == 2
+    assert puts[0].url.path.endswith("/Role")
+    role_body = json.loads(puts[0].content)
+    assert role_body["Rolename"] == {"value": "SO Admin"}
+    assert puts[1].url.path.endswith("/User")
+    user_body = json.loads(puts[1].content)
+    assert user_body["Username"] == {"value": "soadmin"}
+    assert "Password" not in user_body
+    assert user_body["Roles"] == [
+        {"Rolename": {"value": "SO Admin"}, "Selected": {"value": True}}
+    ]
+
+
+def test_apply_user_membership_warm_idempotent_no_password(
+    tmp_path: Path, instance: Instance
+) -> None:
+    """T148: warm User re-apply injects Roles ids; package seed has no Password."""
+    user_path = tmp_path / "91-users.yaml"
+    user_path.write_text(ROLE_USER_YAML["user"])
+    user = seed.load_baseline(user_path)
+    live_user = {
+        "Username": {"value": "soadmin"},
+        "FirstName": {"value": "SO"},
+        "LastName": {"value": "Admin"},
+        "Email": {"value": "soadmin@example.com"},
+        "IsApproved": {"value": True},
+        "PasswordNeverExpires": {"value": True},
+        "PasswordChangeOnNextLogin": {"value": False},
+        "Roles": [
+            {
+                "Rolename": {"value": "SO Admin"},
+                "Selected": {"value": True},
+                "id": "guid-so-admin",
+            },
+            {
+                "Rolename": {"value": "Administrator"},
+                "Selected": {"value": False},
+                "id": "guid-admin",
+            },
+        ],
+    }
+    recorder = Recorder({"/User": httpx.Response(200, json=[live_user])})
+    seed.apply(_client(instance, recorder), user)
+    puts = [r for r in recorder.requests if r.method == "PUT"]
+    body = json.loads(puts[-1].content)
+    assert "Password" not in body
+    # matched membership keeps live id; extra live role row deleted (V4 list owns)
+    roles = body["Roles"]
+    so = next(r for r in roles if r.get("Rolename", {}).get("value") == "SO Admin")
+    assert so["id"] == "guid-so-admin"
+    assert so["Selected"] == {"value": True}
+    deletes = [r for r in roles if r.get("delete") is True]
+    assert deletes == [{"id": "guid-admin", "delete": True}]
+
+
+def test_package_master_role_before_user_v22_order() -> None:
+    """T148/V22: package 90-roles sorts before 91-users (Role before User)."""
+    root = Path(__file__).resolve().parents[1] / "src" / "acumatica_cli" / "templates"
+    master = sorted((root / "config/master").glob("*.yaml"))
+    names = [p.name for p in master]
+    assert "90-roles.yaml" in names
+    assert "91-users.yaml" in names
+    assert names.index("90-roles.yaml") < names.index("91-users.yaml")
+    # expand_files leaf-dir order matches alpha (V22 sole order within dir)
+    from acumatica_cli.cli import expand_files
+
+    expanded = expand_files((root / "config/master",))
+    entities = [seed.load_baseline(p).entity for p in expanded]
+    assert entities.index("Role") < entities.index("User")
 
 
 def test_diff_ignores_password_fields(tmp_path: Path, instance: Instance) -> None:
