@@ -92,42 +92,9 @@ V38: reconcile-normalize — entity-vs-table compare ! pad-trim both sides on st
 
 ## §T TASKS
 
-## archived: §T.1..§T.57 → SPEC.archive.md (57 rows)
+## archived: §T.1..§T.90 → SPEC.archive.md (90 rows)
 
 id|status|task|cites
-T58|x|fix multi-org LedgerCompany identity — declared key uniquely identifies each org-link row; V25 extract + `load_baseline` dup-tuple enforcement (gh #7)|V4,V12,V24,V25,I.cmd,T48,T50
-T59|x|multi-org period/calendar reads — single-org demo strategy; V26 org-context narrowed to in-scope multi-org surfaces (gh #8 out of scope)|V4,V12,V21,V26,I.cmd,T48,T49,T50
-T60|x|detail-list seed support — recursive wrap/unwrap + `detail_keys:` order-insensitive detail diff (gh #9)|V4,V9,V10,I.data,T50
-T61|x|Bootstrap/1.5.0 distribution setup entities — prefs + AvailabilityCalculationRule + PostingClass + CashAccount; version bump per V21 (gh #10)|V12,V20,V21,V22
-T62|x|`acu run` scenario runner — put/action/wait + capture/expect; first consumer `scenario/buy-build-sell.yaml` (gh #11)|V1,V4,V5,V6,V9,V10,V15,V16,I.cmd,T60
-T63|x|rewrite e2e tier single-org self-contained — packaged config-init templates into tmp dirs; no dataset tenants|V13,V16,V22,V26,I.cmd,T20,T50
-T64|x|Bootstrap/1.6.0 VendorClass entity (AP201000) — TermsID + GL-account pairs; version bump per V21 (gh #13)|V12,V20,V21,V22,B8
-T65|x|linked-entity seed support — nested dict wrap/unwrap bare; `$expand` from record shape|V4,V9,V10,V12,I.data,T60,T64
-T66|x|`acu run` get step + path capture — key-URL fetch; dotted/indexed capture into expanded details|V4,V9,V10,V12,I.cmd,I.data,T62
-T67|x|optional SSH (hosted path) — `Instance.ssh` empty default; tenant cmds hard-error when unset; `config check` skip|V1,V3,I.cfg,I.cmd
-T68|x|`acu bootstrap [--export <path>]` hosted path — data-plane publish w/o SSH; export offline zip; recycle if ACU_SSH set else warn|V1,V3,V4,V5,V9,V15,V16,I.cmd,T45,T67
-T69|x|bootstrap contract ownership (hybrid A) — data-repo `bootstrap/project.xml` preferred, packaged minimal fallback; symbolic `endpoint: bootstrap`|V2,V20,V21,I.cmd,I.data
-T70|x|apply re-login after first Company — logout+login mid-run; one retry on `'Branch' cannot be empty` (gh #16, closes §B.24)|V5,V6,I.cmd,B24
-T71|x|symbolic `endpoint: default` — resolve @ `client._url` to `Default/<Instance.api_version>`; dual-serve names both symbols; never load-rewrite `default` (gh #17)|V11,V20,I.data
-T72|x|`ACU_API_VERSION` version-half only validator — hard error on `/` or `Default/` prefix; fix env template comments|V11,I.cfg
-T73|x|`target.yaml` dataset matrix — model + loader + `config init` template (14→15) + local gate on allowlisted data-plane cmds + `config check` `ok|fail|warn|skip` + `--strict` (gh #17)|V2,V10,V27,I.cmd,I.data
-T74|x|`config check` endpoints probe — spike-gate: V12 capture `GET /entity` shape → fail-closed Default presence check|V12,V27,I.cmd
-T75|x|docs: symbolic default + `target.yaml` operator guide (README + rest-api)|V12,V20,V27
-T76|x|optional live ERP build probe in `config check` (HTTP only; major.minor match when method known)|V12,V27,I.cmd
-T77|x|`config init --flavor distribution` CLI + default apply/diff order includes `master/` when present + post-scaffold next-step cmds; default (no flavor) path unchanged|V28,I.cmd
-T78|x|package distribution templates: bootstrap `project.xml` + features + expanded COA + `master/*` + golden `scenario/` + README (rebuild order, empty-tenant !); org-CD token per V29; feature+ref closure per V22|V21,V22,V28,V29,I.data,T77
-T79|x|docs: distribution entity map (entity, endpoint bootstrap or default, screen, seed file) + apply-order/deps notes + changelog/release note for `--flavor distribution` + any apply-dir default change|V12,V28,T77,T78
-T80|x|live verify acceptance: virgin empty tenant matching `target.yaml` → `bootstrap` → `apply` → `run scenario/` expects hold → `diff` clean; default no-flavor init offline e2e still green|V4,V12,V22,V28,V29,T77,T78
-T81|x|single full Bootstrap contract Bootstrap/1.0.0 — swap packaged minimal bootstrap_project.xml for full company entity set; version 1.0.0; data-repo override still preferred|V2,V21,I.data,I.cmd,T69
-T82|x|config init always scaffolds bootstrap/project.xml from full contract; distribution drops divergent 1.8.0 project.xml identity; features/COA/master/scenario stay flavor-only|V28,I.cmd,T81
-T83|x|sweep Bootstrap/1.9.0 + 1.8.0 pins → 1.0.0 (tests, docs, README, parity); offline e2e + distribution scaffold green|V13,V21,T81,T82
-T84|x|seed umbrella expand + default_seed_dirs prefer config/ (gh #19) — dir w/ SEED_DIRS children expands nested fixed order; dual layout prefer config/ only|V9,V22,V30,I.cmd
-T85|x|bootstrap path dual resolve (gh #19) — `load_contract_xml` + `load_features` prefer config/bootstrap then root bootstrap|V2,V21,V30,I.cmd,I.data
-T86|x|scenario once-guard (gh #19) — `once: true` ! authored `present` inquire-absolute `when` eq|gte; skip line; no expect on skip; empty steps ok|V4,V9,V10,I.cmd,I.data,T62
-T87|x|distribution init rehome (gh #19) — scaffold under config/; lifecycle scenarios 10-seed-capital + 20-buy-gateways + 30-build stub + 40-sell; drop monoscenario buy-sell; next-step cmds apply config/|V28,V29,V30,I.cmd,I.data,T84,T86
-T88|x|offline unit tests once skip + config/ path expansion (gh #19)|V4,V9,V13,V30,T84,T86
-T89|x|docs + warm capital non-stack path (gh #19) — README/distribution notes; e2e or documented live prove Owner Capital stays 50000 on second run scenario/|V4,V12,V28,T86,T87
-T90|x|dual-shape `parse_entity_list` — accept array + `{endpoints:[...]}`; unit tests array/wrapper/fail-closed; `config check` endpoints green when Default listed under wrapper (gh #20)|V12,V31,I.cmd
 T91|x|docs `rest-api.md` — document 26.x GET /entity wrapper + array as legacy when still seen (gh #20)|V12,V31
 T92|x|optional: `config check` ERP probe from wrapper `version.acumaticaBuildVersion` when present (gh #20; T76 follow)|V12,V27,I.cmd,T76
 T93|x|snapshot engine — view model + capture render/parse + determinism rules + write/diff/assert paths|V32,V33,V10
@@ -162,7 +129,7 @@ T121|x|extract per-row progress stdout matching apply banner (`path -> tenant on
 T122|x|strip `#` comments from package template YAML — scope: `src/acumatica_cli/templates/**/*.yaml` grep `^\s*#` + trailing `\s#\s`; data only; offline unit gate no-comment; narrative stays sibling gitops separate files|V28
 T123|x|friendly network/transport errors — map httpx TransportError class @ main choke → one `x` line (class + base_url + reachability hint); covers all data-plane via main (apply/diff/run/state/extract/bootstrap/config-check REST); offline unit tests connect/timeout; ACU_DEBUG still re-raises|V9,I.cmd
 T124|x|default ACU_SSH from ACU_BASE_URL host — `Administrator@<hostname>` when key absent; blank key = hosted opt-out; drop ACU_SSH from scaffold env; docs + tests + check-extras V3; verify make check|V3,I.cfg,I.cmd
-T125|x|api_version from target.yaml — `load_instance`: `--api-version` flag ? → else `default_api` when target present → else code default `25.200.001`; drop `ACU_API_VERSION` from Instance env surface + scaffold env template; retire dual-source `assert_target_compatible` match (source-merge instead); config check/show surface source not mismatch; offline tests|V27,V2,V3,I.cfg,I.cmd,I.env
+T125|x|api_version from target.yaml — `load_instance` flag ? else `default_api` else `25.200.001`; drop `ACU_API_VERSION` env+scaffold; source-merge over dual-source match; check/show source; offline tests|V27,V2,V3,I.cfg,I.cmd,I.env
 T126|x|docs sweep: README + rest-api + templates env/README + target template comments — sole data-repo Default pin = `target.yaml` `default_api`; no operator `ACU_API_VERSION` pin; changelog note|V12,V27,I.cmd,T125
 T127|x|SnapshotArtifact IR parse — SM203520 XML ZIP + ac.exe export xml folder; reject .adb; deterministic table/row model + summary fields|V10,V35,V37,I.cmd,I.data
 T128|x|`acu inventory` CLI — artifact → inventory/ summary + tables; --out/--force/--dry-run; offline no session; exit 0/1; V15 verb map + V27 allowlist extras as needed|V9,V15,V16,V35,V37,I.cmd,T127
