@@ -3,8 +3,9 @@
 # table → catalog entity. Optional keys:/fields: rename seed names →
 # inventory columns so join/compare works when DAC names differ (M3).
 # Global resolvers: + per-row resolves: map inv int FKs → CD (M4).
+# Global enums: + per-row enums: map REST labels → DAC codes (M5).
 # Data-repo root snapshot_map.yaml wins over this package file.
-# v1 rows remain {table, entity} only — aliases/resolves optional.
+# v1 rows remain {table, entity} only — aliases/resolves/enums optional.
 
 resolvers:
   account_cd:
@@ -15,6 +16,37 @@ resolvers:
     table: Sub
     id: SubID
     cd: SubCD
+  branch_cd:
+    table: Branch
+    id: BranchID
+    cd: BranchCD
+
+enums:
+  reason_usage:
+    Adjustment: A
+    Assembly/Disassembly: D
+    Issue: I
+    Receipt: R
+    Vendor Return: N
+  account_type:
+    Asset: A
+    Liability: L
+    Income: I
+    Expense: E
+  post_option:
+    Summary: S
+    Detail: D
+  due_type:
+    Fixed Number of Days: N
+  disc_type:
+    Fixed Number of Days: N
+  visible_to:
+    All: AL
+  prepare_on:
+    Fixed Day of Month: F
+  bool_bit:
+    "true": "1"
+    "false": "0"
 
 tables:
   # Wave 1 renames — key/field aliases where seed ≠ DAC column
@@ -22,8 +54,14 @@ tables:
     entity: Subaccount
     keys:
       SubaccountCD: SubCD
+    enums:
+      Active: bool_bit
   - table: Terms
     entity: CreditTerms
+    enums:
+      DueType: due_type
+      DiscType: disc_type
+      VisibleTo: visible_to
   - table: UnitOfMeasure
     entity: UnitsOfMeasure
     keys:
@@ -34,6 +72,10 @@ tables:
     entity: AvailabilityCalculationRule
   - table: SOSetup
     entity: SOPreferences
+    enums:
+      AutoReleaseIN: bool_bit
+      HoldShipments: bool_bit
+      RequireShipmentTotal: bool_bit
   - table: POSetup
     entity: POPreferences
   - table: ARSetup
@@ -41,13 +83,28 @@ tables:
   - table: APSetup
     entity: APPreferences
 
-  # Wave 2 — table renames (field aliases / more FKs later)
+  # Wave 2 — table renames + PostingClass FK resolve
   - table: INPostClass
     entity: PostingClass
+    resolves:
+      COGSAcctID: account_cd
+      COGSSubID: sub_cd
+      InvtAcctID: account_cd
+      InvtSubID: sub_cd
+      LCVarianceAcctID: account_cd
+      LCVarianceSubID: sub_cd
+      POAccrualAcctID: account_cd
+      POAccrualSubID: sub_cd
+      PPVAcctID: account_cd
+      PPVSubID: sub_cd
+      SalesAcctID: account_cd
+      SalesSubID: sub_cd
   - table: INItemClass
     entity: ItemClass
   - table: INSite
     entity: Warehouse
+    enums:
+      Active: bool_bit
   - table: InventoryItem
     entity: StockItem
   - table: INSetup
@@ -62,17 +119,33 @@ tables:
     entity: KitSpecification
   - table: SOOrderType
     entity: OrderType
+    resolves:
+      FreightAcctID: account_cd
+      FreightSubID: sub_cd
+    enums:
+      Active: bool_bit
   - table: ARStatementCycle
     entity: StatementCycle
+    enums:
+      PrepareOn: prepare_on
   - table: OrganizationLedgerLink
     entity: LedgerCompany
 
-  # Identity tables needing FK CD resolve (M4) — table name == entity
+  # Identity tables — FK resolve (M4) + enums (M5)
+  - table: Account
+    entity: Account
+    enums:
+      Type: account_type
+      PostOption: post_option
+      Active: bool_bit
+      RequireUnits: bool_bit
   - table: ReasonCode
     entity: ReasonCode
     resolves:
       AccountID: account_cd
       SubID: sub_cd
+    enums:
+      Usage: reason_usage
   - table: VendorClass
     entity: VendorClass
     resolves:
@@ -84,3 +157,11 @@ tables:
       ExpenseSubID: sub_cd
       POAccrualAcctID: account_cd
       POAccrualSubID: sub_cd
+  - table: CashAccount
+    entity: CashAccount
+    resolves:
+      AccountID: account_cd
+      SubID: sub_cd
+      BranchID: branch_cd
+    enums:
+      Active: bool_bit

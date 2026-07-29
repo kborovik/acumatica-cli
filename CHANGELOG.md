@@ -14,13 +14,17 @@
   `config/` seed; writes `findings/` only (unmapped tables, REST gaps,
   rest-vs-snapshot deltas, custom columns). Never writes `config/` or mutates
   the tenant (V35/V36).
-- **`snapshot_map.yaml` normalize (T132–T136, V38):** package (and optional
+- **`snapshot_map.yaml` normalize (T132–T140, V38):** package (and optional
   data-repo) map goes beyond table→entity. Compare pad-trims string keys and
   fields; optional per-row `keys:` / `fields:` rename seed names → inventory
   columns (e.g. SubaccountCD→SubCD, UnitID→Unit); global `resolvers:` plus
   per-row `resolves:` map inv int FKs → CD via inventory indexes (Account+Sub
-  first; ReasonCode/VendorClass *AcctID/*SubID). v1 `{table, entity}` rows
-  still load. Enums (Usage labels, etc.) remain out of scope.
+  first; ReasonCode/VendorClass/PostingClass/CashAccount/OrderType freight);
+  global `enums:` plus per-row `enums:` fold REST labels → DAC codes
+  (ReasonCode.Usage, Account Type/PostOption/Active, CreditTerms Due/Disc,
+  bool Active on prefs/warehouse/sub, …). Decimal-looking values collapse
+  trailing zeros (`0` vs `0.000000`) without mangling bare CDs like `000000`.
+  v1 `{table, entity}` rows still load.
 - Docs: README CLI map + dual-reader table (inventory vs extract vs state);
   [docs/demo-seed.md](docs/demo-seed.md) dual-reader section + snapshot_map;
   [docs/ac-exe.md](docs/ac-exe.md) export-xml + SM203520 Settings XML notes

@@ -108,7 +108,8 @@ Beyond renames, the map (and package defaults) support V38 normalize:
 | ----- | ---- | ------ |
 | Pad-trim | (always on) | string keys + fields strip both sides so NVarChar padding joins |
 | Key/field aliases | per-row `keys:` / `fields:` | seed name → inventory column (e.g. `SubaccountCD: SubCD`, `UnitID: Unit`, `Description: Descr`) |
-| FK CD resolve | global `resolvers:` + per-row `resolves:` | inv int id → CD via inventory index (prefer compare in seed CD space); package ships Account+Sub for ReasonCode/VendorClass `*AcctID`/`*SubID` |
+| FK CD resolve | global `resolvers:` + per-row `resolves:` | inv int id → CD via inventory index (prefer compare in seed CD space); package ships Account+Sub (+ Branch) for ReasonCode/VendorClass/PostingClass/CashAccount/OrderType freight |
+| Enum labels | global `enums:` + per-row `enums:` | REST label → DAC code (e.g. `Usage: reason_usage`, `Active: bool_bit`, Account `Type`/`PostOption`) |
 
 ```yaml
 # snapshot_map.yaml (excerpt — package ships defaults)
@@ -116,10 +117,15 @@ resolvers:
   account_cd: { table: Account, id: AccountID, cd: AccountCD }
   sub_cd:     { table: Sub,     id: SubID,     cd: SubCD }
 
+enums:
+  reason_usage: { Adjustment: A, Issue: I, Receipt: R }
+  bool_bit: { "true": "1", "false": "0" }
+
 tables:
   - table: Sub
     entity: Subaccount
     keys: { SubaccountCD: SubCD }
+    enums: { Active: bool_bit }
   - table: UnitOfMeasure
     entity: UnitsOfMeasure
     keys: { UnitID: Unit }
@@ -127,12 +133,14 @@ tables:
   - table: ReasonCode
     entity: ReasonCode
     resolves: { AccountID: account_cd, SubID: sub_cd }
+    enums: { Usage: reason_usage }
 ```
 
 Without aliases, renamed DACs clear **unmapped** but skip row compare (key
 names miss). Without resolvers, ReasonCode/VendorClass report false
-CD-vs-int deltas. Enums (e.g. Usage label vs char code) are still out of
-scope. Findings report seed-side field names and resolved inventory values.
+CD-vs-int deltas. Without enums, Usage/Account Type/Active report false
+label-vs-code deltas. Findings report seed-side field names and resolved
+inventory values (codes after enum fold).
 
 Artifact notes and the SM203520 / `ac.exe export xml` distinction: [ac-exe.md](ac-exe.md).
 

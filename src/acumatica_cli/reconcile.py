@@ -24,7 +24,9 @@ Per-row optional ``keys:`` / ``fields:`` maps rename seed names →
 inventory column names (V38 M3) so e.g. SubaccountCD joins SubCD and
 UnitID joins Unit without false key-skips. Global ``resolvers:`` plus
 per-row ``resolves:`` map inv int FKs → CD strings before compare (V38 M4)
-so seed CD space matches inventory IDs (Account/Sub first).
+so seed CD space matches inventory IDs (Account/Sub first). Global
+``enums:`` plus per-row ``enums:`` map REST labels → DAC codes (V38 M5)
+so e.g. Usage Adjustment vs A and Active true vs 1 do not false-delta.
 """
 
 from __future__ import annotations
@@ -120,8 +122,10 @@ class TableMapEntry(Model):
 
     Optional ``keys`` / ``fields`` are seed-name → inventory-column aliases
     (V38 M3). Optional ``resolves`` maps seed field → global resolver name
-    (V38 M4): inventory value is looked up id→CD before compare. Absent
-    aliases → identity names. v1 rows are ``{table, entity}`` only.
+    (V38 M4): inventory value is looked up id→CD before compare. Optional
+    ``enums`` maps seed field → global enum table name (V38 M5): seed labels
+    fold to DAC codes before compare. Absent aliases → identity names. v1
+    rows are ``{table, entity}`` only.
     """
 
     table: str
@@ -129,6 +133,7 @@ class TableMapEntry(Model):
     keys: dict[str, str] = Field(default_factory=dict)
     fields: dict[str, str] = Field(default_factory=dict)
     resolves: dict[str, str] = Field(default_factory=dict)
+    enums: dict[str, str] = Field(default_factory=dict)
 
     @field_validator("table", "entity")
     @classmethod
@@ -138,25 +143,29 @@ class TableMapEntry(Model):
             raise ValueError("table/entity must be non-empty")
         return v
 
-    @field_validator("keys", "fields", "resolves", mode="before")
+    @field_validator("keys", "fields", "resolves", "enums", mode="before")
     @classmethod
     def _str_map(cls, v: object) -> object:
-        """Accept seed→inv (or seed→resolver) string maps; reject empty names."""
+        """Accept seed→inv/resolver/enum-name string maps; reject empty names."""
         if v is None:
             return {}
         if not isinstance(v, dict):
-            raise ValueError("keys/fields/resolves must be a mapping of strings")
+            raise ValueError(
+                "keys/fields/resolves/enums must be a mapping of strings"
+            )
         out: dict[str, str] = {}
         for seed_name, target in v.items():
             s = str(seed_name).strip()
             if isinstance(target, dict):
                 raise ValueError(
-                    f"keys/fields/resolves[{s!r}]: expected string value "
-                    "(use resolves: for FK names; enums are M5)"
+                    f"keys/fields/resolves/enums[{s!r}]: expected string value "
+                    "(use resolves: for FK names; enums: for label→code tables)"
                 )
             i = str(target).strip()
             if not s or not i:
-                raise ValueError("keys/fields/resolves names must be non-empty")
+                raise ValueError(
+                    "keys/fields/resolves/enums names must be non-empty"
+                )
             out[s] = i
         return out
 
@@ -165,6 +174,7 @@ class SnapshotMap(Model):
     """Optional table→entity map (package or data-repo ``snapshot_map.yaml``)."""
 
     resolvers: dict[str, FkResolver] = Field(default_factory=dict)
+    enums: dict[str, dict[str, str]] = Field(default_factory=dict)
     tables: list[TableMapEntry] = Field(default_factory=list)
 
     @field_validator("resolvers", mode="before")
@@ -175,6 +185,39 @@ class SnapshotMap(Model):
         if not isinstance(v, dict):
             raise ValueError("resolvers must be a mapping of name -> {table,id,cd}")
         return v
+
+    @field_validator("enums", mode="before")
+    @classmethod
+    def _enums_map(cls, v: object) -> object:
+        """Global name → {label: code}; stringify YAML bool keys as true/false."""
+        if v is None:
+            return {}
+        if not isinstance(v, dict):
+            raise ValueError("enums must be a mapping of name -> {label: code}")
+        out: dict[str, dict[str, str]] = {}
+        for name, mapping in v.items():
+            n = str(name).strip()
+            if not n:
+                raise ValueError("enums names must be non-empty")
+            if not isinstance(mapping, dict):
+                raise ValueError(f"enums[{n!r}]: expected mapping of label -> code")
+            inner: dict[str, str] = {}
+            for label, code in mapping.items():
+                if isinstance(label, bool):
+                    lab = "true" if label else "false"
+                else:
+                    lab = str(label).strip()
+                if isinstance(code, bool):
+                    cd = "true" if code else "false"
+                else:
+                    cd = str(code).strip()
+                if not lab or not cd:
+                    raise ValueError(
+                        f"enums[{n!r}]: label/code must be non-empty strings"
+                    )
+                inner[lab] = cd
+            out[n] = inner
+        return out
 
     def entity_for(self, table: str) -> str | None:
         """Catalog entity name for a DAC table, or None when unmapped."""
@@ -432,6 +475,7 @@ def reconcile(
     catalog_entities = set(by_entity)
     seed_index = _index_seeds(seeds)
     fk_indexes = _build_fk_indexes(inv, smap.resolvers)
+    enum_tables = smap.enums
     config_present = config_dir is not None and config_dir.is_dir()
 
     unmapped: list[UnmappedTable] = []
@@ -468,6 +512,7 @@ def reconcile(
                 seeds=seed_index,
                 map_entry=map_entry,
                 fk_indexes=fk_indexes,
+                enum_tables=enum_tables,
             )
         )
         _append_usr_custom(custom, table.name, entity, col_names)
@@ -558,7 +603,7 @@ def _rest_gaps_for_table(
     return gaps
 
 
-def _deltas_for_table(  # noqa: PLR0913 — keyword-only; map_entry + fk_indexes V38
+def _deltas_for_table(  # noqa: PLR0913 — keyword-only; map + V38 indexes
     *,
     entity: str,
     table: inventory.TableData,
@@ -567,11 +612,13 @@ def _deltas_for_table(  # noqa: PLR0913 — keyword-only; map_entry + fk_indexes
     seeds: _SeedIndex,
     map_entry: TableMapEntry | None = None,
     fk_indexes: dict[str, dict[str, str]] | None = None,
+    enum_tables: dict[str, dict[str, str]] | None = None,
 ) -> list[FieldDelta]:
     """Per-spec field deltas for one inventory table (optional map aliases)."""
     if not config_present:
         return []
     indexes = fk_indexes if fk_indexes is not None else {}
+    enums = enum_tables if enum_tables is not None else {}
     out: list[FieldDelta] = []
     for spec in specs:
         seed_file = _find_seed_for_spec(spec, seeds)
@@ -585,6 +632,7 @@ def _deltas_for_table(  # noqa: PLR0913 — keyword-only; map_entry + fk_indexes
                 spec=spec,
                 map_entry=map_entry,
                 fk_indexes=indexes,
+                enum_tables=enums,
             )
         )
     return out
@@ -657,6 +705,35 @@ def _resolve_inv_value(
     return id_to_cd.get(raw, raw)
 
 
+def _enum_norm(
+    raw: str,
+    *,
+    field: str,
+    field_enums: dict[str, str],
+    enum_tables: dict[str, dict[str, str]],
+) -> str:
+    """Map REST label → DAC code when field has an enum table (V38 M5).
+
+    Seed side usually carries labels (Adjustment, Asset, true); inventory
+    stores codes (A, A, 1). Labels in the table fold to codes; values that
+    already equal a code (or are unmapped) pass through unchanged.
+    """
+    enum_name = field_enums.get(field)
+    if enum_name is None:
+        return raw
+    table = enum_tables.get(enum_name)
+    if not table:
+        return raw
+    if raw in table:
+        return table[raw]
+    # case-insensitive label match (seed YAML sometimes differs in case)
+    lower = raw.lower()
+    for lab, code in table.items():
+        if lab.lower() == lower:
+            return code
+    return raw
+
+
 def _compare_seed_table(  # noqa: PLR0913 — keyword-only compare bundle
     *,
     entity: str,
@@ -665,6 +742,7 @@ def _compare_seed_table(  # noqa: PLR0913 — keyword-only compare bundle
     spec: extract.EntitySpec,
     map_entry: TableMapEntry | None = None,
     fk_indexes: dict[str, dict[str, str]] | None = None,
+    enum_tables: dict[str, dict[str, str]] | None = None,
 ) -> list[FieldDelta]:
     """Field-level compare for rows that share a key tuple on both sides.
 
@@ -673,8 +751,9 @@ def _compare_seed_table(  # noqa: PLR0913 — keyword-only compare bundle
     → skip that seed row (no false delta). Optional map ``keys`` / ``fields``
     rename seed names → inv columns (V38 M3). Optional ``resolves`` + global
     FK indexes convert inv int IDs → CD before compare (V38 M4; prefer seed
-    CD space). Join keys and field values are pad-trimmed on both sides (V38)
-    so fixed-width / trailing-space DAC columns match seed natural keys.
+    CD space). Optional ``enums`` + global enum tables fold seed labels →
+    codes (V38 M5). Join keys and field values are pad-trimmed on both sides
+    (V38) so fixed-width / trailing-space DAC columns match seed natural keys.
     Detail lists skipped (not comparable to flat snapshot rows). Findings
     always report seed-side field names and resolved inventory values.
     """
@@ -682,7 +761,9 @@ def _compare_seed_table(  # noqa: PLR0913 — keyword-only compare bundle
     key_alias = map_entry.keys if map_entry is not None else {}
     field_alias = map_entry.fields if map_entry is not None else {}
     resolves = map_entry.resolves if map_entry is not None else {}
+    field_enums = map_entry.enums if map_entry is not None else {}
     indexes = fk_indexes if fk_indexes is not None else {}
+    enums = enum_tables if enum_tables is not None else {}
     inv_keys = [key_alias.get(k, k) for k in keys]
     inv_index = _index_inventory_rows(table.rows, inv_keys)
     deltas: list[FieldDelta] = []
@@ -701,12 +782,22 @@ def _compare_seed_table(  # noqa: PLR0913 — keyword-only compare bundle
             inv_field = field_alias.get(field, field)
             if inv_field not in inv_row:
                 continue
-            left = _norm(seed_val)
-            right = _resolve_inv_value(
-                _norm(inv_row[inv_field]),
+            left = _enum_norm(
+                _norm(seed_val),
                 field=field,
-                resolves=resolves,
-                fk_indexes=indexes,
+                field_enums=field_enums,
+                enum_tables=enums,
+            )
+            right = _enum_norm(
+                _resolve_inv_value(
+                    _norm(inv_row[inv_field]),
+                    field=field,
+                    resolves=resolves,
+                    fk_indexes=indexes,
+                ),
+                field=field,
+                field_enums=field_enums,
+                enum_tables=enums,
             )
             if left != right:
                 deltas.append(
@@ -742,8 +833,11 @@ def _norm(value: Any) -> str:
 
     String sides strip leading/trailing whitespace (DAC/NVarChar padding).
     Bools/numbers fold to a stable spelling so seed and inventory agree.
-    Sibling of ``seed._norm`` spirit; used on *both* key join and field
-    compare so padded inventory never misses a seed row or false-deltas.
+    Decimal-looking strings with a point collapse trailing zeros so seed
+    ``0`` matches inventory ``0.000000`` without treating bare CDs like
+    ``000000`` as numbers. Sibling of ``seed._norm`` spirit; used on *both*
+    key join and field compare so padded inventory never misses a seed row
+    or false-deltas.
     """
     if isinstance(value, bool):
         return "true" if value else "false"
@@ -756,7 +850,16 @@ def _norm(value: Any) -> str:
         if value == float(as_int):
             return str(as_int)
         return str(value)
-    return str(value).strip()
+    s = str(value).strip()
+    if "." in s:
+        try:
+            f = float(s)
+        except ValueError:
+            return s
+        as_int = int(f)
+        if f == float(as_int):
+            return str(as_int)
+    return s
 
 
 # ---------------------------------------------------------------------------

@@ -1104,9 +1104,11 @@ def reconcile_cmd(
     Exit 0 clean, 1 IO/parse fail; never 2 (conflicts are findings, not
     drift). Optional snapshot_map.yaml maps DAC tables to catalog
     entities (absent → identity match on entity name) and may declare
-    keys:/fields: seed→inv aliases plus resolvers:/resolves: for FK
-    int→CD compare (package defaults cover Sub, UnitOfMeasure,
-    ReasonCode/VendorClass Account+Sub). Compare always pad-trims strings.
+    keys:/fields: seed→inv aliases, resolvers:/resolves: for FK int→CD,
+    and enums: label→code (package defaults cover Sub/UOM aliases,
+    ReasonCode/VendorClass/PostingClass/CashAccount Account+Sub,
+    ReasonCode.Usage + Account Type/Active bools, etc.). Compare always
+    pad-trims strings.
     """
     inv = (
         inventory_dir

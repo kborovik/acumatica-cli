@@ -353,7 +353,7 @@ def test_key_field_aliases_subaccount_and_uom(tmp_path: Path) -> None:
 def test_package_snapshot_map_loads_sub_and_uom_aliases(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """Package defaults ship Sub + UnitOfMeasure aliases (T133)."""
+    """Package defaults ship Sub + UnitOfMeasure aliases (T133) + M5 enums."""
     # No data-repo map → load package snapshot_map.yaml
     monkeypatch.chdir(tmp_path)
     smap = reconcile.load_snapshot_map()
@@ -361,28 +361,44 @@ def test_package_snapshot_map_loads_sub_and_uom_aliases(
     assert sub is not None
     assert sub.entity == "Subaccount"
     assert sub.keys == {"SubaccountCD": "SubCD"}
+    assert sub.enums.get("Active") == "bool_bit"
     uom = smap.entry_for("UnitOfMeasure")
     assert uom is not None
     assert uom.entity == "UnitsOfMeasure"
     assert uom.keys == {"UnitID": "Unit"}
     assert uom.fields == {"Description": "Descr"}
-    # v1-only rows still present without aliases
+    # CreditTerms: no key aliases; enums for Due/Disc/Visible
     terms = smap.entry_for("Terms")
     assert terms is not None
     assert terms.entity == "CreditTerms"
     assert terms.keys == {}
+    assert terms.enums.get("DueType") == "due_type"
     # T134: Account/Sub resolvers + ReasonCode/VendorClass resolves
     assert "account_cd" in smap.resolvers
     assert smap.resolvers["account_cd"].table == "Account"
     assert smap.resolvers["sub_cd"].cd == "SubCD"
+    assert "branch_cd" in smap.resolvers
     rc = smap.entry_for("ReasonCode")
     assert rc is not None
     assert rc.resolves["AccountID"] == "account_cd"
     assert rc.resolves["SubID"] == "sub_cd"
+    assert rc.enums.get("Usage") == "reason_usage"
     vc = smap.entry_for("VendorClass")
     assert vc is not None
     assert vc.resolves["APAcctID"] == "account_cd"
     assert vc.resolves["ExpenseSubID"] == "sub_cd"
+    # T137/T138: enums + PostingClass resolves
+    assert "reason_usage" in smap.enums
+    assert smap.enums["reason_usage"]["Adjustment"] == "A"
+    assert smap.enums["bool_bit"]["true"] == "1"
+    pc = smap.entry_for("INPostClass")
+    assert pc is not None
+    assert pc.resolves["InvtAcctID"] == "account_cd"
+    assert pc.resolves["SalesSubID"] == "sub_cd"
+    acct = smap.entry_for("Account")
+    assert acct is not None
+    assert acct.enums["Type"] == "account_type"
+    assert acct.enums["Active"] == "bool_bit"
 
 
 def test_fk_resolve_reason_code_and_vendor_class(tmp_path: Path) -> None:
@@ -803,6 +819,244 @@ def test_fk_resolve_real_cd_mismatch_still_deltas(tmp_path: Path) -> None:
         for d in bundle.deltas
     )
     assert not any(d.field == "SubID" for d in bundle.deltas)
+
+
+def test_enum_label_to_code_reason_code_usage(tmp_path: Path) -> None:
+    """V38/T137: seed Usage label → DAC code; match inv → 0 false delta."""
+    reason_xml = """\
+<?xml version="1.0" encoding="utf-8"?>
+<data>
+  <table name="ReasonCode">
+    <col name="ReasonCodeID" type="NVarChar(20)"/>
+    <col name="Usage" type="Char(1)"/>
+  </table>
+  <rows>
+    <row ReasonCodeID="INISSUE" Usage="I"/>
+    <row ReasonCodeID="INRECEIPT" Usage="R"/>
+  </rows>
+</data>
+"""
+    inv = _inventory_tree(tmp_path, reason_xml)
+    tree = reconcile.load_inventory_tree(inv)
+    cfg = tmp_path / "config"
+    (cfg / "master").mkdir(parents=True)
+    (cfg / "master" / "10-reason-codes.yaml").write_text(
+        "entity: ReasonCode\n"
+        "key: ReasonCodeID\n"
+        "endpoint: bootstrap\n"
+        "records:\n"
+        "  - ReasonCodeID: INISSUE\n"
+        "    Usage: Issue\n"
+        "  - ReasonCodeID: INRECEIPT\n"
+        "    Usage: Receipt\n",
+        encoding="utf-8",
+    )
+    seeds = reconcile.load_config_seeds(cfg)
+    smap = reconcile.SnapshotMap.model_validate(
+        {
+            "enums": {
+                "reason_usage": {
+                    "Adjustment": "A",
+                    "Issue": "I",
+                    "Receipt": "R",
+                }
+            },
+            "tables": [
+                {
+                    "table": "ReasonCode",
+                    "entity": "ReasonCode",
+                    "enums": {"Usage": "reason_usage"},
+                }
+            ],
+        }
+    )
+    bundle = reconcile.reconcile(tree, seeds, config_dir=cfg, snapshot_map=smap)
+    assert not any(d.field == "Usage" for d in bundle.deltas)
+
+
+def test_enum_bool_bit_and_account_type(tmp_path: Path) -> None:
+    """V38/T137: Active true/1 and Type Asset/A normalize; real Type drift remains."""
+    account_xml = """\
+<?xml version="1.0" encoding="utf-8"?>
+<data>
+  <table name="Account">
+    <col name="AccountCD" type="NVarChar(10)"/>
+    <col name="Type" type="Char(1)"/>
+    <col name="Active" type="Bit"/>
+    <col name="RequireUnits" type="Bit"/>
+    <col name="PostOption" type="Char(1)"/>
+  </table>
+  <rows>
+    <row AccountCD="10100     " Type="A" Active="1" RequireUnits="0" PostOption="D"/>
+    <row AccountCD="20000     " Type="L" Active="1" RequireUnits="0" PostOption="S"/>
+  </rows>
+</data>
+"""
+    inv = _inventory_tree(tmp_path, account_xml)
+    tree = reconcile.load_inventory_tree(inv)
+    cfg = tmp_path / "config"
+    (cfg / "baseline").mkdir(parents=True)
+    (cfg / "baseline" / "20-accounts.yaml").write_text(
+        "entity: Account\n"
+        "key: AccountCD\n"
+        "records:\n"
+        "  - AccountCD: '10100'\n"
+        "    Type: Asset\n"
+        "    Active: true\n"
+        "    RequireUnits: false\n"
+        "    PostOption: Detail\n"
+        "  - AccountCD: '20000'\n"
+        "    Type: Expense\n"
+        "    Active: true\n"
+        "    RequireUnits: false\n"
+        "    PostOption: Summary\n",
+        encoding="utf-8",
+    )
+    seeds = reconcile.load_config_seeds(cfg)
+    smap = reconcile.SnapshotMap.model_validate(
+        {
+            "enums": {
+                "account_type": {
+                    "Asset": "A",
+                    "Liability": "L",
+                    "Income": "I",
+                    "Expense": "E",
+                },
+                "post_option": {"Summary": "S", "Detail": "D"},
+                "bool_bit": {"true": "1", "false": "0"},
+            },
+            "tables": [
+                {
+                    "table": "Account",
+                    "entity": "Account",
+                    "enums": {
+                        "Type": "account_type",
+                        "PostOption": "post_option",
+                        "Active": "bool_bit",
+                        "RequireUnits": "bool_bit",
+                    },
+                }
+            ],
+        }
+    )
+    bundle = reconcile.reconcile(tree, seeds, config_dir=cfg, snapshot_map=smap)
+    # 10100 matches fully
+    assert not any(d.key == ["10100"] for d in bundle.deltas)
+    # 20000 seed Expense vs inv L (Liability) — real drift on Type only
+    assert any(
+        d.key == ["20000"]
+        and d.field == "Type"
+        and d.seed == "E"
+        and d.inventory == "L"
+        for d in bundle.deltas
+    )
+    assert not any(
+        d.key == ["20000"] and d.field in ("Active", "RequireUnits", "PostOption")
+        for d in bundle.deltas
+    )
+
+
+def test_posting_class_fk_resolve(tmp_path: Path) -> None:
+    """V38/T138: PostingClass *AcctID/*SubID int → CD; match seed → 0 deltas."""
+    account_xml = """\
+<?xml version="1.0" encoding="utf-8"?>
+<data>
+  <table name="Account">
+    <col name="AccountID" type="Int"/>
+    <col name="AccountCD" type="NVarChar(10)"/>
+  </table>
+  <rows>
+    <row AccountID="4" AccountCD="12100     "/>
+    <row AccountID="17" AccountCD="40000     "/>
+    <row AccountID="21" AccountCD="50000     "/>
+  </rows>
+</data>
+"""
+    sub_xml = """\
+<?xml version="1.0" encoding="utf-8"?>
+<data>
+  <table name="Sub">
+    <col name="SubID" type="Int"/>
+    <col name="SubCD" type="NVarChar(30)"/>
+  </table>
+  <rows>
+    <row SubID="1" SubCD="000000    "/>
+  </rows>
+</data>
+"""
+    pc_xml = """\
+<?xml version="1.0" encoding="utf-8"?>
+<data>
+  <table name="INPostClass">
+    <col name="PostClassID" type="NVarChar(10)"/>
+    <col name="InvtAcctID" type="Int"/>
+    <col name="InvtSubID" type="Int"/>
+    <col name="SalesAcctID" type="Int"/>
+    <col name="SalesSubID" type="Int"/>
+    <col name="COGSAcctID" type="Int"/>
+    <col name="COGSSubID" type="Int"/>
+  </table>
+  <rows>
+    <row PostClassID="PARTS" InvtAcctID="4" InvtSubID="1"
+         SalesAcctID="17" SalesSubID="1" COGSAcctID="21" COGSSubID="1"/>
+  </rows>
+</data>
+"""
+    inv = _inventory_tree(tmp_path, account_xml, sub_xml, pc_xml)
+    tree = reconcile.load_inventory_tree(inv)
+    cfg = tmp_path / "config"
+    (cfg / "master").mkdir(parents=True)
+    (cfg / "master" / "40-posting-classes.yaml").write_text(
+        "entity: PostingClass\n"
+        "key: PostClassID\n"
+        "endpoint: bootstrap\n"
+        "records:\n"
+        "  - PostClassID: PARTS\n"
+        "    InvtAcctID: '12100'\n"
+        "    InvtSubID: '000000'\n"
+        "    SalesAcctID: '40000'\n"
+        "    SalesSubID: '000000'\n"
+        "    COGSAcctID: '50000'\n"
+        "    COGSSubID: '000000'\n",
+        encoding="utf-8",
+    )
+    seeds = reconcile.load_config_seeds(cfg)
+    smap = reconcile.SnapshotMap.model_validate(
+        {
+            "resolvers": {
+                "account_cd": {
+                    "table": "Account",
+                    "id": "AccountID",
+                    "cd": "AccountCD",
+                },
+                "sub_cd": {"table": "Sub", "id": "SubID", "cd": "SubCD"},
+            },
+            "tables": [
+                {
+                    "table": "INPostClass",
+                    "entity": "PostingClass",
+                    "resolves": {
+                        "InvtAcctID": "account_cd",
+                        "InvtSubID": "sub_cd",
+                        "SalesAcctID": "account_cd",
+                        "SalesSubID": "sub_cd",
+                        "COGSAcctID": "account_cd",
+                        "COGSSubID": "sub_cd",
+                    },
+                }
+            ],
+        }
+    )
+    bundle = reconcile.reconcile(tree, seeds, config_dir=cfg, snapshot_map=smap)
+    assert not any(d.entity == "PostingClass" for d in bundle.deltas)
+
+
+def test_decimal_trailing_zero_norm() -> None:
+    """DiscPercent-style 0 vs 0.000000 collapses without mangling CD 000000."""
+    assert reconcile._norm("0.000000") == "0"
+    assert reconcile._norm("0") == "0"
+    assert reconcile._norm("000000") == "000000"
+    assert reconcile._norm(0.0) == "0"
 
 
 def test_models_forbid_extra() -> None:
