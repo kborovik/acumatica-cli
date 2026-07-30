@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## [v0.20.0] - 2026-07-30
+
 ### Changed
 
 - **Keep-a-Changelog release path (T163–T165 / V19):** `gmake release`
@@ -114,3 +116,4 @@
 
 - Seed packaging no longer claims `WeightUOM` / `VolumeUOM` fields the endpoint
   GET never returns (B26 class permanent red diff).
+
