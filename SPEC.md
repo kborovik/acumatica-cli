@@ -173,7 +173,7 @@ T161|x|offline tests LAB5-class inventory+config → findings only real gaps not
 T162|x|docs table inventory table → entity → bootstrap\|default\|unmapped; changelog (gh #27)|V12,V42,T159,T160
 T163|x|`make release` promote Unreleased → `## [vX.Y.Z] - date`; empty Unreleased hard-fail; commit CHANGELOG w/ pyproject|V19,I.pkg
 T164|x|`release.yml` GH release notes from CHANGELOG version section for tag; not sole `--generate-notes`|V19,I.pkg,T163
-T165|.|docs README release path + CHANGELOG Unreleased duty for user-facing work|V12,V19,T163
+T165|x|docs README release path + CHANGELOG Unreleased duty for user-facing work|V12,V19,T163
 
 ## §B BUGS
 

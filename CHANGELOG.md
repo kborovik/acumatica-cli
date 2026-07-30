@@ -4,12 +4,14 @@
 
 ### Changed
 
-- **No PyPI publish (private repo / V19):** `release.yml` no longer uses
-  `pypa/gh-action-pypi-publish` or OIDC trusted publishing. Tag `v*` still
-  re-runs CI, builds sdist+wheel, and creates a GitHub Release with those
-  artifacts. Install via git URL or editable clone — not pypi.org. SPEC
-  §I.pkg, §V.19, `.spec/check-extras.md` §V.19, README, and Makefile
-  release messages updated.
+- **Keep-a-Changelog release path (T163–T165 / V19):** `gmake release`
+  hard-fails when `## Unreleased` has no bullets, promotes the body to
+  `## [vX.Y.Z] - YYYY-MM-DD` via `scripts/changelog`, and commits
+  `CHANGELOG.md` with `pyproject.toml`. Tag `v*` GH release notes come from
+  that promoted section (`scripts/changelog notes` + `--notes-file`), not
+  sole auto-generated notes. README documents Unreleased duty + sole release
+  path. No PyPI publish (private repo) — install via git URL or editable
+  clone. SPEC §I.pkg, §V.19, `.spec/check-extras.md` §V.19.
 - **Primary repo URL:** docs and `pyproject.toml` point at
   https://github.com/kborovik/acu-cli (active). `kborovik/acumatica-cli` is
   demo-only and is no longer referenced for install/clone.

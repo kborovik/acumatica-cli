@@ -180,7 +180,7 @@ def test_makefile_release_promotes_changelog() -> None:
 
 
 def test_release_yml_notes_from_changelog() -> None:
-    """V19: GH release notes from CHANGELOG version section, not sole --generate-notes."""
+    """V19: GH release notes from CHANGELOG section, not sole auto-notes."""
     text = RELEASE_YML.read_text()
     assert "scripts/changelog notes" in text
     assert "--notes-file" in text

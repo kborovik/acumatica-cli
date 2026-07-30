@@ -252,12 +252,23 @@ GitHub Actions runs the same gate on every push and pull request to `main`.
 
 ### Release
 
+Human release notes live in root [`CHANGELOG.md`](CHANGELOG.md) (Keep a Changelog).
+During development, append user-facing work under `## Unreleased` in `### Added` / `### Changed` / `### Fixed` as appropriate.
+Empty Unreleased (no bullets) hard-fails the release — nothing to ship.
+
 ```sh
 gmake release patch   # or minor | major
 ```
 
-Local release runs `gmake check`, bumps the version, commits, tags `v<version>`, and pushes.
-GitHub Actions re-runs the check on the tag, then creates a GitHub Release (with sdist/wheel artifacts) only if that check passes. There is no PyPI publish — the repo is private.
+`gmake release` is the sole release path (never local `gh release create`):
+
+1. `gmake check` (ruff, basedpyright, offline pytest)
+2. Fail if `## Unreleased` has no bullets
+3. Bump `pyproject.toml` version (`major` | `minor` | `patch`)
+4. Promote Unreleased body to `## [vX.Y.Z] - YYYY-MM-DD`, leave an empty `## Unreleased`
+5. Commit `CHANGELOG.md` + `pyproject.toml` (+ lock if bumped) together, tag `vX.Y.Z`, push
+
+GitHub Actions on tag `v*` re-runs CI, builds sdist+wheel, and creates a GitHub Release whose notes are the promoted CHANGELOG section for that tag (plus the artifacts). There is no PyPI publish — the repo is private. Install via git URL or editable clone.
 
 ### Live end-to-end tier
 
