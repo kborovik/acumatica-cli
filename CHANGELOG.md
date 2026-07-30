@@ -4,11 +4,14 @@
 
 ### Added
 
-- **Bootstrap NumberingSequence (T150, gh #25):** Bootstrap contract `1.2.0`
-  exposes NumberingSequence on CS201010 — key `NumberingID`, bounds
+- **Bootstrap NumberingSequence (T150–T151, gh #25):** Bootstrap contract
+  `1.2.0` exposes NumberingSequence on CS201010 — key `NumberingID`, bounds
   `StartNbr`/`EndNbr`/`WarnNbr`/`NbrStep`/`StartDate` (+ `Descr`). `LastNbr`
-  is runtime state and is omitted from the contract (V40). Follow-on:
-  catalog/map seed (T151), extract/diff strip pipeline (T152), docs (T153).
+  is runtime state and is omitted from the contract (V40). Catalog +
+  `snapshot_map` cover the entity; package seed
+  `config/master/05-numbering-sequences.yaml` (LAB5-class module sequences,
+  bounds only) sorts before master prefs that may reference `*NumberingID`
+  (V22). Follow-on: extract/diff strip pipeline (T152), docs (T153).
 - **Bootstrap Role + User + membership (T145–T149, gh #24):** Bootstrap
   contract `1.1.0` exposes Role (SM201005) and User (SM201010) with User
   detail `Roles` for membership. Package seeds `config/master/90-roles.yaml`

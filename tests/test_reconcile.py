@@ -419,6 +419,20 @@ def test_package_snapshot_map_roles_users_membership(
     assert membership.entity == "User"
 
 
+def test_package_snapshot_map_numbering_sequence(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """T151: NumberingSequence (+ Numbering header) map to Bootstrap entity."""
+    monkeypatch.chdir(tmp_path)
+    smap = reconcile.load_snapshot_map()
+    detail = smap.entry_for("NumberingSequence")
+    assert detail is not None
+    assert detail.entity == "NumberingSequence"
+    header = smap.entry_for("Numbering")
+    assert header is not None
+    assert header.entity == "NumberingSequence"
+
+
 def test_fk_resolve_reason_code_and_vendor_class(tmp_path: Path) -> None:
     """V38/T134: inv AccountID/SubID int → CD; match seed → 0 false deltas."""
     account_xml = """\

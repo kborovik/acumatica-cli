@@ -491,6 +491,21 @@ TABLES: dict[str, list[dict[str, Any]]] = {
             "LastModifiedDateTime": "2026-07-11T00:00:00+00:00",
         }
     ],
+    # T151 NumberingSequence (gh #25). Bounds + LastNbr on live GET; catalog
+    # include omits LastNbr so extract never seeds runtime counters (V40).
+    "NumberingSequence": [
+        {
+            "NumberingID": "BATCH",
+            "Descr": "GL batches",
+            "StartNbr": "000000",
+            "EndNbr": "999999",
+            "WarnNbr": "999990",
+            "NbrStep": 1,
+            "StartDate": "1900-01-01T00:00:00+00:00",
+            "LastNbr": "000025",
+            "LastModifiedDateTime": "2026-07-11T00:00:00+00:00",
+        }
+    ],
     # T146 Role/User (+ membership detail). Canned custom role only —
     # package templates never seed built-in system roles.
     "Role": [
@@ -591,6 +606,7 @@ def test_packaged_manifest_is_self_consistent() -> None:
     ]
     assert "config/baseline/91-company-packaging.yaml" not in files  # B26/T118
     assert "config/baseline/30-currencies.yaml" not in files  # V34: not in templates
+    assert "config/master/05-numbering-sequences.yaml" in files
     assert "config/master/10-reason-codes.yaml" in files
     assert "config/master/85-kit-specifications.yaml" in files
     assert "config/master/90-roles.yaml" in files
@@ -1260,6 +1276,41 @@ def test_catalog_filter_split_and_include_rows_declared() -> None:
     assert entities.count("StockItem") == 2
 
 
+def test_catalog_numbering_sequence_row() -> None:
+    """T151: NumberingSequence catalog bounds-only; V22 before prefs."""
+    manifest = extract.load_manifest()
+    by_file = {s.file: s for s in manifest.entities}
+    num = by_file["config/master/05-numbering-sequences.yaml"]
+    assert num.entity == "NumberingSequence"
+    assert num.keys == ["NumberingID"]
+    assert num.endpoint == "bootstrap"
+    assert set(num.include) == {
+        "Descr",
+        "StartNbr",
+        "EndNbr",
+        "WarnNbr",
+        "NbrStep",
+        "StartDate",
+    }
+    # V40: LastNbr is runtime — not in include (T152 hardens strip/diff)
+    assert "LastNbr" not in num.include
+    files = [s.file for s in manifest.entities]
+    # V22: within master/, numbering sorts before prefs that may *NumberingID.
+    # Umbrella SEED_DIRS order is bootstrap→baseline→setup→master, so
+    # baseline GL prefs still apply before master numbering (tenant-native
+    # system sequences satisfy GL until master numbering is applied).
+    for prefs in (
+        "config/master/20-in-preferences.yaml",
+        "config/master/56-so-preferences.yaml",
+        "config/master/57-po-preferences.yaml",
+        "config/master/60-ar-preferences.yaml",
+        "config/master/61-ap-preferences.yaml",
+        "config/master/62-ca-preferences.yaml",
+    ):
+        assert prefs in by_file
+        assert files.index(num.file) < files.index(prefs), prefs
+
+
 def test_catalog_role_user_membership_rows() -> None:
     """T146: Role then User catalog rows; membership via User detail_keys."""
     manifest = extract.load_manifest()
@@ -1281,6 +1332,47 @@ def test_catalog_role_user_membership_rows() -> None:
     # V22 apply order: Role file sorts before User
     files = [s.file for s in manifest.entities]
     assert files.index(role.file) < files.index(user.file)
+
+
+def test_package_numbering_sequence_template() -> None:
+    """T151: package numbering = LAB5-class module sequences; bounds only."""
+    root = Path(__file__).resolve().parents[1] / "src" / "acumatica_cli" / "templates"
+    path = root / "config/master/05-numbering-sequences.yaml"
+    numbering = seed.load_baseline(path)
+    assert isinstance(numbering, seed.BaselineFile)
+    assert numbering.entity == "NumberingSequence"
+    assert numbering.endpoint == seed.BOOTSTRAP_ENDPOINT
+    ids = [r["NumberingID"] for r in numbering.records]
+    assert ids == sorted(ids)
+    expected = {
+        "APBILL",
+        "APPAYMENT",
+        "ARINVOICE",
+        "ARPAYMENT",
+        "BATCH",
+        "INISSUE",
+        "INKITASSY",
+        "INRECEIPT",
+        "POORDER",
+        "PORECEIPT",
+        "SOORDER",
+        "SOSHIPMENT",
+    }
+    assert set(ids) == expected
+    for rec in numbering.records:
+        assert "LastNbr" not in rec
+        assert rec["StartNbr"] == "000000"
+        assert rec["EndNbr"] == "999999"
+        assert rec["WarnNbr"] == "999990"
+        assert rec["NbrStep"] == 1
+        assert rec["StartDate"] == "1900-01-01"
+    # V22 within master/: numbering before IN prefs
+    master = sorted(p.name for p in (root / "config/master").glob("*.yaml"))
+    assert "05-numbering-sequences.yaml" in master
+    assert "20-in-preferences.yaml" in master
+    assert master.index("05-numbering-sequences.yaml") < master.index(
+        "20-in-preferences.yaml"
+    )
 
 
 def test_package_role_user_templates_prebuild_roles() -> None:

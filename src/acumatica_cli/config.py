@@ -72,6 +72,10 @@ INIT_TEMPLATES = (
     ("config/setup/10-financial-year.yaml", "config/setup/10-financial-year.yaml"),
     ("config/setup/20-master-calendar.yaml", "config/setup/20-master-calendar.yaml"),
     ("config/setup/30-open-periods.yaml", "config/setup/30-open-periods.yaml"),
+    (
+        "config/master/05-numbering-sequences.yaml",
+        "config/master/05-numbering-sequences.yaml",
+    ),
     ("config/master/10-reason-codes.yaml", "config/master/10-reason-codes.yaml"),
     ("config/master/20-in-preferences.yaml", "config/master/20-in-preferences.yaml"),
     (

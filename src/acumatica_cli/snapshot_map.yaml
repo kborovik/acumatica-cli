@@ -181,3 +181,11 @@ tables:
       PasswordChangeOnNextLogin: bool_bit
   - table: UsersInRoles
     entity: User
+
+  # T151 NumberingSequence (gh #25 / CS201010). Inventory detail table is
+  # NumberingSequence (bounds rows); header DAC Numbering maps same entity
+  # when present (Descr). Entity = Bootstrap contract flat NumberingSequence.
+  - table: NumberingSequence
+    entity: NumberingSequence
+  - table: Numbering
+    entity: NumberingSequence

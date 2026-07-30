@@ -144,6 +144,23 @@ entities:
 # config/master/ - full packaged seed (T117). Multi-file Warehouse uses
 # include field-partition (same live warehouse row, three apply phases).
 # Multi-file StockItem uses OData filter-split on ItemClass.
+#
+# NumberingSequence (T151/gh #25): V22 prefix 05- sorts before every prefs
+# file that may reference *NumberingID (IN/SO/PO/AR/AP/CA/GL setup). Bootstrap
+# only — Default has no numbering surface. Bounds-only include (no LastNbr;
+# runtime counter is V40/T152).
+
+- entity: NumberingSequence
+  endpoint: bootstrap
+  keys: [NumberingID]
+  file: config/master/05-numbering-sequences.yaml
+  include:
+  - Descr
+  - StartNbr
+  - EndNbr
+  - WarnNbr
+  - NbrStep
+  - StartDate
 
 - entity: ReasonCode
   endpoint: bootstrap
