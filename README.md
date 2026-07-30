@@ -123,7 +123,7 @@ There is no `--flavor`.
 | `config/bootstrap/` | virgin-tenant config: features, company, credit terms, `project.xml` |
 | `config/baseline/` | reference data: subaccounts, COA, ledger, UOMs |
 | `config/setup/` | one-time actions: financial year, master calendar, open periods |
-| `config/master/` | inventory/distribution masters: numbering (`05-…`) before prefs, warehouse, items, parties + Role/User (`90-roles` → `91-users`) |
+| `config/master/` | inventory/distribution masters: numbering (`05-…`) before prefs, warehouse, items, parties + Role/User (`90-roles` then `91-users`) |
 | `scenario/` | lifecycle txns for `acu run`: once capital, then buy, build, sell |
 | `config/views/` | observer views for `acu state` (`inquire:` / `entity:` / `gi:`; not SEED_DIRS) |
 | `state/` | committed derived-state observations (evidence, not seed; money/qty fixed-point) |
