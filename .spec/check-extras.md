@@ -124,9 +124,12 @@ for granular /sdd:check runs.
 
 ## §V.19 — release-pipeline recipe (extracted from SPEC.md §V.19)
 
-- sole path: `make release <part>` — `make check` first, then bump + commit + tag + push
+- sole path: `make release <part>` — `make check` first, then bump + CHANGELOG promote + commit + tag + push
 - never local `gh release create`
-- tag `v*` → `release.yml` re-runs CI check (`workflow_call` → `ci.yml`) then `uv build` + GH release create with `dist/*` artifacts
+- Keep-a-Changelog root `CHANGELOG.md`: user-facing work appends under `## Unreleased` (`### Added` / `### Changed` / `### Fixed`) during development
+- `make release` promote: move Unreleased body → `## [vX.Y.Z] - YYYY-MM-DD` (version = post-bump `uv version --short`); leave empty `## Unreleased` heading block; empty/no bullet Unreleased → hard fail (nothing to ship)
+- release commit includes `CHANGELOG.md` + `pyproject.toml` (+ lock if bumped) together
+- tag `v*` → `release.yml` re-runs CI check (`workflow_call` → `ci.yml`) then `uv build` + GH release create with `dist/*` artifacts + notes from promoted CHANGELOG version section (not sole `--generate-notes`)
 - no PyPI publish (private repo); no PyPI API token or OIDC trusted-publisher setup
 - tag `v<version>` == pyproject `version`
 - CI also runs on every push/PR to `main`
