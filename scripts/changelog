@@ -1,0 +1,192 @@
+#!/usr/bin/env python3
+"""Keep-a-Changelog helper for the V19 release pipeline.
+
+usage:
+  scripts/changelog check                 # exit 1 if ## Unreleased has no bullets
+  scripts/changelog promote <ver> [date]  # Unreleased body -> ## [vX.Y.Z] - YYYY-MM-DD
+  scripts/changelog notes <ver|tag>       # print body of ## [vX.Y.Z] for GH release
+
+Version may be ``0.20.0`` or ``v0.20.0``; headings always use the ``v`` form
+per SPEC V19 / I.pkg. Empty Unreleased (no ``- `` bullets) hard-fails -
+nothing to ship. ``promote`` never writes when check would fail.
+"""
+
+from __future__ import annotations
+
+import os
+import re
+import sys
+from datetime import date
+from pathlib import Path
+
+REPO = Path(__file__).resolve().parent.parent
+UNRELEASED = "## Unreleased"
+# Keep-a-Changelog H2: ## Unreleased or ## [vX.Y.Z] - YYYY-MM-DD
+H2 = re.compile(r"^##\s+")
+BULLET = re.compile(r"^\s*-\s+\S")
+
+
+def changelog_path() -> Path:
+    """Root CHANGELOG.md, or CHANGELOG_PATH env (offline tests)."""
+    override = os.environ.get("CHANGELOG_PATH")
+    return Path(override) if override else REPO / "CHANGELOG.md"
+
+
+def die(msg: str, code: int = 1) -> None:
+    print(f"x changelog: {msg}", file=sys.stderr)
+    raise SystemExit(code)
+
+
+def normalize_version(raw: str) -> str:
+    """Strip optional leading v; require X.Y.Z-ish."""
+    v = raw[1:] if raw.startswith("v") else raw
+    if not re.fullmatch(r"\d+\.\d+\.\d+", v):
+        die(f"version must be X.Y.Z (got {raw!r})")
+    return v
+
+
+def version_heading(version: str) -> str:
+    return f"## [v{normalize_version(version)}]"
+
+
+def load() -> str:
+    path = changelog_path()
+    if not path.is_file():
+        die(f"{path} missing")
+    return path.read_text(encoding="utf-8")
+
+
+def _is_heading(bare: str, heading_prefix: str) -> bool:
+    """True when bare is the target H2 (optional `` - date`` for version rows)."""
+    if bare == heading_prefix:
+        return True
+    # version sections: ## [vX.Y.Z] - YYYY-MM-DD
+    return bare.startswith(heading_prefix + " -")
+
+
+def section_bounds(text: str, heading_prefix: str) -> tuple[int, int, int]:
+    """Return (heading_line_idx, body_start_idx, body_end_idx) over lines.
+
+    body_end is the line index of the next H2, or len(lines).
+    """
+    lines = text.splitlines(keepends=True)
+    start: int | None = None
+    for i, line in enumerate(lines):
+        bare = line.rstrip("\r\n")
+        if _is_heading(bare, heading_prefix):
+            start = i
+            break
+    if start is None:
+        die(f"no {heading_prefix!r} section in CHANGELOG.md")
+    body_start = start + 1
+    body_end = len(lines)
+    for j in range(body_start, len(lines)):
+        if H2.match(lines[j]):
+            body_end = j
+            break
+    return start, body_start, body_end
+
+
+def unreleased_body_lines(text: str) -> list[str]:
+    _, body_start, body_end = section_bounds(text, UNRELEASED)
+    lines = text.splitlines(keepends=True)
+    return lines[body_start:body_end]
+
+
+def has_bullets(body_lines: list[str]) -> bool:
+    return any(BULLET.match(line.rstrip("\r\n")) for line in body_lines)
+
+
+def cmd_check() -> None:
+    text = load()
+    body = unreleased_body_lines(text)
+    if not has_bullets(body):
+        die("## Unreleased has no bullets - nothing to ship (V19)")
+    print("ok unreleased has bullets")
+
+
+def cmd_promote(version: str, day: str | None) -> None:
+    ver = normalize_version(version)
+    if day is None:
+        day = date.today().isoformat()
+    elif not re.fullmatch(r"\d{4}-\d{2}-\d{2}", day):
+        die(f"date must be YYYY-MM-DD (got {day!r})")
+
+    text = load()
+    lines = text.splitlines(keepends=True)
+    start, body_start, body_end = section_bounds(text, UNRELEASED)
+    body = lines[body_start:body_end]
+    if not has_bullets(body):
+        die("## Unreleased has no bullets - nothing to ship (V19)")
+
+    # Drop leading/trailing blank lines from the promoted body; keep structure.
+    while body and body[0].strip() == "":
+        body = body[1:]
+    while body and body[-1].strip() == "":
+        body = body[:-1]
+
+    new_heading = f"{version_heading(ver)} - {day}\n"
+    # Leave empty Unreleased (heading + blank line), then versioned section.
+    rebuilt: list[str] = []
+    rebuilt.extend(lines[: start + 1])  # through ## Unreleased
+    rebuilt.append("\n")
+    rebuilt.append(new_heading)
+    rebuilt.append("\n")
+    rebuilt.extend(body)
+    if body and not body[-1].endswith("\n"):
+        rebuilt.append("\n")
+    rebuilt.append("\n")
+    # Rest after old Unreleased body (prior version sections, etc.)
+    rest = lines[body_end:]
+    # Avoid double blank at the join when rest already starts with blank.
+    while rest and rest[0].strip() == "":
+        rest = rest[1:]
+    rebuilt.extend(rest)
+
+    changelog_path().write_text("".join(rebuilt), encoding="utf-8")
+    print(f"ok promoted Unreleased -> [v{ver}] - {day}")
+
+
+def cmd_notes(version: str) -> None:
+    ver = normalize_version(version)
+    heading = version_heading(ver)
+    text = load()
+    _, body_start, body_end = section_bounds(text, heading)
+    lines = text.splitlines(keepends=True)
+    body = lines[body_start:body_end]
+    while body and body[0].strip() == "":
+        body = body[1:]
+    while body and body[-1].strip() == "":
+        body = body[:-1]
+    if not body:
+        die(f"{heading} section is empty")
+    sys.stdout.write("".join(body))
+    if body and not body[-1].endswith("\n"):
+        sys.stdout.write("\n")
+
+
+def main(argv: list[str]) -> None:
+    if len(argv) < 2:
+        die(
+            "usage: changelog check | promote <ver> [date] | notes <ver|tag>",
+            code=2,
+        )
+    cmd = argv[1]
+    if cmd == "check":
+        if len(argv) != 2:
+            die("usage: changelog check", code=2)
+        cmd_check()
+    elif cmd == "promote":
+        if len(argv) not in (3, 4):
+            die("usage: changelog promote <ver> [YYYY-MM-DD]", code=2)
+        cmd_promote(argv[2], argv[3] if len(argv) == 4 else None)
+    elif cmd == "notes":
+        if len(argv) != 3:
+            die("usage: changelog notes <ver|tag>", code=2)
+        cmd_notes(argv[2])
+    else:
+        die(f"unknown command {cmd!r}", code=2)
+
+
+if __name__ == "__main__":
+    main(sys.argv)
