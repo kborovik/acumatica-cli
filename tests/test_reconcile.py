@@ -1146,6 +1146,407 @@ def test_decimal_trailing_zero_compare(tmp_path: Path) -> None:
     assert not any(d.field == "DiscPercent" for d in bundle.deltas)
 
 
+def test_package_snapshot_map_t160_masters(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """T160/V42: PaymentMethod/CustomerClass/INLocation/ItemClass/StockItem map."""
+    monkeypatch.chdir(tmp_path)
+    smap = reconcile.load_snapshot_map()
+    pm = smap.entry_for("PaymentMethod")
+    assert pm is not None
+    assert pm.entity == "PaymentMethod"
+    assert pm.fields["Description"] == "Descr"
+    assert pm.fields["MeansOfPayment"] == "PaymentType"
+    assert pm.enums["MeansOfPayment"] == "means_of_payment"
+    assert smap.enums["means_of_payment"]["Cash/Check"] == "CHC"
+    pma = smap.entry_for("PaymentMethodAccount")
+    assert pma is not None
+    assert pma.entity == "PaymentMethod"
+    cc = smap.entry_for("CustomerClass")
+    assert cc is not None
+    assert cc.keys["ClassID"] == "CustomerClassID"
+    assert cc.fields["ARAccount"] == "ARAcctID"
+    assert cc.resolves["ARAccount"] == "account_cd"
+    assert cc.resolves["SalesSubaccount"] == "sub_cd"
+    loc = smap.entry_for("INLocation")
+    assert loc is not None
+    assert loc.entity == "Warehouse"
+    site = smap.entry_for("INSite")
+    assert site is not None
+    assert site.keys["WarehouseID"] == "SiteCD"
+    item = smap.entry_for("INItemClass")
+    assert item is not None
+    assert item.keys["ClassID"] == "ItemClassCD"
+    stock = smap.entry_for("InventoryItem")
+    assert stock is not None
+    assert stock.keys["InventoryID"] == "InventoryCD"
+    assert stock.enums["ItemStatus"] == "item_status"
+    # LotSerial non-goal (T159): no map row
+    assert smap.entry_for("INLotSerClass") is None
+
+
+def test_payment_method_alias_enum_no_false_delta(tmp_path: Path) -> None:
+    """V42/T161: REST PaymentMethod names vs DAC — match seed → 0 deltas."""
+    pm_xml = """\
+<?xml version="1.0" encoding="utf-8"?>
+<data>
+  <table name="PaymentMethod">
+    <col name="PaymentMethodID" type="NVarChar(10)"/>
+    <col name="Descr" type="NVarChar(60)"/>
+    <col name="PaymentType" type="Char(3)"/>
+    <col name="IsActive" type="Bit"/>
+    <col name="UseForAP" type="Bit"/>
+    <col name="UseForAR" type="Bit"/>
+  </table>
+  <rows>
+    <row PaymentMethodID="WIRE" Descr="Wire transfer" PaymentType="CHC"
+         IsActive="1" UseForAP="1" UseForAR="1"/>
+  </rows>
+</data>
+"""
+    inv = _inventory_tree(tmp_path, pm_xml)
+    tree = reconcile.load_inventory_tree(inv)
+    cfg = tmp_path / "config"
+    (cfg / "master").mkdir(parents=True)
+    (cfg / "master" / "64-payment-methods.yaml").write_text(
+        "entity: PaymentMethod\n"
+        "key: PaymentMethodID\n"
+        "records:\n"
+        "  - PaymentMethodID: WIRE\n"
+        "    Description: Wire transfer\n"
+        "    Active: true\n"
+        "    MeansOfPayment: Cash/Check\n"
+        "    UseInAP: true\n"
+        "    UseInAR: true\n",
+        encoding="utf-8",
+    )
+    seeds = reconcile.load_config_seeds(cfg)
+    smap = reconcile.SnapshotMap.model_validate(
+        {
+            "enums": {
+                "means_of_payment": {"Cash/Check": "CHC"},
+                "bool_bit": {"true": "1", "false": "0"},
+            },
+            "tables": [
+                {
+                    "table": "PaymentMethod",
+                    "entity": "PaymentMethod",
+                    "fields": {
+                        "Description": "Descr",
+                        "Active": "IsActive",
+                        "UseInAP": "UseForAP",
+                        "UseInAR": "UseForAR",
+                        "MeansOfPayment": "PaymentType",
+                    },
+                    "enums": {
+                        "Active": "bool_bit",
+                        "UseInAP": "bool_bit",
+                        "UseInAR": "bool_bit",
+                        "MeansOfPayment": "means_of_payment",
+                    },
+                }
+            ],
+        }
+    )
+    bundle = reconcile.reconcile(tree, seeds, config_dir=cfg, snapshot_map=smap)
+    assert not any(d.entity == "PaymentMethod" for d in bundle.deltas)
+    assert not any(u.name == "PaymentMethod" for u in bundle.unmapped)
+
+
+def test_customer_class_key_fk_resolve_no_false_delta(tmp_path: Path) -> None:
+    """V42/T161: ClassID→CustomerClassID + AR/Sales acct int→CD → 0 false deltas."""
+    account_xml = """\
+<?xml version="1.0" encoding="utf-8"?>
+<data>
+  <table name="Account">
+    <col name="AccountID" type="Int"/>
+    <col name="AccountCD" type="NVarChar(10)"/>
+  </table>
+  <rows>
+    <row AccountID="57" AccountCD="11000     "/>
+    <row AccountID="71" AccountCD="40000     "/>
+    <row AccountID="73" AccountCD="49000     "/>
+  </rows>
+</data>
+"""
+    sub_xml = """\
+<?xml version="1.0" encoding="utf-8"?>
+<data>
+  <table name="Sub">
+    <col name="SubID" type="Int"/>
+    <col name="SubCD" type="NVarChar(30)"/>
+  </table>
+  <rows>
+    <row SubID="3" SubCD="000000    "/>
+  </rows>
+</data>
+"""
+    cc_xml = """\
+<?xml version="1.0" encoding="utf-8"?>
+<data>
+  <table name="CustomerClass">
+    <col name="CustomerClassID" type="NVarChar(10)"/>
+    <col name="Descr" type="NVarChar(60)"/>
+    <col name="TermsID" type="NVarChar(10)"/>
+    <col name="CuryID" type="NVarChar(5)"/>
+    <col name="ARAcctID" type="Int"/>
+    <col name="ARSubID" type="Int"/>
+    <col name="SalesAcctID" type="Int"/>
+    <col name="SalesSubID" type="Int"/>
+    <col name="DiscTakenAcctID" type="Int"/>
+    <col name="DiscTakenSubID" type="Int"/>
+    <col name="StatementCycleId" type="NVarChar(10)"/>
+  </table>
+  <rows>
+    <row CustomerClassID="B2B" Descr="B2B customers" TermsID="NET30"
+         CuryID="USD" ARAcctID="57" ARSubID="3" SalesAcctID="71" SalesSubID="3"
+         DiscTakenAcctID="73" DiscTakenSubID="3" StatementCycleId="MONTHLY"/>
+  </rows>
+</data>
+"""
+    inv = _inventory_tree(tmp_path, account_xml, sub_xml, cc_xml)
+    tree = reconcile.load_inventory_tree(inv)
+    cfg = tmp_path / "config"
+    (cfg / "master").mkdir(parents=True)
+    (cfg / "master" / "71-customer-classes.yaml").write_text(
+        "entity: CustomerClass\n"
+        "key: ClassID\n"
+        "records:\n"
+        "  - ClassID: B2B\n"
+        "    Description: B2B customers\n"
+        "    Terms: NET30\n"
+        "    CurrencyID: USD\n"
+        "    ARAccount: '11000'\n"
+        "    ARSubaccount: '000000'\n"
+        "    SalesAccount: '40000'\n"
+        "    SalesSubaccount: '000000'\n"
+        "    CashDiscountAccount: '49000'\n"
+        "    CashDiscountSubaccount: '000000'\n"
+        "    StatementCycleID: MONTHLY\n",
+        encoding="utf-8",
+    )
+    seeds = reconcile.load_config_seeds(cfg)
+    smap = reconcile.SnapshotMap.model_validate(
+        {
+            "resolvers": {
+                "account_cd": {
+                    "table": "Account",
+                    "id": "AccountID",
+                    "cd": "AccountCD",
+                },
+                "sub_cd": {"table": "Sub", "id": "SubID", "cd": "SubCD"},
+            },
+            "tables": [
+                {
+                    "table": "CustomerClass",
+                    "entity": "CustomerClass",
+                    "keys": {"ClassID": "CustomerClassID"},
+                    "fields": {
+                        "Description": "Descr",
+                        "Terms": "TermsID",
+                        "CurrencyID": "CuryID",
+                        "ARAccount": "ARAcctID",
+                        "ARSubaccount": "ARSubID",
+                        "SalesAccount": "SalesAcctID",
+                        "SalesSubaccount": "SalesSubID",
+                        "CashDiscountAccount": "DiscTakenAcctID",
+                        "CashDiscountSubaccount": "DiscTakenSubID",
+                        "StatementCycleID": "StatementCycleId",
+                    },
+                    "resolves": {
+                        "ARAccount": "account_cd",
+                        "ARSubaccount": "sub_cd",
+                        "SalesAccount": "account_cd",
+                        "SalesSubaccount": "sub_cd",
+                        "CashDiscountAccount": "account_cd",
+                        "CashDiscountSubaccount": "sub_cd",
+                    },
+                }
+            ],
+        }
+    )
+    bundle = reconcile.reconcile(tree, seeds, config_dir=cfg, snapshot_map=smap)
+    assert not any(d.entity == "CustomerClass" for d in bundle.deltas)
+
+
+def test_itemclass_stockitem_key_join_and_status_enum(tmp_path: Path) -> None:
+    """V42/T161: ItemClassCD/InventoryCD join + ItemStatus Active/AC → 0 noise."""
+    item_xml = """\
+<?xml version="1.0" encoding="utf-8"?>
+<data>
+  <table name="INItemClass">
+    <col name="ItemClassCD" type="NVarChar(10)"/>
+    <col name="Descr" type="NVarChar(60)"/>
+    <col name="StkItem" type="Bit"/>
+    <col name="ItemType" type="Char(1)"/>
+    <col name="ValMethod" type="Char(1)"/>
+    <col name="BaseUnit" type="NVarChar(6)"/>
+    <col name="AvailabilitySchemeID" type="NVarChar(10)"/>
+    <col name="PostClassID" type="NVarChar(10)"/>
+    <col name="TaxCategoryID" type="NVarChar(10)"/>
+  </table>
+  <rows>
+    <row ItemClassCD="PARTS     " Descr="Purchased components" StkItem="1"
+         ItemType="F" ValMethod="A" BaseUnit="EA"
+         AvailabilitySchemeID="DEFAULT" PostClassID="PARTS"
+         TaxCategoryID="EXEMPT"/>
+  </rows>
+</data>
+"""
+    stock_xml = """\
+<?xml version="1.0" encoding="utf-8"?>
+<data>
+  <table name="InventoryItem">
+    <col name="InventoryCD" type="NVarChar(30)"/>
+    <col name="Descr" type="NVarChar(256)"/>
+    <col name="ItemStatus" type="Char(2)"/>
+  </table>
+  <rows>
+    <row InventoryCD="ENCL-STD  " Descr="Standard enclosure" ItemStatus="AC"/>
+  </rows>
+</data>
+"""
+    inv = _inventory_tree(tmp_path, item_xml, stock_xml)
+    tree = reconcile.load_inventory_tree(inv)
+    cfg = tmp_path / "config"
+    (cfg / "master").mkdir(parents=True)
+    (cfg / "master" / "54-item-classes.yaml").write_text(
+        "entity: ItemClass\n"
+        "key: ClassID\n"
+        "records:\n"
+        "  - ClassID: PARTS\n"
+        "    Description: Purchased components\n"
+        "    StockItem: true\n"
+        "    ItemType: Finished Good\n"
+        "    ValuationMethod: Average\n"
+        "    BaseUOM: EA\n"
+        "    AvailabilityCalculationRule: DEFAULT\n"
+        "    PostingClass: PARTS\n"
+        "    TaxCategoryID: EXEMPT\n",
+        encoding="utf-8",
+    )
+    (cfg / "master" / "80-stock-items-parts.yaml").write_text(
+        "entity: StockItem\n"
+        "key: InventoryID\n"
+        "records:\n"
+        "  - InventoryID: ENCL-STD\n"
+        "    Description: Standard enclosure\n"
+        "    ItemStatus: Active\n",
+        encoding="utf-8",
+    )
+    seeds = reconcile.load_config_seeds(cfg)
+    smap = reconcile.SnapshotMap.model_validate(
+        {
+            "enums": {
+                "item_type": {"Finished Good": "F"},
+                "val_method": {"Average": "A"},
+                "item_status": {"Active": "AC"},
+                "bool_bit": {"true": "1", "false": "0"},
+            },
+            "tables": [
+                {
+                    "table": "INItemClass",
+                    "entity": "ItemClass",
+                    "keys": {"ClassID": "ItemClassCD"},
+                    "fields": {
+                        "Description": "Descr",
+                        "StockItem": "StkItem",
+                        "BaseUOM": "BaseUnit",
+                        "AvailabilityCalculationRule": "AvailabilitySchemeID",
+                        "PostingClass": "PostClassID",
+                    },
+                    "enums": {
+                        "StockItem": "bool_bit",
+                        "ItemType": "item_type",
+                        "ValuationMethod": "val_method",
+                    },
+                },
+                {
+                    "table": "InventoryItem",
+                    "entity": "StockItem",
+                    "keys": {"InventoryID": "InventoryCD"},
+                    "fields": {"Description": "Descr"},
+                    "enums": {"ItemStatus": "item_status"},
+                },
+            ],
+        }
+    )
+    bundle = reconcile.reconcile(tree, seeds, config_dir=cfg, snapshot_map=smap)
+    assert not any(d.entity in ("ItemClass", "StockItem") for d in bundle.deltas)
+
+
+def test_inlocation_mapped_to_warehouse_not_unmapped(tmp_path: Path) -> None:
+    """V42/T161: INLocation maps to Warehouse; clears unmapped noise."""
+    loc_xml = """\
+<?xml version="1.0" encoding="utf-8"?>
+<data>
+  <table name="INLocation">
+    <col name="LocationCD" type="NVarChar(30)"/>
+    <col name="Descr" type="NVarChar(60)"/>
+    <col name="Active" type="Bit"/>
+  </table>
+  <rows>
+    <row LocationCD="MAIN      " Descr="Main storage" Active="1"/>
+  </rows>
+</data>
+"""
+    inv = _inventory_tree(tmp_path, loc_xml)
+    tree = reconcile.load_inventory_tree(inv)
+    smap = reconcile.SnapshotMap.model_validate(
+        {"tables": [{"table": "INLocation", "entity": "Warehouse"}]}
+    )
+    # catalog has Warehouse — map must not leave table unmapped
+    bundle = reconcile.reconcile(tree, [], config_dir=None, snapshot_map=smap)
+    assert not any(u.name == "INLocation" for u in bundle.unmapped)
+
+
+def test_warehouse_id_alias_to_sitecd(tmp_path: Path) -> None:
+    """V42/T161: Default WarehouseID seed key joins INSite.SiteCD."""
+    site_xml = """\
+<?xml version="1.0" encoding="utf-8"?>
+<data>
+  <table name="INSite">
+    <col name="SiteCD" type="NVarChar(10)"/>
+    <col name="Descr" type="NVarChar(60)"/>
+    <col name="Active" type="Bit"/>
+  </table>
+  <rows>
+    <row SiteCD="WH01      " Descr="Main warehouse" Active="1"/>
+  </rows>
+</data>
+"""
+    inv = _inventory_tree(tmp_path, site_xml)
+    tree = reconcile.load_inventory_tree(inv)
+    cfg = tmp_path / "config"
+    (cfg / "master").mkdir(parents=True)
+    (cfg / "master" / "50-warehouse.yaml").write_text(
+        "entity: Warehouse\n"
+        "key: WarehouseID\n"
+        "endpoint: default\n"
+        "records:\n"
+        "  - WarehouseID: WH01\n"
+        "    Descr: Main warehouse\n"
+        "    Active: true\n",
+        encoding="utf-8",
+    )
+    seeds = reconcile.load_config_seeds(cfg)
+    smap = reconcile.SnapshotMap.model_validate(
+        {
+            "enums": {"bool_bit": {"true": "1", "false": "0"}},
+            "tables": [
+                {
+                    "table": "INSite",
+                    "entity": "Warehouse",
+                    "keys": {"WarehouseID": "SiteCD"},
+                    "enums": {"Active": "bool_bit"},
+                }
+            ],
+        }
+    )
+    bundle = reconcile.reconcile(tree, seeds, config_dir=cfg, snapshot_map=smap)
+    assert not any(d.entity == "Warehouse" for d in bundle.deltas)
+
+
 def test_models_forbid_extra() -> None:
     with pytest.raises(ValidationError):
         reconcile.UnmappedTable.model_validate({"name": "X", "rows": 0, "bogus": 1})
