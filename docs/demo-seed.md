@@ -142,6 +142,53 @@ CD-vs-int deltas. Without enums, Usage/Account Type/Active report false
 label-vs-code deltas. Findings report seed-side field names and resolved
 inventory values (codes after enum fold).
 
+### Inventory table → entity → endpoint (V42)
+
+Package `snapshot_map.yaml` (and identity match when table name equals catalog
+entity). Endpoint column = catalog symbolic contract for the entity (not the
+inventory transport — inventory is always offline XML).
+
+| Inventory table | Entity | Endpoint | Notes |
+| --------------- | ------ | -------- | ----- |
+| `Account` | Account | default | Type/PostOption/Active enums |
+| `Sub` | Subaccount | default | `SubaccountCD`→`SubCD` |
+| `Terms` | CreditTerms | bootstrap | Due/Disc/Visible enums |
+| `UnitOfMeasure` | UnitsOfMeasure | default | `UnitID`→`Unit` |
+| `OrganizationLedgerLink` | LedgerCompany | bootstrap | |
+| `GLSetup` / `INSetup` / `APSetup` / `ARSetup` / `SOSetup` / `POSetup` / `CASetup` | module Preferences | bootstrap | bool_bit policy bits |
+| `ReasonCode` | ReasonCode | bootstrap | Usage enum + Account/Sub FK |
+| `INPostClass` | PostingClass | bootstrap | *Acct/*Sub FK resolve |
+| `INAvailabilityScheme` | AvailabilityCalculationRule | bootstrap | |
+| `INItemClass` | ItemClass | default | `ClassID`→`ItemClassCD`; ItemType/ValMethod |
+| `INSite` | Warehouse | bootstrap \| default | `WarehouseID`→`SiteCD` |
+| `INLocation` | Warehouse | bootstrap \| default | bin rows; detail lists not field-compared |
+| `InventoryItem` | StockItem | default | `InventoryID`→`InventoryCD`; ItemStatus |
+| `INKitSpecHdr` | KitSpecification | default | |
+| `SOOrderType` | OrderType | bootstrap | Freight FK |
+| `ARStatementCycle` | StatementCycle | bootstrap | PrepareOn |
+| `CashAccount` | CashAccount | bootstrap | Account/Sub/Branch FK |
+| `PaymentMethod` | PaymentMethod | default | Descr/IsActive/UseFor*/PaymentType |
+| `PaymentMethodAccount` | PaymentMethod | default | detail cash accounts |
+| `VendorClass` | VendorClass | bootstrap | *Acct/*Sub FK |
+| `CustomerClass` | CustomerClass | default | `ClassID`→`CustomerClassID` + AR/Sales FK |
+| `Vendor` | Vendor | default | identity; CD on `BAccount` (v1 no multi-table join) |
+| `Customer` | Customer | default | identity; CD on `BAccount` (v1 no multi-table join) |
+| `Roles` / `Users` / `UsersInRoles` | Role / User | bootstrap | membership detail |
+| `NumberingSequence` / `Numbering` | NumberingSequence | bootstrap | bounds only (V40) |
+| `Company` / `Ledger` / `TaxCategory` | (identity) | bootstrap or default | table name = entity; no map row required |
+
+#### Intentionally unmapped (findings noise, not CaC gaps)
+
+| Class | Examples |
+| ----- | -------- |
+| Txn / history | `INTran*`, `GLTran`, `APInvoice`, `ARPayment`, `Batch`, `PO*`, `SO*`, cost/status hist |
+| System / audit | `Note`, `LoginTrace`, `ScreenPreferences` (when present) |
+| Features via plugin | `FeaturesSet` (bits applied by Bootstrap plugin, not seed table) |
+| Party CD host | `BAccount` — natural CD for Vendor/Customer; v1 maps extension tables only |
+| Party address/contact | `Location`, `Contact`, `Address` (linked entities, not flat seed headers) |
+| Lot/serial | `INLotSerClass` — demo non-goal (see [LotSerialClass](#lotserialclass--non-goal-gh-27--v42)) |
+| Kit/detail noise | `INKitSpecStkDet`, `INUnit`, site-status / cost tables |
+
 Artifact notes and the SM203520 / `ac.exe export xml` distinction: [ac-exe.md](ac-exe.md).
 
 Default scaffold golden is **trial-balance only** (V28/V33):

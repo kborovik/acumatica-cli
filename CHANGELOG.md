@@ -4,6 +4,17 @@
 
 ### Added
 
+- **Inventory map coverage polish (T159–T162, gh #27 / V42):** package
+  `snapshot_map.yaml` joins Default masters without Bootstrap bumps —
+  PaymentMethod field/enum aliases (`Descr`/`IsActive`/`UseFor*`/`PaymentType`),
+  CustomerClass `ClassID`→`CustomerClassID` + AR/Sales account FK resolve,
+  INSite `WarehouseID`→`SiteCD`, `INLocation`→Warehouse, ItemClass/StockItem
+  natural-key aliases + ItemStatus enum, `PaymentMethodAccount`→PaymentMethod.
+  LotSerialClass is an explicit **non-goal** (demo never claims
+  `DfltLotSerClassID`; `INLotSerClass` stays unmapped). Offline tests prove
+  LAB5-class fixtures produce 0 join-alias false deltas for those masters.
+  Docs: [docs/demo-seed.md](docs/demo-seed.md) inventory table → entity →
+  endpoint table + intentional-unmapped classes.
 - **Bootstrap *Preferences field depth (T154–T158, gh #26 / V41):** Bootstrap
   contract `1.3.0` deepens GL/IN/AP/AR/SO/PO/CA Preferences with a **curated**
   field set (numbering IDs where package sequences exist, post/hold/control
