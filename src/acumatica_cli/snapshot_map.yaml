@@ -44,6 +44,19 @@ enums:
     All: AL
   prepare_on:
     Fixed Day of Month: F
+  means_of_payment:
+    Cash/Check: CHC
+  item_type:
+    Finished Good: F
+  val_method:
+    Average: A
+  item_status:
+    Active: AC
+    Inactive: IN
+    No Sales: NS
+    No Purchases: NP
+    No Request: NR
+    Marked for Deletion: MD
   bool_bit:
     "true": "1"
     "false": "0"
@@ -118,12 +131,37 @@ tables:
       SalesSubID: sub_cd
   - table: INItemClass
     entity: ItemClass
+    keys:
+      ClassID: ItemClassCD
+    fields:
+      Description: Descr
+      StockItem: StkItem
+      BaseUOM: BaseUnit
+      AvailabilityCalculationRule: AvailabilitySchemeID
+      PostingClass: PostClassID
+    enums:
+      StockItem: bool_bit
+      ItemType: item_type
+      ValuationMethod: val_method
   - table: INSite
     entity: Warehouse
+    # Bootstrap seed key SiteCD; Default phases use WarehouseID (= SiteCD).
+    keys:
+      WarehouseID: SiteCD
     enums:
       Active: bool_bit
+  # Warehouse locations detail table (IN204000 Locations tab). Header
+  # compare stays on INSite; map clears unmapped for bin rows (V42).
+  - table: INLocation
+    entity: Warehouse
   - table: InventoryItem
     entity: StockItem
+    keys:
+      InventoryID: InventoryCD
+    fields:
+      Description: Descr
+    enums:
+      ItemStatus: item_status
   - table: INSetup
     entity: INPreferences
     enums:
@@ -198,6 +236,58 @@ tables:
       BranchID: branch_cd
     enums:
       Active: bool_bit
+
+  # T160 / V42 — Default masters (no Bootstrap bump). PaymentMethod joins on
+  # PaymentMethodID; REST names differ from DAC. CustomerClass key ClassID →
+  # CustomerClassID + account/sub FK resolve. PaymentMethodAccount = detail
+  # cash-account rows (compare skips lists). Vendor/Customer identity tables
+  # keep CD on BAccount — v1 no multi-table join (docs non-goal for BAccount).
+  - table: PaymentMethod
+    entity: PaymentMethod
+    fields:
+      Description: Descr
+      Active: IsActive
+      UseInAP: UseForAP
+      UseInAR: UseForAR
+      MeansOfPayment: PaymentType
+    enums:
+      Active: bool_bit
+      UseInAP: bool_bit
+      UseInAR: bool_bit
+      MeansOfPayment: means_of_payment
+  - table: PaymentMethodAccount
+    entity: PaymentMethod
+  - table: CustomerClass
+    entity: CustomerClass
+    keys:
+      ClassID: CustomerClassID
+    fields:
+      Description: Descr
+      Terms: TermsID
+      CurrencyID: CuryID
+      ARAccount: ARAcctID
+      ARSubaccount: ARSubID
+      SalesAccount: SalesAcctID
+      SalesSubaccount: SalesSubID
+      CashDiscountAccount: DiscTakenAcctID
+      CashDiscountSubaccount: DiscTakenSubID
+      StatementCycleID: StatementCycleId
+    resolves:
+      ARAccount: account_cd
+      ARSubaccount: sub_cd
+      SalesAccount: account_cd
+      SalesSubaccount: sub_cd
+      CashDiscountAccount: account_cd
+      CashDiscountSubaccount: sub_cd
+  - table: Vendor
+    entity: Vendor
+    fields:
+      VendorClass: VendorClassID
+      Terms: TermsID
+  - table: Customer
+    entity: Customer
+    fields:
+      CustomerClass: CustomerClassID
 
   # T146 Role/User (+ membership detail). Tables from SM201005/SM201010 /
   # UsersInRoles inventory; entity names = Bootstrap contract (T145).
