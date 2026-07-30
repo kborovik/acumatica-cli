@@ -37,7 +37,9 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
+          # V19 / I.pkg: notes body from promoted CHANGELOG version section
+          ./scripts/changelog notes "${GITHUB_REF_NAME}" > release-notes.md
           gh release create "${GITHUB_REF_NAME}" \
             --title "${GITHUB_REF_NAME}" \
-            --generate-notes \
+            --notes-file release-notes.md \
             dist/*

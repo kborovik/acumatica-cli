@@ -15,6 +15,7 @@ import pytest
 REPO = Path(__file__).parent.parent
 SCRIPT = REPO / "scripts" / "changelog"
 MAKEFILE = REPO / "Makefile"
+RELEASE_YML = REPO / ".github" / "workflows" / "release.yml"
 
 SAMPLE = """\
 # Changelog
@@ -176,3 +177,12 @@ def test_makefile_release_promotes_changelog() -> None:
     assert "CHANGELOG.md" in text
     # never local gh release create
     assert "gh release create" not in text
+
+
+def test_release_yml_notes_from_changelog() -> None:
+    """V19: GH release notes from CHANGELOG version section, not sole --generate-notes."""
+    text = RELEASE_YML.read_text()
+    assert "scripts/changelog notes" in text
+    assert "--notes-file" in text
+    assert "--generate-notes" not in text
+    assert "gh release create" in text
