@@ -92,6 +92,7 @@ V38: reconcile-normalize — entity-vs-table compare ! pad-trim both sides on st
 V39: password-seed — User seed Password write-only @ apply when present in YAML; extract strips `Password` + `b64__Password` (never seed hashes); diff ignores password fields
 V40: numbering-runtime — NumberingSequence seed ! bounds only (`NumberingID`, `StartNbr`, `EndNbr`, `WarnNbr`, `NbrStep` + StartDate? if screen requires); `LastNbr` (+ advanced counter) = runtime state — extract strips; diff ignores; apply never requires; ! reset live counters every apply (gh #25)
 V41: prefs-field-depth — Bootstrap *Preferences field lists ! curated subset (demo seed need or ERP-default rebuild risk); ! full DAC mirror; each field ! seed/catalog reason; server-derived/runtime ! seed (B11 class); contract shape change ! version bump (V21) (gh #26)
+V42: inventory-map-coverage — dual-reader masters (catalog entity or demo seed claims) ! snapshot_map table→entity (+ aliases/resolves/enums as needed) so `acu reconcile` findings = real gaps not join-alias noise; intentional unmapped (txn/history/Notes/LoginTrace/ScreenPreferences/FeaturesSet-via-plugin) ! short docs table; demo-not-seeded Default master → explicit non-goal note ok; ! Bootstrap bump for map/catalog-only polish (gh #27)
 
 ## §T TASKS
 
@@ -166,6 +167,10 @@ T155|x|extend bootstrap_project.xml *Preferences for chosen fields; version bump
 T156|x|widen seed_catalog include + package templates only where demo claims field; snapshot_map enums/resolves if new FKs (numbering IDs depend V40)|V34,V38,V40,V41,T155
 T157|x|offline tests: apply body + extract include + no permanent drift from server-derived/runtime; bootstrap field asserts|V13,V34,V41,T155,T156
 T158|x|docs demo-seed — added fields list + apply order vs warehouse/lot class/numbering if any; changelog (gh #26)|V12,T154,T156
+T159|.|LotSerialClass: catalog+template if demo claims; else docs non-goal (IN prefs skip DfltLotSerClassID stands)|V34,V42,I.data
+T160|.|snapshot_map polish inventory masters reconcile should compare (PaymentMethod, CustomerClass, Vendor/Customer?, INLocation↔Warehouse locations, LotSerial if catalog); aliases/resolves/enums; ! Bootstrap bump|V35,V38,V42,I.data,T159
+T161|.|offline tests LAB5-class inventory+config → findings only real gaps not join-alias noise for mapped masters; existing reconcile green|V13,V38,V42,T160
+T162|.|docs table inventory table → entity → bootstrap\|default\|unmapped; changelog (gh #27)|V12,V42,T159,T160
 
 ## §B BUGS
 
