@@ -91,6 +91,7 @@ V37: tenant-snapshot artifact — accept SM203520 XML ZIP (`manifest.xml` + `*.x
 V38: reconcile-normalize — entity-vs-table compare ! pad-trim both sides on string keys+fields; seed→inv key/field aliases declarative via snapshot_map (or package defaults), v1 `{table,entity}` rows still load; FK fields resolve inv int IDs → CD via inventory lookup indexes (prefer compare in seed/CD space); first targets Account+Sub for *AcctID/*SubID on ReasonCode/VendorClass-class + PostingClass/CashAccount/OrderType freight; global enums: + per-row field→enum fold REST labels → DAC codes (Usage, Account Type/PostOption, bool_bit Active, CreditTerms Due/Disc/Visible, …); decimal-looking strings collapse trailing zeros (0 vs 0.000000) without mangling bare CDs like 000000; never silent promote config/ (V36)
 V39: password-seed — User seed Password write-only @ apply when present in YAML; extract strips `Password` + `b64__Password` (never seed hashes); diff ignores password fields
 V40: numbering-runtime — NumberingSequence seed ! bounds only (`NumberingID`, `StartNbr`, `EndNbr`, `WarnNbr`, `NbrStep` + StartDate? if screen requires); `LastNbr` (+ advanced counter) = runtime state — extract strips; diff ignores; apply never requires; ! reset live counters every apply (gh #25)
+V41: prefs-field-depth — Bootstrap *Preferences field lists ! curated subset (demo seed need or ERP-default rebuild risk); ! full DAC mirror; each field ! seed/catalog reason; server-derived/runtime ! seed (B11 class); contract shape change ! version bump (V21) (gh #26)
 
 ## §T TASKS
 
@@ -160,6 +161,11 @@ T150|x|bootstrap contract NumberingSequence (CS201010 or V12-verified screen; ke
 T151|x|seed_catalog + snapshot_map NumberingSequence; optional package template master/baseline; V22 order before prefs *NumberingID refs|V22,V34,V35,I.data,T150
 T152|x|LastNbr pipeline: extract strip LastNbr(+advanced counter); apply bounds without LastNbr; diff ignore; offline unit tests|V40,I.cmd,T150
 T153|x|docs demo-seed — numbering seed vs prefs *NumberingID apply order (gh #25)|V12,T150,T151
+T154|.|inventory+demo field pick list per prefs entity (IN/AP/AR/GL/SO/PO/CA as chosen); reason per field; ! full DAC|V41,I.data
+T155|.|extend bootstrap_project.xml *Preferences for chosen fields; version bump|V21,V41,I.data,T154
+T156|.|widen seed_catalog include + package templates only where demo claims field; snapshot_map enums/resolves if new FKs (numbering IDs depend V40)|V34,V38,V40,V41,T155
+T157|.|offline tests: apply body + extract include + no permanent drift from server-derived/runtime; bootstrap field asserts|V13,V34,V41,T155,T156
+T158|.|docs demo-seed — added fields list + apply order vs warehouse/lot class/numbering if any; changelog (gh #26)|V12,T154,T156
 
 ## §B BUGS
 
