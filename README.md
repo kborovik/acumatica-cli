@@ -17,7 +17,7 @@ Acumatica configuration normally lives in the web UI: wizards, screens, and manu
 ## Quick start
 
 ```sh
-uv tool install acumatica-cli
+uv tool install git+https://github.com/kborovik/acu-cli.git
 
 acu config init --host erp.example.com my-erp
 cd my-erp                                # edit .env: set ACU_PASSWORD, ACU_TENANT
@@ -165,17 +165,18 @@ Prefer symbolic `default` over a pinned `Default/25.200.001` so the seed tree tr
 
 ## Installation
 
-Requires Python 3.14 or newer.
+Requires Python 3.14 or newer. This is a **private** package — not published to PyPI.
 
 ```sh
-uv tool install acumatica-cli
+uv tool install git+https://github.com/kborovik/acu-cli.git
 ```
 
-`pipx install acumatica-cli` and `pip install acumatica-cli` work too.
-For the latest development version straight from the main branch:
+Or clone and install editable for development:
 
 ```sh
-uv tool install git+https://github.com/kborovik/acumatica-cli.git
+git clone https://github.com/kborovik/acu-cli.git
+cd acu-cli
+gmake install    # editable install as a global uv tool
 ```
 
 Verify with `acu --version`.
@@ -238,8 +239,8 @@ On macOS use Homebrew's `gmake` (`brew install make`); `/usr/bin/make` is 3.81 a
 Elsewhere plain `make` is fine when it is GNU Make.
 
 ```sh
-git clone https://github.com/kborovik/acumatica-cli.git
-cd acumatica-cli
+git clone https://github.com/kborovik/acu-cli.git
+cd acu-cli
 gmake install    # editable install as a global uv tool
 gmake check      # offline gate: ruff, basedpyright strict, pytest
 ```
@@ -256,7 +257,7 @@ gmake release patch   # or minor | major
 ```
 
 Local release runs `gmake check`, bumps the version, commits, tags `v<version>`, and pushes.
-GitHub Actions re-runs the check on the tag, then publishes the GitHub release and PyPI package only if that check passes.
+GitHub Actions re-runs the check on the tag, then creates a GitHub Release (with sdist/wheel artifacts) only if that check passes. There is no PyPI publish — the repo is private.
 
 ### Live end-to-end tier
 

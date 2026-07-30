@@ -11,7 +11,7 @@ endpoint exposes the seeding surface (serialization verified T12).
 Contract ownership is hybrid (T69/V2/T81/T85): the data repo's
 ``config/bootstrap/project.xml`` is preferred, then root
 ``bootstrap/project.xml``; else the packaged full company
-``bootstrap_project.xml`` (``Bootstrap/1.3.0``) so PyPI-only and offline
+``bootstrap_project.xml`` (``Bootstrap/1.3.0``) so package-only and offline
 virgin paths still bootstrap the full surface.
 
 Customization publishes are tenant-scoped, so the package must be published

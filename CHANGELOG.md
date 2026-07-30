@@ -2,6 +2,18 @@
 
 ## Unreleased
 
+### Changed
+
+- **No PyPI publish (private repo / V19):** `release.yml` no longer uses
+  `pypa/gh-action-pypi-publish` or OIDC trusted publishing. Tag `v*` still
+  re-runs CI, builds sdist+wheel, and creates a GitHub Release with those
+  artifacts. Install via git URL or editable clone — not pypi.org. SPEC
+  §I.pkg, §V.19, `.spec/check-extras.md` §V.19, README, and Makefile
+  release messages updated.
+- **Primary repo URL:** docs and `pyproject.toml` point at
+  https://github.com/kborovik/acu-cli (active). `kborovik/acumatica-cli` is
+  demo-only and is no longer referenced for install/clone.
+
 ### Added
 
 - **Inventory map coverage polish (T159–T162, gh #27 / V42):** package

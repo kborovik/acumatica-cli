@@ -7,7 +7,7 @@
 
   package_zip() (bootstrap.py) prefers data-repo bootstrap/project.xml when
   present; otherwise this packaged template is the fallback so config init,
-  offline tests, and PyPI-only installs still bootstrap the full surface.
+  offline tests, and package-only installs still bootstrap the full surface.
 
   package_zip() injects a
   <Graph ClassName="AcuBootstrapPlugin" FileType="NewFile" Source="..."/>

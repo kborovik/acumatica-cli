@@ -17,7 +17,7 @@ dependencies = [
 
 [project.urls]
 Homepage = "https://lab5.ca"
-Repository = "https://github.com/kborovik/acumatica-cli"
+Repository = "https://github.com/kborovik/acu-cli"
 
 [project.scripts]
 acu = "acumatica_cli.cli:main"

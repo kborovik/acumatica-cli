@@ -126,8 +126,8 @@ for granular /sdd:check runs.
 
 - sole path: `make release <part>` — `make check` first, then bump + commit + tag + push
 - never local `gh release create`
-- tag `v*` → `release.yml` re-runs CI check (`workflow_call` → `ci.yml`) then `uv build` + pypi.org via OIDC + creates GH release
-- no PyPI API token in repo or GitHub secrets
+- tag `v*` → `release.yml` re-runs CI check (`workflow_call` → `ci.yml`) then `uv build` + GH release create with `dist/*` artifacts
+- no PyPI publish (private repo); no PyPI API token or OIDC trusted-publisher setup
 - tag `v<version>` == pyproject `version`
 - CI also runs on every push/PR to `main`
 
