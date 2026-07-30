@@ -197,6 +197,7 @@ Cross-directory order is fixed: bootstrap, then baseline, then setup, then maste
 | Company | Org CD **LAB5** (single placeholder across ledger link, open periods, TransitBranchID, cash BranchID) |
 | COA / GL | Expanded accounts for inventory, in-transit, PO accrual, PPV/LCV, freight, discounts |
 | Setup calendar | Financial year, then master calendar, then open periods for LAB5 |
+| Numbering | `05-numbering-sequences.yaml` before any prefs that may set `*NumberingID` — see [Numbering sequences](#numbering-sequences) |
 | Master prefs | Reason codes and IN prefs before warehouse; warehouse before item classes and stock items |
 | Parties | Vendor/customer classes before vendors/customers |
 | Roles / users | `90-roles.yaml` then `91-users.yaml` (Role before User; membership rides User detail) — see [Role, User, and password seed](#role-user-and-password-seed) |
@@ -264,6 +265,64 @@ Authoring a first-login password: put `Password` on the User record for the
 initial apply only. After that, omit it — warm re-apply and extract stay
 identity-only. Never commit password hashes from SM203520 / inventory dumps.
 
+## Numbering sequences
+
+Default contract has **no** Numbering Sequences surface. Sequences live on the
+**Bootstrap** endpoint only (`endpoint: bootstrap` → active package version,
+currently `Bootstrap/1.2.0`). Screen: CS201010 (Numbering Sequences).
+
+### Apply order (V22)
+
+Numbered prefix under `config/master/` places sequences **before** every module
+prefs file that may reference a sequence id via `*NumberingID` (IN/SO/PO/AR/AP/CA
+setup and kin):
+
+| File | Entity | Notes |
+| ---- | ------ | ----- |
+| `config/master/05-numbering-sequences.yaml` | NumberingSequence | key `NumberingID`; bounds only |
+| later `20-in-preferences.yaml`, `56-so-preferences.yaml`, … | module prefs | may point `*NumberingID` at a sequence id |
+
+Package demo pins LAB5-class module sequences (`APBILL`, `APPAYMENT`,
+`ARINVOICE`, `ARPAYMENT`, `BATCH`, `INISSUE`, `INKITASSY`, `INRECEIPT`,
+`POORDER`, `PORECEIPT`, `SOORDER`, `SOSHIPMENT`) as bounds-only rows. A custom
+sequence id used by a prefs seed must exist (tenant-native or earlier
+NumberingSequence seed) before that prefs PUT.
+
+### Bounds vs runtime (V40)
+
+Seed is **bounds only**. Issued progress is runtime state and never desired
+config:
+
+| Field class | Fields | Seed? |
+| ----------- | ------ | ----- |
+| Identity + bounds | `NumberingID`, `StartNbr`, `EndNbr`, `WarnNbr`, `NbrStep`, `StartDate`?, `Descr`? | yes |
+| Runtime counter | `LastNbr` (+ advanced counter if ever exposed) | **never** |
+
+| Path | Behavior |
+| ---- | -------- |
+| **apply** | PUT bounds only. `LastNbr` is never sent — even if hand-authored seed includes it — so re-apply does not reset live counters. |
+| **extract** | Always strips `LastNbr` (catalog include is bounds-only; hard strip even if include mistakenly lists it). |
+| **diff** | Ignores `LastNbr` — seed bounds vs live counter is never drift. |
+
+```yaml
+# config/master/05-numbering-sequences.yaml (shape)
+entity: NumberingSequence
+key: NumberingID
+endpoint: bootstrap
+records:
+- NumberingID: BATCH
+  StartNbr: '000000'
+  EndNbr: '999999'
+  WarnNbr: '999990'
+  NbrStep: 1
+  StartDate: '1900-01-01'
+  # LastNbr: never seed — runtime issued progress (V40)
+```
+
+Do not author `LastNbr` in seed. Scenario documents that advance counters are
+out of scope for apply; warm re-apply of bounds must leave live `LastNbr`
+alone.
+
 ## Entity map
 
 **Catalog mirror:** seed-file paths and entity/endpoint pairs below match packaged
@@ -285,6 +344,7 @@ not in the catalog, not extracted.
 | `config/setup/10-financial-year.yaml` | FinancialYearSettings / GeneratePeriods | bootstrap | GL101000 | setup synth |
 | `config/setup/20-master-calendar.yaml` | MasterCalendar / GenerateCalendar | bootstrap | GL201000 | setup synth |
 | `config/setup/30-open-periods.yaml` | ManagePeriods / ProcessAll | bootstrap | GL503000 | setup synth |
+| `config/master/05-numbering-sequences.yaml` | NumberingSequence | bootstrap | CS201010 | catalog |
 | `config/master/10-reason-codes.yaml` | ReasonCode | bootstrap | CS211000 | catalog |
 | `config/master/20-in-preferences.yaml` | INPreferences | bootstrap | IN101000 | catalog |
 | `config/master/30-availability-rules.yaml` | AvailabilityCalculationRule | bootstrap | IN201500 | catalog |

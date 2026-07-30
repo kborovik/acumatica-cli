@@ -4,7 +4,7 @@
 
 ### Added
 
-- **Bootstrap NumberingSequence (T150–T152, gh #25):** Bootstrap contract
+- **Bootstrap NumberingSequence (T150–T153, gh #25):** Bootstrap contract
   `1.2.0` exposes NumberingSequence on CS201010 — key `NumberingID`, bounds
   `StartNbr`/`EndNbr`/`WarnNbr`/`NbrStep`/`StartDate` (+ `Descr`). `LastNbr`
   is runtime state and is omitted from the contract (V40). Catalog +
@@ -13,7 +13,9 @@
   bounds only) sorts before master prefs that may reference `*NumberingID`
   (V22). **LastNbr pipeline (T152/V40):** extract hard-strips `LastNbr`;
   diff ignores it; apply never PUTs it (hand-authored seed cannot reset
-  live counters). Follow-on: docs (T153).
+  live counters). Docs: [docs/demo-seed.md](docs/demo-seed.md) numbering
+  seed vs prefs apply order + bounds/runtime rule; README + package
+  template map.
 - **Bootstrap Role + User + membership (T145–T149, gh #24):** Bootstrap
   contract `1.1.0` exposes Role (SM201005) and User (SM201010) with User
   detail `Roles` for membership. Package seeds `config/master/90-roles.yaml`
