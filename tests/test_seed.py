@@ -926,6 +926,132 @@ def test_diff_still_flags_non_password_user_fields(
     assert not any("Password" in d for d in drifts)
 
 
+NUMBERING_BOUNDS_YAML = """\
+entity: NumberingSequence
+key: NumberingID
+endpoint: bootstrap
+records:
+  - NumberingID: BATCH
+    StartNbr: '000000'
+    EndNbr: '999999'
+    WarnNbr: '999990'
+    NbrStep: 1
+    StartDate: '1900-01-01'
+"""
+
+NUMBERING_WITH_LASTNBR_YAML = """\
+entity: NumberingSequence
+key: NumberingID
+endpoint: bootstrap
+records:
+  - NumberingID: BATCH
+    StartNbr: '000000'
+    EndNbr: '999999'
+    WarnNbr: '999990'
+    NbrStep: 1
+    StartDate: '1900-01-01'
+    LastNbr: '000025'
+"""
+
+
+def test_apply_bounds_without_lastnbr(tmp_path: Path, instance: Instance) -> None:
+    """V40/T152: apply of bounds-only seed never requires LastNbr."""
+    baseline = seed.load_baseline(_write(tmp_path, NUMBERING_BOUNDS_YAML))
+    recorder = Recorder({"/NumberingSequence": httpx.Response(200, json=[])})
+    seed.apply(_client(instance, recorder), baseline)
+    puts = [r for r in recorder.requests if r.method == "PUT"]
+    body = json.loads(puts[-1].content)
+    assert body["NumberingID"] == {"value": "BATCH"}
+    assert body["StartNbr"] == {"value": "000000"}
+    assert body["EndNbr"] == {"value": "999999"}
+    assert body["WarnNbr"] == {"value": "999990"}
+    assert body["NbrStep"] == {"value": 1}
+    assert "LastNbr" not in body
+
+
+def test_apply_strips_lastnbr_when_present_in_seed(
+    tmp_path: Path, instance: Instance
+) -> None:
+    """V40/T152: hand-authored LastNbr never PUTs — live counters stay put."""
+    baseline = seed.load_baseline(_write(tmp_path, NUMBERING_WITH_LASTNBR_YAML))
+    recorder = Recorder({"/NumberingSequence": httpx.Response(200, json=[])})
+    seed.apply(_client(instance, recorder), baseline)
+    puts = [r for r in recorder.requests if r.method == "PUT"]
+    body = json.loads(puts[-1].content)
+    assert "LastNbr" not in body
+    assert body["NumberingID"] == {"value": "BATCH"}
+    assert body["StartNbr"] == {"value": "000000"}
+
+
+def test_diff_ignores_lastnbr_fields(tmp_path: Path, instance: Instance) -> None:
+    """V40/T152: seed LastNbr vs advanced live counter is not drift."""
+    baseline = seed.load_baseline(_write(tmp_path, NUMBERING_WITH_LASTNBR_YAML))
+    recorder = Recorder(
+        {
+            "/NumberingSequence": _live(
+                {
+                    "NumberingID": "BATCH",
+                    "StartNbr": "000000",
+                    "EndNbr": "999999",
+                    "WarnNbr": "999990",
+                    "NbrStep": 1,
+                    "StartDate": "1900-01-01",
+                    "LastNbr": "000099",  # advanced beyond seed — not drift
+                }
+            )
+        }
+    )
+    assert seed.diff(_client(instance, recorder), baseline) == []
+
+
+def test_diff_ignores_live_lastnbr_when_seed_omits(
+    tmp_path: Path, instance: Instance
+) -> None:
+    """V40/T152: package bounds seed vs live with LastNbr is clean."""
+    baseline = seed.load_baseline(_write(tmp_path, NUMBERING_BOUNDS_YAML))
+    recorder = Recorder(
+        {
+            "/NumberingSequence": _live(
+                {
+                    "NumberingID": "BATCH",
+                    "StartNbr": "000000",
+                    "EndNbr": "999999",
+                    "WarnNbr": "999990",
+                    "NbrStep": 1,
+                    "StartDate": "1900-01-01",
+                    "LastNbr": "000042",
+                }
+            )
+        }
+    )
+    assert seed.diff(_client(instance, recorder), baseline) == []
+
+
+def test_diff_still_flags_numbering_bounds_drift(
+    tmp_path: Path, instance: Instance
+) -> None:
+    """V40/T152: bounds fields still compare; only LastNbr is ignored."""
+    baseline = seed.load_baseline(_write(tmp_path, NUMBERING_BOUNDS_YAML))
+    recorder = Recorder(
+        {
+            "/NumberingSequence": _live(
+                {
+                    "NumberingID": "BATCH",
+                    "StartNbr": "000000",
+                    "EndNbr": "500000",  # drifted bound
+                    "WarnNbr": "999990",
+                    "NbrStep": 1,
+                    "StartDate": "1900-01-01",
+                    "LastNbr": "000099",
+                }
+            )
+        }
+    )
+    drifts = seed.diff(_client(instance, recorder), baseline)
+    assert drifts == ["NumberingSequence [BATCH].EndNbr: source='999999' live='500000'"]
+    assert not any("LastNbr" in d for d in drifts)
+
+
 def test_diff_normalizes_booleans(tmp_path: Path, instance: Instance) -> None:
     text = "entity: E\nkey: K\nrecords:\n  - K: A\n    Active: true\n"
     baseline = seed.load_baseline(_write(tmp_path, text))

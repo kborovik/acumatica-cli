@@ -777,6 +777,39 @@ def test_shape_hard_strips_password_fields() -> None:
     assert shaped2[0]["Description"] == "Hour"
 
 
+def test_shape_hard_strips_lastnbr_runtime_fields() -> None:
+    """V40/T152: LastNbr never enters seed (even via include allow-list)."""
+    live = [
+        wrap(
+            {
+                "UnitID": "BATCH",  # re-use UnitID key field of _spec default
+                "Description": "GL Batch",
+                "StartNbr": "000000",
+                "EndNbr": "999999",
+                "LastNbr": "000025",
+            }
+        )
+    ]
+    # include mistakenly lists LastNbr — still hard-stripped (V40)
+    spec = _spec(include=["Description", "StartNbr", "EndNbr", "LastNbr"])
+    shaped = extract._shape(spec, live)  # pyright: ignore[reportPrivateUsage]
+    assert shaped == [
+        {
+            "UnitID": "BATCH",
+            "Description": "GL Batch",
+            "EndNbr": "999999",
+            "StartNbr": "000000",
+        }
+    ]
+    assert "LastNbr" not in shaped[0]
+    # strip-list path (no include): LastNbr still hard-stripped
+    shaped2 = extract._shape(  # pyright: ignore[reportPrivateUsage]
+        _spec(strip=["Noise"]), live
+    )
+    assert "LastNbr" not in shaped2[0]
+    assert shaped2[0]["StartNbr"] == "000000"
+
+
 def test_shape_missing_key_field_is_a_hard_error() -> None:
     with pytest.raises(RuntimeError, match="missing key field"):
         extract._shape(  # pyright: ignore[reportPrivateUsage]

@@ -82,6 +82,13 @@ _BRANCH_EMPTY = "'Branch' cannot be empty"
 # YAML; extract always strips; diff never compares (GET returns hashes
 # or nothing — never a re-seedable value).
 PASSWORD_FIELDS = frozenset({"Password", "b64__Password"})
+# NumberingSequence runtime counters (V40/gh #25): bounds-only seed;
+# LastNbr (+ advanced counter if ever exposed) = issued progress, not
+# desired config. Extract hard-strips; diff never compares; apply never
+# PUTs them (re-apply must not reset live counters).
+NUMBERING_RUNTIME_FIELDS = frozenset({"LastNbr"})
+# Fields omitted from source↔live compare (V39 write-only + V40 runtime).
+_DIFF_IGNORE_FIELDS = PASSWORD_FIELDS | NUMBERING_RUNTIME_FIELDS
 
 
 def active_bootstrap(root: Path | None = None) -> tuple[str, frozenset[str]]:
@@ -343,6 +350,9 @@ def apply(
     seed; warm re-apply (record already live) strips them so identity
     re-PUT does not reset passwords.
 
+    Numbering runtime fields (V40/T152): never PUT ``LastNbr`` (or kin) so
+    apply of bounds never resets live counters.
+
     Returns the record count.
     """
     if isinstance(baseline, ActionFile):
@@ -385,6 +395,9 @@ def _put_body(
     One live fetch when the record has detail lists and/or password fields.
     Virgin (no live) keeps seed Password; warm drops password material so
     re-apply is identity-only (package User seed never needs a password).
+
+    Always drops numbering runtime counters (V40/T152) so bounds apply never
+    resets live ``LastNbr`` even if hand-authored seed included them.
     """
     has_details = any(isinstance(v, list) for v in record.values())
     has_password = any(k in record for k in PASSWORD_FIELDS)
@@ -397,7 +410,8 @@ def _put_body(
         body = dict(record)
     if live is not None and has_password:
         body = {k: v for k, v in body.items() if k not in PASSWORD_FIELDS}
-    return body
+    # V40: never send runtime numbering counters (field-name deny, any entity).
+    return {k: v for k, v in body.items() if k not in NUMBERING_RUNTIME_FIELDS}
 
 
 def _merge_detail_ids(
@@ -506,8 +520,8 @@ def diff(client: AcumaticaClient, baseline: BaselineFile | ActionFile) -> list[s
             drifts.append(f"{label}: missing on tenant")
             continue
         actual = unwrap(live)
-        # V39: password write-only — never compare Password / b64__Password
-        fields = {k: v for k, v in record.items() if k not in PASSWORD_FIELDS}
+        # V39/V40: never compare write-only password or runtime numbering counters
+        fields = {k: v for k, v in record.items() if k not in _DIFF_IGNORE_FIELDS}
         for field, expected in fields.items():
             if isinstance(expected, list):
                 key = (baseline.detail_keys or {})[field]  # load-validated
@@ -532,7 +546,7 @@ def _diff_nested(path: str, expected: dict[str, Any], live: Any) -> list[str]:
         return [f"{path}: not returned by endpoint"]
     drifts: list[str] = []
     for field, want in expected.items():
-        if field in PASSWORD_FIELDS:
+        if field in _DIFF_IGNORE_FIELDS:
             continue
         if isinstance(want, dict):
             drifts.extend(_diff_nested(f"{path}.{field}", want, live.get(field)))
@@ -566,7 +580,7 @@ def _diff_details(
             drifts.append(f"{label}.{field}[{row[key]}]: missing on tenant")
             continue
         for sub, want in row.items():
-            if sub in PASSWORD_FIELDS:
+            if sub in _DIFF_IGNORE_FIELDS:
                 continue
             if sub not in live_row:
                 drifts.append(
