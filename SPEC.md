@@ -167,7 +167,7 @@ T155|x|extend bootstrap_project.xml *Preferences for chosen fields; version bump
 T156|x|widen seed_catalog include + package templates only where demo claims field; snapshot_map enums/resolves if new FKs (numbering IDs depend V40)|V34,V38,V40,V41,T155
 T157|x|offline tests: apply body + extract include + no permanent drift from server-derived/runtime; bootstrap field asserts|V13,V34,V41,T155,T156
 T158|x|docs demo-seed — added fields list + apply order vs warehouse/lot class/numbering if any; changelog (gh #26)|V12,T154,T156
-T159|.|LotSerialClass: catalog+template if demo claims; else docs non-goal (IN prefs skip DfltLotSerClassID stands)|V34,V42,I.data
+T159|x|LotSerialClass: catalog+template if demo claims; else docs non-goal (IN prefs skip DfltLotSerClassID stands)|V34,V42,I.data
 T160|.|snapshot_map polish inventory masters reconcile should compare (PaymentMethod, CustomerClass, Vendor/Customer?, INLocation↔Warehouse locations, LotSerial if catalog); aliases/resolves/enums; ! Bootstrap bump|V35,V38,V42,I.data,T159
 T161|.|offline tests LAB5-class inventory+config → findings only real gaps not join-alias noise for mapped masters; existing reconcile green|V13,V38,V42,T160
 T162|.|docs table inventory table → entity → bootstrap\|default\|unmapped; changelog (gh #27)|V12,V42,T159,T160

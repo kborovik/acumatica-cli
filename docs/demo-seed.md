@@ -369,6 +369,22 @@ IN; PO hold receipts / return reason / auto-release IN; CA transit account/sub
 If you later seed `DfltLotSerClassID` or `TransitSiteID`, renumber master
 prefixes so lot class / warehouse sort **before** IN preferences.
 
+### LotSerialClass — non-goal (gh #27 / V42)
+
+Demo does **not** seed lot/serial classes and does **not** claim
+`DfltLotSerClassID` on IN preferences (V41 apply-order skip stands).
+
+| Surface | Status |
+| ------- | ------ |
+| `seed_catalog.yaml` row for Default `LotSerialClass` | **not packaged** |
+| Package template under `config/master/` | **none** |
+| Inventory table `INLotSerClass` | intentionally **unmapped** in `snapshot_map` (system `DEFAULT` only on LAB5-class) |
+| Bootstrap bump for lot/serial | **out of scope** this pass |
+
+When a data repo later seeds lot/serial classes, add a catalog row + numbered
+master template **before** any IN prefs FK claim, map `INLotSerClass` →
+`LotSerialClass`, and re-check V34 completeness.
+
 ## Entity map
 
 **Catalog mirror:** seed-file paths and entity/endpoint pairs below match packaged
@@ -432,3 +448,4 @@ not in the catalog, not extracted.
 - Multi-org, multicurrency, full tax engine
 - Production cutover or opening balances from a legacy system
 - Replacing external data repos for production cutovers
+- **LotSerialClass** seed/catalog (demo never claims `DfltLotSerClassID`; see [LotSerialClass — non-goal](#lotserialclass--non-goal-gh-27--v42))
