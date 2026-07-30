@@ -117,7 +117,7 @@ def test_load_contract_xml_prefers_config_bootstrap(tmp_path: Path) -> None:
 <Customization level="" description="root" product-version="26.101">
   <EntityEndpoint>
     <Endpoint xmlns="http://www.acumatica.com/entity/maintenance/5.31"
-              name="Bootstrap" version="1.1.0" systemContractVersion="4">
+              name="Bootstrap" version="1.2.0" systemContractVersion="4">
       <TopLevelEntity name="RootOnly" screen="CS000000">
         <Fields><Field name="ID" type="StringValue" /></Fields>
       </TopLevelEntity>
@@ -129,7 +129,7 @@ def test_load_contract_xml_prefers_config_bootstrap(tmp_path: Path) -> None:
 <Customization level="" description="config" product-version="26.101">
   <EntityEndpoint>
     <Endpoint xmlns="http://www.acumatica.com/entity/maintenance/5.31"
-              name="Bootstrap" version="1.1.0" systemContractVersion="4">
+              name="Bootstrap" version="1.2.0" systemContractVersion="4">
       <TopLevelEntity name="ConfigOnly" screen="CS000000">
         <Fields><Field name="ID" type="StringValue" /></Fields>
       </TopLevelEntity>
@@ -143,7 +143,7 @@ def test_load_contract_xml_prefers_config_bootstrap(tmp_path: Path) -> None:
     (tmp_path / "config" / "bootstrap" / "project.xml").write_bytes(cfg_contract)
 
     name, entities = bootstrap.parse_endpoint(bootstrap.load_contract_xml(tmp_path))
-    assert name == "Bootstrap/1.1.0"
+    assert name == "Bootstrap/1.2.0"
     assert entities == frozenset({"ConfigOnly"})
 
 
@@ -169,7 +169,7 @@ def test_package_zip_carries_the_bootstrap_endpoint() -> None:
     Verified vs 26.101.0225 by live import round-trip: the <Endpoint> child
     is the XmlSerializer form of Model.Endpoint in the entity/maintenance/5.31
     namespace; no .endpoint file is involved. Packaged contract is the single
-    full company surface (Bootstrap/1.1.0); data-repo bootstrap/project.xml
+    full company surface (Bootstrap/1.2.0); data-repo bootstrap/project.xml
     may still override when present (V2).
     """
     ns = "{http://www.acumatica.com/entity/maintenance/5.31}"
@@ -178,11 +178,11 @@ def test_package_zip_carries_the_bootstrap_endpoint() -> None:
     (item,) = root.findall("EntityEndpoint")
     (endpoint,) = item.findall(f"{ns}Endpoint")
     assert endpoint.get("name") == "Bootstrap"
-    assert endpoint.get("version") == "1.1.0"
+    assert endpoint.get("version") == "1.2.0"
     # SystemContracts.V4 is the build's only IsCurrent implementation
     assert endpoint.get("systemContractVersion") == "4"
     entities = {e.get("name"): e for e in endpoint.findall(f"{ns}TopLevelEntity")}
-    # T81 full company + T145 Role/User membership
+    # T81 full company + T145 Role/User + T150 NumberingSequence
     assert set(entities) == {
         "Company",
         "CreditTerms",
@@ -210,6 +210,7 @@ def test_package_zip_carries_the_bootstrap_endpoint() -> None:
         "CashAccount",
         "Role",
         "User",
+        "NumberingSequence",
     }
     # features stay OUT: contract-endpoint writes to CS100000 do not
     # persist (T3 verdict) - the CustomizationPlugin owns features
@@ -242,6 +243,22 @@ def test_package_zip_carries_the_bootstrap_endpoint() -> None:
         f.get("name") for f in details["UserRole"].findall(f"{ns}Fields/{ns}Field")
     }
     assert {"Rolename", "Selected"} <= membership_fields
+    # T150: NumberingSequence bounds on CS201010 (gh #25); no LastNbr (V40)
+    assert entities["NumberingSequence"].get("screen") == "CS201010"
+    numbering_fields = {
+        f.get("name"): f.get("type")
+        for f in entities["NumberingSequence"].findall(f"{ns}Fields/{ns}Field")
+    }
+    assert numbering_fields == {
+        "NumberingID": "StringValue",
+        "Descr": "StringValue",
+        "StartNbr": "StringValue",
+        "EndNbr": "StringValue",
+        "WarnNbr": "StringValue",
+        "NbrStep": "IntValue",
+        "StartDate": "DateTimeValue",
+    }
+    assert "LastNbr" not in numbering_fields
     # GL preferences = GL102000 on this build - GL105000 has no site-map
     # row at all (T34, verified vs the live SiteMap table)
     assert entities["GLPreferences"].get("screen") == "GL102000"
@@ -337,6 +354,17 @@ def test_package_zip_carries_the_bootstrap_endpoint() -> None:
             "Password": "UserList",
             "Roles": ("AllowedRoles", ""),
         },
+        # T150 NumberingSequence (gh #25): CS201010 Sequence header +
+        # SequenceDetail bounds (flat entity; LastNbr omitted V40)
+        "NumberingSequence": {
+            "NumberingID": "Sequence",
+            "Descr": "Sequence",
+            "StartNbr": "SequenceDetail",
+            "EndNbr": "SequenceDetail",
+            "WarnNbr": "SequenceDetail",
+            "NbrStep": "SequenceDetail",
+            "StartDate": "SequenceDetail",
+        },
     }
     for entity, expected in views.items():
         fields = {
@@ -386,7 +414,7 @@ def test_package_zip_prefers_data_repo_contract(tmp_path: Path) -> None:
 <Customization level="" description="data-repo full" product-version="26.101">
   <EntityEndpoint>
     <Endpoint xmlns="http://www.acumatica.com/entity/maintenance/5.31"
-              name="Bootstrap" version="1.1.0" systemContractVersion="4">
+              name="Bootstrap" version="1.2.0" systemContractVersion="4">
       <TopLevelEntity name="Company" screen="CS101500">
         <Fields><Field name="AcctCD" type="StringValue" /></Fields>
       </TopLevelEntity>

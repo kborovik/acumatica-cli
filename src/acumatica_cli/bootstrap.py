@@ -11,7 +11,7 @@ endpoint exposes the seeding surface (serialization verified T12).
 Contract ownership is hybrid (T69/V2/T81/T85): the data repo's
 ``config/bootstrap/project.xml`` is preferred, then root
 ``bootstrap/project.xml``; else the packaged full company
-``bootstrap_project.xml`` (``Bootstrap/1.1.0``) so PyPI-only and offline
+``bootstrap_project.xml`` (``Bootstrap/1.2.0``) so PyPI-only and offline
 virgin paths still bootstrap the full surface.
 
 Customization publishes are tenant-scoped, so the package must be published
@@ -69,7 +69,7 @@ def _bootstrap_file(root: Path, name: str) -> Path | None:
 
 
 def packaged_contract_xml() -> bytes:
-    """The CLI-shipped full company Bootstrap contract (``Bootstrap/1.1.0``)."""
+    """The CLI-shipped full company Bootstrap contract (``Bootstrap/1.2.0``)."""
     return (resources.files("acumatica_cli") / "bootstrap_project.xml").read_bytes()
 
 

@@ -156,7 +156,7 @@ T146|x|seed_catalog + snapshot_map rows Roles/Users/membership; optional package
 T147|x|password-seed pipeline: apply write-only when present; extract strip Password+b64__Password; diff ignore password; offline unit tests|V39,I.cmd,T145
 T148|x|apply order Role then User then membership (V22 prefixes); virgin+warm idempotent PUT; re-apply no password when user unchanged|V4,V22,V39,T145,T147
 T149|x|docs demo-seed or README CLI map — role/user seed order + password rule (gh #24)|V12,T145,T147
-T150|.|bootstrap contract NumberingSequence (CS201010 or V12-verified screen; key NumberingID ≥ bounds fields); version bump|V21,I.data
+T150|x|bootstrap contract NumberingSequence (CS201010 or V12-verified screen; key NumberingID ≥ bounds fields); version bump|V21,I.data
 T151|.|seed_catalog + snapshot_map NumberingSequence; optional package template master/baseline; V22 order before prefs *NumberingID refs|V22,V34,V35,I.data,T150
 T152|.|LastNbr pipeline: extract strip LastNbr(+advanced counter); apply bounds without LastNbr; diff ignore; offline unit tests|V40,I.cmd,T150
 T153|.|docs demo-seed — numbering seed vs prefs *NumberingID apply order (gh #25)|V12,T150,T151

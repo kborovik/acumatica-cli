@@ -210,7 +210,7 @@ Reference closure: every foreign key must resolve to a tenant-native row or an e
 
 Default contract has **no** Role or User surface. Both live on the **Bootstrap**
 endpoint only (`endpoint: bootstrap` → active package version, currently
-`Bootstrap/1.1.0`). Screens: Role = SM201005, User = SM201010.
+`Bootstrap/1.2.0`). Screens: Role = SM201005, User = SM201010.
 
 ### Apply order (V22)
 

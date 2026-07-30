@@ -1,7 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!--
   acu bootstrap customization package template - full company contract
-  (SPEC T81 single full-company line; T145 bumps 1.0.0 -> 1.1.0 for Role/User).
+  (SPEC T81 single full-company line; T145 bumps 1.0.0 -> 1.1.0 for Role/User;
+  T150 bumps 1.1.0 -> 1.2.0 for NumberingSequence).
 
   package_zip() (bootstrap.py) prefers data-repo bootstrap/project.xml when
   present; otherwise this packaged template is the fallback so config init,
@@ -29,7 +30,8 @@
   MasterCalendar, CompanyCalendar, CompanyPeriod, ManagePeriods,
   GLPreferences, INPreferences, ReasonCode, AP/AR/SO/PO/CA Preferences,
   AvailabilityCalculationRule, PostingClass, VendorClass, StatementCycle,
-  Warehouse, OrderType, CashAccount, Role, User (+ UserRole membership detail).
+  Warehouse, OrderType, CashAccount, Role, User (+ UserRole membership detail),
+  NumberingSequence.
 
   T145 Role/User (gh #24) - Default endpoint has no Role/User surface:
   - Role SM201005 -> RoleAccess, PrimaryView Roles (PX.SM.Roles):
@@ -44,13 +46,23 @@
     projection): Rolename + Selected (assign when true). Apply order
     Role then User (V22 prefixes; T148).
 
+  T150 NumberingSequence (gh #25) - Default endpoint has no numbering
+  surface; CS201010 Numbering Sequences (NumberingSequenceMaint):
+  - PrimaryView Sequence (DAC Numbering): key NumberingID + Descr.
+  - Detail view SequenceDetail (DAC NumberingSequence): bounds StartNbr,
+    EndNbr, WarnNbr, NbrStep, StartDate. LastNbr is runtime counter —
+    omitted from contract (V40/T152 strip/ignore if ever present).
+  - Flat entity (Currency multi-view idiom): NumberingID/Descr on Sequence,
+    bounds on SequenceDetail. Single sequence row per NumberingID is the
+    demo/LAB5 shape; multi-segment / branch-scoped rows are out of v1.
+
   Contract field names = DAC property names verbatim (no rename layer).
   Features (CS100000) stays OUT of the endpoint - the plugin owns features.
   Shape change requires a version bump (V21).
 -->
-<Customization level="" description="acu bootstrap: CustomizationPlugin enables features on publish; Bootstrap endpoint exposes full company surface (company + credit terms + financial currency + GL chain + module preferences + vendor class + statement cycle + warehouse + order type + cash account + role + user + membership)" product-version="26.101">
+<Customization level="" description="acu bootstrap: CustomizationPlugin enables features on publish; Bootstrap endpoint exposes full company surface (company + credit terms + financial currency + GL chain + module preferences + vendor class + statement cycle + warehouse + order type + cash account + role + user + membership + numbering sequence)" product-version="26.101">
   <EntityEndpoint>
-    <Endpoint xmlns="http://www.acumatica.com/entity/maintenance/5.31" name="Bootstrap" version="1.1.0" systemContractVersion="4">
+    <Endpoint xmlns="http://www.acumatica.com/entity/maintenance/5.31" name="Bootstrap" version="1.2.0" systemContractVersion="4">
       <TopLevelEntity name="Company" screen="CS101500">
         <Fields>
           <Field name="AcctCD" type="StringValue" />
@@ -867,6 +879,40 @@
           </Mapping>
         </Mappings>
       </Detail>
+      <TopLevelEntity name="NumberingSequence" screen="CS201010">
+        <Fields>
+          <Field name="NumberingID" type="StringValue" />
+          <Field name="Descr" type="StringValue" />
+          <Field name="StartNbr" type="StringValue" />
+          <Field name="EndNbr" type="StringValue" />
+          <Field name="WarnNbr" type="StringValue" />
+          <Field name="NbrStep" type="IntValue" />
+          <Field name="StartDate" type="DateTimeValue" />
+        </Fields>
+        <Mappings>
+          <Mapping field="NumberingID">
+            <To object="Sequence" field="NumberingID" />
+          </Mapping>
+          <Mapping field="Descr">
+            <To object="Sequence" field="Descr" />
+          </Mapping>
+          <Mapping field="StartNbr">
+            <To object="SequenceDetail" field="StartNbr" />
+          </Mapping>
+          <Mapping field="EndNbr">
+            <To object="SequenceDetail" field="EndNbr" />
+          </Mapping>
+          <Mapping field="WarnNbr">
+            <To object="SequenceDetail" field="WarnNbr" />
+          </Mapping>
+          <Mapping field="NbrStep">
+            <To object="SequenceDetail" field="NbrStep" />
+          </Mapping>
+          <Mapping field="StartDate">
+            <To object="SequenceDetail" field="StartDate" />
+          </Mapping>
+        </Mappings>
+      </TopLevelEntity>
     </Endpoint>
   </EntityEndpoint>
 </Customization>
