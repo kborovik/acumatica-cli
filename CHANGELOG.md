@@ -4,6 +4,14 @@
 
 ### Added
 
+- **Bootstrap Role + User + membership (T145–T149, gh #24):** Bootstrap
+  contract `1.1.0` exposes Role (SM201005) and User (SM201010) with User
+  detail `Roles` for membership. Package seeds `config/master/90-roles.yaml`
+  then `91-users.yaml` (demo `soadmin` / `SO Admin`). Password is write-only
+  on virgin apply when present in YAML; extract strips `Password` /
+  `b64__Password`; diff ignores password fields (V39). Warm re-apply never
+  resets an existing user's password. Docs: [docs/demo-seed.md](docs/demo-seed.md)
+  Role/User apply order + password rule; README + package template map.
 - **`acu tenant recycle` (T142–T144):** site-wide IIS app-pool restart over SSH
   (`Restart-WebAppPool`). Reloads the tenant map (V5) and drops every session
   so concurrent API-user license slots free up. Confirm prompt; `--yes` skips.

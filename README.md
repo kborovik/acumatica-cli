@@ -35,7 +35,7 @@ acu --tenant DEV run scenario/           # replay transaction scenarios
 ```
 
 Bare `apply` / `diff` (no path args) also prefer `config/` when those trees exist.
-See [docs/demo-seed.md](docs/demo-seed.md) for the entity map, once-guard, and apply-order notes.
+See [docs/demo-seed.md](docs/demo-seed.md) for the entity map, once-guard, apply-order notes, and Role/User + password seed rules.
 
 **Hosted Acumatica (no SSH):** the tenant already exists; set a blank `ACU_SSH=` in `.env` (scaffold omits the key — without it, acu defaults to `Administrator@<ACU_BASE_URL host>` for SSH boxes).
 
@@ -123,7 +123,7 @@ There is no `--flavor`.
 | `config/bootstrap/` | virgin-tenant config: features, company, credit terms, `project.xml` |
 | `config/baseline/` | reference data: subaccounts, COA, ledger, UOMs |
 | `config/setup/` | one-time actions: financial year, master calendar, open periods |
-| `config/master/` | inventory/distribution masters (prefs, warehouse, items, parties) |
+| `config/master/` | inventory/distribution masters (prefs, warehouse, items, parties) + Role/User (`90-roles` → `91-users`) |
 | `scenario/` | lifecycle txns for `acu run`: once capital, then buy, build, sell |
 | `config/views/` | observer views for `acu state` (`inquire:` / `entity:` / `gi:`; not SEED_DIRS) |
 | `state/` | committed derived-state observations (evidence, not seed; money/qty fixed-point) |

@@ -154,7 +154,7 @@ T145|x|bootstrap contract Role (SM201005 key Rolename ≥ Rolename+Descr) + User
 T146|x|seed_catalog + snapshot_map rows Roles/Users/membership; optional package template master seed; ! built-in system roles as mutable seed|V34,V35,I.data,T145
 T147|x|password-seed pipeline: apply write-only when present; extract strip Password+b64__Password; diff ignore password; offline unit tests|V39,I.cmd,T145
 T148|x|apply order Role then User then membership (V22 prefixes); virgin+warm idempotent PUT; re-apply no password when user unchanged|V4,V22,V39,T145,T147
-T149|.|docs demo-seed or README CLI map — role/user seed order + password rule (gh #24)|V12,T145,T147
+T149|x|docs demo-seed or README CLI map — role/user seed order + password rule (gh #24)|V12,T145,T147
 
 ## §B BUGS
 

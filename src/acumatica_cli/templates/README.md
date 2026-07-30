@@ -43,7 +43,7 @@ Bare `acu apply` / `acu diff` also prefer `config/` when those trees exist.
 | `config/bootstrap/` | Company, features, credit terms, Bootstrap `project.xml` (Bootstrap/1.1.0) |
 | `config/baseline/` | GL foundation (COA, ledger, subaccounts, UOMs) |
 | `config/setup/` | Financial year, master calendar, open periods |
-| `config/master/` | Inventory, warehouse, items, vendors, customers, module prefs |
+| `config/master/` | Inventory, warehouse, items, vendors, customers, module prefs, roles/users (`90-roles` then `91-users`) |
 | `scenario/10-seed-capital.yaml` | Once-class owner capital JE (skip-if-present when present) |
 | `scenario/20-buy.yaml` | Additive component PO → receipt → bill → AP pay |
 | `scenario/30-build.yaml` | Additive kit assembly |

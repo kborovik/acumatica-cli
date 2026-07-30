@@ -199,11 +199,70 @@ Cross-directory order is fixed: bootstrap, then baseline, then setup, then maste
 | Setup calendar | Financial year, then master calendar, then open periods for LAB5 |
 | Master prefs | Reason codes and IN prefs before warehouse; warehouse before item classes and stock items |
 | Parties | Vendor/customer classes before vendors/customers |
+| Roles / users | `90-roles.yaml` then `91-users.yaml` (Role before User; membership rides User detail) — see [Role, User, and password seed](#role-user-and-password-seed) |
 | Scenario | Runs only after master apply; capital once-guard then additive buy/build/sell |
 
 Feature closure: every feature-gated form used by a seed file must appear in `config/bootstrap/features.yaml`.
 
 Reference closure: every foreign key must resolve to a tenant-native row or an earlier-sorting seed file.
+
+## Role, User, and password seed
+
+Default contract has **no** Role or User surface. Both live on the **Bootstrap**
+endpoint only (`endpoint: bootstrap` → active package version, currently
+`Bootstrap/1.1.0`). Screens: Role = SM201005, User = SM201010.
+
+### Apply order (V22)
+
+Numbered prefixes under `config/master/` enforce **Role → User → membership**:
+
+| File | Entity | Notes |
+| ---- | ------ | ----- |
+| `config/master/90-roles.yaml` | Role | key `Rolename`; fields `Rolename`, `Descr` |
+| `config/master/91-users.yaml` | User | key `Username`; identity fields + detail `Roles` |
+
+Membership is **not** a separate seed file. It is the User detail list
+`Roles` (`detail_keys: { Roles: Rolename }`), each row `Rolename` +
+`Selected`. A role must exist (tenant-native or earlier Role seed) before a
+User PUT that selects it.
+
+Package demo: full pre-build role dump in `90-roles.yaml` + demo user
+`soadmin` with `SO Admin` selected in `91-users.yaml`. Built-in system roles
+(Administrator, Customizer, …) are present as identity/header rows for
+reference closure; access-rights matrix beyond role header is out of scope.
+
+### Password rule (V39)
+
+| Path | Behavior |
+| ---- | -------- |
+| **apply** | `Password` is **write-only** when present in seed YAML. Virgin create (no live User) sends it; **warm** re-apply (User already live) **strips** password fields so identity re-PUT does not reset passwords. Package User seed needs no password. |
+| **extract** | Always strips `Password` and `b64__Password` — hashes never enter seed (even if a catalog `include` mistakenly listed them). |
+| **diff** | Ignores password fields — seed with or without `Password` vs live hash is never drift. |
+
+```yaml
+# config/master/91-users.yaml (shape)
+entity: User
+key: Username
+endpoint: bootstrap
+detail_keys:
+  Roles: Rolename
+records:
+- Username: soadmin
+  FirstName: SO
+  LastName: Admin
+  Email: soadmin@example.com
+  IsApproved: true
+  PasswordNeverExpires: true
+  PasswordChangeOnNextLogin: false
+  # Password: optional; write-only on virgin create only
+  Roles:
+  - Rolename: SO Admin
+    Selected: true
+```
+
+Authoring a first-login password: put `Password` on the User record for the
+initial apply only. After that, omit it — warm re-apply and extract stay
+identity-only. Never commit password hashes from SM203520 / inventory dumps.
 
 ## Entity map
 
@@ -251,6 +310,8 @@ not in the catalog, not extracted.
 | `config/master/80-stock-items-parts.yaml` | StockItem | default | IN202500 | catalog |
 | `config/master/82-stock-items-kits.yaml` | StockItem | default | IN202500 | catalog |
 | `config/master/85-kit-specifications.yaml` | KitSpecification | default | IN209500 | catalog |
+| `config/master/90-roles.yaml` | Role | bootstrap | SM201005 | catalog |
+| `config/master/91-users.yaml` | User (+ Roles membership detail) | bootstrap | SM201010 | catalog |
 | `scenario/10-seed-capital.yaml` | JournalTransaction (once) | default | GL301000 | run only |
 | `scenario/20-buy.yaml` | PO / receipt / AP bill+pay | default | PO/IN/AP | run only |
 | `scenario/30-build.yaml` | KitAssembly | default | IN307000 | run only |
