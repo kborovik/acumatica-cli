@@ -28,7 +28,7 @@ records:
 
 BOOTSTRAP_YAML = """\
 entity: CreditTerms
-endpoint: Bootstrap/1.2.0
+endpoint: Bootstrap/1.3.0
 key: TermsID
 records:
   - TermsID: NET30
@@ -37,7 +37,7 @@ records:
 SETUP_YAML = """\
 action: GenerateCalendar
 entity: MasterCalendar
-endpoint: Bootstrap/1.2.0
+endpoint: Bootstrap/1.3.0
 record:
   FinancialYear: 2026
 done_when:
@@ -789,9 +789,9 @@ def test_config_init_scaffolds_data_repo(tmp_path: Path) -> None:
     assert not (repo / "snapshot").exists()
     writes = [ln for ln in result.output.splitlines() if ln.startswith("write ")]
     assert len(writes) == len(INIT_TEMPLATES)
-    # T81/T82: scaffolded contract is Bootstrap/1.2.0 full company
+    # T81/T82: scaffolded contract is Bootstrap/1.3.0 full company
     assert (
-        'name="Bootstrap" version="1.2.0"'
+        'name="Bootstrap" version="1.3.0"'
         in (repo / "config" / "bootstrap" / "project.xml").read_text()
     )
     target = (repo / "target.yaml").read_text()

@@ -433,6 +433,32 @@ def test_package_snapshot_map_numbering_sequence(
     assert header.entity == "NumberingSequence"
 
 
+def test_package_snapshot_map_prefs_bool_enums(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """T156/V41: package map folds prefs policy bits via bool_bit."""
+    monkeypatch.chdir(tmp_path)
+    smap = reconcile.load_snapshot_map()
+    in_setup = smap.entry_for("INSetup")
+    assert in_setup is not None
+    assert in_setup.entity == "INPreferences"
+    assert in_setup.enums.get("AutoPost") == "bool_bit"
+    assert in_setup.enums.get("NegQty") == "bool_bit"
+    assert in_setup.enums.get("RequireControlTotal") == "bool_bit"
+    gl = smap.entry_for("GLSetup")
+    assert gl is not None
+    assert gl.enums.get("AutoPostOption") == "bool_bit"
+    ap = smap.entry_for("APSetup")
+    assert ap is not None
+    assert ap.enums.get("RequireVendorRef") == "bool_bit"
+    so = smap.entry_for("SOSetup")
+    assert so is not None
+    assert so.enums.get("CreditCheckError") == "bool_bit"
+    ca = smap.entry_for("CASetup")
+    assert ca is not None
+    assert ca.enums.get("ReleaseAP") == "bool_bit"
+
+
 def test_fk_resolve_reason_code_and_vendor_class(tmp_path: Path) -> None:
     """V38/T134: inv AccountID/SubID int → CD; match seed → 0 false deltas."""
     account_xml = """\

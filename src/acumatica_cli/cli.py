@@ -516,7 +516,7 @@ def config_init(host: str | None, directory: Path | None) -> None:
     verified example - no secrets. Single full seed under ``config/``
     (bootstrap/baseline/setup/master) + lifecycle ``scenario/`` +
     ``config/views/`` + README; full company ``project.xml``
-    (Bootstrap/1.2.0). No ``--flavor`` (V28/T108). Existing files are
+    (Bootstrap/1.3.0). No ``--flavor`` (V28/T108). Existing files are
     never overwritten (reported as skipped). DIRECTORY defaults to the
     current directory and is created if absent. No git init, no gpg.
     """

@@ -3,3 +3,10 @@ key: HoldEntry
 endpoint: bootstrap
 records:
 - HoldEntry: false
+  BatchNumberingID: BATCH
+  InvoiceNumberingID: APBILL
+  CheckNumberingID: APPAYMENT
+  AutoPost: true
+  RequireControlTotal: true
+  RequireVendorRef: true
+  RequireApprovePayments: true

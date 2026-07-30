@@ -13,3 +13,12 @@ records:
   ReceiptReasonCode: INRECEIPT
   AdjustmentReasonCode: INADJUST
   PIReasonCode: INPI
+  BatchNumberingID: BATCH
+  ReceiptNumberingID: INRECEIPT
+  IssueNumberingID: INISSUE
+  AdjustmentNumberingID: INADJUST
+  KitAssemblyNumberingID: INKITASSY
+  AutoPost: true
+  SummPost: false
+  NegQty: false
+  RequireControlTotal: true

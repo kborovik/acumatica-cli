@@ -161,11 +161,11 @@ T150|x|bootstrap contract NumberingSequence (CS201010 or V12-verified screen; ke
 T151|x|seed_catalog + snapshot_map NumberingSequence; optional package template master/baseline; V22 order before prefs *NumberingID refs|V22,V34,V35,I.data,T150
 T152|x|LastNbr pipeline: extract strip LastNbr(+advanced counter); apply bounds without LastNbr; diff ignore; offline unit tests|V40,I.cmd,T150
 T153|x|docs demo-seed — numbering seed vs prefs *NumberingID apply order (gh #25)|V12,T150,T151
-T154|.|inventory+demo field pick list per prefs entity (IN/AP/AR/GL/SO/PO/CA as chosen); reason per field; ! full DAC|V41,I.data
-T155|.|extend bootstrap_project.xml *Preferences for chosen fields; version bump|V21,V41,I.data,T154
-T156|.|widen seed_catalog include + package templates only where demo claims field; snapshot_map enums/resolves if new FKs (numbering IDs depend V40)|V34,V38,V40,V41,T155
-T157|.|offline tests: apply body + extract include + no permanent drift from server-derived/runtime; bootstrap field asserts|V13,V34,V41,T155,T156
-T158|.|docs demo-seed — added fields list + apply order vs warehouse/lot class/numbering if any; changelog (gh #26)|V12,T154,T156
+T154|x|inventory+demo field pick list per prefs entity (IN/AP/AR/GL/SO/PO/CA as chosen); reason per field; ! full DAC|V41,I.data
+T155|x|extend bootstrap_project.xml *Preferences for chosen fields; version bump|V21,V41,I.data,T154
+T156|x|widen seed_catalog include + package templates only where demo claims field; snapshot_map enums/resolves if new FKs (numbering IDs depend V40)|V34,V38,V40,V41,T155
+T157|x|offline tests: apply body + extract include + no permanent drift from server-derived/runtime; bootstrap field asserts|V13,V34,V41,T155,T156
+T158|x|docs demo-seed — added fields list + apply order vs warehouse/lot class/numbering if any; changelog (gh #26)|V12,T154,T156
 
 ## §B BUGS
 

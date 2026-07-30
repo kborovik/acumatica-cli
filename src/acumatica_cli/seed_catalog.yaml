@@ -8,7 +8,7 @@
 #             `bootstrap` stays symbolic in emitted files and resolves to
 #             the active Bootstrap package version at HTTP/load time
 #             (data-repo bootstrap/project.xml when present, else
-#             packaged full company Bootstrap/1.2.0 - V20/V21/T81)
+#             packaged full company Bootstrap/1.3.0 - V20/V21/T81/T155)
 #   keys      key fields: the emitted `key:`, the record sort order, and
 #             the B9 fallback's $select projection; the tuple must
 #             identify each record (V25 - a dup tuple is a row failure)
@@ -116,12 +116,19 @@ entities:
   # server audit stamp (B11 class, T50 round-trip)
   - LastModifiedDateTime
 
+# GLPreferences (V41/T154-T156): curated deepen — accounts + batch numbering
+# + post/hold/control policy. Not full GLSetup DAC (skip COAOrder, retain,
+# allocation/schedule numbering sequences not packaged).
 - entity: GLPreferences
   endpoint: bootstrap
   keys: [RetEarnAccountID]
   file: config/baseline/50-gl-preferences.yaml
   include:
   - YtdNetIncAccountID
+  - BatchNumberingID
+  - AutoPostOption
+  - HoldEntry
+  - RequireControlTotal
 
 - entity: LedgerCompany
   endpoint: bootstrap
@@ -172,6 +179,9 @@ entities:
   - AccountID
   - SubID
 
+# INPreferences (V41): transit/progress/reason + module numbering + post policy.
+# Skip DfltLotSerClassID / TransitSiteID / DfltPostClassID — need apply order
+# after warehouse/lot class/posting class (20- sorts before those files).
 - entity: INPreferences
   endpoint: bootstrap
   keys: [HoldEntry]
@@ -188,6 +198,15 @@ entities:
   - ReceiptReasonCode
   - AdjustmentReasonCode
   - PIReasonCode
+  - BatchNumberingID
+  - ReceiptNumberingID
+  - IssueNumberingID
+  - AdjustmentNumberingID
+  - KitAssemblyNumberingID
+  - AutoPost
+  - SummPost
+  - NegQty
+  - RequireControlTotal
 
 - entity: AvailabilityCalculationRule
   endpoint: bootstrap
@@ -284,6 +303,8 @@ entities:
   - HoldShipments
   - RequireShipmentTotal
   - AutoReleaseIN
+  - ShipmentNumberingID
+  - CreditCheckError
 
 - entity: POPreferences
   endpoint: bootstrap
@@ -292,6 +313,9 @@ entities:
   include:
   - AutoReleaseIN
   - RCReturnReasonCodeID
+  - RegularPONumberingID
+  - ReceiptNumberingID
+  - AutoReleaseAP
 
 - entity: OrderType
   endpoint: bootstrap
@@ -302,17 +326,36 @@ entities:
   - FreightAcctID
   - FreightSubID
 
+# AR/APPreferences (V41): HoldEntry key + numbering + post/control policy.
+# Skip aging/retainage/default class FKs (not demo-critical; class order).
 - entity: ARPreferences
   endpoint: bootstrap
   keys: [HoldEntry]
   file: config/master/60-ar-preferences.yaml
-  # singleton keyed by HoldEntry; seed claims HoldEntry only
+  include:
+  - BatchNumberingID
+  - InvoiceNumberingID
+  - PaymentNumberingID
+  - AutoPost
+  - RequireControlTotal
+  - RequireExtRef
+  - CreditCheckError
 
 - entity: APPreferences
   endpoint: bootstrap
   keys: [HoldEntry]
   file: config/master/61-ap-preferences.yaml
+  include:
+  - BatchNumberingID
+  - InvoiceNumberingID
+  - CheckNumberingID
+  - AutoPost
+  - RequireControlTotal
+  - RequireVendorRef
+  - RequireApprovePayments
 
+# CAPreferences (V41): transit + batch numbering + release/post policy.
+# Skip Transfer/Register numbering — sequences not in package 05- seed.
 - entity: CAPreferences
   endpoint: bootstrap
   keys: [TransitAcctId]
@@ -320,6 +363,10 @@ entities:
   include:
   - HoldEntry
   - TransitSubID
+  - BatchNumberingID
+  - AutoPostOption
+  - ReleaseAP
+  - ReleaseAR
 
 - entity: CashAccount
   endpoint: bootstrap

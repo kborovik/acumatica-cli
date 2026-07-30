@@ -211,7 +211,7 @@ Reference closure: every foreign key must resolve to a tenant-native row or an e
 
 Default contract has **no** Role or User surface. Both live on the **Bootstrap**
 endpoint only (`endpoint: bootstrap` → active package version, currently
-`Bootstrap/1.2.0`). Screens: Role = SM201005, User = SM201010.
+`Bootstrap/1.3.0`). Screens: Role = SM201005, User = SM201010.
 
 ### Apply order (V22)
 
@@ -269,7 +269,7 @@ identity-only. Never commit password hashes from SM203520 / inventory dumps.
 
 Default contract has **no** Numbering Sequences surface. Sequences live on the
 **Bootstrap** endpoint only (`endpoint: bootstrap` → active package version,
-currently `Bootstrap/1.2.0`). Screen: CS201010 (Numbering Sequences).
+currently `Bootstrap/1.3.0`). Screen: CS201010 (Numbering Sequences).
 
 ### Apply order (V22)
 
@@ -283,10 +283,10 @@ setup and kin):
 | later `20-in-preferences.yaml`, `56-so-preferences.yaml`, … | module prefs | may point `*NumberingID` at a sequence id |
 
 Package demo pins LAB5-class module sequences (`APBILL`, `APPAYMENT`,
-`ARINVOICE`, `ARPAYMENT`, `BATCH`, `INISSUE`, `INKITASSY`, `INRECEIPT`,
-`POORDER`, `PORECEIPT`, `SOORDER`, `SOSHIPMENT`) as bounds-only rows. A custom
-sequence id used by a prefs seed must exist (tenant-native or earlier
-NumberingSequence seed) before that prefs PUT.
+`ARINVOICE`, `ARPAYMENT`, `BATCH`, `INADJUST`, `INISSUE`, `INKITASSY`,
+`INRECEIPT`, `POORDER`, `PORECEIPT`, `SOORDER`, `SOSHIPMENT`) as bounds-only
+rows. A custom sequence id used by a prefs seed must exist (tenant-native or
+earlier NumberingSequence seed) before that prefs PUT.
 
 ### Bounds vs runtime (V40)
 
@@ -322,6 +322,52 @@ records:
 Do not author `LastNbr` in seed. Scenario documents that advance counters are
 out of scope for apply; warm re-apply of bounds must leave live `LastNbr`
 alone.
+
+## Module preferences field depth (V41)
+
+Bootstrap `*Preferences` entities are a **curated subset** of inventory
+`*Setup` tables — not a full DAC mirror (gh #26). Each seed/catalog field has
+a reason: demo need or rebuild risk when virgin ERP defaults drift across
+builds. Server-derived and runtime fields stay out (B11 class).
+
+Active package: `Bootstrap/1.3.0` (shape change = version bump, V21).
+
+### Added fields (beyond pre-1.3.0 surface)
+
+| Entity | Screen | Added fields | Reason |
+| ------ | ------ | ------------ | ------ |
+| GLPreferences | GL102000 | `BatchNumberingID`, `AutoPostOption`, `HoldEntry`, `RequireControlTotal` | pin BATCH + post/hold policy vs virgin defaults |
+| INPreferences | IN101000 | `BatchNumberingID`, `ReceiptNumberingID`, `IssueNumberingID`, `AdjustmentNumberingID`, `KitAssemblyNumberingID`, `AutoPost`, `SummPost`, `NegQty`, `RequireControlTotal` | LAB5 numbering + post/qty/control policy |
+| APPreferences | AP101000 | `BatchNumberingID`, `InvoiceNumberingID`, `CheckNumberingID`, `AutoPost`, `RequireControlTotal`, `RequireVendorRef`, `RequireApprovePayments` | bill/payment sequences + vendor-ref scenario needs |
+| ARPreferences | AR101000 | `BatchNumberingID`, `InvoiceNumberingID`, `PaymentNumberingID`, `AutoPost`, `RequireControlTotal`, `RequireExtRef`, `CreditCheckError` | invoice/payment sequences + credit policy |
+| SOPreferences | SO101000 | `ShipmentNumberingID`, `CreditCheckError` | SOSHIPMENT pin + credit check |
+| POPreferences | PO101000 | `RegularPONumberingID`, `ReceiptNumberingID`, `AutoReleaseAP` | POORDER/PORECEIPT pin; AP auto-release off |
+| CAPreferences | CA101000 | `BatchNumberingID`, `AutoPostOption`, `ReleaseAP`, `ReleaseAR` | batch + cash release policy |
+
+Pre-existing surfaces kept: GL accounts; IN transit/progress/reason codes /
+`UpdateGL` / `HoldEntry`; SO default order type / hold-shipment / auto-release
+IN; PO hold receipts / return reason / auto-release IN; CA transit account/sub
+/ `HoldEntry`.
+
+### Explicitly not seeded (V41)
+
+| Skip class | Examples | Why |
+| ---------- | -------- | --- |
+| Apply-order FKs | IN `DfltLotSerClassID`, `TransitSiteID`, `DfltPostClassID`; AP/AR default class | Prefer files sort **before** warehouse / lot class / posting class / vendor-customer class |
+| Unsequenced numbering | CA `TransferNumberingID` / `RegisterNumberingID`; IN `PINumberingID` | Sequence ids not in package `05-numbering-sequences.yaml` |
+| Full-DAC noise | aging buckets, retainage, print flags, assignment maps | Not demo-critical; rebuild risk low vs maintenance cost |
+
+### Apply order vs numbering / warehouse / lot class
+
+| Step | Must exist first |
+| ---- | ---------------- |
+| `05-numbering-sequences.yaml` | every prefs `*NumberingID` claim |
+| `10-reason-codes.yaml` | IN/PO reason-code FKs |
+| `20-in-preferences.yaml` | before warehouse (IN prefs do **not** claim site/lot/posting defaults) |
+| warehouse / posting class / item class | stock items — not prefs FKs this pass |
+
+If you later seed `DfltLotSerClassID` or `TransitSiteID`, renumber master
+prefixes so lot class / warehouse sort **before** IN preferences.
 
 ## Entity map
 

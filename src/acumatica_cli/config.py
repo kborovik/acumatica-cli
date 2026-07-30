@@ -44,7 +44,7 @@ DB_NAME = "AcumaticaDB"
 # dest layout under templates/ (derived from sibling acumatica-gitops seed
 # trees; prune demo/, Makefile, live .env, state/, packaged project.xml).
 # bootstrap project.xml is not a templates/ file: scaffold copies the
-# packaged full company contract (bootstrap_project.xml) → Bootstrap/1.2.0.
+# packaged full company contract (bootstrap_project.xml) → Bootstrap/1.3.0.
 INIT_TEMPLATES = (
     ("env", ".env"),
     ("gitignore", ".gitignore"),

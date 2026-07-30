@@ -35,7 +35,7 @@ acu --tenant DEV run scenario/           # replay transaction scenarios
 ```
 
 Bare `apply` / `diff` (no path args) also prefer `config/` when those trees exist.
-See [docs/demo-seed.md](docs/demo-seed.md) for the entity map, once-guard, apply-order notes, NumberingSequence vs prefs `*NumberingID`, and Role/User + password seed rules.
+See [docs/demo-seed.md](docs/demo-seed.md) for the entity map, once-guard, apply-order notes, NumberingSequence vs prefs `*NumberingID`, curated *Preferences field depth (V41), and Role/User + password seed rules.
 
 **Hosted Acumatica (no SSH):** the tenant already exists; set a blank `ACU_SSH=` in `.env` (scaffold omits the key — without it, acu defaults to `Administrator@<ACU_BASE_URL host>` for SSH boxes).
 
@@ -115,7 +115,7 @@ See [docs/ac-exe.md](docs/ac-exe.md) for export / SM203520 notes and [docs/demo-
 ## The data repo
 
 Your configuration lives in its own git repo.
-`acu config init` scaffolds a **single full seed** under `config/` (Bootstrap `project.xml` at `Bootstrap/1.2.0`, expanded COA, masters) plus lifecycle `scenario/`, observer `config/views/`, and README.
+`acu config init` scaffolds a **single full seed** under `config/` (Bootstrap `project.xml` at `Bootstrap/1.3.0`, expanded COA, masters) plus lifecycle `scenario/`, observer `config/views/`, and README.
 There is no `--flavor`.
 
 | Path | What it holds |
@@ -158,7 +158,7 @@ Dual-served entities (on both Bootstrap and Default) need an explicit `endpoint:
 | omitted | `Default/<api_version>` for Default-only entities |
 | `bootstrap` | active `Bootstrap/<ver>` from `bootstrap/project.xml` or the packaged contract |
 | `default` | `Default/<api_version>` — tracks the resolved API version |
-| `Bootstrap/1.2.0` or `Default/25.200.001` | literal pin (ignores the resolved Default version) |
+| `Bootstrap/1.3.0` or `Default/25.200.001` | literal pin (ignores the resolved Default version) |
 
 `api_version` resolves as `--api-version` flag, else `target.yaml` `default_api` when present, else code default `25.200.001` (never `ACU_API_VERSION` in `.env`).
 Prefer symbolic `default` over a pinned `Default/25.200.001` so the seed tree travels with the dataset pin.

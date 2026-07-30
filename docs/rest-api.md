@@ -84,7 +84,7 @@ A `version` object may carry the live ERP build id
     {
       "name": "Bootstrap",
       "version": "1.0.0",
-      "href": "http://…/entity/Bootstrap/1.2.0/"
+      "href": "http://…/entity/Bootstrap/1.3.0/"
     }
   ]
 }

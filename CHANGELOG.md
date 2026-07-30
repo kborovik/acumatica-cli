@@ -4,6 +4,15 @@
 
 ### Added
 
+- **Bootstrap *Preferences field depth (T154–T158, gh #26 / V41):** Bootstrap
+  contract `1.3.0` deepens GL/IN/AP/AR/SO/PO/CA Preferences with a **curated**
+  field set (numbering IDs where package sequences exist, post/hold/control
+  policy knobs that LAB5 rebuilds care about). Not a full DAC mirror —
+  lot-class/site/default-class FKs and unsequenced CA transfer numbering stay
+  out. Catalog includes + package templates updated; `INADJUST` added to
+  `05-numbering-sequences.yaml`; snapshot_map bool_bit enums for new policy
+  bits. Docs: [docs/demo-seed.md](docs/demo-seed.md) prefs field list + apply
+  order vs numbering/warehouse/lot class.
 - **Bootstrap NumberingSequence (T150–T153, gh #25):** Bootstrap contract
   `1.2.0` exposes NumberingSequence on CS201010 — key `NumberingID`, bounds
   `StartNbr`/`EndNbr`/`WarnNbr`/`NbrStep`/`StartDate` (+ `Descr`). `LastNbr`

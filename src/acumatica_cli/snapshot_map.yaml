@@ -76,12 +76,29 @@ tables:
       AutoReleaseIN: bool_bit
       HoldShipments: bool_bit
       RequireShipmentTotal: bool_bit
+      CreditCheckError: bool_bit
   - table: POSetup
     entity: POPreferences
+    enums:
+      HoldReceipts: bool_bit
+      AutoReleaseIN: bool_bit
+      AutoReleaseAP: bool_bit
   - table: ARSetup
     entity: ARPreferences
+    enums:
+      HoldEntry: bool_bit
+      AutoPost: bool_bit
+      RequireControlTotal: bool_bit
+      RequireExtRef: bool_bit
+      CreditCheckError: bool_bit
   - table: APSetup
     entity: APPreferences
+    enums:
+      HoldEntry: bool_bit
+      AutoPost: bool_bit
+      RequireControlTotal: bool_bit
+      RequireVendorRef: bool_bit
+      RequireApprovePayments: bool_bit
 
   # Wave 2 — table renames + PostingClass FK resolve
   - table: INPostClass
@@ -109,10 +126,26 @@ tables:
     entity: StockItem
   - table: INSetup
     entity: INPreferences
+    enums:
+      HoldEntry: bool_bit
+      UpdateGL: bool_bit
+      AutoPost: bool_bit
+      SummPost: bool_bit
+      NegQty: bool_bit
+      RequireControlTotal: bool_bit
   - table: CASetup
     entity: CAPreferences
+    enums:
+      HoldEntry: bool_bit
+      AutoPostOption: bool_bit
+      ReleaseAP: bool_bit
+      ReleaseAR: bool_bit
   - table: GLSetup
     entity: GLPreferences
+    enums:
+      AutoPostOption: bool_bit
+      HoldEntry: bool_bit
+      RequireControlTotal: bool_bit
 
   # Wave 3
   - table: INKitSpecHdr

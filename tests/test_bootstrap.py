@@ -117,7 +117,7 @@ def test_load_contract_xml_prefers_config_bootstrap(tmp_path: Path) -> None:
 <Customization level="" description="root" product-version="26.101">
   <EntityEndpoint>
     <Endpoint xmlns="http://www.acumatica.com/entity/maintenance/5.31"
-              name="Bootstrap" version="1.2.0" systemContractVersion="4">
+              name="Bootstrap" version="1.3.0" systemContractVersion="4">
       <TopLevelEntity name="RootOnly" screen="CS000000">
         <Fields><Field name="ID" type="StringValue" /></Fields>
       </TopLevelEntity>
@@ -129,7 +129,7 @@ def test_load_contract_xml_prefers_config_bootstrap(tmp_path: Path) -> None:
 <Customization level="" description="config" product-version="26.101">
   <EntityEndpoint>
     <Endpoint xmlns="http://www.acumatica.com/entity/maintenance/5.31"
-              name="Bootstrap" version="1.2.0" systemContractVersion="4">
+              name="Bootstrap" version="1.3.0" systemContractVersion="4">
       <TopLevelEntity name="ConfigOnly" screen="CS000000">
         <Fields><Field name="ID" type="StringValue" /></Fields>
       </TopLevelEntity>
@@ -143,7 +143,7 @@ def test_load_contract_xml_prefers_config_bootstrap(tmp_path: Path) -> None:
     (tmp_path / "config" / "bootstrap" / "project.xml").write_bytes(cfg_contract)
 
     name, entities = bootstrap.parse_endpoint(bootstrap.load_contract_xml(tmp_path))
-    assert name == "Bootstrap/1.2.0"
+    assert name == "Bootstrap/1.3.0"
     assert entities == frozenset({"ConfigOnly"})
 
 
@@ -169,7 +169,7 @@ def test_package_zip_carries_the_bootstrap_endpoint() -> None:
     Verified vs 26.101.0225 by live import round-trip: the <Endpoint> child
     is the XmlSerializer form of Model.Endpoint in the entity/maintenance/5.31
     namespace; no .endpoint file is involved. Packaged contract is the single
-    full company surface (Bootstrap/1.2.0); data-repo bootstrap/project.xml
+    full company surface (Bootstrap/1.3.0); data-repo bootstrap/project.xml
     may still override when present (V2).
     """
     ns = "{http://www.acumatica.com/entity/maintenance/5.31}"
@@ -178,7 +178,7 @@ def test_package_zip_carries_the_bootstrap_endpoint() -> None:
     (item,) = root.findall("EntityEndpoint")
     (endpoint,) = item.findall(f"{ns}Endpoint")
     assert endpoint.get("name") == "Bootstrap"
-    assert endpoint.get("version") == "1.2.0"
+    assert endpoint.get("version") == "1.3.0"
     # SystemContracts.V4 is the build's only IsCurrent implementation
     assert endpoint.get("systemContractVersion") == "4"
     entities = {e.get("name"): e for e in endpoint.findall(f"{ns}TopLevelEntity")}
@@ -297,11 +297,17 @@ def test_package_zip_carries_the_bootstrap_endpoint() -> None:
             ),
             "TermsDef",
         ),
-        # GL setup singleton (T34): both accounts sit directly on the
-        # primary GLSetupRecord view, PXDefault with no default value -
-        # required at persist; segment-mask CD strings -> StringValue
+        # GL setup singleton (T34 + T155/V41 prefs deepen): accounts +
+        # batch numbering + post/hold/control policy on GLSetupRecord
         "GLPreferences": dict.fromkeys(
-            ("YtdNetIncAccountID", "RetEarnAccountID"),
+            (
+                "YtdNetIncAccountID",
+                "RetEarnAccountID",
+                "BatchNumberingID",
+                "AutoPostOption",
+                "HoldEntry",
+                "RequireControlTotal",
+            ),
             "GLSetupRecord",
         ),
         # org-ledger link (T36/B12): LedgerCD locates the ledger on the
@@ -386,11 +392,6 @@ def test_package_zip_carries_the_bootstrap_endpoint() -> None:
         entities["Company"].findall(f"{ns}Fields/{ns}Field")[0].get("type")
         == "StringValue"
     )
-    # GLPreferences value types (T34): segment-mask CD strings
-    assert {
-        f.get("type")
-        for f in entities["GLPreferences"].findall(f"{ns}Fields/{ns}Field")
-    } == {"StringValue"}
     # FinancialYearSettings value types (T36): BegFinYear DateTime ->
     # DateTimeValue, FinPeriods Nullable<Int16> -> ShortValue
     year_types = {
@@ -404,6 +405,102 @@ def test_package_zip_carries_the_bootstrap_endpoint() -> None:
     }
 
 
+def test_package_prefs_field_depth_curated_not_full_dac() -> None:
+    """T154/T155/V41: curated *Preferences deepen (gh #26) — not full DAC."""
+    ns = "{http://www.acumatica.com/entity/maintenance/5.31}"
+    with zipfile.ZipFile(io.BytesIO(bootstrap.package_zip())) as zf:
+        root = ET.fromstring(zf.read("project.xml"))
+    (endpoint,) = root.findall(f"EntityEndpoint/{ns}Endpoint")
+    assert endpoint.get("version") == "1.3.0"
+    entities = {e.get("name"): e for e in endpoint.findall(f"{ns}TopLevelEntity")}
+    gl_types = {
+        f.get("name"): f.get("type")
+        for f in entities["GLPreferences"].findall(f"{ns}Fields/{ns}Field")
+    }
+    assert gl_types["YtdNetIncAccountID"] == "StringValue"
+    assert gl_types["BatchNumberingID"] == "StringValue"
+    assert gl_types["AutoPostOption"] == "BooleanValue"
+    assert gl_types["HoldEntry"] == "BooleanValue"
+    prefs_fields = {
+        name: {f.get("name") for f in entities[name].findall(f"{ns}Fields/{ns}Field")}
+        for name in (
+            "GLPreferences",
+            "INPreferences",
+            "APPreferences",
+            "ARPreferences",
+            "SOPreferences",
+            "POPreferences",
+            "CAPreferences",
+        )
+    }
+    assert {
+        "YtdNetIncAccountID",
+        "RetEarnAccountID",
+        "BatchNumberingID",
+        "AutoPostOption",
+        "HoldEntry",
+        "RequireControlTotal",
+    } <= prefs_fields["GLPreferences"]
+    assert {
+        "HoldEntry",
+        "BatchNumberingID",
+        "ReceiptNumberingID",
+        "IssueNumberingID",
+        "AdjustmentNumberingID",
+        "KitAssemblyNumberingID",
+        "AutoPost",
+        "SummPost",
+        "NegQty",
+        "RequireControlTotal",
+        "UpdateGL",
+        "TransitBranchID",
+    } <= prefs_fields["INPreferences"]
+    assert {
+        "HoldEntry",
+        "BatchNumberingID",
+        "InvoiceNumberingID",
+        "CheckNumberingID",
+        "AutoPost",
+        "RequireVendorRef",
+        "RequireApprovePayments",
+    } <= prefs_fields["APPreferences"]
+    assert {
+        "HoldEntry",
+        "BatchNumberingID",
+        "InvoiceNumberingID",
+        "PaymentNumberingID",
+        "RequireExtRef",
+        "CreditCheckError",
+    } <= prefs_fields["ARPreferences"]
+    assert {
+        "DefaultOrderType",
+        "ShipmentNumberingID",
+        "CreditCheckError",
+        "AutoReleaseIN",
+    } <= prefs_fields["SOPreferences"]
+    assert {
+        "HoldReceipts",
+        "RegularPONumberingID",
+        "ReceiptNumberingID",
+        "AutoReleaseAP",
+        "RCReturnReasonCodeID",
+    } <= prefs_fields["POPreferences"]
+    assert {
+        "HoldEntry",
+        "TransitAcctId",
+        "TransitSubID",
+        "BatchNumberingID",
+        "AutoPostOption",
+        "ReleaseAP",
+        "ReleaseAR",
+    } <= prefs_fields["CAPreferences"]
+    # V41: not full DAC — order-dependent / unsequenced skipped
+    assert "DfltLotSerClassID" not in prefs_fields["INPreferences"]
+    assert "TransitSiteID" not in prefs_fields["INPreferences"]
+    assert "TransferNumberingID" not in prefs_fields["CAPreferences"]
+    assert "DfltVendorClassID" not in prefs_fields["APPreferences"]
+
+
 def test_package_zip_prefers_data_repo_contract(tmp_path: Path) -> None:
     """Data-repo bootstrap/project.xml is the package endpoint when present (V2)."""
     (tmp_path / "bootstrap").mkdir()
@@ -414,7 +511,7 @@ def test_package_zip_prefers_data_repo_contract(tmp_path: Path) -> None:
 <Customization level="" description="data-repo full" product-version="26.101">
   <EntityEndpoint>
     <Endpoint xmlns="http://www.acumatica.com/entity/maintenance/5.31"
-              name="Bootstrap" version="1.2.0" systemContractVersion="4">
+              name="Bootstrap" version="1.3.0" systemContractVersion="4">
       <TopLevelEntity name="Company" screen="CS101500">
         <Fields><Field name="AcctCD" type="StringValue" /></Fields>
       </TopLevelEntity>

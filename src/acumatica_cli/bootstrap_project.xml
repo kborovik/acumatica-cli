@@ -2,7 +2,8 @@
 <!--
   acu bootstrap customization package template - full company contract
   (SPEC T81 single full-company line; T145 bumps 1.0.0 -> 1.1.0 for Role/User;
-  T150 bumps 1.1.0 -> 1.2.0 for NumberingSequence).
+  T150 bumps 1.1.0 -> 1.2.0 for NumberingSequence;
+  T154/T155 bumps 1.2.0 -> 1.3.0 for *Preferences field depth, gh #26 / V41).
 
   package_zip() (bootstrap.py) prefers data-repo bootstrap/project.xml when
   present; otherwise this packaged template is the fallback so config init,
@@ -56,13 +57,42 @@
     bounds on SequenceDetail. Single sequence row per NumberingID is the
     demo/LAB5 shape; multi-segment / branch-scoped rows are out of v1.
 
+  T154/T155 prefs-field-depth (gh #26 / V41) - curated *Preferences
+  deepen from LAB5 inventory *Setup vs virgin ERP defaults. NOT full DAC.
+  Each added field has a seed/catalog reason (demo need or rebuild risk).
+  Skipped: lot-class / default-site FKs (need apply reorder vs warehouse
+  / lot class), CA transfer/register numbering (sequences not packaged),
+  server-derived/runtime (B11), aging/retainage/print flags.
+  *NumberingID only when package 05-numbering-sequences has the id (V40).
+  Pick list (added beyond pre-1.3.0 surface):
+  - GLPreferences (GL102000 / GLSetupRecord): +BatchNumberingID (BATCH),
+    +AutoPostOption, +HoldEntry, +RequireControlTotal
+    (keep YtdNetIncAccountID + RetEarnAccountID)
+  - INPreferences (IN101000 / setup): +Batch/Receipt/Issue/Adjustment/
+    KitAssembly NumberingID; +AutoPost +SummPost +NegQty
+    +RequireControlTotal (keep transit/progress/reason/UpdateGL/HoldEntry)
+  - APPreferences (AP101000 / Setup): +Batch/Invoice/Check NumberingID;
+    +AutoPost +RequireControlTotal +RequireVendorRef
+    +RequireApprovePayments (keep HoldEntry)
+  - ARPreferences (AR101000 / ARSetupRecord): +Batch/Invoice/Payment
+    NumberingID; +AutoPost +RequireControlTotal +RequireExtRef
+    +CreditCheckError (keep HoldEntry)
+  - SOPreferences (SO101000 / sosetup): +ShipmentNumberingID
+    +CreditCheckError (keep DefaultOrderType/HoldShipments/
+    RequireShipmentTotal/AutoReleaseIN)
+  - POPreferences (PO101000 / Setup): +RegularPONumberingID
+    +ReceiptNumberingID +AutoReleaseAP (keep HoldReceipts/
+    RCReturnReasonCodeID/AutoReleaseIN)
+  - CAPreferences (CA101000 / CASetupRecord): +BatchNumberingID
+    +AutoPostOption +ReleaseAP +ReleaseAR (keep HoldEntry/Transit*)
+
   Contract field names = DAC property names verbatim (no rename layer).
   Features (CS100000) stays OUT of the endpoint - the plugin owns features.
   Shape change requires a version bump (V21).
 -->
 <Customization level="" description="acu bootstrap: CustomizationPlugin enables features on publish; Bootstrap endpoint exposes full company surface (company + credit terms + financial currency + GL chain + module preferences + vendor class + statement cycle + warehouse + order type + cash account + role + user + membership + numbering sequence)" product-version="26.101">
   <EntityEndpoint>
-    <Endpoint xmlns="http://www.acumatica.com/entity/maintenance/5.31" name="Bootstrap" version="1.2.0" systemContractVersion="4">
+    <Endpoint xmlns="http://www.acumatica.com/entity/maintenance/5.31" name="Bootstrap" version="1.3.0" systemContractVersion="4">
       <TopLevelEntity name="Company" screen="CS101500">
         <Fields>
           <Field name="AcctCD" type="StringValue" />
@@ -355,6 +385,10 @@
         <Fields>
           <Field name="YtdNetIncAccountID" type="StringValue" />
           <Field name="RetEarnAccountID" type="StringValue" />
+          <Field name="BatchNumberingID" type="StringValue" />
+          <Field name="AutoPostOption" type="BooleanValue" />
+          <Field name="HoldEntry" type="BooleanValue" />
+          <Field name="RequireControlTotal" type="BooleanValue" />
         </Fields>
         <Mappings>
           <Mapping field="YtdNetIncAccountID">
@@ -362,6 +396,18 @@
           </Mapping>
           <Mapping field="RetEarnAccountID">
             <To object="GLSetupRecord" field="RetEarnAccountID" />
+          </Mapping>
+          <Mapping field="BatchNumberingID">
+            <To object="GLSetupRecord" field="BatchNumberingID" />
+          </Mapping>
+          <Mapping field="AutoPostOption">
+            <To object="GLSetupRecord" field="AutoPostOption" />
+          </Mapping>
+          <Mapping field="HoldEntry">
+            <To object="GLSetupRecord" field="HoldEntry" />
+          </Mapping>
+          <Mapping field="RequireControlTotal">
+            <To object="GLSetupRecord" field="RequireControlTotal" />
           </Mapping>
         </Mappings>
       </TopLevelEntity>
@@ -378,6 +424,15 @@
           <Field name="INTransitSubID" type="StringValue" />
           <Field name="TransitBranchID" type="StringValue" />
           <Field name="UpdateGL" type="BooleanValue" />
+          <Field name="BatchNumberingID" type="StringValue" />
+          <Field name="ReceiptNumberingID" type="StringValue" />
+          <Field name="IssueNumberingID" type="StringValue" />
+          <Field name="AdjustmentNumberingID" type="StringValue" />
+          <Field name="KitAssemblyNumberingID" type="StringValue" />
+          <Field name="AutoPost" type="BooleanValue" />
+          <Field name="SummPost" type="BooleanValue" />
+          <Field name="NegQty" type="BooleanValue" />
+          <Field name="RequireControlTotal" type="BooleanValue" />
         </Fields>
         <Mappings>
           <Mapping field="HoldEntry">
@@ -413,6 +468,33 @@
           <Mapping field="UpdateGL">
             <To object="setup" field="UpdateGL" />
           </Mapping>
+          <Mapping field="BatchNumberingID">
+            <To object="setup" field="BatchNumberingID" />
+          </Mapping>
+          <Mapping field="ReceiptNumberingID">
+            <To object="setup" field="ReceiptNumberingID" />
+          </Mapping>
+          <Mapping field="IssueNumberingID">
+            <To object="setup" field="IssueNumberingID" />
+          </Mapping>
+          <Mapping field="AdjustmentNumberingID">
+            <To object="setup" field="AdjustmentNumberingID" />
+          </Mapping>
+          <Mapping field="KitAssemblyNumberingID">
+            <To object="setup" field="KitAssemblyNumberingID" />
+          </Mapping>
+          <Mapping field="AutoPost">
+            <To object="setup" field="AutoPost" />
+          </Mapping>
+          <Mapping field="SummPost">
+            <To object="setup" field="SummPost" />
+          </Mapping>
+          <Mapping field="NegQty">
+            <To object="setup" field="NegQty" />
+          </Mapping>
+          <Mapping field="RequireControlTotal">
+            <To object="setup" field="RequireControlTotal" />
+          </Mapping>
         </Mappings>
       </TopLevelEntity>
       <TopLevelEntity name="ReasonCode" screen="CS211000">
@@ -444,20 +526,76 @@
       <TopLevelEntity name="APPreferences" screen="AP101000">
         <Fields>
           <Field name="HoldEntry" type="BooleanValue" />
+          <Field name="BatchNumberingID" type="StringValue" />
+          <Field name="InvoiceNumberingID" type="StringValue" />
+          <Field name="CheckNumberingID" type="StringValue" />
+          <Field name="AutoPost" type="BooleanValue" />
+          <Field name="RequireControlTotal" type="BooleanValue" />
+          <Field name="RequireVendorRef" type="BooleanValue" />
+          <Field name="RequireApprovePayments" type="BooleanValue" />
         </Fields>
         <Mappings>
           <Mapping field="HoldEntry">
             <To object="Setup" field="HoldEntry" />
+          </Mapping>
+          <Mapping field="BatchNumberingID">
+            <To object="Setup" field="BatchNumberingID" />
+          </Mapping>
+          <Mapping field="InvoiceNumberingID">
+            <To object="Setup" field="InvoiceNumberingID" />
+          </Mapping>
+          <Mapping field="CheckNumberingID">
+            <To object="Setup" field="CheckNumberingID" />
+          </Mapping>
+          <Mapping field="AutoPost">
+            <To object="Setup" field="AutoPost" />
+          </Mapping>
+          <Mapping field="RequireControlTotal">
+            <To object="Setup" field="RequireControlTotal" />
+          </Mapping>
+          <Mapping field="RequireVendorRef">
+            <To object="Setup" field="RequireVendorRef" />
+          </Mapping>
+          <Mapping field="RequireApprovePayments">
+            <To object="Setup" field="RequireApprovePayments" />
           </Mapping>
         </Mappings>
       </TopLevelEntity>
       <TopLevelEntity name="ARPreferences" screen="AR101000">
         <Fields>
           <Field name="HoldEntry" type="BooleanValue" />
+          <Field name="BatchNumberingID" type="StringValue" />
+          <Field name="InvoiceNumberingID" type="StringValue" />
+          <Field name="PaymentNumberingID" type="StringValue" />
+          <Field name="AutoPost" type="BooleanValue" />
+          <Field name="RequireControlTotal" type="BooleanValue" />
+          <Field name="RequireExtRef" type="BooleanValue" />
+          <Field name="CreditCheckError" type="BooleanValue" />
         </Fields>
         <Mappings>
           <Mapping field="HoldEntry">
             <To object="ARSetupRecord" field="HoldEntry" />
+          </Mapping>
+          <Mapping field="BatchNumberingID">
+            <To object="ARSetupRecord" field="BatchNumberingID" />
+          </Mapping>
+          <Mapping field="InvoiceNumberingID">
+            <To object="ARSetupRecord" field="InvoiceNumberingID" />
+          </Mapping>
+          <Mapping field="PaymentNumberingID">
+            <To object="ARSetupRecord" field="PaymentNumberingID" />
+          </Mapping>
+          <Mapping field="AutoPost">
+            <To object="ARSetupRecord" field="AutoPost" />
+          </Mapping>
+          <Mapping field="RequireControlTotal">
+            <To object="ARSetupRecord" field="RequireControlTotal" />
+          </Mapping>
+          <Mapping field="RequireExtRef">
+            <To object="ARSetupRecord" field="RequireExtRef" />
+          </Mapping>
+          <Mapping field="CreditCheckError">
+            <To object="ARSetupRecord" field="CreditCheckError" />
           </Mapping>
         </Mappings>
       </TopLevelEntity>
@@ -467,6 +605,8 @@
           <Field name="HoldShipments" type="BooleanValue" />
           <Field name="RequireShipmentTotal" type="BooleanValue" />
           <Field name="AutoReleaseIN" type="BooleanValue" />
+          <Field name="ShipmentNumberingID" type="StringValue" />
+          <Field name="CreditCheckError" type="BooleanValue" />
         </Fields>
         <Mappings>
           <Mapping field="DefaultOrderType">
@@ -481,6 +621,12 @@
           <Mapping field="AutoReleaseIN">
             <To object="sosetup" field="AutoReleaseIN" />
           </Mapping>
+          <Mapping field="ShipmentNumberingID">
+            <To object="sosetup" field="ShipmentNumberingID" />
+          </Mapping>
+          <Mapping field="CreditCheckError">
+            <To object="sosetup" field="CreditCheckError" />
+          </Mapping>
         </Mappings>
       </TopLevelEntity>
       <TopLevelEntity name="POPreferences" screen="PO101000">
@@ -488,6 +634,9 @@
           <Field name="HoldReceipts" type="BooleanValue" />
           <Field name="RCReturnReasonCodeID" type="StringValue" />
           <Field name="AutoReleaseIN" type="BooleanValue" />
+          <Field name="RegularPONumberingID" type="StringValue" />
+          <Field name="ReceiptNumberingID" type="StringValue" />
+          <Field name="AutoReleaseAP" type="BooleanValue" />
         </Fields>
         <Mappings>
           <Mapping field="HoldReceipts">
@@ -498,6 +647,15 @@
           </Mapping>
           <Mapping field="RCReturnReasonCodeID">
             <To object="Setup" field="RCReturnReasonCodeID" />
+          </Mapping>
+          <Mapping field="RegularPONumberingID">
+            <To object="Setup" field="RegularPONumberingID" />
+          </Mapping>
+          <Mapping field="ReceiptNumberingID">
+            <To object="Setup" field="ReceiptNumberingID" />
+          </Mapping>
+          <Mapping field="AutoReleaseAP">
+            <To object="Setup" field="AutoReleaseAP" />
           </Mapping>
         </Mappings>
       </TopLevelEntity>
@@ -630,6 +788,10 @@
           <Field name="HoldEntry" type="BooleanValue" />
           <Field name="TransitAcctId" type="StringValue" />
           <Field name="TransitSubID" type="StringValue" />
+          <Field name="BatchNumberingID" type="StringValue" />
+          <Field name="AutoPostOption" type="BooleanValue" />
+          <Field name="ReleaseAP" type="BooleanValue" />
+          <Field name="ReleaseAR" type="BooleanValue" />
         </Fields>
         <Mappings>
           <Mapping field="HoldEntry">
@@ -640,6 +802,18 @@
           </Mapping>
           <Mapping field="TransitSubID">
             <To object="CASetupRecord" field="TransitSubID" />
+          </Mapping>
+          <Mapping field="BatchNumberingID">
+            <To object="CASetupRecord" field="BatchNumberingID" />
+          </Mapping>
+          <Mapping field="AutoPostOption">
+            <To object="CASetupRecord" field="AutoPostOption" />
+          </Mapping>
+          <Mapping field="ReleaseAP">
+            <To object="CASetupRecord" field="ReleaseAP" />
+          </Mapping>
+          <Mapping field="ReleaseAR">
+            <To object="CASetupRecord" field="ReleaseAR" />
           </Mapping>
         </Mappings>
       </TopLevelEntity>

@@ -5,3 +5,6 @@ records:
 - HoldReceipts: false
   RCReturnReasonCodeID: PORETURN
   AutoReleaseIN: true
+  RegularPONumberingID: POORDER
+  ReceiptNumberingID: PORECEIPT
+  AutoReleaseAP: false

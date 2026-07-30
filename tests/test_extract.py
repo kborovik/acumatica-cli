@@ -218,7 +218,18 @@ TABLES: dict[str, list[dict[str, Any]]] = {
             "CurrencyID": "USD",
         }
     ],
-    "GLPreferences": [{"RetEarnAccountID": "32000", "YtdNetIncAccountID": "33000"}],
+    "GLPreferences": [
+        {
+            "RetEarnAccountID": "32000",
+            "YtdNetIncAccountID": "33000",
+            "BatchNumberingID": "BATCH",
+            "AutoPostOption": True,
+            "HoldEntry": True,
+            "RequireControlTotal": False,
+            # server audit — strip path must not claim (B11)
+            "LastModifiedDateTime": "2026-07-11T00:00:00+00:00",
+        }
+    ],
     # the gh-issue-#7 repro shape (B21): one ledger, three org links -
     # the pair key keeps every link distinct through the round-trip
     "LedgerCompany": [
@@ -254,6 +265,15 @@ TABLES: dict[str, list[dict[str, Any]]] = {
             "ReceiptReasonCode": "INRECEIPT",
             "AdjustmentReasonCode": "INADJUST",
             "PIReasonCode": "INPI",
+            "BatchNumberingID": "BATCH",
+            "ReceiptNumberingID": "INRECEIPT",
+            "IssueNumberingID": "INISSUE",
+            "AdjustmentNumberingID": "INADJUST",
+            "KitAssemblyNumberingID": "INKITASSY",
+            "AutoPost": True,
+            "SummPost": False,
+            "NegQty": False,
+            "RequireControlTotal": True,
         }
     ],
     "AvailabilityCalculationRule": [
@@ -339,6 +359,8 @@ TABLES: dict[str, list[dict[str, Any]]] = {
             "HoldShipments": False,
             "RequireShipmentTotal": False,
             "AutoReleaseIN": True,
+            "ShipmentNumberingID": "SOSHIPMENT",
+            "CreditCheckError": True,
         }
     ],
     "POPreferences": [
@@ -346,6 +368,9 @@ TABLES: dict[str, list[dict[str, Any]]] = {
             "HoldReceipts": False,
             "RCReturnReasonCodeID": "PORETURN",
             "AutoReleaseIN": True,
+            "RegularPONumberingID": "POORDER",
+            "ReceiptNumberingID": "PORECEIPT",
+            "AutoReleaseAP": False,
         }
     ],
     "OrderType": [
@@ -356,10 +381,40 @@ TABLES: dict[str, list[dict[str, Any]]] = {
             "FreightSubID": "000000",
         }
     ],
-    "ARPreferences": [{"HoldEntry": False}],
-    "APPreferences": [{"HoldEntry": False}],
+    "ARPreferences": [
+        {
+            "HoldEntry": False,
+            "BatchNumberingID": "BATCH",
+            "InvoiceNumberingID": "ARINVOICE",
+            "PaymentNumberingID": "ARPAYMENT",
+            "AutoPost": True,
+            "RequireControlTotal": True,
+            "RequireExtRef": True,
+            "CreditCheckError": True,
+        }
+    ],
+    "APPreferences": [
+        {
+            "HoldEntry": False,
+            "BatchNumberingID": "BATCH",
+            "InvoiceNumberingID": "APBILL",
+            "CheckNumberingID": "APPAYMENT",
+            "AutoPost": True,
+            "RequireControlTotal": True,
+            "RequireVendorRef": True,
+            "RequireApprovePayments": True,
+        }
+    ],
     "CAPreferences": [
-        {"TransitAcctId": "10200", "TransitSubID": "000000", "HoldEntry": False}
+        {
+            "TransitAcctId": "10200",
+            "TransitSubID": "000000",
+            "HoldEntry": False,
+            "BatchNumberingID": "BATCH",
+            "AutoPostOption": True,
+            "ReleaseAP": True,
+            "ReleaseAR": True,
+        }
     ],
     "CashAccount": [
         {
@@ -1070,12 +1125,12 @@ def test_b9_fallback_selects_keys_then_key_urls(
         for r in server.requests
     ]
     assert currency_requests == [
-        ("Bootstrap/1.2.0/Currency", {"$filter": "IsFinancial eq true"}),
+        ("Bootstrap/1.3.0/Currency", {"$filter": "IsFinancial eq true"}),
         (
-            "Bootstrap/1.2.0/Currency",
+            "Bootstrap/1.3.0/Currency",
             {"$select": "CuryID", "$filter": "IsFinancial eq true"},
         ),
-        ("Bootstrap/1.2.0/Currency/EUR", {}),
+        ("Bootstrap/1.3.0/Currency/EUR", {}),
     ]
     text = extract._render(spec, records)  # pyright: ignore[reportPrivateUsage]
     assert "RealGainAcctID" in text
@@ -1344,6 +1399,68 @@ def test_catalog_numbering_sequence_row() -> None:
         assert files.index(num.file) < files.index(prefs), prefs
 
 
+def test_catalog_prefs_field_depth_includes() -> None:
+    """T156/V41: catalog include lists match curated *Preferences deepen."""
+    manifest = extract.load_manifest()
+    by_file = {s.file: s for s in manifest.entities}
+    gl = by_file["config/baseline/50-gl-preferences.yaml"]
+    assert "BatchNumberingID" in gl.include
+    assert "AutoPostOption" in gl.include
+    assert "HoldEntry" in gl.include
+    assert "RequireControlTotal" in gl.include
+    # key field not duplicated in include
+    assert "RetEarnAccountID" not in gl.include
+
+    inp = by_file["config/master/20-in-preferences.yaml"]
+    for field in (
+        "BatchNumberingID",
+        "ReceiptNumberingID",
+        "IssueNumberingID",
+        "AdjustmentNumberingID",
+        "KitAssemblyNumberingID",
+        "AutoPost",
+        "SummPost",
+        "NegQty",
+        "RequireControlTotal",
+    ):
+        assert field in inp.include, field
+    # V41 skip: lot-class / site order-dependent FKs
+    assert "DfltLotSerClassID" not in inp.include
+    assert "TransitSiteID" not in inp.include
+
+    ap = by_file["config/master/61-ap-preferences.yaml"]
+    assert {
+        "BatchNumberingID",
+        "InvoiceNumberingID",
+        "CheckNumberingID",
+        "AutoPost",
+        "RequireVendorRef",
+        "RequireApprovePayments",
+    } <= set(ap.include)
+    ar = by_file["config/master/60-ar-preferences.yaml"]
+    assert {
+        "InvoiceNumberingID",
+        "PaymentNumberingID",
+        "RequireExtRef",
+        "CreditCheckError",
+    } <= set(ar.include)
+    so = by_file["config/master/56-so-preferences.yaml"]
+    assert "ShipmentNumberingID" in so.include
+    assert "CreditCheckError" in so.include
+    po = by_file["config/master/57-po-preferences.yaml"]
+    assert "RegularPONumberingID" in po.include
+    assert "ReceiptNumberingID" in po.include
+    assert "AutoReleaseAP" in po.include
+    ca = by_file["config/master/62-ca-preferences.yaml"]
+    assert {
+        "BatchNumberingID",
+        "AutoPostOption",
+        "ReleaseAP",
+        "ReleaseAR",
+    } <= set(ca.include)
+    assert "TransferNumberingID" not in ca.include
+
+
 def test_catalog_role_user_membership_rows() -> None:
     """T146: Role then User catalog rows; membership via User detail_keys."""
     manifest = extract.load_manifest()
@@ -1383,6 +1500,7 @@ def test_package_numbering_sequence_template() -> None:
         "ARINVOICE",
         "ARPAYMENT",
         "BATCH",
+        "INADJUST",
         "INISSUE",
         "INKITASSY",
         "INRECEIPT",

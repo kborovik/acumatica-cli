@@ -4,3 +4,7 @@ endpoint: bootstrap
 records:
 - RetEarnAccountID: '32000'
   YtdNetIncAccountID: '33000'
+  BatchNumberingID: BATCH
+  AutoPostOption: true
+  HoldEntry: true
+  RequireControlTotal: false

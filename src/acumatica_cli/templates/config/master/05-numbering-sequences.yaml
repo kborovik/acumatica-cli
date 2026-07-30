@@ -32,6 +32,12 @@ records:
   WarnNbr: '999990'
   NbrStep: 1
   StartDate: '1900-01-01'
+- NumberingID: INADJUST
+  StartNbr: '000000'
+  EndNbr: '999999'
+  WarnNbr: '999990'
+  NbrStep: 1
+  StartDate: '1900-01-01'
 - NumberingID: INISSUE
   StartNbr: '000000'
   EndNbr: '999999'

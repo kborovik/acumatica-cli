@@ -6,3 +6,5 @@ records:
   HoldShipments: false
   RequireShipmentTotal: false
   AutoReleaseIN: true
+  ShipmentNumberingID: SOSHIPMENT
+  CreditCheckError: true

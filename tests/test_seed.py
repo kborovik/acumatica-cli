@@ -68,14 +68,14 @@ def test_load_baseline_rejects_record_without_key(tmp_path: Path) -> None:
 
 
 def test_load_baseline_parses_endpoint_override(tmp_path: Path) -> None:
-    text = BASELINE + "endpoint: Bootstrap/1.2.0\n"
-    assert seed.load_baseline(_write(tmp_path, text)).endpoint == "Bootstrap/1.2.0"
+    text = BASELINE + "endpoint: Bootstrap/1.3.0\n"
+    assert seed.load_baseline(_write(tmp_path, text)).endpoint == "Bootstrap/1.3.0"
 
 
 LEDGER_LINK_YAML = """\
 entity: LedgerCompany
 key: [LedgerCD, OrganizationID]
-endpoint: Bootstrap/1.2.0
+endpoint: Bootstrap/1.3.0
 records:
   - LedgerCD: ACTUAL
     OrganizationID: PRODUCTS
@@ -127,7 +127,7 @@ def test_bootstrap_entities_parsed_from_packaged_template() -> None:
     # V2/T81: the ambiguous set comes from the active contract (packaged
     # full company fallback), never a hand-list - parity pinned so a
     # template edit surfaces offline.
-    assert seed.BOOTSTRAP_ENDPOINT == "Bootstrap/1.2.0"
+    assert seed.BOOTSTRAP_ENDPOINT == "Bootstrap/1.3.0"
     assert {
         "Company",
         "CreditTerms",
@@ -169,7 +169,7 @@ def test_load_baseline_rejects_bootstrap_entity_without_endpoint(
     """
     with pytest.raises(
         SystemExit,
-        match=r"endpoint: default.*Bootstrap/1\.2\.0.*'bootstrap' \| 'default'",
+        match=r"endpoint: default.*Bootstrap/1\.3\.0.*'bootstrap' \| 'default'",
     ):
         seed.load_baseline(_write(tmp_path, AMBIGUOUS_YAML))
 
@@ -178,7 +178,7 @@ def test_load_baseline_bootstrap_entity_explicit_endpoint_passes(
     tmp_path: Path,
 ) -> None:
     # V20: explicit endpoint: disambiguates - either target is legitimate
-    for endpoint in ("Bootstrap/1.2.0", "Default/25.200.001", "default"):
+    for endpoint in ("Bootstrap/1.3.0", "Default/25.200.001", "default"):
         text = AMBIGUOUS_YAML + f"endpoint: {endpoint}\n"
         assert seed.load_baseline(_write(tmp_path, text)).endpoint == endpoint
 
@@ -186,7 +186,7 @@ def test_load_baseline_bootstrap_entity_explicit_endpoint_passes(
 def test_load_baseline_resolves_symbolic_bootstrap(tmp_path: Path) -> None:
     """Symbolic endpoint: bootstrap resolves to the active package version."""
     text = AMBIGUOUS_YAML + "endpoint: bootstrap\n"
-    assert seed.load_baseline(_write(tmp_path, text)).endpoint == "Bootstrap/1.2.0"
+    assert seed.load_baseline(_write(tmp_path, text)).endpoint == "Bootstrap/1.3.0"
 
 
 def test_load_baseline_keeps_symbolic_default(tmp_path: Path) -> None:
@@ -232,7 +232,7 @@ def test_active_bootstrap_prefers_data_repo_contract(
 <Customization level="" description="data-repo contract" product-version="26.101">
   <EntityEndpoint>
     <Endpoint xmlns="http://www.acumatica.com/entity/maintenance/5.31"
-              name="Bootstrap" version="1.2.0" systemContractVersion="4">
+              name="Bootstrap" version="1.3.0" systemContractVersion="4">
       <TopLevelEntity name="Company" screen="CS101500">
         <Fields><Field name="AcctCD" type="StringValue" /></Fields>
       </TopLevelEntity>
@@ -247,17 +247,17 @@ def test_active_bootstrap_prefers_data_repo_contract(
     )
     monkeypatch.chdir(tmp_path)
     name, entities = seed.active_bootstrap()
-    assert name == "Bootstrap/1.2.0"
+    assert name == "Bootstrap/1.3.0"
     assert "OnlyInDataRepo" in entities
     assert "OnlyInDataRepo" not in seed.BOOTSTRAP_ENTITIES  # packaged full
     text = "entity: OnlyInDataRepo\nkey: ID\nendpoint: bootstrap\nrecords:\n  - ID: X\n"
-    assert seed.load_baseline(_write(tmp_path, text)).endpoint == "Bootstrap/1.2.0"
+    assert seed.load_baseline(_write(tmp_path, text)).endpoint == "Bootstrap/1.3.0"
 
 
 def test_apply_and_diff_target_endpoint_override(
     tmp_path: Path, instance: Instance
 ) -> None:
-    text = BASELINE + "endpoint: Bootstrap/1.2.0\n"
+    text = BASELINE + "endpoint: Bootstrap/1.3.0\n"
     baseline = seed.load_baseline(_write(tmp_path, text))
     recorder = Recorder({"/UnitsOfMeasure": _live({"UOM": "KG"})})
 
@@ -265,7 +265,7 @@ def test_apply_and_diff_target_endpoint_override(
     seed.diff(_client(instance, recorder), baseline)
 
     paths = {r.url.path for r in recorder.requests}
-    assert paths == {"/AcumaticaERP/entity/Bootstrap/1.2.0/UnitsOfMeasure"}
+    assert paths == {"/AcumaticaERP/entity/Bootstrap/1.3.0/UnitsOfMeasure"}
 
 
 def test_norm_folds_booleans_and_strips() -> None:
@@ -556,7 +556,7 @@ def _session_client(instance: Instance, recorder: SessionRecorder) -> AcumaticaC
 COMPANY_YAML = """\
 entity: Company
 key: AcctCD
-endpoint: Bootstrap/1.2.0
+endpoint: Bootstrap/1.3.0
 records:
   - AcctCD: LAB5
     OrganizationName: Lab Five
@@ -579,11 +579,11 @@ def test_apply_company_relogins_once_per_session(
     assert methods_paths == [
         ("POST", "/AcumaticaERP/entity/auth/login"),
         ("GET", "/AcumaticaERP/Frames/Login.aspx"),
-        ("PUT", "/AcumaticaERP/entity/Bootstrap/1.2.0/Company"),
+        ("PUT", "/AcumaticaERP/entity/Bootstrap/1.3.0/Company"),
         ("POST", "/AcumaticaERP/entity/auth/logout"),
         ("POST", "/AcumaticaERP/entity/auth/login"),
         ("GET", "/AcumaticaERP/Frames/Login.aspx"),
-        ("PUT", "/AcumaticaERP/entity/Bootstrap/1.2.0/Company"),
+        ("PUT", "/AcumaticaERP/entity/Bootstrap/1.3.0/Company"),
         ("POST", "/AcumaticaERP/entity/auth/logout"),
     ]
 
@@ -606,7 +606,7 @@ def test_apply_retries_once_on_branch_empty(
     text = """\
 entity: INPreferences
 key: HoldEntry
-endpoint: Bootstrap/1.2.0
+endpoint: Bootstrap/1.3.0
 records:
   - HoldEntry: false
     TransitBranchID: LAB5
@@ -1052,6 +1052,138 @@ def test_diff_still_flags_numbering_bounds_drift(
     assert not any("LastNbr" in d for d in drifts)
 
 
+def _package_template(rel: str) -> Path:
+    return (
+        Path(__file__).resolve().parents[1]
+        / "src"
+        / "acumatica_cli"
+        / "templates"
+        / rel
+    )
+
+
+def test_package_in_preferences_apply_body_includes_deepen_fields(
+    instance: Instance,
+) -> None:
+    """T157/V41: package INPreferences PUT carries numbering + policy fields."""
+    baseline = seed.load_baseline(
+        _package_template("config/master/20-in-preferences.yaml")
+    )
+    assert isinstance(baseline, seed.BaselineFile)
+    recorder = Recorder({"/INPreferences": httpx.Response(200, json=[])})
+    seed.apply(_client(instance, recorder), baseline)
+    puts = [r for r in recorder.requests if r.method == "PUT"]
+    body = json.loads(puts[-1].content)
+    assert body["HoldEntry"] == {"value": False}
+    assert body["BatchNumberingID"] == {"value": "BATCH"}
+    assert body["ReceiptNumberingID"] == {"value": "INRECEIPT"}
+    assert body["IssueNumberingID"] == {"value": "INISSUE"}
+    assert body["AdjustmentNumberingID"] == {"value": "INADJUST"}
+    assert body["KitAssemblyNumberingID"] == {"value": "INKITASSY"}
+    assert body["AutoPost"] == {"value": True}
+    assert body["SummPost"] == {"value": False}
+    assert body["NegQty"] == {"value": False}
+    assert body["RequireControlTotal"] == {"value": True}
+    # V41: order-dependent FKs never claimed
+    assert "DfltLotSerClassID" not in body
+    assert "TransitSiteID" not in body
+
+
+def test_package_gl_preferences_apply_body_includes_deepen_fields(
+    instance: Instance,
+) -> None:
+    """T157/V41: package GLPreferences PUT carries batch numbering + policy."""
+    baseline = seed.load_baseline(
+        _package_template("config/baseline/50-gl-preferences.yaml")
+    )
+    assert isinstance(baseline, seed.BaselineFile)
+    recorder = Recorder({"/GLPreferences": httpx.Response(200, json=[])})
+    seed.apply(_client(instance, recorder), baseline)
+    body = json.loads([r for r in recorder.requests if r.method == "PUT"][-1].content)
+    assert body["RetEarnAccountID"] == {"value": "32000"}
+    assert body["YtdNetIncAccountID"] == {"value": "33000"}
+    assert body["BatchNumberingID"] == {"value": "BATCH"}
+    assert body["AutoPostOption"] == {"value": True}
+    assert body["HoldEntry"] == {"value": True}
+    assert body["RequireControlTotal"] == {"value": False}
+
+
+def test_package_ap_ar_so_po_ca_preferences_claim_deepen_fields() -> None:
+    """T156/T157: package AR/AP/SO/PO/CA prefs claim curated fields only."""
+    ar = seed.load_baseline(_package_template("config/master/60-ar-preferences.yaml"))
+    assert isinstance(ar, seed.BaselineFile)
+    rec = ar.records[0]
+    assert rec["InvoiceNumberingID"] == "ARINVOICE"
+    assert rec["PaymentNumberingID"] == "ARPAYMENT"
+    assert rec["RequireExtRef"] is True
+    assert rec["CreditCheckError"] is True
+
+    ap = seed.load_baseline(_package_template("config/master/61-ap-preferences.yaml"))
+    assert isinstance(ap, seed.BaselineFile)
+    rec = ap.records[0]
+    assert rec["InvoiceNumberingID"] == "APBILL"
+    assert rec["CheckNumberingID"] == "APPAYMENT"
+    assert rec["RequireVendorRef"] is True
+    assert rec["RequireApprovePayments"] is True
+
+    so = seed.load_baseline(_package_template("config/master/56-so-preferences.yaml"))
+    assert isinstance(so, seed.BaselineFile)
+    assert so.records[0]["ShipmentNumberingID"] == "SOSHIPMENT"
+    assert so.records[0]["CreditCheckError"] is True
+
+    po = seed.load_baseline(_package_template("config/master/57-po-preferences.yaml"))
+    assert isinstance(po, seed.BaselineFile)
+    assert po.records[0]["RegularPONumberingID"] == "POORDER"
+    assert po.records[0]["ReceiptNumberingID"] == "PORECEIPT"
+    assert po.records[0]["AutoReleaseAP"] is False
+
+    ca = seed.load_baseline(_package_template("config/master/62-ca-preferences.yaml"))
+    assert isinstance(ca, seed.BaselineFile)
+    rec = ca.records[0]
+    assert rec["BatchNumberingID"] == "BATCH"
+    assert rec["AutoPostOption"] is True
+    assert rec["ReleaseAP"] is True
+    assert rec["ReleaseAR"] is True
+    assert "TransferNumberingID" not in rec
+
+
+def test_package_prefs_diff_clean_when_live_matches_seed(
+    instance: Instance,
+) -> None:
+    """T157: deepened fields compare clean; no permanent drift from extras."""
+    baseline = seed.load_baseline(
+        _package_template("config/master/20-in-preferences.yaml")
+    )
+    assert isinstance(baseline, seed.BaselineFile)
+    live = {
+        "HoldEntry": False,
+        "INProgressAcctID": "12300",
+        "INProgressSubID": "000000",
+        "INTransitAcctID": "12400",
+        "INTransitSubID": "000000",
+        "TransitBranchID": "LAB5",
+        "UpdateGL": True,
+        "IssuesReasonCode": "INISSUE",
+        "ReceiptReasonCode": "INRECEIPT",
+        "AdjustmentReasonCode": "INADJUST",
+        "PIReasonCode": "INPI",
+        "BatchNumberingID": "BATCH",
+        "ReceiptNumberingID": "INRECEIPT",
+        "IssueNumberingID": "INISSUE",
+        "AdjustmentNumberingID": "INADJUST",
+        "KitAssemblyNumberingID": "INKITASSY",
+        "AutoPost": True,
+        "SummPost": False,
+        "NegQty": False,
+        "RequireControlTotal": True,
+        # server-only noise must not dirty seed-claimed surface (B11 class)
+        "LastModifiedDateTime": "2026-07-30T00:00:00+00:00",
+        "PerRetainTran": 99,
+    }
+    recorder = Recorder({"/INPreferences": _live(live)})
+    assert seed.diff(_client(instance, recorder), baseline) == []
+
+
 def test_diff_normalizes_booleans(tmp_path: Path, instance: Instance) -> None:
     text = "entity: E\nkey: K\nrecords:\n  - K: A\n    Active: true\n"
     baseline = seed.load_baseline(_write(tmp_path, text))
@@ -1111,7 +1243,7 @@ def test_diff_multi_key_single_org_no_phantom_drift(
     text = """\
 entity: LedgerCompany
 key: [LedgerCD, OrganizationID]
-endpoint: Bootstrap/1.2.0
+endpoint: Bootstrap/1.3.0
 records:
   - LedgerCD: ACTUAL
     OrganizationID: COMPANY
@@ -1147,7 +1279,7 @@ NO_ENTITY_500 = httpx.Response(
 CURRENCY_YAML = """\
 entity: Currency
 key: CuryID
-endpoint: Bootstrap/1.2.0
+endpoint: Bootstrap/1.3.0
 records:
   - CuryID: EUR
     Description: Euro
@@ -1175,8 +1307,8 @@ def test_diff_falls_back_to_key_url_on_optimization_500(
     assert seed.diff(_client(instance, recorder), baseline) == []
     paths = [r.url.path for r in recorder.requests]
     assert [p.split("/entity/", 1)[1] for p in paths] == [
-        "Bootstrap/1.2.0/Currency",
-        "Bootstrap/1.2.0/Currency/EUR",
+        "Bootstrap/1.3.0/Currency",
+        "Bootstrap/1.3.0/Currency/EUR",
     ]
 
 
@@ -1206,7 +1338,7 @@ def test_diff_non_optimization_500_still_raises(
 ACTION_YAML = """\
 action: GenerateCalendar
 entity: MasterCalendar
-endpoint: Bootstrap/1.2.0
+endpoint: Bootstrap/1.3.0
 record:
   FinancialYear: 2026
 parameters:
@@ -1280,8 +1412,8 @@ def test_apply_action_invokes_on_204_never_following_location(
     assert [
         (r.method, r.url.path.split("/entity/", 1)[1]) for r in recorder.requests
     ] == [
-        ("GET", "Bootstrap/1.2.0/MasterCalendar"),
-        ("POST", "Bootstrap/1.2.0/MasterCalendar/GenerateCalendar"),
+        ("GET", "Bootstrap/1.3.0/MasterCalendar"),
+        ("POST", "Bootstrap/1.3.0/MasterCalendar/GenerateCalendar"),
     ]
     assert "invoke GenerateCalendar [MasterCalendar]" in capsys.readouterr().out
 
@@ -1310,7 +1442,7 @@ def test_apply_action_polls_202_location_to_completion(
     """202 = long-running: poll the Location status URL until it answers 204."""
     action = _action(tmp_path)
     status_path = (
-        "/AcumaticaERP/entity/Bootstrap/1.2.0/MasterCalendar"
+        "/AcumaticaERP/entity/Bootstrap/1.3.0/MasterCalendar"
         "/GenerateCalendar/status/abc"
     )
     polls: list[str] = []
@@ -1378,7 +1510,7 @@ def test_probe_routes_filter_and_defaults(tmp_path: Path, instance: Instance) ->
     seed.diff(_client(instance, recorder), action)
 
     (request,) = recorder.requests
-    assert request.url.path.endswith("/Bootstrap/1.2.0/MasterCalendar")
+    assert request.url.path.endswith("/Bootstrap/1.3.0/MasterCalendar")
     assert request.url.params["$filter"] == "FinancialYear eq '2026'"
 
 

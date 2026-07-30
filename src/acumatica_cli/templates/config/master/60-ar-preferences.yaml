@@ -3,3 +3,10 @@ key: HoldEntry
 endpoint: bootstrap
 records:
 - HoldEntry: false
+  BatchNumberingID: BATCH
+  InvoiceNumberingID: ARINVOICE
+  PaymentNumberingID: ARPAYMENT
+  AutoPost: true
+  RequireControlTotal: true
+  RequireExtRef: true
+  CreditCheckError: true
