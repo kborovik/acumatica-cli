@@ -246,6 +246,9 @@ def test_tenant_delete_by_id(wired: Instance, monkeypatch: pytest.MonkeyPatch) -
     assert result.exit_code == 0
     assert calls == [("delete", 3, None), "recycle"]
     assert "Company deleted" in result.output
+    # T169/V9: ac.exe delete + recycle both on step path (piped stderr)
+    assert "deleting tenant id 3 on" in result.stderr
+    assert "recycling app pool" in result.stderr
 
 
 def test_tenant_delete_by_login(
@@ -272,6 +275,9 @@ def test_tenant_delete_by_login(
 
     assert result.exit_code == 0
     assert calls == [("delete", None, "DEV"), "recycle"]
+    # T169/V9: login-only label on step path
+    assert "deleting tenant DEV on" in result.stderr
+    assert "recycling app pool" in result.stderr
 
 
 def test_tenant_delete_requires_id_or_login(wired: Instance) -> None:

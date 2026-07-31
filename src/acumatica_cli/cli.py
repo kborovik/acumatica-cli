@@ -493,8 +493,12 @@ def tenant_delete(
     if (company_id is None) == (login_name is None):
         raise SystemExit("pass exactly one of --id or --login")
     mgr = TenantManager(inst)
+    # V9 long single-op: ac.exe delete matches create's step path (TTY spinner /
+    # piped stderr process line); recycle stays its own step after.
+    label = f"id {company_id}" if company_id is not None else str(login_name)
     try:
-        raw = mgr.delete(company_id, login_name=login_name)
+        with output.step(f"deleting tenant {label} on {inst.base_url}"):
+            raw = mgr.delete(company_id, login_name=login_name)
     except RuntimeError as exc:
         raise SystemExit(str(exc)) from exc
     output.data(raw.splitlines()[-1] if raw.strip() else "done")
