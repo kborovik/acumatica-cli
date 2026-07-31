@@ -972,10 +972,16 @@ def run(
     dry_run: bool = False,
 ) -> FindingsBundle:
     """Load → reconcile → emit. Returns the bundle (for tests)."""
-    inv = load_inventory_tree(inventory_dir)
-    seeds = load_config_seeds(config_dir)
-    smap = load_snapshot_map()
-    bundle = reconcile(inv, seeds, config_dir=config_dir, snapshot_map=smap)
+    # V9 long single-op: load inventory tree + optional config seeds + compare.
+    # Emit write/skip lines stay multi-unit stdout after the step.
+    with output.step(
+        f"loading inventory + comparing"
+        f"{f' vs {config_dir}' if config_dir is not None else ' (no config/)'}"
+    ):
+        inv = load_inventory_tree(inventory_dir)
+        seeds = load_config_seeds(config_dir)
+        smap = load_snapshot_map()
+        bundle = reconcile(inv, seeds, config_dir=config_dir, snapshot_map=smap)
     # Guard: never write into config paths (V35/V36)
     if config_dir is not None:
         try:

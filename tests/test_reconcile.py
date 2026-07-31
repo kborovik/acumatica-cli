@@ -1635,6 +1635,8 @@ def test_cli_reconcile_defaults(
     assert (tmp_path / "findings" / "summary.yaml").is_file()
     assert (tmp_path / "findings" / "unmapped.yaml").is_file()
     assert "write" in result.output
+    # T171/V9: load+compare via output.step (piped stderr); write/skip on stdout
+    assert "loading inventory + comparing" in result.stderr
     # never touch config/
     assert not (tmp_path / "config").exists() or not any(
         (tmp_path / "config").rglob("*")
