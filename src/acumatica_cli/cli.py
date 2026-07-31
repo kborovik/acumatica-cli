@@ -257,8 +257,8 @@ def tenant_list(inst: Instance) -> None:
     "--id",
     "company_id",
     type=int,
-    required=True,
-    help="CompanyID (first free is usually 3)",
+    default=None,
+    help="CompanyID (omit = next free max(list)+1; exists-skip adopts live id)",
 )
 @click.option(
     "--login",
@@ -286,7 +286,7 @@ def tenant_list(inst: Instance) -> None:
 @pass_instance
 def tenant_create(
     inst: Instance,
-    company_id: int,
+    company_id: int | None,
     login_name: str,
     company_type: str | None,
     parent_id: int,
@@ -304,11 +304,15 @@ def tenant_create(
     the create: an unrecycled tenant is invisible to REST, so the bootstrap
     chain cannot run either.
 
+    --login is required; --id is optional (V16 login-only). Omit --id →
+    next free CompanyID = max(live list)+1 (ac.exe never auto-picks). When
+    the login already exists: omit --id → adopt the live CompanyID; pass
+    --id → must match, else hard error naming both.
+
     Resumable (V4, closes B17): when the login already exists on the
     instance (tenant list probe - live state, never a marker) the ac.exe
     create is skipped and the init + digest-gated publish chain still runs,
-    so re-running create is the republish route for existing tenants. --id
-    must match the existing CompanyID, else hard error naming both.
+    so re-running create is the republish route for existing tenants.
 
     After create (or on exists-skip), CompanyCD is set equal to --login.
     ac.exe only writes LoginName into CompanyKey and auto-generates CD
@@ -316,16 +320,21 @@ def tenant_create(
     the Companies screen so ``acu tenant list`` shows Login = CD.
     """
     mgr = TenantManager(inst)
-    existing = next((t for t in mgr.list() if t.login_name == login_name), None)
+    tenants = mgr.list()
+    existing = next((t for t in tenants if t.login_name == login_name), None)
     if existing is not None:
-        if existing.company_id != company_id:
+        if company_id is not None and existing.company_id != company_id:
             raise SystemExit(
                 f"tenant {login_name} exists with CompanyID "
                 f"{existing.company_id}, not {company_id}; "
                 f"pass --id {existing.company_id}"
             )
+        company_id = existing.company_id
         output.data(f"skip create: tenant {login_name} exists (id {company_id})")
     else:
+        if company_id is None:
+            # ac.exe never auto-picks; allocate next free from live list
+            company_id = max((t.company_id for t in tenants), default=0) + 1
         with output.step(
             f"creating tenant {company_id} ({login_name}) on {inst.base_url}"
         ):
