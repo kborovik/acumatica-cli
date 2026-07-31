@@ -225,9 +225,7 @@ def test_tenant_recycle_help_lists_yes(wired: Instance) -> None:
     assert "app pool" in result.output.lower() or "recycle" in result.output.lower()
 
 
-def test_tenant_delete_by_id(
-    wired: Instance, monkeypatch: pytest.MonkeyPatch
-) -> None:
+def test_tenant_delete_by_id(wired: Instance, monkeypatch: pytest.MonkeyPatch) -> None:
     calls: list[object] = []
 
     def fake_delete(
@@ -495,6 +493,77 @@ def test_tenant_create_exists_id_mismatch_errors(
     assert result.exit_code == 1
     assert "tenant Scratch exists with CompanyID 2, not 3" in result.output
     assert create_env == []
+
+
+def test_tenant_create_login_only_allocates_next_free_id(
+    create_env: list[str], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # T166/T167: omit --id → next free CompanyID = max(list)+1 (ac.exe never
+    # auto-picks); create + set_cd use the allocated id
+    monkeypatch.setattr(
+        TenantManager,
+        "list",
+        lambda self: [
+            Tenant(
+                company_id=1,
+                company_cd="System",
+                login_name="",
+                company_type="System",
+            ),
+            Tenant(
+                company_id=2,
+                company_cd="Company",
+                login_name="Company",
+                company_type="Custom",
+            ),
+        ],
+    )
+    seen: list[int] = []
+    monkeypatch.setattr(
+        TenantManager,
+        "create",
+        lambda self, cid, login, parent, visible, ctype: (
+            seen.append(cid) or create_env.append("create") or "Company created"
+        ),
+    )
+    result = CliRunner().invoke(
+        cli.cli, ["tenant", "create", "--login", "Scratch", "--no-init"]
+    )
+
+    assert result.exit_code == 0
+    assert seen == [3]  # max(1, 2) + 1
+    assert create_env == ["create", "set_cd:Scratch"]
+
+
+def test_tenant_create_exists_skip_without_id_adopts_live_id(
+    create_env: list[str], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # T166/T167: login exists + omit --id → adopt live CompanyID, skip ac.exe
+    # create, still run set_cd + init/publish chain
+    monkeypatch.setattr(
+        TenantManager,
+        "list",
+        lambda self: [
+            Tenant(
+                company_id=5,
+                company_cd="Scratch",
+                login_name="Scratch",
+                company_type="",
+            )
+        ],
+    )
+    result = CliRunner().invoke(cli.cli, ["tenant", "create", "--login", "Scratch"])
+
+    assert result.exit_code == 0
+    assert "skip create: tenant Scratch exists (id 5)" in result.stdout
+    assert create_env == [
+        "set_cd:Scratch",
+        "recycle",
+        "init:Scratch",
+        "publish:Scratch:MultiCompany,Multicurrency",
+        "recycle",
+        "init:Scratch",
+    ]
 
 
 def test_tenant_create_type_rejects_unknown_dataset(create_env: list[str]) -> None:

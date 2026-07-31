@@ -185,9 +185,7 @@ def test_delete_unknown_login_raises_before_ssh_config_call(
     assert len(run.commands) == 1
 
 
-def test_delete_requires_exactly_one_identity(
-    instance: Instance, run: FakeRun
-) -> None:
+def test_delete_requires_exactly_one_identity(instance: Instance, run: FakeRun) -> None:
     with pytest.raises(ValueError, match="exactly one of company_id or login_name"):
         TenantManager(instance).delete()
     with pytest.raises(ValueError, match="exactly one of company_id or login_name"):
