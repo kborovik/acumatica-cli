@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## [v0.20.2] - 2026-07-31
+
 ### Changed
 
 - **CLI progress on long single-ops (T169–T171 / V9):** `acu tenant delete`
