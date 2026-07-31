@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## [v0.20.1] - 2026-07-31
+
 ### Added
 
 - **`acu tenant create --login NAME` without `--id`:** omit `--id` to allocate
