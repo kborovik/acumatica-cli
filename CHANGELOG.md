@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+### Changed
+
+- **CLI progress on long single-ops (T169–T171 / V9):** `acu tenant delete`
+  wraps ac.exe delete in `output.step` (matching create) and keeps the
+  recycle step; `acu inventory` steps artifact parse before banner + write/skip
+  emit; `acu reconcile` steps load+compare before findings emit. TTY spinner /
+  piped stderr process line; never silence multi-second work.
+
 ## [v0.20.1] - 2026-07-31
 
 ### Added
