@@ -154,6 +154,19 @@ def test_delete_uses_deleted_subkey_with_full_spec(
     )
 
 
+def test_delete_by_login_name_resolves_company_id(
+    instance: Instance, run: FakeRun
+) -> None:
+    run.results = [(0, SQLCMD_ROWS), (0, "Company deleted")]
+    TenantManager(instance).delete(login_name="Company")
+
+    delete_command = run.commands[1]
+    assert (
+        '-company:"CompanyID=2;ParentID=1;CompanyType=Custom;Deleted=Yes;"'
+        in delete_command
+    )
+
+
 def test_delete_unknown_id_raises_before_ssh_config_call(
     instance: Instance, run: FakeRun
 ) -> None:
@@ -161,6 +174,25 @@ def test_delete_unknown_id_raises_before_ssh_config_call(
     with pytest.raises(RuntimeError, match="no tenant with CompanyID=99"):
         TenantManager(instance).delete(99)
     assert len(run.commands) == 1  # only the list() lookup ran
+
+
+def test_delete_unknown_login_raises_before_ssh_config_call(
+    instance: Instance, run: FakeRun
+) -> None:
+    run.results = [(0, SQLCMD_ROWS)]
+    with pytest.raises(RuntimeError, match=r"no tenant with login 'missing'"):
+        TenantManager(instance).delete(login_name="missing")
+    assert len(run.commands) == 1
+
+
+def test_delete_requires_exactly_one_identity(
+    instance: Instance, run: FakeRun
+) -> None:
+    with pytest.raises(ValueError, match="exactly one of company_id or login_name"):
+        TenantManager(instance).delete()
+    with pytest.raises(ValueError, match="exactly one of company_id or login_name"):
+        TenantManager(instance).delete(2, login_name="Company")
+    assert run.commands == []
 
 
 def test_ping_sends_trivial_readonly_command(instance: Instance, run: FakeRun) -> None:

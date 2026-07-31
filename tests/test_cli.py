@@ -225,6 +225,93 @@ def test_tenant_recycle_help_lists_yes(wired: Instance) -> None:
     assert "app pool" in result.output.lower() or "recycle" in result.output.lower()
 
 
+def test_tenant_delete_by_id(
+    wired: Instance, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    calls: list[object] = []
+
+    def fake_delete(
+        self: TenantManager,
+        company_id: int | None = None,
+        *,
+        login_name: str | None = None,
+    ) -> str:
+        calls.append(("delete", company_id, login_name))
+        return "Company deleted\n"
+
+    monkeypatch.setattr(TenantManager, "delete", fake_delete)
+    monkeypatch.setattr(
+        TenantManager, "recycle_app_pool", lambda self: calls.append("recycle")
+    )
+    result = CliRunner().invoke(cli.cli, ["tenant", "delete", "--id", "3", "--yes"])
+
+    assert result.exit_code == 0
+    assert calls == [("delete", 3, None), "recycle"]
+    assert "Company deleted" in result.output
+
+
+def test_tenant_delete_by_login(
+    wired: Instance, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    calls: list[object] = []
+
+    def fake_delete(
+        self: TenantManager,
+        company_id: int | None = None,
+        *,
+        login_name: str | None = None,
+    ) -> str:
+        calls.append(("delete", company_id, login_name))
+        return "Company deleted\n"
+
+    monkeypatch.setattr(TenantManager, "delete", fake_delete)
+    monkeypatch.setattr(
+        TenantManager, "recycle_app_pool", lambda self: calls.append("recycle")
+    )
+    result = CliRunner().invoke(
+        cli.cli, ["tenant", "delete", "--login", "DEV", "--yes"]
+    )
+
+    assert result.exit_code == 0
+    assert calls == [("delete", None, "DEV"), "recycle"]
+
+
+def test_tenant_delete_requires_id_or_login(wired: Instance) -> None:
+    result = CliRunner().invoke(cli.cli, ["tenant", "delete", "--yes"])
+
+    assert result.exit_code != 0
+    assert "exactly one of --id or --login" in result.output
+
+
+def test_tenant_delete_rejects_both_id_and_login(wired: Instance) -> None:
+    result = CliRunner().invoke(
+        cli.cli, ["tenant", "delete", "--id", "3", "--login", "DEV", "--yes"]
+    )
+
+    assert result.exit_code != 0
+    assert "exactly one of --id or --login" in result.output
+
+
+def test_tenant_delete_unknown_login_exits(
+    wired: Instance, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    def fake_delete(
+        self: TenantManager,
+        company_id: int | None = None,
+        *,
+        login_name: str | None = None,
+    ) -> str:
+        raise RuntimeError(f"no tenant with login {login_name!r}")
+
+    monkeypatch.setattr(TenantManager, "delete", fake_delete)
+    result = CliRunner().invoke(
+        cli.cli, ["tenant", "delete", "--login", "missing", "--yes"]
+    )
+
+    assert result.exit_code != 0
+    assert "no tenant with login 'missing'" in result.output
+
+
 @pytest.fixture
 def create_env(
     wired: Instance, tmp_path: Path, monkeypatch: pytest.MonkeyPatch

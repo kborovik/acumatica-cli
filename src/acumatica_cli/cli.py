@@ -458,13 +458,36 @@ def bootstrap_cmd(ctx: click.Context, export_path: Path | None) -> None:
 
 
 @tenant_group.command("delete")
-@click.option("--id", "company_id", type=int, required=True)
+@click.option(
+    "--id",
+    "company_id",
+    type=int,
+    default=None,
+    help="CompanyID (from `acu tenant list`)",
+)
+@click.option(
+    "--login",
+    "login_name",
+    default=None,
+    help="Sign-in / REST tenant name (alternative to --id)",
+)
 @click.confirmation_option(prompt="Delete this tenant and all its data?")
 @pass_instance
-def tenant_delete(inst: Instance, company_id: int) -> None:
-    """Delete the tenant and all its data, then recycle the app pool."""
+def tenant_delete(
+    inst: Instance, company_id: int | None, login_name: str | None
+) -> None:
+    """Delete the tenant and all its data, then recycle the app pool.
+
+    Pass exactly one of --id or --login (login = sign-in name from
+    `acu tenant list`). Confirm prompt; --yes skips.
+    """
+    if (company_id is None) == (login_name is None):
+        raise SystemExit("pass exactly one of --id or --login")
     mgr = TenantManager(inst)
-    raw = mgr.delete(company_id)
+    try:
+        raw = mgr.delete(company_id, login_name=login_name)
+    except RuntimeError as exc:
+        raise SystemExit(str(exc)) from exc
     output.data(raw.splitlines()[-1] if raw.strip() else "done")
     with output.step("recycling app pool (drops the tenant from the running app)"):
         mgr.recycle_app_pool()

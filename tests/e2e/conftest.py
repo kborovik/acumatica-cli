@@ -138,10 +138,9 @@ def delete_tenant(tenant_manager: TenantManager) -> DeleteTenant:
     """Delete the named tenant if it exists, then recycle (V5) to forget it."""
 
     def _delete(login: str) -> None:
-        tenant = next((t for t in tenant_manager.list() if t.login_name == login), None)
-        if tenant is None:
+        if not any(t.login_name == login for t in tenant_manager.list()):
             return
-        tenant_manager.delete(tenant.company_id)
+        tenant_manager.delete(login_name=login)
         tenant_manager.recycle_app_pool()
 
     return _delete

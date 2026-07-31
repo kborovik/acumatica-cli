@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+### Added
+
+- **`acu tenant delete --login NAME`:** delete a tenant by sign-in name as an
+  alternative to `--id`. Pass exactly one of `--id` or `--login`.
+
 ## [v0.20.0] - 2026-07-30
 
 ### Changed

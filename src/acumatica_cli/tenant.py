@@ -188,8 +188,16 @@ class TenantManager:
         self._ssh(f'sqlcmd -S "(local)" -E -C -Q "{query}"')
         return True
 
-    def delete(self, company_id: int) -> str:
+    def delete(
+        self,
+        company_id: int | None = None,
+        *,
+        login_name: str | None = None,
+    ) -> str:
         """Delete the tenant and all its data.
+
+        Identify by ``company_id`` or ``login_name`` (exactly one). Login is
+        the sign-in name / REST tenant value (``CompanyKey``).
 
         Two verified gotchas (docs/ac-exe.md):
 
@@ -201,10 +209,18 @@ class TenantManager:
           CompanyType as the system tenant and aborts with "The system company
           cannot be removed."
         """
-        target = next((t for t in self.list() if t.company_id == company_id), None)
-        if target is None:
-            raise RuntimeError(f"no tenant with CompanyID={company_id}")
+        if (company_id is None) == (login_name is None):
+            raise ValueError("pass exactly one of company_id or login_name")
+        tenants = self.list()
+        if login_name is not None:
+            target = next((t for t in tenants if t.login_name == login_name), None)
+            if target is None:
+                raise RuntimeError(f"no tenant with login {login_name!r}")
+        else:
+            target = next((t for t in tenants if t.company_id == company_id), None)
+            if target is None:
+                raise RuntimeError(f"no tenant with CompanyID={company_id}")
         return self._company_config(
-            f"CompanyID={company_id};ParentID=1;"
+            f"CompanyID={target.company_id};ParentID=1;"
             f"CompanyType={target.company_type};Deleted=Yes;"
         )
