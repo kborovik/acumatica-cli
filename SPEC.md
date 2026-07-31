@@ -174,9 +174,9 @@ T162|x|docs table inventory table → entity → bootstrap\|default\|unmapped; c
 T163|x|`make release` promote Unreleased → `## [vX.Y.Z] - date`; empty Unreleased hard-fail; commit CHANGELOG w/ pyproject|V19,I.pkg
 T164|x|`release.yml` GH release notes from CHANGELOG version section for tag; not sole `--generate-notes`|V19,I.pkg,T163
 T165|x|docs README release path + CHANGELOG Unreleased duty for user-facing work|V12,V19,T163
-T166|.|tenant create --id optional; omit → next free CompanyID max+1 from list; exists-skip adopts existing id when --id omit|V16,I.cmd
-T167|.|offline tests: create login-only allocates; exists-skip without --id; id mismatch still hard-error; delete --login green|V13,T166
-T168|.|README CLI map + help + CHANGELOG Unreleased — create --login-only|V12,V19,T166
+T166|x|tenant create --id optional; omit → next free CompanyID max+1 from list; exists-skip adopts existing id when --id omit|V16,I.cmd
+T167|x|offline tests: create login-only allocates; exists-skip without --id; id mismatch still hard-error; delete --login green|V13,T166
+T168|x|README CLI map + help + CHANGELOG Unreleased — create --login-only|V12,V19,T166
 
 ## §B BUGS
 

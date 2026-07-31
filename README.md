@@ -25,7 +25,7 @@ cd my-erp                                # edit .env: set ACU_PASSWORD, ACU_TENA
                                          # start from a brand-new empty tenant
 
 acu config check                         # read-only preflight (incl. target.yaml)
-acu tenant create --id 3 --login DEV     # create the tenant + bootstrap it (needs SSH)
+acu tenant create --login DEV            # create + bootstrap (SSH; --id optional)
 # or hosted: acu --tenant DEV bootstrap
 acu --tenant DEV apply config/           # seed config/{bootstrap,baseline,setup,master}/
 acu --tenant DEV run scenario/           # once capital → buy → build → sell
@@ -58,8 +58,9 @@ acu [--tenant NAME] [--url URL] [--ssh USER@HOST] [--api-version V]
 │
 ├── tenant                            tenant CRUD (ac.exe over SSH — control plane)
 │   ├── list                          CompanyID, sign-in name, internal CD, type
-│   ├── create --id N --login NAME    create + bootstrap; re-run to republish (SSH)
+│   ├── create --login NAME [--id N]  create + bootstrap; re-run to republish (SSH)
 │   │          [--type SalesDemo|T100|U100] [--parent N] [--hidden] [--no-init]
+│   │                                 omit --id → next free CompanyID (max list + 1)
 │   ├── delete --id N | --login NAME [--yes]
 │   │                                 delete the tenant and its data, recycle app pool
 │   └── recycle [--yes]               restart site app pool (tenant map + free API slots)
@@ -166,7 +167,8 @@ Prefer symbolic `default` over a pinned `Default/25.200.001` so the seed tree tr
 
 ## Installation
 
-Requires Python 3.14 or newer. This is a **private** package — not published to PyPI.
+Requires Python 3.14 or newer.
+This is a **private** package — not published to PyPI.
 
 ```sh
 uv tool install git+https://github.com/kborovik/acu-cli.git
@@ -269,7 +271,9 @@ gmake release patch   # or minor | major
 4. Promote Unreleased body to `## [vX.Y.Z] - YYYY-MM-DD`, leave an empty `## Unreleased`
 5. Commit `CHANGELOG.md` + `pyproject.toml` (+ lock if bumped) together, tag `vX.Y.Z`, push
 
-GitHub Actions on tag `v*` re-runs CI, builds sdist+wheel, and creates a GitHub Release whose notes are the promoted CHANGELOG section for that tag (plus the artifacts). There is no PyPI publish — the repo is private. Install via git URL or editable clone.
+GitHub Actions on tag `v*` re-runs CI, builds sdist+wheel, and creates a GitHub Release whose notes are the promoted CHANGELOG section for that tag (plus the artifacts).
+There is no PyPI publish — the repo is private.
+Install via git URL or editable clone.
 
 ### Live end-to-end tier
 

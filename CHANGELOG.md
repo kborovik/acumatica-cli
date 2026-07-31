@@ -4,6 +4,11 @@
 
 ### Added
 
+- **`acu tenant create --login NAME` without `--id`:** omit `--id` to allocate
+  the next free CompanyID (`max(list)+1` from the live tenant list). When the
+  login already exists, omit `--id` to adopt the live id and skip ac.exe create
+  (republish route). Pass `--id` only when you need a specific CompanyID; a
+  mismatch against an existing login is still a hard error.
 - **`acu tenant delete --login NAME`:** delete a tenant by sign-in name as an
   alternative to `--id`. Pass exactly one of `--id` or `--login`.
 
