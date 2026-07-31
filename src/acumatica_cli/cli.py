@@ -1119,7 +1119,10 @@ def inventory_cmd(
     not this command). Not extract (REST seed into config/), not state
     (derived balances) — never writes config/ or state/ (V35).
     """
-    art = inventory.parse_artifact(artifact)
+    # V9 long single-op: artifact parse (ZIP/folder IR) via step; banner +
+    # per-table write/skip emit stay multi-unit stdout after.
+    with output.step(f"parsing snapshot artifact {artifact}"):
+        art = inventory.parse_artifact(artifact)
     target = load_target()
     if target is not None:
         inventory.assert_erp_matches(art, target.erp)

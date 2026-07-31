@@ -178,7 +178,7 @@ T166|x|tenant create --id optional; omit → next free CompanyID max+1 from list
 T167|x|offline tests: create login-only allocates; exists-skip without --id; id mismatch still hard-error; delete --login green|V13,T166
 T168|x|README CLI map + help + CHANGELOG Unreleased — create --login-only|V12,V19,T166
 T169|x|tenant delete progress — wrap ac.exe delete in output.step matching create; keep recycle step; offline assert step path; CHANGELOG Unreleased|V9,V19,I.cmd
-T170|.|inventory progress — output.step around artifact parse; keep banner + write/skip emit; offline assert|V9,I.cmd
+T170|x|inventory progress — output.step around artifact parse; keep banner + write/skip emit; offline assert|V9,I.cmd
 T171|.|reconcile progress — output.step around load+compare; keep emit write/skip; offline assert|V9,I.cmd
 T172|.|CHANGELOG Unreleased — CLI progress (delete/inventory/reconcile); suite green|V19,T169,T170,T171
 

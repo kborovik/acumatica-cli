@@ -425,6 +425,9 @@ def test_cli_inventory_folder_to_default_out(
     assert (tmp_path / "inventory" / "summary.yaml").is_file()
     assert (tmp_path / "inventory" / "tables" / "Account.yaml").is_file()
     assert "write" in result.output
+    # T170/V9: long parse via output.step (piped stderr); banner/write on stdout
+    # (rich may soft-wrap a long path across lines — match the step label only)
+    assert "parsing snapshot artifact" in result.stderr
 
 
 def test_cli_inventory_dry_run(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
