@@ -130,7 +130,7 @@ def test_load_contract_xml_rejects_data_repo_project_xml(tmp_path: Path) -> None
 def test_load_contract_xml_package_only(tmp_path: Path) -> None:
     # No data-repo project.xml → always packaged full company surface
     name, entities = bootstrap.parse_endpoint(bootstrap.load_contract_xml(tmp_path))
-    assert name == "Bootstrap/1.3.0"
+    assert name == "Bootstrap/1.4.0"
     assert "Company" in entities
     assert "OnlyInDataRepo" not in entities
 
@@ -157,7 +157,7 @@ def test_package_zip_carries_the_bootstrap_endpoint() -> None:
     Verified vs 26.101.0225 by live import round-trip: the <Endpoint> child
     is the XmlSerializer form of Model.Endpoint in the entity/maintenance/5.31
     namespace; no .endpoint file is involved. Packaged contract is the single
-    full company surface (Bootstrap/1.3.0 package SoT — V2/V21/T178).
+    full company surface (Bootstrap/1.4.0 package SoT — V2/V21/T178).
     """
     ns = "{http://www.acumatica.com/entity/maintenance/5.31}"
     with zipfile.ZipFile(io.BytesIO(bootstrap.package_zip())) as zf:
@@ -165,7 +165,7 @@ def test_package_zip_carries_the_bootstrap_endpoint() -> None:
     (item,) = root.findall("EntityEndpoint")
     (endpoint,) = item.findall(f"{ns}Endpoint")
     assert endpoint.get("name") == "Bootstrap"
-    assert endpoint.get("version") == "1.3.0"
+    assert endpoint.get("version") == "1.4.0"
     # SystemContracts.V4 is the build's only IsCurrent implementation
     assert endpoint.get("systemContractVersion") == "4"
     entities = {e.get("name"): e for e in endpoint.findall(f"{ns}TopLevelEntity")}
@@ -347,16 +347,17 @@ def test_package_zip_carries_the_bootstrap_endpoint() -> None:
             "Password": "UserList",
             "Roles": ("AllowedRoles", ""),
         },
-        # T150 NumberingSequence (gh #25): CS201010 Sequence header +
-        # SequenceDetail bounds (flat entity; LastNbr omitted V40)
+        # T150/T159 NumberingSequence (gh #25): CS201010 NumberingMaint
+        # Header (Numbering) + Sequence (NumberingSequence) bounds; flat
+        # entity; LastNbr omitted V40. Live view names != early T150 guess.
         "NumberingSequence": {
-            "NumberingID": "Sequence",
-            "Descr": "Sequence",
-            "StartNbr": "SequenceDetail",
-            "EndNbr": "SequenceDetail",
-            "WarnNbr": "SequenceDetail",
-            "NbrStep": "SequenceDetail",
-            "StartDate": "SequenceDetail",
+            "NumberingID": "Header",
+            "Descr": "Header",
+            "StartNbr": "Sequence",
+            "EndNbr": "Sequence",
+            "WarnNbr": "Sequence",
+            "NbrStep": "Sequence",
+            "StartDate": "Sequence",
         },
     }
     for entity, expected in views.items():
@@ -398,7 +399,7 @@ def test_package_prefs_field_depth_curated_not_full_dac() -> None:
     with zipfile.ZipFile(io.BytesIO(bootstrap.package_zip())) as zf:
         root = ET.fromstring(zf.read("project.xml"))
     (endpoint,) = root.findall(f"EntityEndpoint/{ns}Endpoint")
-    assert endpoint.get("version") == "1.3.0"
+    assert endpoint.get("version") == "1.4.0"
     entities = {e.get("name"): e for e in endpoint.findall(f"{ns}TopLevelEntity")}
     gl_types = {
         f.get("name"): f.get("type")
@@ -496,7 +497,7 @@ def test_package_zip_rejects_data_repo_contract(tmp_path: Path) -> None:
 <Customization level="" description="data-repo full" product-version="26.101">
   <EntityEndpoint>
     <Endpoint xmlns="http://www.acumatica.com/entity/maintenance/5.31"
-              name="Bootstrap" version="1.3.0" systemContractVersion="4">
+              name="Bootstrap" version="1.4.0" systemContractVersion="4">
       <TopLevelEntity name="OnlyInDataRepo" screen="CS000000">
         <Fields><Field name="ID" type="StringValue" /></Fields>
       </TopLevelEntity>
@@ -529,7 +530,7 @@ def test_bootstrap_endpoint_carries_the_gl_setup_actions() -> None:
     GenerateParams dialog view on GenerateCalendarExtensionBase, and
     ProcessAll on FinPeriodStatusProcess (runtime-registered by
     PXFilteredProcessing - no declared PXAction member; the name literal
-    confirmed in the PX.Data.dll string heap, T37). The 1.3.0
+    confirmed in the PX.Data.dll string heap, T37). The
     CompanyCalendar OpenPeriods action is gone: its Open flow redirects
     to GL503000, unfollowable over contract (B13) - ManagePeriods drives
     GL503000 directly instead.

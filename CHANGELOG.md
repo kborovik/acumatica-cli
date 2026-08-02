@@ -2,6 +2,16 @@
 
 ## Unreleased
 
+### Fixed
+
+- **Bootstrap NumberingSequence view maps (T159):** CS201010 graph is
+  `NumberingMaint` with views `Header` (Numbering) + `Sequence`
+  (NumberingSequence). Contract 1.2.0/1.3.0 mapped `Sequence`/`SequenceDetail`
+  (wrong) so every PUT answered 422
+  `The provided value ' <NEW>' does not match the required input mask
+  '>aaaaaaaaaa'`. Contract bump **1.3.0 → 1.4.0** (V21); republish Bootstrap
+  before `acu apply` of `05-numbering-sequences.yaml`.
+
 ## [v0.22.0] - 2026-08-01
 
 ### Changed

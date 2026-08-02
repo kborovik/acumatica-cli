@@ -118,7 +118,7 @@ See [docs/ac-exe.md](docs/ac-exe.md) for export / SM203520 notes and [docs/demo-
 
 Your configuration lives in its own git repo.
 `acu config init` scaffolds a **single full seed** under `config/` (features, company, credit terms, expanded COA, masters) plus lifecycle `scenario/`, observer `config/views/`, and README.
-The Bootstrap endpoint contract is package SoT (`bootstrap_project.xml` inside the CLI — `Bootstrap/1.3.0`); `config init` never writes `project.xml`, and data repos must not keep one (a present file hard-errors on bootstrap/publish).
+The Bootstrap endpoint contract is package SoT (`bootstrap_project.xml` inside the CLI — `Bootstrap/1.4.0`); `config init` never writes `project.xml`, and data repos must not keep one (a present file hard-errors on bootstrap/publish).
 There is no `--flavor`.
 
 | Path | What it holds |
@@ -161,7 +161,7 @@ Dual-served entities (on both Bootstrap and Default) need an explicit `endpoint:
 | omitted | `Default/<api_version>` for Default-only entities |
 | `bootstrap` | active `Bootstrap/<ver>` from the packaged contract only |
 | `default` | `Default/<api_version>` — tracks the resolved API version |
-| `Bootstrap/1.3.0` or `Default/25.200.001` | literal pin (ignores the resolved Default version) |
+| `Bootstrap/1.4.0` or `Default/25.200.001` | literal pin (ignores the resolved Default version) |
 
 `api_version` resolves as `--api-version` flag, else `target.yaml` `default_api` when present, else code default `25.200.001` (never `ACU_API_VERSION` in `.env`).
 Prefer symbolic `default` over a pinned `Default/25.200.001` so the seed tree travels with the dataset pin.

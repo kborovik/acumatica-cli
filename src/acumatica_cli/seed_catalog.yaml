@@ -6,7 +6,7 @@
 #   entity    contract entity name (the GET source and the emitted `entity:`)
 #   endpoint  omitted = the instance Default endpoint; the symbolic name
 #             `bootstrap` stays symbolic in emitted files and resolves to
-#             the packaged full company Bootstrap/1.3.0 at HTTP/load time
+#             the packaged full company Bootstrap/1.4.0 at HTTP/load time
 #             (package SoT - V20/V21/T178; data-repo project.xml forbidden)
 #   keys      key fields: the emitted `key:`, the record sort order, and
 #             the B9 fallback's $select projection; the tuple must

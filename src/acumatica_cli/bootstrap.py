@@ -9,7 +9,7 @@ cannot write CS100000 at all (T3 verdict) — and whose Bootstrap contract
 endpoint exposes the seeding surface (serialization verified T12).
 
 Bootstrap endpoint contract is package SoT (V2/V21/T178): always the
-packaged full company ``bootstrap_project.xml`` (``Bootstrap/1.3.0``).
+packaged full company ``bootstrap_project.xml`` (``Bootstrap/1.4.0``).
 Data-repo ``config/bootstrap/project.xml`` or ``bootstrap/project.xml`` is
 not a seed — present → hard error naming package SoT (no dual contract line).
 
@@ -68,7 +68,7 @@ def _bootstrap_file(root: Path, name: str) -> Path | None:
 
 
 def packaged_contract_xml() -> bytes:
-    """The CLI-shipped full company Bootstrap contract (``Bootstrap/1.3.0``)."""
+    """The CLI-shipped full company Bootstrap contract (``Bootstrap/1.4.0``)."""
     return (resources.files("acumatica_cli") / "bootstrap_project.xml").read_bytes()
 
 

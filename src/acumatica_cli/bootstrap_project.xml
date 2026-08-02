@@ -3,7 +3,8 @@
   acu bootstrap customization package template - full company contract
   (SPEC T81 single full-company line; T145 bumps 1.0.0 -> 1.1.0 for Role/User;
   T150 bumps 1.1.0 -> 1.2.0 for NumberingSequence;
-  T154/T155 bumps 1.2.0 -> 1.3.0 for *Preferences field depth, gh #26 / V41).
+  T154/T155 bumps 1.2.0 -> 1.3.0 for *Preferences field depth, gh #26 / V41;
+  T159 bumps 1.3.0 -> 1.4.0 for NumberingSequence view-name fix).
 
   package_zip() (bootstrap.py) prefers data-repo bootstrap/project.xml when
   present; otherwise this packaged template is the fallback so config init,
@@ -48,14 +49,18 @@
     Role then User (V22 prefixes; T148).
 
   T150 NumberingSequence (gh #25) - Default endpoint has no numbering
-  surface; CS201010 Numbering Sequences (NumberingSequenceMaint):
-  - PrimaryView Sequence (DAC Numbering): key NumberingID + Descr.
-  - Detail view SequenceDetail (DAC NumberingSequence): bounds StartNbr,
+  surface; CS201010 Numbering Sequences (NumberingMaint — NOT the
+  misnamed NumberingSequenceMaint):
+  - PrimaryView Header (DAC Numbering): key NumberingID + Descr.
+  - Detail view Sequence (DAC NumberingSequence): bounds StartNbr,
     EndNbr, WarnNbr, NbrStep, StartDate. LastNbr is runtime counter —
     omitted from contract (V40/T152 strip/ignore if ever present).
-  - Flat entity (Currency multi-view idiom): NumberingID/Descr on Sequence,
-    bounds on SequenceDetail. Single sequence row per NumberingID is the
+  - Flat entity (Currency multi-view idiom): NumberingID/Descr on Header,
+    bounds on Sequence. Single sequence row per NumberingID is the
     demo/LAB5 shape; multi-segment / branch-scoped rows are out of v1.
+  T159: view names were wrong in 1.2.0/1.3.0 (Sequence/SequenceDetail);
+  live aspx + NumberingMaint reflection = Header/Sequence. Bump 1.3.0
+  -> 1.4.0 (V21). Wrong maps made every PUT 422 on NewSymbol mask.
 
   T154/T155 prefs-field-depth (gh #26 / V41) - curated *Preferences
   deepen from LAB5 inventory *Setup vs virgin ERP defaults. NOT full DAC.
@@ -92,7 +97,7 @@
 -->
 <Customization level="" description="acu bootstrap: CustomizationPlugin enables features on publish; Bootstrap endpoint exposes full company surface (company + credit terms + financial currency + GL chain + module preferences + vendor class + statement cycle + warehouse + order type + cash account + role + user + membership + numbering sequence)" product-version="26.101">
   <EntityEndpoint>
-    <Endpoint xmlns="http://www.acumatica.com/entity/maintenance/5.31" name="Bootstrap" version="1.3.0" systemContractVersion="4">
+    <Endpoint xmlns="http://www.acumatica.com/entity/maintenance/5.31" name="Bootstrap" version="1.4.0" systemContractVersion="4">
       <TopLevelEntity name="Company" screen="CS101500">
         <Fields>
           <Field name="AcctCD" type="StringValue" />
@@ -1065,25 +1070,25 @@
         </Fields>
         <Mappings>
           <Mapping field="NumberingID">
-            <To object="Sequence" field="NumberingID" />
+            <To object="Header" field="NumberingID" />
           </Mapping>
           <Mapping field="Descr">
-            <To object="Sequence" field="Descr" />
+            <To object="Header" field="Descr" />
           </Mapping>
           <Mapping field="StartNbr">
-            <To object="SequenceDetail" field="StartNbr" />
+            <To object="Sequence" field="StartNbr" />
           </Mapping>
           <Mapping field="EndNbr">
-            <To object="SequenceDetail" field="EndNbr" />
+            <To object="Sequence" field="EndNbr" />
           </Mapping>
           <Mapping field="WarnNbr">
-            <To object="SequenceDetail" field="WarnNbr" />
+            <To object="Sequence" field="WarnNbr" />
           </Mapping>
           <Mapping field="NbrStep">
-            <To object="SequenceDetail" field="NbrStep" />
+            <To object="Sequence" field="NbrStep" />
           </Mapping>
           <Mapping field="StartDate">
-            <To object="SequenceDetail" field="StartDate" />
+            <To object="Sequence" field="StartDate" />
           </Mapping>
         </Mappings>
       </TopLevelEntity>

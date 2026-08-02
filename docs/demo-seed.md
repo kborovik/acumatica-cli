@@ -277,7 +277,7 @@ Reference closure: every foreign key must resolve to a tenant-native row or an e
 
 Default contract has **no** Role or User surface. Both live on the **Bootstrap**
 endpoint only (`endpoint: bootstrap` → active package version, currently
-`Bootstrap/1.3.0`). Screens: Role = SM201005, User = SM201010.
+`Bootstrap/1.4.0`). Screens: Role = SM201005, User = SM201010.
 
 ### Apply order (V22)
 
@@ -335,7 +335,7 @@ identity-only. Never commit password hashes from SM203520 / inventory dumps.
 
 Default contract has **no** Numbering Sequences surface. Sequences live on the
 **Bootstrap** endpoint only (`endpoint: bootstrap` → active package version,
-currently `Bootstrap/1.3.0`). Screen: CS201010 (Numbering Sequences).
+currently `Bootstrap/1.4.0`). Screen: CS201010 (Numbering Sequences).
 
 ### Apply order (V22)
 
@@ -396,7 +396,7 @@ Bootstrap `*Preferences` entities are a **curated subset** of inventory
 a reason: demo need or rebuild risk when virgin ERP defaults drift across
 builds. Server-derived and runtime fields stay out (B11 class).
 
-Active package: `Bootstrap/1.3.0` (shape change = version bump, V21).
+Active package: `Bootstrap/1.4.0` (shape change = version bump, V21).
 
 ### Added fields (beyond pre-1.3.0 surface)
 
