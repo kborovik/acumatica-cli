@@ -606,7 +606,7 @@ def _patch_lifecycle_ssh(
 def test_check_lifecycle_mock_green(
     data_root: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    # T195/T197: offline mock path — create → apply → run → diff → delete
+    # T195/T197/T199/T200: offline mock — pre-clean→create→apply→run→diff; leave tenant
     (data_root / "matrix.yaml").write_text(_matrix_yaml())
     (data_root / "config" / "baseline").mkdir(parents=True)
     (data_root / "config" / "baseline" / "uom.yaml").write_text(
@@ -622,4 +622,9 @@ def test_check_lifecycle_mock_green(
     assert result.exit_code == 0, result.output
     assert "check cell=default" in result.output
     assert "1 cell(s) green" in result.output
-    assert store == []  # post-clean deleted
+    # success line may wrap mid-phrase under narrow columns
+    assert "left for" in result.output
+    assert "inspection" in result.output
+    # V47: no post-clean delete — rebuilt tenant remains for manual inspect
+    assert len(store) == 1
+    assert store[0].login_name == "T1"

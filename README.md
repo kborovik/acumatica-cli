@@ -31,7 +31,7 @@ acu --tenant DEV apply config/           # seed config/{bootstrap,baseline,setup
 acu --tenant DEV run scenario/           # once capital → buy → build → sell
 acu --tenant DEV diff config/            # prove zero drift (exit 2 on drift)
 acu --tenant DEV state                   # capture state/ trial-balance
-acu check --yes --tenant DEV             # cold lifecycle create→apply→run→diff→delete
+acu check --yes --tenant DEV             # cold lifecycle create→apply→run→diff (leave tenant)
 ```
 
 Bare `apply` / `diff` (no path args) also prefer `config/` when those trees exist.
@@ -69,7 +69,7 @@ acu [--cell ID] [--tenant NAME] [--url URL] [--ssh USER@HOST] [--api-version V]
 ├── apply [--dry-run] [FILES...]      push YAML via REST (idempotent PUT upserts)
 ├── diff  [FILES...]                  drift check vs the live tenant (exit 2 on drift)
 ├── run   [--dry-run] [FILES...]      execute transaction scenario YAML (exit 1 on any miss)
-├── check [--all] [--yes] [--tenant L] cold lifecycle create→apply→run→diff→delete (V47)
+├── check [--all] [--yes] [--tenant L] cold lifecycle create→apply→run→diff; leave tenant (V47)
 ├── state [--out DIR] [--diff] [--assert-unchanged] [--dry-run] [FILES...]
 │                                     capture derived state into state/ (not seed)
 ├── extract [--out DIR] [--only NAME]... [--force] [--dry-run]
@@ -254,7 +254,7 @@ acu --cell lab25 diff
 acu apply config/ overlays/default-24.200.001/
 acu diff config/ overlays/default-24.200.001/
 
-# cold lifecycle every cell (SSH + tenant required)
+# cold lifecycle every cell (SSH + tenant required); tenants left for inspect
 acu check --all --yes --tenant LAB5
 ```
 

@@ -905,19 +905,19 @@ def _probe_erp(claimed: str, live: str | None) -> bool:
 @click.option(
     "--yes",
     is_flag=True,
-    help="Skip tenant delete confirmation prompts",
+    help="Accepted for muscle-memory (pre-clean delete is always unattended)",
 )
 @click.option(
     "--tenant",
     "tenant_login",
     default=None,
-    help="Tenant login for create/delete (else ACU_TENANT / global --tenant)",
+    help="Tenant login for pre-clean create (else ACU_TENANT / global --tenant)",
 )
 @click.pass_context
 def check_cmd(
     ctx: click.Context, all_cells: bool, yes: bool, tenant_login: str | None
 ) -> None:
-    """Cold matrix lifecycle: delete → create → apply → run → diff → delete.
+    """Cold matrix lifecycle: delete → create → apply → run → diff (leave tenant).
 
     Distinct from ``acu config check`` (read-only preflight). Requires
     ``matrix.yaml``, non-empty ACU_SSH (tenant CRUD), and a tenant login
@@ -925,9 +925,10 @@ def check_cmd(
     (default first); ``--all`` walks every cell in matrix order, continues
     on failure, and aggregates exit ≠0 when any cell fails. Diff drift is
     a cell fail (exit 1 overall; never 2 — V47). Bare apply/run/diff use
-    pin overlay auto-compose (V44). Lifecycle deletes are always unattended
-    (no confirm prompt); ``--yes`` is accepted for operator muscle-memory
-    parity with ``tenant delete --yes``.
+    pin overlay auto-compose (V44). Pre-clean delete is always unattended;
+    the rebuilt tenant is left on the host after a green run (and after
+    failure) for manual inspect / Account Summary / ``acu state``.
+    ``--yes`` is accepted for operator muscle-memory only.
     """
     _ = yes
     matrix = _require_matrix_for_check()
@@ -993,7 +994,7 @@ def _check_one_cell(cell: object, overrides: dict[str, str], tenant: str) -> boo
 
 
 def _lifecycle_one_cell(inst: Instance, tenant: str) -> int:
-    """create→apply→run→diff→delete for one cell; return 0 or 1 (never 2)."""
+    """pre-clean→create→apply→run→diff; leave tenant (V47); return 0 or 1."""
     mgr = TenantManager(inst)
     _lifecycle_delete_best_effort(mgr, tenant, label="pre-clean")
     try:
@@ -1007,14 +1008,15 @@ def _lifecycle_one_cell(inst: Instance, tenant: str) -> int:
         if code == 2:
             code = 1  # V47: check never exits 2
         output.error(f"lifecycle: {exc}")
-        _lifecycle_delete_best_effort(mgr, tenant, label="post-clean")
+        # Leave tenant for manual inspect (no post-clean — V47).
         return 1 if code != 0 else 0
     except (RuntimeError, httpx.HTTPError) as exc:
         output.error(f"lifecycle: {_format_failure(exc, target=inst.base_url)}")
-        _lifecycle_delete_best_effort(mgr, tenant, label="post-clean")
+        # Leave tenant for manual inspect (no post-clean — V47).
         return 1
-    _lifecycle_delete_best_effort(mgr, tenant, label="post-clean")
-    output.success(f"cell lifecycle green on {inst.base_url} tenant {tenant}")
+    output.success(
+        f"cell lifecycle green on {inst.base_url} tenant {tenant} (left for inspection)"
+    )
     return 0
 
 

@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+### Changed
+
+- **`acu check` leaves the rebuilt tenant (V47):** lifecycle is now
+  `delete → create → apply → run → diff` with **no post-clean delete**.
+  Green cells keep the tenant for manual inspect (Account Summary, `acu state`,
+  demos). Failures also leave the tenant (no post-clean). Pre-clean delete
+  still runs so each check starts cold. `--yes` remains accepted for
+  muscle-memory only.
+
 ## [v0.24.0] - 2026-08-02
 
 ### Added
@@ -11,10 +20,10 @@
   (omit → first). Active cell sources `Instance.api_version` and `base_url`
   when flag/env leave them unset. Retires `target.yaml`.
 - **`acu check` lifecycle (V47):** cold
-  `delete → create → apply → run → diff → delete` per matrix cell. Requires
-  matrix + SSH + tenant. `--all` walks cells continue-on-fail + aggregate
-  exit; never exit 2 (diff drift = cell fail). Distinct from
-  `acu config check` preflight.
+  `delete → create → apply → run → diff` per matrix cell (post-clean delete
+  dropped in Unreleased — tenant left for inspect). Requires matrix + SSH +
+  tenant. `--all` walks cells continue-on-fail + aggregate exit; never exit 2
+  (diff drift = cell fail). Distinct from `acu config check` preflight.
 - **Overlays in `config init` template (V44):** scaffold `overlays/README.md` +
   `overlays/default-24.200.001/` (KitAssembly Type `Assembly` for lab 25r1 /
   Default half `24.200.001`). Future halves = new `overlays/default-<half>/`
