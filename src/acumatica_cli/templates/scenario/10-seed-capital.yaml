@@ -3,7 +3,7 @@ description: Once-class owner capital JE (fund Checking 10100 for AP WIRE)
 once: true
 present:
   inquire: AccountSummaryInquiry
-  parameters: {Ledger: ACTUAL, Period: "072026"}
+  parameters: {Ledger: ACTUAL, Period: "${current_period}"}
   match: {Account: '30000'}
   when:
     EndingBalance: {gte: 50000}
@@ -32,10 +32,10 @@ expect:
   fields:
     Status: Posted
 - inquire: AccountSummaryInquiry
-  parameters: {Ledger: ACTUAL, Period: "072026"}
+  parameters: {Ledger: ACTUAL, Period: "${current_period}"}
   match: {Account: '10100'}
   delta: {EndingBalance: 50000.00}
 - inquire: AccountSummaryInquiry
-  parameters: {Ledger: ACTUAL, Period: "072026"}
+  parameters: {Ledger: ACTUAL, Period: "${current_period}"}
   match: {Account: '30000'}
   delta: {EndingBalance: 50000.00}

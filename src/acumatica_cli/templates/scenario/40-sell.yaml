@@ -235,18 +235,18 @@ expect:
   parameters: {InventoryID: GW-RAIL, WarehouseID: WH01}
   delta: {QtyOnHand: -2.0}
 - inquire: AccountSummaryInquiry
-  parameters: {Ledger: ACTUAL, Period: "072026"}
+  parameters: {Ledger: ACTUAL, Period: "${current_period}"}
   match: {Account: '40000'}
   delta: {EndingBalance: 4138.00}
 - inquire: AccountSummaryInquiry
-  parameters: {Ledger: ACTUAL, Period: "072026"}
+  parameters: {Ledger: ACTUAL, Period: "${current_period}"}
   match: {Account: '50000'}
   delta: {EndingBalance: 1848.00}
 - inquire: AccountSummaryInquiry
-  parameters: {Ledger: ACTUAL, Period: "072026"}
+  parameters: {Ledger: ACTUAL, Period: "${current_period}"}
   match: {Account: '11000'}
   delta: {EndingBalance: 0.00}
 - inquire: AccountSummaryInquiry
-  parameters: {Ledger: ACTUAL, Period: "072026"}
+  parameters: {Ledger: ACTUAL, Period: "${current_period}"}
   match: {Account: '10100'}
   delta: {EndingBalance: 4138.00}
