@@ -922,7 +922,7 @@ def test_config_init_scaffolds_data_repo(tmp_path: Path) -> None:
     expected = [
         ".env",
         ".gitignore",
-        "target.yaml",
+        "matrix.yaml",
         "README.md",
         "config/baseline/10-subaccounts.yaml",
         "config/baseline/20-accounts.yaml",
@@ -959,13 +959,16 @@ def test_config_init_scaffolds_data_repo(tmp_path: Path) -> None:
     ).read_text()
     assert "Type: Assembly" in overlay_build
     assert "Type: Production" not in overlay_build
-    target = (repo / "target.yaml").read_text()
-    assert "default_api:" in target
-    assert "erp:" in target
-    # --host substitutes into ACU_BASE_URL only; ACU_SSH + ACU_API_VERSION
-    # omitted (T124/T125)
+    matrix = (repo / "matrix.yaml").read_text()
+    assert "default_api:" in matrix
+    assert "erp:" in matrix
+    assert 'base_url: "http://erp.test/AcumaticaERP"' in matrix
+    assert "id:" in matrix
+    assert not (repo / "target.yaml").exists()
+    # --host substitutes into matrix cell base_url; ACU_BASE_URL omitted
+    # when cell carries where (V27/V28); ACU_SSH + ACU_API_VERSION omitted
     env = (repo / ".env").read_text()
-    assert "ACU_BASE_URL=http://erp.test/AcumaticaERP" in env
+    assert not any(ln.startswith("ACU_BASE_URL=") for ln in env.splitlines())
     assert not any(ln.startswith("ACU_SSH=") for ln in env.splitlines())
     assert not any(ln.startswith("ACU_API_VERSION=") for ln in env.splitlines())
     # T104/V28/V33: TB is EndingBalance-class inquire, not roster Account
@@ -982,14 +985,16 @@ def test_config_init_defaults_to_cwd_with_placeholder_host(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     # I.cmd config init: <dir> optional (cwd), --host optional (placeholder);
-    # ACU_SSH line omitted — resolve-time default from base_url host (T124)
+    # where lives in matrix.yaml cell base_url; ACU_SSH omitted (T124/V28)
     monkeypatch.chdir(tmp_path)
     result = CliRunner().invoke(cli.cli, ["config", "init"])
 
     assert result.exit_code == 0
     env = (tmp_path / ".env").read_text()
-    assert "ACU_BASE_URL=http://erp.example.com/AcumaticaERP" in env
+    assert not any(ln.startswith("ACU_BASE_URL=") for ln in env.splitlines())
     assert not any(ln.startswith("ACU_SSH=") for ln in env.splitlines())
+    matrix = (tmp_path / "matrix.yaml").read_text()
+    assert "http://erp.example.com/AcumaticaERP" in matrix
 
 
 def test_config_init_rerun_skips_and_never_overwrites(tmp_path: Path) -> None:
@@ -1657,8 +1662,8 @@ def test_tenant_list_fails_without_ssh(
 def test_config_check_discovery_fails_without_base_url(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    # I.cmd config check: the discovery probe is walk-up + parse +
-    # ACU_BASE_URL, the primary identity key since T40
+    # I.cmd config check: discovery needs base_url from --url, ACU_BASE_URL,
+    # or matrix.yaml cell (V27); none → fail
     (tmp_path / ".env").write_text("ACU_SSH=Administrator@acu.test\n")
     monkeypatch.chdir(tmp_path)
 
@@ -1666,7 +1671,7 @@ def test_config_check_discovery_fails_without_base_url(
 
     assert result.exit_code == 1
     assert "fail discovery:" in result.output
-    assert "missing required key ACU_BASE_URL (or --url)" in result.output
+    assert "missing required base_url" in result.output
 
 
 def test_tenant_short_flag_is_gone(wired: Instance) -> None:

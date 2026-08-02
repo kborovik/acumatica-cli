@@ -16,6 +16,7 @@ hard-error when empty post-default — V1/V3). The password must resolve via
 ``--password`` or ``ACU_PASSWORD``.
 """
 
+import os
 from collections.abc import Iterator, Mapping
 from importlib import resources
 from pathlib import Path
@@ -50,7 +51,7 @@ DB_NAME = "AcumaticaDB"
 INIT_TEMPLATES = (
     ("env", ".env"),
     ("gitignore", ".gitignore"),
-    ("target", "target.yaml"),
+    ("matrix", "matrix.yaml"),
     ("README.md", "README.md"),
     ("config/bootstrap/company.yaml", "config/bootstrap/company.yaml"),
     ("config/bootstrap/credit-terms.yaml", "config/bootstrap/credit-terms.yaml"),
@@ -229,13 +230,16 @@ def scaffold(directory: Path, host: str | None = None) -> Iterator[tuple[str, Pa
     """Write the data-repo template set into ``directory``, never overwriting.
 
     Yields ("write" | "skip", path) per template file. ``host`` replaces the
-    placeholder host inside the scaffolded .env ``ACU_BASE_URL`` only
-    (``ACU_SSH`` is omitted — defaults from the base_url host at resolve;
-    hosted opt-out = present blank ``ACU_SSH=``). Secrets stay placeholders
-    (V2). Single full seed under ``config/`` + lifecycle ``scenario/`` +
-    pin-keyed ``overlays/`` (V28/T108/V44; no flavor). The directory is
-    created if absent. No git init, no gpg - version control and secret
-    encryption stay the operator's call.
+    placeholder host inside the scaffolded ``matrix.yaml`` cell ``base_url``
+    (and any residual placeholder in ``.env``). ``ACU_BASE_URL`` is omitted
+    from the scaffolded env when the cell carries where (V27/V28); set it
+    only to override cell where. ``ACU_SSH`` is omitted — defaults from the
+    resolved base_url host at resolve; hosted opt-out = present blank
+    ``ACU_SSH=``. Secrets stay placeholders (V2). Single full seed under
+    ``config/`` + lifecycle ``scenario/`` + one-cell ``matrix.yaml`` +
+    pin-keyed ``overlays/`` (V28/T108/V44; no flavor; no ``target.yaml``).
+    The directory is created if absent. No git init, no gpg - version
+    control and secret encryption stay the operator's call.
     """
     pkg = resources.files("acumatica_cli") / "templates"
     directory.mkdir(parents=True, exist_ok=True)
@@ -245,7 +249,7 @@ def scaffold(directory: Path, host: str | None = None) -> Iterator[tuple[str, Pa
             yield "skip", target
             continue
         content = (pkg / resource).read_text(encoding="utf-8")
-        if host and dest == ".env":
+        if host and dest in (".env", "matrix.yaml"):
             content = content.replace(PLACEHOLDER_HOST, host)
         target.parent.mkdir(parents=True, exist_ok=True)
         target.write_text(content, encoding="utf-8")
@@ -302,33 +306,53 @@ def read_env_values(env_file: Path) -> dict[str, Any]:
 def load_instance(overrides: Mapping[str, str | None] | None = None) -> Instance:
     """Resolve the target: global flags over ACU_* environment over defaults.
 
-    ``overrides`` carries the global flags keyed by Instance field name;
-    per key the first set value wins (flag, ACU_* var - process environment
-    over a found .env - code default). Exclusion ``api_version`` (V27):
-    ``--api-version`` flag ? → else active ``matrix.yaml`` cell
-    ``default_api`` when matrix present → else ``DEFAULT_API_VERSION``;
-    ``ACU_API_VERSION`` is ignored.
+    ``overrides`` carries the global flags keyed by Instance field name
+    (plus optional ``cell`` for matrix cell id — not an Instance field).
+    Per key the first set value wins (flag, ACU_* var - process environment
+    over a found .env - code default). Exclusions (V27):
+
+    - ``api_version``: ``--api-version`` flag ? → else active matrix cell
+      ``default_api`` → else ``DEFAULT_API_VERSION``; never ``ACU_API_VERSION``.
+    - ``base_url``: ``--url`` flag ? → else ``ACU_BASE_URL`` (env/.env) →
+      else active cell ``base_url`` → else hard error naming sources.
+
+    Active cell = ``--cell`` id when set, else first cell when matrix
+    present; unknown id → hard error naming known ids; ``--cell`` without
+    matrix → hard error.
     No .env is fine (V3): the hard error comes only when a required value
     (base_url, password) is still unresolved after the merge, naming the
     missing key. ``ssh`` defaults from the base_url host when the key is
     absent; blank key = hosted path; tenant cmds hard-error when empty
     post-default.
     """
-    flags = {k: v for k, v in dict(overrides or {}).items() if v is not None}
+    raw = dict(overrides or {})
+    cell_id = raw.pop("cell", None)
+    flags = {k: v for k, v in raw.items() if v is not None}
     root = find_data_root()
-    # V27: resolve api_version outside env. Init kwargs beat dotenv/env,
-    # so always inject — ACU_API_VERSION (valid or invalid) is ignored.
-    if "api_version" not in flags:
-        # Local import avoids config↔matrix cycle (matrix imports Instance).
-        from .matrix import active_cell, load_matrix
+    # Local import avoids config↔matrix cycle (matrix imports Instance).
+    from .matrix import active_cell, load_matrix
 
-        matrix = load_matrix(root)
-        flags["api_version"] = (
-            active_cell(matrix).default_api
-            if matrix is not None
-            else DEFAULT_API_VERSION
+    matrix = load_matrix(root)
+    if cell_id is not None and matrix is None:
+        raise SystemExit(
+            f"--cell {cell_id!r} requires matrix.yaml "
+            "(none found under data root; see acu config init)"
         )
+    cell = active_cell(matrix, cell_id) if matrix is not None else None
+    # V27: resolve api_version outside env. Init kwargs beat dotenv/env,
+    # so always inject when flag absent — ACU_API_VERSION is ignored.
+    if "api_version" not in flags:
+        flags["api_version"] = (
+            cell.default_api if cell is not None else DEFAULT_API_VERSION
+        )
+    # V27: base_url from cell only when flag + env/.env leave it unset.
     env_file = root / ".env" if root is not None else None
+    if "base_url" not in flags and cell is not None:
+        env_has_url = bool(os.environ.get("ACU_BASE_URL"))
+        if not env_has_url:
+            file_vals = read_env_values(env_file) if env_file is not None else {}
+            if not file_vals.get("base_url"):
+                flags["base_url"] = cell.base_url
     try:
         # _env_file is a real BaseSettings init override; the synthesized
         # field-only __init__ signature hides it from the type checker

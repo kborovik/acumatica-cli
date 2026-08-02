@@ -4,6 +4,15 @@
 
 ### Added
 
+- **`matrix.yaml` multi-host pin+where (V27/V44):** ordered `cells` with
+  `id`+`erp`+`default_api`+`base_url`. Global `--cell` selects a cell
+  (omit → first). Active cell sources `Instance.api_version` and `base_url`
+  when flag/env leave them unset. Retires `target.yaml`.
+- **`acu check` lifecycle (V47):** cold
+  `delete → create → apply → run → diff → delete` per matrix cell. Requires
+  matrix + SSH + tenant. `--all` walks cells continue-on-fail + aggregate
+  exit; never exit 2 (diff drift = cell fail). Distinct from
+  `acu config check` preflight.
 - **Overlays in `config init` template (V44):** scaffold `overlays/README.md` +
   `overlays/default-24.200.001/` (KitAssembly Type `Assembly` for lab 25r1 /
   Default half `24.200.001`). Future halves = new `overlays/default-<half>/`
@@ -12,7 +21,12 @@
   `acu diff` append `overlays/default-<api>/` config seed dirs when present;
   `acu run` replaces same-basename files from
   `overlays/default-<api>/scenario/`. Explicit path args stay fully manual.
-  `api` = resolved `Instance.api_version` (`target.yaml` `default_api`).
+  `api` = resolved `Instance.api_version` (matrix cell `default_api`).
+
+### Changed
+
+- **`config init` scaffolds `matrix.yaml`** (one default cell); omits sticky
+  `ACU_BASE_URL` when the cell carries where. No `target.yaml`.
 
 ## [v0.23.1] - 2026-08-02
 

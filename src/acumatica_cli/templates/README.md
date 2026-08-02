@@ -9,7 +9,8 @@ Tenant Factory class). Single full seed — no `--flavor`.
 
 ```sh
 # 1. Credentials in .env (ACU_PASSWORD, ACU_TENANT, …)
-#    Default API pin = committed target.yaml default_api (not .env)
+#    Default API pin + REST where = committed matrix.yaml cell
+#    (default_api + base_url; not sticky ACU_BASE_URL / ACU_API_VERSION)
 acu config check
 
 # 2. Publish Bootstrap (features + contract from config/bootstrap/)
@@ -31,6 +32,9 @@ acu state
 # warm gate: once-capital only — additive buy/sell moves numeric observations
 acu run scenario/10-seed-capital.yaml && acu state --assert-unchanged
 
+# 7. Cold matrix lifecycle (SSH + tenant; optional multi-cell --all)
+# acu check --yes
+
 # Optional: re-seed from live (inverse of apply; always under config/)
 # acu extract --out . --force
 ```
@@ -42,6 +46,7 @@ Bare `acu apply` / `acu diff` also prefer `config/` when those trees exist.
 
 | Path | Role |
 |------|------|
+| `matrix.yaml` | Multi-host pin+where: cells `id`+`erp`+`default_api`+`base_url` (V27); `--cell` selects |
 | `config/bootstrap/` | Company, features, credit terms (Bootstrap contract is package SoT — never scaffolded) |
 | `config/baseline/` | GL foundation (COA, ledger, subaccounts, UOMs) |
 | `config/setup/` | Financial year, master calendar, open periods |

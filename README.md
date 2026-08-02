@@ -21,17 +21,17 @@ uv tool install git+https://github.com/kborovik/acu-cli.git
 
 acu config init --host erp.example.com my-erp
 cd my-erp                                # edit .env: set ACU_PASSWORD, ACU_TENANT
-                                         # Default API pin = target.yaml default_api
+                                         # pin+where = matrix.yaml cell (default_api + base_url)
                                          # start from a brand-new empty tenant
 
-acu config check                         # read-only preflight (incl. target.yaml)
+acu config check                         # read-only preflight (incl. matrix.yaml)
 acu tenant create --login DEV            # create + bootstrap (SSH; --id optional)
 # or hosted: acu --tenant DEV bootstrap
 acu --tenant DEV apply config/           # seed config/{bootstrap,baseline,setup,master}/
 acu --tenant DEV run scenario/           # once capital → buy → build → sell
 acu --tenant DEV diff config/            # prove zero drift (exit 2 on drift)
 acu --tenant DEV state                   # capture state/ trial-balance
-acu --tenant DEV run scenario/           # replay transaction scenarios
+acu check --yes --tenant DEV             # cold lifecycle create→apply→run→diff→delete
 ```
 
 Bare `apply` / `diff` (no path args) also prefer `config/` when those trees exist.
@@ -53,7 +53,7 @@ acu bootstrap --export AcuBootstrap.zip  # import + publish on SM204505
 ## CLI map
 
 ```text
-acu [--tenant NAME] [--url URL] [--ssh USER@HOST] [--api-version V]
+acu [--cell ID] [--tenant NAME] [--url URL] [--ssh USER@HOST] [--api-version V]
     [--username U] [--password P] [--version] [--completion [SHELL]]
 │
 ├── tenant                            tenant CRUD (ac.exe over SSH — control plane)
@@ -69,6 +69,7 @@ acu [--tenant NAME] [--url URL] [--ssh USER@HOST] [--api-version V]
 ├── apply [--dry-run] [FILES...]      push YAML via REST (idempotent PUT upserts)
 ├── diff  [FILES...]                  drift check vs the live tenant (exit 2 on drift)
 ├── run   [--dry-run] [FILES...]      execute transaction scenario YAML (exit 1 on any miss)
+├── check [--all] [--yes] [--tenant L] cold lifecycle create→apply→run→diff→delete (V47)
 ├── state [--out DIR] [--diff] [--assert-unchanged] [--dry-run] [FILES...]
 │                                     capture derived state into state/ (not seed)
 ├── extract [--out DIR] [--only NAME]... [--force] [--dry-run]
@@ -80,9 +81,9 @@ acu [--tenant NAME] [--url URL] [--ssh USER@HOST] [--api-version V]
 ├── schema [--out DIR]                dump the endpoint's OpenAPI schema (swagger.json)
 │
 └── config                            configuration ops
-    ├── init [--host HOST] [DIR]      scaffold full data repo (config/, scenario/, target.yaml)
+    ├── init [--host HOST] [DIR]      scaffold full data repo (config/, scenario/, matrix.yaml)
     ├── show                          print the resolved config as a complete .env
-    └── check [--strict]              preflight: discovery, secrets, target, REST, endpoints, SSH
+    └── check [--strict]              preflight: discovery, secrets, matrix, REST, endpoints, SSH
 ```
 
 `apply` and `diff` without FILES prefer `config/<name>/` when any seed child exists under `config/`; otherwise root `bootstrap/`, `baseline/`, `setup/`, then `master/` when present.
@@ -132,13 +133,13 @@ There is no `--flavor`.
 | `state/` | committed derived-state observations (evidence, not seed; money/qty fixed-point) |
 | `inventory/` | engagement: offline snapshot tables from `acu inventory` (not seed; not SEED_DIRS) |
 | `findings/` | engagement: `acu reconcile` cross-check output (never apply path) |
-| `target.yaml` | committed verified matrix: `erp` + `default_api` (what, not where) |
-| `.env` | where to apply and who signs in, every key an `ACU_*` variable |
+| `matrix.yaml` | multi-host pin+where: cells `id`+`erp`+`default_api`+`base_url` (V27); `--cell` selects |
+| `.env` | secrets + optional where override (`ACU_*`); never Default API pin |
 
 Legacy data repos may still keep root `bootstrap/`…`master/`; bare `apply`/`diff` prefer `config/` when present and never merge both trees.
 
 Files in each directory apply alphabetically; the numbered prefixes (`10-`, `20-`, and so on) encode dependency order.
-Commit `target.yaml` with the seeds so every clone knows the verified ERP line and Default API generation.
+Commit `matrix.yaml` with the seeds so every clone knows verified ERP line, Default API half, and REST where per cell.
 
 Seed YAML is state: `apply` upserts it, `diff` proves it.
 `acu extract` is the inverse of `apply`: GET live tenant rows into seed YAML under `config/{bootstrap,baseline,setup,master}/` (hard-cut).
@@ -163,7 +164,8 @@ Dual-served entities (on both Bootstrap and Default) need an explicit `endpoint:
 | `default` | `Default/<api_version>` — tracks the resolved API version |
 | `Bootstrap/1.4.0` or `Default/25.200.001` | literal pin (ignores the resolved Default version) |
 
-`api_version` resolves as `--api-version` flag, else `target.yaml` `default_api` when present, else code default `25.200.001` (never `ACU_API_VERSION` in `.env`).
+`api_version` resolves as `--api-version` flag, else active `matrix.yaml` cell `default_api`, else code default `25.200.001` (never `ACU_API_VERSION` in `.env`).
+`base_url` resolves as `--url`, else `ACU_BASE_URL`, else active cell `base_url`.
 Prefer symbolic `default` over a pinned `Default/25.200.001` so the seed tree travels with the dataset pin.
 
 ## Installation
@@ -187,15 +189,14 @@ Verify with `acu --version`.
 
 ## Configuration
 
-Everything lives in one `.env` file: *where* to apply and *who* signs in
-(`ACU_*` vars only).
-The Default contract API pin is **not** in `.env` — it
-lives in committed `target.yaml` (`default_api`).
+Secrets live in one `.env` file (`ACU_*` vars). Non-secret **where** and the
+Default contract pin live in committed `matrix.yaml` (cell `base_url` +
+`default_api`). Optional `ACU_BASE_URL` overrides cell where for ad-hoc probes.
 
 ```sh
-ACU_BASE_URL=http://acu-dev1.vm.internal/AcumaticaERP  # required: REST root
+# ACU_BASE_URL optional when matrix.yaml cell carries base_url
 ACU_TENANT=LAB5                                        # sign-in name of the tenant API sessions use
-# ACU_SSH omitted → defaults to Administrator@acu-dev1.vm.internal
+# ACU_SSH omitted → defaults to Administrator@ + resolved base_url host
 # ACU_SSH=                                         # hosted opt-out (blank key)
 ACU_USER=admin                                         # optional, defaults to admin
 ACU_PASSWORD=...                                       # required for live commands
@@ -205,18 +206,22 @@ There is no `ACU_API_VERSION` env key (unknown `ACU_*` vars are ignored).
 Ad-hoc override: `acu --api-version 24.200.001 …` (version half only, never
 `Default/25.200.001` — a full path would nest as `/entity/Default/Default/...`).
 
-The committed `target.yaml` next to `.env` declares the verified matrix (what, not where) and is the **sole data-repo Default pin**:
+Committed `matrix.yaml` is the **sole data-repo pin+where registry** (1..N cells):
 
 ```yaml
-erp: "26.101.0225"           # claimed product line/build
-default_api: "25.200.001"    # sources Instance.api_version when --api-version absent
+cells:
+  - id: "default"
+    erp: "26.101.0225"           # claimed product line/build
+    default_api: "25.200.001"    # sources Instance.api_version when --api-version absent
+    base_url: "http://acu-dev1.vm.internal/AcumaticaERP"
 ```
 
-When `target.yaml` is present, live commands resolve `api_version` from
-`default_api` (source-merge). `acu config check` reports
-`ok target (api_version from default_api=…; erp=… claimed)`.
-Missing `target.yaml` only warns on check unless you pass `--strict` (then
-the code default `25.200.001` is used).
+`--cell <id>` selects a cell (omit → first cell). When present, live commands
+source `api_version` from cell `default_api` and `base_url` from the cell when
+flag/env leave them unset. `acu config check` reports
+`ok matrix (cell=…; api_version from default_api=…; …)`.
+Missing `matrix.yaml` only warns on `config check` unless you pass `--strict`.
+`acu check` (lifecycle) **requires** matrix.
 
 ### Multi-host matrix (V44)
 
@@ -226,7 +231,7 @@ One **trunk seed** in the data repo serves every host. Version fan-out is
 | Piece | Role |
 | ----- | ---- |
 | Trunk seed | Canonical `config/` + `scenario/` (newest supported matrix) |
-| Per-host `target.yaml` | Pin `erp` + `default_api` from live `acu config check` |
+| `matrix.yaml` cells | Each host: `id`+`erp`+`default_api`+`base_url`; `--cell` / `acu check --all` |
 | Optional overlays | Surgical seed deltas keyed by Default half (e.g. `overlays/default-24.200.001/`) |
 | OpenAPI | Live `acu schema` dump only (gitignored); never multi-version swagger trees in package or data repo |
 
@@ -236,18 +241,21 @@ One **trunk seed** in the data repo serves every host. Version fan-out is
 **Bare compose (pin auto):** when path args are omitted, `acu apply` /
 `acu diff` append overlay config seed dirs when present; `acu run` replaces
 same-basename scenario files from the pin overlay. Pin =
-resolved `api_version` (`target.yaml` `default_api`). Explicit path args
+resolved `api_version` (matrix cell `default_api`). Explicit path args
 disable auto-compose.
 
 ```sh
-# target.yaml default_api: 24.200.001 → uses overlays/default-24.200.001/
-acu apply
-acu run
-acu diff
+# matrix cell default_api: 24.200.001 → uses overlays/default-24.200.001/
+acu --cell lab25 apply
+acu --cell lab25 run
+acu --cell lab25 diff
 
 # explicit path args (no auto) — later path wins same keys
 acu apply config/ overlays/default-24.200.001/
 acu diff config/ overlays/default-24.200.001/
+
+# cold lifecycle every cell (SSH + tenant required)
+acu check --all --yes --tenant LAB5
 ```
 
 Add a future half by creating `overlays/default-<new-half>/` with the
@@ -259,19 +267,19 @@ Sibling data-repo retirement of release branches:
 
 Worth knowing:
 
-- The file is found by walking up from the current directory, so any subdirectory of the data repo works.
-- Without a `.env`, global flags plus the process environment supply the full configuration.
-- When `ACU_SSH` is **absent**, acu defaults to `Administrator@` + the `ACU_BASE_URL` hostname.
+- The `.env` file is found by walking up from the current directory, so any subdirectory of the data repo works.
+- Without a `.env`, global flags plus the process environment (and matrix cell where) supply the configuration.
+- When `ACU_SSH` is **absent**, acu defaults to `Administrator@` + the resolved base_url hostname.
   A **present blank** `ACU_SSH=` is the hosted opt-out.
-  Only `acu tenant` requires a non-empty value post-default.
-- `acu config show` prints the resolved `.env` (password excluded; never `ACU_API_VERSION`) and comments `erp` / `default_api` plus the `api_version` source when `target.yaml` is present.
+  Only `acu tenant` / `acu check` require a non-empty value post-default.
+- `acu config show` prints the resolved `.env` (password excluded; never `ACU_API_VERSION`) and comments active cell id/erp/default_api/base_url plus api_version source when `matrix.yaml` is present.
 - Redirect it to turn resolved state into a working config: `acu config show > .env`.
 
 Verify before touching anything live:
 
 ```sh
-acu config check           # discovery, secrets, target, REST, endpoints, SSH
-acu config check --strict  # missing target.yaml becomes fail
+acu config check           # discovery, secrets, matrix, REST, endpoints, SSH
+acu config check --strict  # missing matrix.yaml becomes fail
 acu apply --dry-run        # show what would be written, write nothing
 ```
 

@@ -1,7 +1,7 @@
 # Overlays (Default API half)
 
 Surgical rewrites for hosts whose **Default contract half** differs from
-trunk. Keyed by `target.yaml` `default_api`, not ERP marketing year.
+trunk. Keyed by `matrix.yaml` cell `default_api`, not ERP marketing year.
 
 ```
 overlays/default-<default_api>/
@@ -43,7 +43,7 @@ halves only need an overlay when the contract rejects trunk fields.
 
 ## Future halves
 
-1. Set host-true `target.yaml` (`erp` + `default_api`) from `acu config check`.
+1. Set host-true `matrix.yaml` cell (`erp` + `default_api` + `base_url`) from `acu config check`.
 2. If bare apply/run fails on a contract field, add
    `overlays/default-<that-half>/…` with the minimal rewrite.
 3. Re-run bare `acu apply` / `acu run` / `acu diff` (pin auto picks it up).

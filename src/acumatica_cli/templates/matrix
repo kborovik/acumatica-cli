@@ -1,0 +1,9 @@
+# scaffolded by `acu config init` — multi-host pin+where registry (V27).
+# Each cell: id + erp + default_api (version half only) + base_url (REST root).
+# First cell is default when --cell is omitted. --cell selects by id.
+# Sole data-repo Default pin + non-secret where. Never secrets. Never target.yaml.
+cells:
+  - id: "default"
+    erp: "26.101.0225"
+    default_api: "25.200.001"
+    base_url: "http://erp.example.com/AcumaticaERP"

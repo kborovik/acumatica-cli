@@ -166,12 +166,12 @@ T189|x|investigate User Roles membership apply/diff for built-in soadmin/apadmin
 T190|x|CHANGELOG Unreleased + suite green after matrix/apply-error work|V19,V13,T183,T184,T186
 T191|x|optional later: curated compat profile by Default half for proven rewrites; no full swagger trees|V44,V11
 T192|x|matrix.yaml load+models (cells id/erp/default_api/base_url); unique ids; ordered; drop target.yaml loader|V27,I.data
-T193|.|global --cell; default first cell; resolve base_url+api_version+erp from active cell|V27,I.cmd
-T194|.|config init/show/check: matrix surface; init one-cell scaffold; retire target template|V27,V28,I.cmd
-T195|.|acu check lifecycle create→apply→run→diff→delete; --yes; tenant+SSH gates|V47,I.cmd
-T196|.|acu check --all continue+aggregate exit; per-cell progress (V9)|V47,V9,I.cmd
-T197|.|offline tests: matrix load/select; resolve order; check dry/mock paths; no target.yaml|V13,V27,T192,T193,T195
-T198|.|docs README+templates+CHANGELOG matrix.yaml + acu check; suite green|V12,V19,V44,T192,T195
+T193|x|global --cell; default first cell; resolve base_url+api_version+erp from active cell|V27,I.cmd
+T194|x|config init/show/check: matrix surface; init one-cell scaffold; retire target template|V27,V28,I.cmd
+T195|x|acu check lifecycle create→apply→run→diff→delete; --yes; tenant+SSH gates|V47,I.cmd
+T196|x|acu check --all continue+aggregate exit; per-cell progress (V9)|V47,V9,I.cmd
+T197|x|offline tests: matrix load/select; resolve order; check dry/mock paths; no target.yaml|V13,V27,T192,T193,T195
+T198|x|docs README+templates+CHANGELOG matrix.yaml + acu check; suite green|V12,V19,V44,T192,T195
 
 ## §B BUGS
 

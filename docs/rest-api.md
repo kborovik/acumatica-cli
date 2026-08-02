@@ -117,11 +117,11 @@ raw hint — never silent skip (V12).
 The Default contract version half is **not** an env pin. Resolution:
 
 1. `--api-version` global flag (ad-hoc override; version half only)
-2. else data-repo `target.yaml` `default_api` when the file is present
+2. else data-repo `matrix.yaml` `default_api` when the file is present
 3. else code default `25.200.001`
 
 There is no `ACU_API_VERSION` key — unknown `ACU_*` vars are ignored.
-`acu config show` never emits `ACU_API_VERSION`; when `target.yaml` is
+`acu config show` never emits `ACU_API_VERSION`; when `matrix.yaml` is
 present it comments `erp` / `default_api` and notes the `api_version`
 source. Dual-source match-gate (env pin must equal `default_api`) is
 retired: source-merge means a present target *is* the configured version
@@ -129,7 +129,7 @@ unless the flag overrides.
 
 ### Multi-host matrix (V44)
 
-Data repos pin hosts with per-checkout `target.yaml` (`erp` + `default_api`)
+Data repos pin hosts with per-checkout `matrix.yaml` (`erp` + `default_api`)
 on a single trunk seed. Optional Default-half overlays live under
 `overlays/default-<default_api>/` (scaffolded by `config init`). Bare
 `apply` / `diff` / `run` auto-compose the pin overlay when path args are
@@ -148,13 +148,13 @@ should not need curl to see which field the contract rejected.
 
 ### Live ERP build probe
 
-`target.yaml` field `erp` is the claimed dataset matrix line (V27).
+`matrix.yaml` field `erp` is the claimed dataset matrix line (V27).
 When `GET /entity` returns the 26.x wrapper and
 `version.acumaticaBuildVersion` is a non-empty string, `config check`
 compares that live id to the claimed `erp` on **major.minor** (first two
 dotted segments). Match → `ok erp (…)`; mismatch → `fail erp: …`.
 
-When the body is a bare array (no build id), or `target.yaml` is not in
+When the body is a bare array (no build id), or `matrix.yaml` is not in
 the match path, check emits:
 
 ```text
