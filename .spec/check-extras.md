@@ -84,8 +84,8 @@ for granular /sdd:check runs.
 ## §V.2 — bootstrap source closure (extracted from SPEC.md §V.2)
 
 - package-embedded config = what — never company surface hardcoded in plugin source
-- bootstrap feature set sources from data-repo `bootstrap/features.yaml` (absent → built-in six)
-- bootstrap endpoint contract sources from data-repo `bootstrap/project.xml` when present (absent → packaged full company contract `Bootstrap/1.0.0`)
+- bootstrap feature set sources from data-repo dual path `config/bootstrap/features.yaml` then `bootstrap/features.yaml` (absent → built-in six)
+- bootstrap endpoint contract = packaged `bootstrap_project.xml` sole SoT — never data-repo `project.xml` override; present data-repo file → hard error on bootstrap/publish/load_contract
 
 ## §V.3 — discovery resolution matrix (extracted from SPEC.md §V.3)
 
@@ -97,7 +97,7 @@ for granular /sdd:check runs.
 ## §V.20 — seed endpoint resolution (extracted from SPEC.md §V.20)
 
 - literal forms: `Bootstrap/<ver>` | `Default/<ver>`; symbolic: `bootstrap` | `default`
-- symbolic `bootstrap` → active package version @ load (data-repo `bootstrap/project.xml` when present, else packaged full company contract)
+- symbolic `bootstrap` → active package version @ load from packaged `bootstrap_project.xml` only
 - symbolic `default` → `Default/<Instance.api_version>` @ HTTP via `client._url` (never load-rewritten)
 - §B.8 class — Bootstrap `Currency` vs Default CM201000 list; symptom returns behind clean apply
 
@@ -136,10 +136,10 @@ for granular /sdd:check runs.
 
 ## §V.21 — contract identity (extracted from SPEC.md §V.21)
 
-- entity or field shape change in active contract XML ! version bump
-- active paths: `config/bootstrap/project.xml` or `bootstrap/project.xml` or packaged full company fallback
+- entity or field shape change in packaged `bootstrap_project.xml` ! version bump
+- sole active path: packaged `bootstrap_project.xml` (never data-repo `project.xml`)
 - version held → older build's digest gate republishes prior contract under same identity (silent downgrade, no version signal in seed failures)
-- single contract line `Bootstrap/1.0.0` (not dual minimal/full versions)
+- single contract line (identity = Endpoint name+version in package XML; not dual minimal/full versions)
 - version-ref parity scan → existing §V.21 parity recipe above
 
 ## §V.28 — init-template recipe (extracted from SPEC.md §V.28)
@@ -149,7 +149,7 @@ for granular /sdd:check runs.
 - package templates ! derive from sibling `acumatica-gitops` seed trees; prune non-seed extras (`demo/`, Makefile, live `.env`, committed `state/`)
 - package `templates/**/*.yaml` ! data only — no `#` comments (full-line `^\s*#` or trailing `\s#\s`); unit gate offline
 - narrative/docs comments ! sibling `acumatica-gitops` separate files, never inlined package YAML
-- full company contract identity `Bootstrap/1.0.0` — not a second Bootstrap identity
+- never scaffolds `project.xml` — Bootstrap contract stays packaged SoT (V2/V21); not a second Bootstrap identity in data repo
 - `config/views/` TB only w/ EndingBalance-class numeric money capture (V33)
 - inventory-summary ! golden this pass
 - golden `scenario/` lifecycle: `10-seed-capital` (once+present) + `20-buy` + `30-build` + `40-sell` + README (gitops names)
