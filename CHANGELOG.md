@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## [v0.23.1] - 2026-08-02
+
 ### Added
 
 - **Multi-host matrix docs (V44):** trunk seed + per-host `target.yaml` +
