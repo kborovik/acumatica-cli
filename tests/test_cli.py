@@ -910,8 +910,8 @@ def test_url_flag_rejected_after_subcommand(wired: Instance) -> None:
 
 
 def test_config_init_scaffolds_data_repo(tmp_path: Path) -> None:
-    # I.cmd config init / V28/T108: single full seed under config/ + scenario/
-    # (T82: project.xml always scaffolded; T113: config/views observer);
+    # I.cmd config init / V28/T108/T179: single full seed under config/ +
+    # scenario/; never scaffolds project.xml (package SoT); T113 views;
     # runs where V3 discovery finds no .env (tmp_path has none up-tree)
     repo = tmp_path / "repo"
     result = CliRunner().invoke(
@@ -933,7 +933,6 @@ def test_config_init_scaffolds_data_repo(tmp_path: Path) -> None:
         "config/bootstrap/company.yaml",
         "config/bootstrap/credit-terms.yaml",
         "config/bootstrap/features.yaml",
-        "config/bootstrap/project.xml",
         "config/setup/10-financial-year.yaml",
         "config/setup/20-master-calendar.yaml",
         "config/setup/30-open-periods.yaml",
@@ -946,16 +945,12 @@ def test_config_init_scaffolds_data_repo(tmp_path: Path) -> None:
     ]
     for rel in expected:
         assert (repo / rel).is_file(), rel
+    assert not (repo / "config" / "bootstrap" / "project.xml").exists()
     assert not (repo / "bootstrap").exists()
     assert not (repo / "master").exists()
     assert not (repo / "snapshot").exists()
     writes = [ln for ln in result.output.splitlines() if ln.startswith("write ")]
     assert len(writes) == len(INIT_TEMPLATES)
-    # T81/T82: scaffolded contract is Bootstrap/1.3.0 full company
-    assert (
-        'name="Bootstrap" version="1.3.0"'
-        in (repo / "config" / "bootstrap" / "project.xml").read_text()
-    )
     target = (repo / "target.yaml").read_text()
     assert "default_api:" in target
     assert "erp:" in target

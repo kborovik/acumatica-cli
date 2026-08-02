@@ -189,7 +189,7 @@ T176|x|docs + help: period token vs pinned views; ERP business-date skew; CHANGE
 T177|x|e2e or offline cold seed-capital run green w/ token after mock month change; suite green|V4,V13,V43,T174,T175
 T178|x|drop data-repo project.xml resolve; load_contract always packaged bootstrap_project.xml; present data-repo file → hard error on bootstrap/publish path|V2,V21,I.data,I.cmd
 T179|x|config init never scaffolds project.xml; drop INIT_TEMPLATES sentinel + special-case package copy|V28,I.cmd,T178
-T180|.|offline tests: package-only contract; present override → hard error; flip hybrid prefer/override cases|V13,V2,V21,T178,T179
+T180|x|offline tests: package-only contract; present override → hard error; flip hybrid prefer/override cases|V13,V2,V21,T178,T179
 T181|.|docs README + demo-seed + templates README + seed_catalog comments + CHANGELOG Unreleased — package SoT; data repos must not keep project.xml|V12,V19,T178,T179
 T182|.|suite green make check after package-SoT bootstrap contract|V13,T178,T179,T180,T181
 

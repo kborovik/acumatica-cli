@@ -112,8 +112,10 @@ def scenario_tenant(
 
 
 def test_full_scaffold_layout(scenario_repo: Path) -> None:
-    """T80/T110/T113/V28: config/ umbrella + lifecycle + TB views + README."""
-    assert (scenario_repo / "config" / "bootstrap" / "project.xml").is_file()
+    """T80/T110/T113/T179/V28: config/ umbrella + lifecycle + TB views + README."""
+    # Bootstrap contract is package SoT — never scaffolded (T178/T179)
+    assert not (scenario_repo / "config" / "bootstrap" / "project.xml").exists()
+    assert (scenario_repo / "config" / "bootstrap" / "features.yaml").is_file()
     assert (scenario_repo / "config" / "master").is_dir()
     assert (scenario_repo / "scenario" / "10-seed-capital.yaml").is_file()
     assert (scenario_repo / "scenario" / "20-buy.yaml").is_file()

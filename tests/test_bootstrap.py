@@ -110,41 +110,29 @@ def test_load_features_prefers_config_bootstrap(tmp_path: Path) -> None:
     assert bootstrap.load_features(tmp_path) == ["Inventory", "Warehouse"]
 
 
-def test_load_contract_xml_prefers_config_bootstrap(tmp_path: Path) -> None:
-    # T85/V30: config/bootstrap/project.xml wins over root bootstrap/
-    # version tracks packaged line so V21 parity greps stay clean
-    root_contract = b"""\
-<Customization level="" description="root" product-version="26.101">
-  <EntityEndpoint>
-    <Endpoint xmlns="http://www.acumatica.com/entity/maintenance/5.31"
-              name="Bootstrap" version="1.3.0" systemContractVersion="4">
-      <TopLevelEntity name="RootOnly" screen="CS000000">
-        <Fields><Field name="ID" type="StringValue" /></Fields>
-      </TopLevelEntity>
-    </Endpoint>
-  </EntityEndpoint>
-</Customization>
-"""
-    cfg_contract = b"""\
-<Customization level="" description="config" product-version="26.101">
-  <EntityEndpoint>
-    <Endpoint xmlns="http://www.acumatica.com/entity/maintenance/5.31"
-              name="Bootstrap" version="1.3.0" systemContractVersion="4">
-      <TopLevelEntity name="ConfigOnly" screen="CS000000">
-        <Fields><Field name="ID" type="StringValue" /></Fields>
-      </TopLevelEntity>
-    </Endpoint>
-  </EntityEndpoint>
-</Customization>
-"""
+def test_load_contract_xml_rejects_data_repo_project_xml(tmp_path: Path) -> None:
+    # T178/V2/V21: package SoT — present data-repo project.xml hard-errors
+    # (prefer config/ then root order names the first hit).
     (tmp_path / "bootstrap").mkdir()
-    (tmp_path / "bootstrap" / "project.xml").write_bytes(root_contract)
+    (tmp_path / "bootstrap" / "project.xml").write_text("<Customization/>\n")
     (tmp_path / "config" / "bootstrap").mkdir(parents=True)
-    (tmp_path / "config" / "bootstrap" / "project.xml").write_bytes(cfg_contract)
+    (tmp_path / "config" / "bootstrap" / "project.xml").write_text("<Customization/>\n")
 
+    with pytest.raises(SystemExit, match=r"package SoT.*project\.xml"):
+        bootstrap.load_contract_xml(tmp_path)
+
+    # root-only path also rejected
+    (tmp_path / "config" / "bootstrap" / "project.xml").unlink()
+    with pytest.raises(SystemExit, match=r"bootstrap/project\.xml"):
+        bootstrap.load_contract_xml(tmp_path)
+
+
+def test_load_contract_xml_package_only(tmp_path: Path) -> None:
+    # No data-repo project.xml → always packaged full company surface
     name, entities = bootstrap.parse_endpoint(bootstrap.load_contract_xml(tmp_path))
     assert name == "Bootstrap/1.3.0"
-    assert entities == frozenset({"ConfigOnly"})
+    assert "Company" in entities
+    assert "OnlyInDataRepo" not in entities
 
 
 @pytest.mark.parametrize(
@@ -169,8 +157,7 @@ def test_package_zip_carries_the_bootstrap_endpoint() -> None:
     Verified vs 26.101.0225 by live import round-trip: the <Endpoint> child
     is the XmlSerializer form of Model.Endpoint in the entity/maintenance/5.31
     namespace; no .endpoint file is involved. Packaged contract is the single
-    full company surface (Bootstrap/1.3.0); data-repo bootstrap/project.xml
-    may still override when present (V2).
+    full company surface (Bootstrap/1.3.0 package SoT — V2/V21/T178).
     """
     ns = "{http://www.acumatica.com/entity/maintenance/5.31}"
     with zipfile.ZipFile(io.BytesIO(bootstrap.package_zip())) as zf:
@@ -501,20 +488,15 @@ def test_package_prefs_field_depth_curated_not_full_dac() -> None:
     assert "DfltVendorClassID" not in prefs_fields["APPreferences"]
 
 
-def test_package_zip_prefers_data_repo_contract(tmp_path: Path) -> None:
-    """Data-repo bootstrap/project.xml is the package endpoint when present (V2)."""
+def test_package_zip_rejects_data_repo_contract(tmp_path: Path) -> None:
+    """Present data-repo project.xml hard-errors; package never overrides (T178)."""
     (tmp_path / "bootstrap").mkdir()
-    # keep Bootstrap/<packaged-ver> so V21 parity greps stay clean; the
-    # distinguishing signal is a trimmed entity set (override wins over
-    # the packaged full company surface)
-    contract = b"""\
+    (tmp_path / "bootstrap" / "project.xml").write_bytes(
+        b"""\
 <Customization level="" description="data-repo full" product-version="26.101">
   <EntityEndpoint>
     <Endpoint xmlns="http://www.acumatica.com/entity/maintenance/5.31"
               name="Bootstrap" version="1.3.0" systemContractVersion="4">
-      <TopLevelEntity name="Company" screen="CS101500">
-        <Fields><Field name="AcctCD" type="StringValue" /></Fields>
-      </TopLevelEntity>
       <TopLevelEntity name="OnlyInDataRepo" screen="CS000000">
         <Fields><Field name="ID" type="StringValue" /></Fields>
       </TopLevelEntity>
@@ -522,15 +504,20 @@ def test_package_zip_prefers_data_repo_contract(tmp_path: Path) -> None:
   </EntityEndpoint>
 </Customization>
 """
-    (tmp_path / "bootstrap" / "project.xml").write_bytes(contract)
+    )
+    with pytest.raises(SystemExit, match=r"package SoT.*project\.xml"):
+        bootstrap.package_zip(root=tmp_path)
+
+
+def test_package_zip_uses_packaged_contract(tmp_path: Path) -> None:
+    """Without data-repo project.xml, zip carries packaged full company."""
     ns = "{http://www.acumatica.com/entity/maintenance/5.31}"
     with zipfile.ZipFile(io.BytesIO(bootstrap.package_zip(root=tmp_path))) as zf:
         root = ET.fromstring(zf.read("project.xml"))
     (endpoint,) = root.findall(f"EntityEndpoint/{ns}Endpoint")
     names = {e.get("name") for e in endpoint.findall(f"{ns}TopLevelEntity")}
-    assert names == {"Company", "OnlyInDataRepo"}
-    assert root.get("description") == "data-repo full"
-    # Graph plugin still spliced in
+    assert "Company" in names
+    assert "OnlyInDataRepo" not in names
     assert root.find("Graph") is not None
 
 

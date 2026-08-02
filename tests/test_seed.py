@@ -218,24 +218,18 @@ def test_apply_symbolic_default_tracks_configured_api_version(
     assert paths == {"/AcumaticaERP/entity/Default/24.200.001/UnitsOfMeasure"}
 
 
-def test_active_bootstrap_prefers_data_repo_contract(
+def test_active_bootstrap_rejects_data_repo_contract(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """Data-repo bootstrap/project.xml wins over the packaged full company (V2)."""
+    """Present data-repo project.xml hard-errors (V2/V21 package SoT)."""
     (tmp_path / "bootstrap").mkdir()
     (tmp_path / ".env").write_text("ACU_BASE_URL=https://example.com\n")
-    # version stays at the packaged number so parity (V21) greps stay clean;
-    # distinguishing signal is a trimmed override (OnlyInDataRepo) that the
-    # packaged full company surface does not serve
     (tmp_path / "bootstrap" / "project.xml").write_text(
         """\
 <Customization level="" description="data-repo contract" product-version="26.101">
   <EntityEndpoint>
     <Endpoint xmlns="http://www.acumatica.com/entity/maintenance/5.31"
               name="Bootstrap" version="1.3.0" systemContractVersion="4">
-      <TopLevelEntity name="Company" screen="CS101500">
-        <Fields><Field name="AcctCD" type="StringValue" /></Fields>
-      </TopLevelEntity>
       <TopLevelEntity name="OnlyInDataRepo" screen="CS000000">
         <Fields><Field name="ID" type="StringValue" /></Fields>
       </TopLevelEntity>
@@ -246,11 +240,23 @@ def test_active_bootstrap_prefers_data_repo_contract(
         encoding="utf-8",
     )
     monkeypatch.chdir(tmp_path)
+    with pytest.raises(SystemExit, match=r"package SoT.*project\.xml"):
+        seed.active_bootstrap()
+
+
+def test_active_bootstrap_package_only(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """No data-repo project.xml → packaged endpoint (T178/T180)."""
+    (tmp_path / ".env").write_text("ACU_BASE_URL=https://example.com\n")
+    monkeypatch.chdir(tmp_path)
     name, entities = seed.active_bootstrap()
     assert name == "Bootstrap/1.3.0"
-    assert "OnlyInDataRepo" in entities
-    assert "OnlyInDataRepo" not in seed.BOOTSTRAP_ENTITIES  # packaged full
-    text = "entity: OnlyInDataRepo\nkey: ID\nendpoint: bootstrap\nrecords:\n  - ID: X\n"
+    assert entities == seed.BOOTSTRAP_ENTITIES
+    text = (
+        "entity: Company\nkey: AcctCD\nendpoint: bootstrap\n"
+        "records:\n  - AcctCD: MAIN\n"
+    )
     assert seed.load_baseline(_write(tmp_path, text)).endpoint == "Bootstrap/1.3.0"
 
 
