@@ -127,6 +127,23 @@ source. Dual-source match-gate (env pin must equal `default_api`) is
 retired: source-merge means a present target *is* the configured version
 unless the flag overrides.
 
+### Multi-host matrix (V44)
+
+Data repos pin hosts with per-checkout `target.yaml` (`erp` + `default_api`)
+on a single trunk seed. Optional Default-half overlays are ordinary seed
+directories applied after trunk via path args — the CLI has no `--overlay`
+flag. Never commit multi-version OpenAPI trees; use `acu schema` live dumps.
+See README "Multi-host matrix" and
+[acumatica-gitops#2](https://github.com/kborovik/acumatica-gitops/issues/2).
+
+### HTTP error detail (V46)
+
+PUT and action POST failures raise `RuntimeError` with status plus
+`exceptionMessage` **and** nested field errors (`Field: {value, error}` under
+the body or `entity`, including detail rows). Status-only or top-level
+message alone is insufficient when field errors are present — operators
+should not need curl to see which field the contract rejected.
+
 ### Live ERP build probe
 
 `target.yaml` field `erp` is the claimed dataset matrix line (V27).

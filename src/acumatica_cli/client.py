@@ -295,8 +295,38 @@ class AcumaticaClient:
         return parse_entity_response(r)
 
     @staticmethod
+    def _field_errors(body: object, *, prefix: str = "") -> list[str]:
+        """Collect nested contract field errors (V46 / Type.error class).
+
+        Acumatica 422 bodies often keep a top-level ``exceptionMessage`` while
+        the actionable text lives on value wrappers: ``Field: {value, error}``
+        (and the same shape under ``entity`` / detail lists). Walk the tree and
+        emit ``path: message`` lines for every non-empty ``error`` string on a
+        value-wrapper dict. Non-wrapper dicts recurse by key; lists by index.
+        """
+        found: list[str] = []
+        if isinstance(body, dict):
+            err = body.get("error")
+            # Field wrapper (value + error) or leaf error bag — not top-level
+            # envelope keys like exceptionMessage/message/error alone.
+            keys = set(body.keys())
+            is_field = "value" in keys or keys <= {"error", "value", "id", "delete"}
+            if isinstance(err, str) and err.strip() and is_field and prefix:
+                found.append(f"{prefix}: {err.strip()}")
+            for key, child in body.items():
+                if key in ("error", "exceptionMessage", "exceptionType", "message"):
+                    continue
+                child_prefix = f"{prefix}.{key}" if prefix else str(key)
+                found.extend(AcumaticaClient._field_errors(child, prefix=child_prefix))
+        elif isinstance(body, list):
+            for i, child in enumerate(body):
+                child_prefix = f"{prefix}[{i}]" if prefix else f"[{i}]"
+                found.extend(AcumaticaClient._field_errors(child, prefix=child_prefix))
+        return found
+
+    @staticmethod
     def _checked(r: httpx.Response) -> httpx.Response:
-        """Surface Acumatica's exceptionMessage instead of a bare status code."""
+        """Surface exceptionMessage + nested Field.error (V46), not status alone."""
         if r.is_error:
             detail = ""
             try:
@@ -314,6 +344,10 @@ class AcumaticaClient:
                         detail = (
                             inner.get("exceptionMessage") or inner.get("message") or ""
                         )
+                    field_errs = AcumaticaClient._field_errors(body)
+                    if field_errs:
+                        joined = "; ".join(field_errs)
+                        detail = f"{detail}; {joined}" if detail else joined
                     if not detail:
                         # last resort: compact JSON (422 bodies are small)
                         import json

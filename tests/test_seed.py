@@ -498,9 +498,10 @@ def test_apply_puts_every_record(
     baseline = seed.load_baseline(_write(tmp_path, BASELINE))
     recorder = Recorder()
 
-    n = seed.apply(_client(instance, recorder), baseline)
+    n, errors = seed.apply(_client(instance, recorder), baseline)
 
     assert n == 2
+    assert errors == []
     assert [r.method for r in recorder.requests] == ["PUT", "PUT"]
     assert "PUT UnitsOfMeasure [KG]" in capsys.readouterr().out
 
@@ -511,9 +512,10 @@ def test_apply_dry_run_makes_no_calls(
     baseline = seed.load_baseline(_write(tmp_path, BASELINE))
     recorder = Recorder()
 
-    n = seed.apply(_client(instance, recorder), baseline, dry_run=True)
+    n, errors = seed.apply(_client(instance, recorder), baseline, dry_run=True)
 
     assert n == 2
+    assert errors == []
     assert recorder.requests == []
     assert "would PUT UnitsOfMeasure [KG]" in capsys.readouterr().out
 
@@ -1480,9 +1482,10 @@ def test_apply_action_dry_run_makes_no_calls(
     action = _action(tmp_path)
     recorder = Recorder()
 
-    n = seed.apply(_client(instance, recorder), action, dry_run=True)
+    n, errors = seed.apply(_client(instance, recorder), action, dry_run=True)
 
     assert n == 1
+    assert errors == []
     assert recorder.requests == []
     assert "would invoke GenerateCalendar" in capsys.readouterr().out
 
@@ -1600,3 +1603,74 @@ def test_diff_nested_reports_changed_and_missing(
     assert drifts == [
         "Vendor [SHENZHEN].MainContact.Address.Country: source='US' live='CA'"
     ]
+
+
+# -- V45: apply per-record failure isolation (T184/T185) --
+
+
+class _SequencedPutRecorder(Recorder):
+    """Recorder whose PUT responses come from a queue (then default 200)."""
+
+    def __init__(self, put_responses: list[httpx.Response]) -> None:
+        super().__init__()
+        self._put_responses = list(put_responses)
+
+    def __call__(self, request: httpx.Request) -> httpx.Response:
+        if request.method == "PUT":
+            self.requests.append(request)
+            if self._put_responses:
+                return self._put_responses.pop(0)
+            return httpx.Response(200, json={})
+        return super().__call__(request)
+
+
+def test_apply_first_record_fail_continues_later(
+    tmp_path: Path, instance: Instance, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """V45/T185: first-record fail still applies later records; returns errors."""
+    baseline = seed.load_baseline(_write(tmp_path, BASELINE))
+    recorder = _SequencedPutRecorder(
+        [
+            httpx.Response(
+                422,
+                json={
+                    "exceptionMessage": (
+                        "Inserting  'UnitsOfMeasure' record raised at least one error."
+                    ),
+                    "UOM": {
+                        "value": "KG",
+                        "error": "Error: UOM 'KG' is reserved.",
+                    },
+                },
+            ),
+            httpx.Response(200, json={}),
+        ]
+    )
+    n, errors = seed.apply(_client(instance, recorder), baseline)
+    assert n == 1
+    assert len(errors) == 1
+    assert "UnitsOfMeasure [KG]" in errors[0]
+    assert "reserved" in errors[0]
+    puts = [r for r in recorder.requests if r.method == "PUT"]
+    assert len(puts) == 2
+    out = capsys.readouterr()
+    assert "PUT UnitsOfMeasure [HOUR]" in out.out
+    assert "UnitsOfMeasure [KG]" in out.err
+
+
+def test_apply_multi_error_summary_all_fail(
+    tmp_path: Path, instance: Instance, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """V45/T185: every record failure collected; no silent partial."""
+    baseline = seed.load_baseline(_write(tmp_path, BASELINE))
+    blow = httpx.Response(500, json={"exceptionMessage": "server blew up"})
+    recorder = _SequencedPutRecorder([blow, blow])
+    n, errors = seed.apply(_client(instance, recorder), baseline)
+    assert n == 0
+    assert len(errors) == 2
+    assert "UnitsOfMeasure [KG]" in errors[0]
+    assert "UnitsOfMeasure [HOUR]" in errors[1]
+    assert all("server blew up" in e for e in errors)
+    err = capsys.readouterr().err
+    assert "UnitsOfMeasure [KG]" in err
+    assert "UnitsOfMeasure [HOUR]" in err

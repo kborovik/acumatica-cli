@@ -218,6 +218,35 @@ When `target.yaml` is present, live commands resolve `api_version` from
 Missing `target.yaml` only warns on check unless you pass `--strict` (then
 the code default `25.200.001` is used).
 
+### Multi-host matrix (V44)
+
+One **trunk seed** in the data repo serves every host. Version fan-out is
+**not** long-running product branches (`acu-25r1`, `acu-26r1`, …).
+
+| Piece | Role |
+| ----- | ---- |
+| Trunk seed | Canonical `config/` + `scenario/` (newest supported matrix) |
+| Per-host `target.yaml` | Pin `erp` + `default_api` from live `acu config check` |
+| Optional overlays | Surgical seed deltas keyed by Default half (e.g. `overlays/default-24.200.001/`) |
+| OpenAPI | Live `acu schema` dump only (gitignored); never multi-version swagger trees in package or data repo |
+
+**Overlays are data-repo-only** — no `acu apply --overlay` flag. Pass overlay
+dirs as ordinary path args after the trunk tree so later files win for the
+same entity keys you rewrite:
+
+```sh
+# host pinned to Default 24.200.001 needs a KitAssembly Type rewrite
+acu apply config/ overlays/default-24.200.001/
+acu diff config/ overlays/default-24.200.001/
+```
+
+A future optional **compat profile** (curated rewrites by Default half inside
+the CLI) is deferred until overlays prove out in data repos; it will not ship
+full OpenAPI trees (V11/V44).
+
+Sibling data-repo retirement of release branches:
+[acumatica-gitops#2](https://github.com/kborovik/acumatica-gitops/issues/2).
+
 Worth knowing:
 
 - The file is found by walking up from the current directory, so any subdirectory of the data repo works.

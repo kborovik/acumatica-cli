@@ -319,13 +319,19 @@ def _probe(client: AcumaticaClient, action: ActionFile) -> bool:
 
 def _apply_action(
     client: AcumaticaClient, action: ActionFile, dry_run: bool = False
-) -> int:
-    """Invoke the action unless done_when already verifies the desired state."""
+) -> tuple[int, list[str]]:
+    """Invoke the action unless done_when already verifies the desired state.
+
+    On invoke failure, returns ``(0, [error])`` rather than raising so the
+    caller can continue other files (V45 multi-error summary).
+    """
     if dry_run:
         output.data(f"  would invoke {action.action}")
-    elif _probe(client, action):
+        return 1, []
+    if _probe(client, action):
         output.data(f"  skip {action.action} (already done)")
-    else:
+        return 1, []
+    try:
         client.invoke(
             action.entity,
             action.action,
@@ -333,13 +339,17 @@ def _apply_action(
             action.parameters,
             action.endpoint,
         )
-        output.data(f"  invoke {action.action} [{action.entity}]")
-    return 1
+    except RuntimeError as err:
+        msg = f"action {action.action} [{action.entity}]: {err}"
+        output.error(msg)
+        return 0, [msg]
+    output.data(f"  invoke {action.action} [{action.entity}]")
+    return 1, []
 
 
 def apply(
     client: AcumaticaClient, baseline: BaselineFile | ActionFile, dry_run: bool = False
-) -> int:
+) -> tuple[int, list[str]]:
     """PUT every record (upsert by key); an action file invokes its action.
 
     After the first successful Company PUT this session, re-login once so
@@ -353,21 +363,33 @@ def apply(
     Numbering runtime fields (V40/T152): never PUT ``LastNbr`` (or kin) so
     apply of bounds never resets live counters.
 
-    Returns the record count.
+    Per-record failure isolation (V45): a failed PUT does not abort later
+    records in the same file. Returns ``(ok_count, error_messages)`` —
+    never silent partial; caller exits 1 when any errors remain. Exit 2
+    stays drift (``diff`` only).
     """
     if isinstance(baseline, ActionFile):
         return _apply_action(client, baseline, dry_run)
+    ok = 0
+    errors: list[str] = []
     for record in baseline.records:
         label = ", ".join(str(record[k]) for k in baseline.keys)
         if dry_run:
             output.data(f"  would PUT {baseline.entity} [{label}]")
-        else:
+            ok += 1
+            continue
+        try:
             body = _put_body(client, baseline, record)
             _put(client, baseline.entity, body, baseline.endpoint)
             if baseline.entity == "Company":
                 client.refresh_after_company()
             output.data(f"  PUT {baseline.entity} [{label}]")
-    return len(baseline.records)
+            ok += 1
+        except RuntimeError as err:
+            msg = f"{baseline.entity} [{label}]: {err}"
+            output.error(msg)
+            errors.append(msg)
+    return ok, errors
 
 
 def _put(

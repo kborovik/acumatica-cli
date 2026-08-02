@@ -1288,7 +1288,7 @@ def test_bare_apply_diff_ignore_inventory_findings(
         cli.seed,
         "apply",
         lambda client, baseline, dry_run=False: (
-            seen_apply.append(str(baseline.path).replace("\\", "/")) or 1
+            seen_apply.append(str(baseline.path).replace("\\", "/")) or (1, [])
         ),
     )
     result = CliRunner().invoke(cli.cli, ["apply", "--dry-run"])

@@ -27,6 +27,24 @@ acu run scenario/10-seed-capital.yaml && acu state --assert-unchanged
 
 Bare `apply` / `diff` (no path args) also prefer `config/<name>/` when those trees exist (V30).
 
+`apply` continues after a failed record (V45): later records and files still
+run; exit 1 with a multi-error summary when any PUT failed (never silent
+partial; exit 2 stays with `diff`). Field-level 422 detail surfaces in the
+error text (V46).
+
+### Multi-host trunk + overlays (V44)
+
+Keep one trunk seed; pin each host with `target.yaml`; put version-specific
+rewrites under a data-repo overlay directory and pass it after trunk:
+
+```sh
+acu apply config/ overlays/default-24.200.001/
+```
+
+No long-running release branches for version fan-out. No `apply --overlay`
+flag (data-repo path args are enough). Cross-link:
+[acumatica-gitops#2](https://github.com/kborovik/acumatica-gitops/issues/2).
+
 Legacy data repos may still use root `bootstrap/`…`master/`; init no longer scaffolds that layout.
 `acu extract` never writes that root layout — emit is hard-cut to `config/` only (see [Extract](#extract)).
 
@@ -297,6 +315,23 @@ Package demo: full pre-build role dump in `90-roles.yaml` + demo user
 `soadmin` with `SO Admin` selected in `91-users.yaml`. Built-in system roles
 (Administrator, Customizer, …) are present as identity/header rows for
 reference closure; access-rights matrix beyond role header is out of scope.
+
+### User Roles membership limit (T189)
+
+Live lab (Bootstrap contract, cold PUT): **User detail `Roles` membership is
+not durable** — a successful User PUT with `Roles: [{Rolename, Selected:
+true}]` still answers later GET with `Roles: []`. Identity fields (Username,
+names, flags) round-trip; membership does not.
+
+| Path | Practical rule |
+| ---- | -------------- |
+| **apply** | Identity seed is reliable. Membership rows may no-op on the server. |
+| **diff** | Expect possible permanent `Roles[…]: missing on tenant` when seed claims membership. |
+| **Data repos** | Prefer identity-only User seed (e.g. soadmin/apadmin/aradmin without `Roles`); assign roles in UI or accept drift until a contract fix. |
+| **Package template** | Still ships sparse `soadmin` + `SO Admin` membership as the offline contract shape (T148); not a live membership guarantee. |
+
+Not a password issue (V39). Not fixed by re-apply order. Track contract/screen
+gaps via V14 when re-verified on a new Bootstrap version.
 
 ### Password rule (V39)
 

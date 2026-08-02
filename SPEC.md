@@ -154,15 +154,15 @@ T179|x|config init never scaffolds project.xml; drop INIT_TEMPLATES sentinel + s
 T180|x|offline tests: package-only contract; present override → hard error; flip hybrid prefer/override cases|V13,V2,V21,T178,T179
 T181|x|docs README + demo-seed + templates README + seed_catalog comments + CHANGELOG Unreleased — package SoT; data repos must not keep project.xml|V12,V19,T178,T179
 T182|x|suite green make check after package-SoT bootstrap contract|V13,T178,T179,T180,T181
-T183|.|docs multi-host matrix: trunk + target.yaml + optional overlay; no long-running branches; cross-link gitops#2|V44,V12,V27
-T184|.|apply fail report: continue multi-error summary or stopped-at + remaining list; exit 1; never silent partial|V45,I.cmd,V4
-T185|.|offline tests apply fail-report paths (first-record fail + multi-error)|V13,V45,T184
-T186|.|surface 422 field-level errors (Type.error class) in put/action RuntimeError detail|V46,I.cmd
-T187|.|offline tests field-error parse from fixture 422 bodies|V13,V46,T186
-T188|.|decide overlay: data-repo-only vs apply --overlay; docs; implement CLI only if gitops needs hook|V44,I.cmd,I.data
-T189|.|investigate User Roles membership apply/diff for built-in soadmin/apadmin/aradmin; fix or docs limit|V4,V39,I.data
-T190|.|CHANGELOG Unreleased + suite green after matrix/apply-error work|V19,V13,T183,T184,T186
-T191|.|optional later: curated compat profile by Default half for proven rewrites; no full swagger trees|V44,V11
+T183|x|docs multi-host matrix: trunk + target.yaml + optional overlay; no long-running branches; cross-link gitops#2|V44,V12,V27
+T184|x|apply fail report: continue multi-error summary or stopped-at + remaining list; exit 1; never silent partial|V45,I.cmd,V4
+T185|x|offline tests apply fail-report paths (first-record fail + multi-error)|V13,V45,T184
+T186|x|surface 422 field-level errors (Type.error class) in put/action RuntimeError detail|V46,I.cmd
+T187|x|offline tests field-error parse from fixture 422 bodies|V13,V46,T186
+T188|x|decide overlay: data-repo-only vs apply --overlay; docs; implement CLI only if gitops needs hook|V44,I.cmd,I.data
+T189|x|investigate User Roles membership apply/diff for built-in soadmin/apadmin/aradmin; fix or docs limit|V4,V39,I.data
+T190|x|CHANGELOG Unreleased + suite green after matrix/apply-error work|V19,V13,T183,T184,T186
+T191|x|optional later: curated compat profile by Default half for proven rewrites; no full swagger trees|V44,V11
 
 ## §B BUGS
 

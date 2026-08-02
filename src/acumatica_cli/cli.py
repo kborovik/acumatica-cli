@@ -894,16 +894,32 @@ def apply_cmd(inst: Instance, files: tuple[Path, ...], dry_run: bool) -> None:
     SEED_DIRS children (e.g. config/) expands nested trees in fixed order.
     Omitted, defaults prefer config/<name>/ when present, else root SEED_DIRS
     (V30).
+
+    Per-record failure isolation (V45): one failed PUT reports and continues;
+    later records and files still run. Exit 1 with a multi-error summary when
+    any record failed; never silent partial. Exit 2 stays with ``diff``.
     """
     assert_target_compatible(inst)
+    total_ok = 0
+    all_errors: list[str] = []
     with AcumaticaClient(inst) as client:
         for path in expand_files(files or default_seed_dirs()):
             baseline = seed.load_baseline(path)
             output.data(
                 f"{path} -> {inst.tenant} on {inst.base_url} ({baseline.entity})"
             )
-            n = seed.apply(client, baseline, dry_run=dry_run)
+            n, errors = seed.apply(client, baseline, dry_run=dry_run)
+            total_ok += n
+            all_errors.extend(f"{path}: {e}" for e in errors)
             output.data(f"  {n} record(s){' (dry run)' if dry_run else ''}")
+    if all_errors:
+        output.error(
+            f"apply: {len(all_errors)} error(s), {total_ok} record(s) applied"
+            f"{' (dry run)' if dry_run else ''}"
+        )
+        for err in all_errors:
+            output.error(err)
+        raise SystemExit(1)
 
 
 @cli.command("schema")

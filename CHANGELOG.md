@@ -2,6 +2,29 @@
 
 ## Unreleased
 
+### Added
+
+- **Multi-host matrix docs (V44):** trunk seed + per-host `target.yaml` +
+  optional Default-half overlays as ordinary path args (no `apply --overlay`);
+  no long-running product branches; no multi-version OpenAPI trees. Cross-link
+  [acumatica-gitops#2](https://github.com/kborovik/acumatica-gitops/issues/2).
+  Curated CLI compat profiles deferred.
+
+### Changed
+
+- **`acu apply` multi-error summary (V45):** per-record PUT failure reports and
+  continues (later records and files still run); exit 1 with aggregated errors
+  when any failed — never silent partial. Exit 2 stays with `diff`.
+- **422 field-level errors (V46):** PUT/action `RuntimeError` detail includes
+  nested `Field.error` paths under the body/`entity` (and detail rows), not
+  status or top-level `exceptionMessage` alone.
+
+### Fixed
+
+- **User Roles membership docs (T189):** Bootstrap cold PUT does not durable
+  User `Roles` membership (live GET often `Roles: []`); identity seed is the
+  reliable path; document package membership as offline shape only.
+
 ## [v0.23.0] - 2026-08-01
 
 ### Fixed

@@ -417,3 +417,86 @@ def test_get_list_passes_odata_params(instance: Instance) -> None:
     )
     assert result == []
     assert recorder.requests[0].url.params["$filter"] == "CurrencyID eq 'CAD'"
+
+
+# -- V46: field-level error surfacing (T186/T187) --
+
+
+def test_field_errors_from_422_value_wrappers() -> None:
+    """V46: nested Field.error paths collected from a contract 422 body."""
+    body = {
+        "exceptionMessage": (
+            "Inserting  'PaymentMethod' record raised at least one error."
+        ),
+        "exceptionType": "PX.Api.ContractBased.OutcomeEntityHasErrorsException",
+        "PaymentMethodID": {
+            "value": "BILL",
+            "error": "Error: MeansOfPayment is invalid.",
+        },
+        "MeansOfPayment": {
+            "value": "External Payment Processor",
+            "error": "Error: 'External Payment Processor' is not allowed.",
+        },
+    }
+    errs = AcumaticaClient._field_errors(body)  # pyright: ignore[reportPrivateUsage]
+    assert errs == [
+        "PaymentMethodID: Error: MeansOfPayment is invalid.",
+        "MeansOfPayment: Error: 'External Payment Processor' is not allowed.",
+    ]
+
+
+def test_field_errors_under_entity_and_detail_rows() -> None:
+    body = {
+        "exceptionMessage": "Updating  'User' record raised at least one error.",
+        "entity": {
+            "Username": {"value": "soadmin", "error": "Error: Username exists."},
+            "Roles": [
+                {
+                    "Rolename": {
+                        "value": "SO Admin",
+                        "error": "Error: Role not found.",
+                    },
+                    "Selected": {"value": True},
+                }
+            ],
+        },
+    }
+    errs = AcumaticaClient._field_errors(body)  # pyright: ignore[reportPrivateUsage]
+    assert "entity.Username: Error: Username exists." in errs
+    assert "entity.Roles[0].Rolename: Error: Role not found." in errs
+
+
+def test_put_422_surfaces_field_errors_in_runtime_error(instance: Instance) -> None:
+    """V46/T187: put RuntimeError detail includes Field.error text, not status only."""
+    body = {
+        "exceptionMessage": "Inserting  'Vendor' record raised at least one error.",
+        "VendorID": {"value": "X", "error": "Error: VendorID cannot be empty."},
+    }
+    recorder = Recorder({"/Vendor": httpx.Response(422, json=body)})
+    with pytest.raises(RuntimeError, match=r"VendorID.*cannot be empty") as ei:
+        _client(instance, recorder).put("Vendor", {"VendorID": "X"})
+    msg = str(ei.value)
+    assert "422" in msg
+    assert "Inserting  'Vendor'" in msg
+
+
+def test_invoke_422_surfaces_field_errors(instance: Instance) -> None:
+    body = {
+        "exceptionMessage": "The request is invalid.",
+        "entity": {
+            "FinancialYear": {
+                "value": 1999,
+                "error": "Error: Year is out of range.",
+            }
+        },
+    }
+    recorder = Recorder(
+        {"/MasterCalendar/GenerateCalendar": httpx.Response(422, json=body)}
+    )
+    with pytest.raises(RuntimeError, match=r"FinancialYear.*out of range"):
+        _client(instance, recorder).invoke(
+            "MasterCalendar",
+            "GenerateCalendar",
+            {"FinancialYear": 1999},
+            {"FromYear": 1999, "ToYear": 1999},
+        )
