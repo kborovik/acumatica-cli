@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## [v0.24.0] - 2026-08-02
+
 ### Added
 
 - **`matrix.yaml` multi-host pin+where (V27/V44):** ordered `cells` with
