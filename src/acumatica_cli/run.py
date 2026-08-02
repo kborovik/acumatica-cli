@@ -69,7 +69,7 @@ _VAR = re.compile(r"\$\{([A-Za-z0-9_]+)\}")
 _PATH = re.compile(r"([A-Za-z0-9_]+)(?:\[(\d+)\])?")
 
 
-def period_mmYYYY(d: date) -> str:
+def period_mmYYYY(d: date) -> str:  # noqa: N802  # SPEC V43 name (MMyyyy)
     """Format a calendar date as Acumatica financial period ``MMyyyy`` (V43).
 
     Host-local only — no ERP business-date probe. Sole format for the

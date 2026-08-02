@@ -489,7 +489,7 @@ def test_once_dry_run_annotates(
 # --- V43 period token -------------------------------------------------------
 
 
-def test_period_mmYYYY_formats_host_local_month() -> None:
+def test_period_helper_formats_host_local_month() -> None:
     """V43: pure helper is sole MMyyyy format (zero-pad month + 4-digit year)."""
     assert run.period_mmYYYY(date(2026, 8, 1)) == "082026"
     assert run.period_mmYYYY(date(2026, 1, 15)) == "012026"
@@ -506,7 +506,7 @@ def test_builtin_current_period_from_host_date() -> None:
 
 
 @freeze_time("2026-07-31")
-def test_period_mmYYYY_month_boundary_via_freezegun() -> None:
+def test_period_helper_month_boundary_via_freezegun() -> None:
     """T175: freezegun month-end → 072026; next day would be 082026."""
     assert run.period_mmYYYY(date.today()) == "072026"
     with freeze_time("2026-08-01"):
@@ -518,9 +518,10 @@ def test_subst_current_period_builtin() -> None:
     subst = run._subst  # pyright: ignore[reportPrivateUsage]
     variables = run._builtin_variables(today=date(2026, 8, 1))  # pyright: ignore[reportPrivateUsage]
     assert subst("${current_period}", variables) == "082026"
-    assert subst(
-        {"Ledger": "ACTUAL", "Period": "${current_period}"}, variables
-    ) == {"Ledger": "ACTUAL", "Period": "082026"}
+    assert subst({"Ledger": "ACTUAL", "Period": "${current_period}"}, variables) == {
+        "Ledger": "ACTUAL",
+        "Period": "082026",
+    }
 
 
 PERIOD_SCENARIO = """\
@@ -635,3 +636,69 @@ def test_subst_unknown_still_hard_error_with_builtins() -> None:
     variables = run._builtin_variables(today=date(2026, 8, 1))  # pyright: ignore[reportPrivateUsage]
     with pytest.raises(SystemExit, match=r"unknown scenario variable '\$\{nope\}'"):
         subst("${nope}", variables)
+
+
+@freeze_time("2026-09-01")
+def test_package_seed_capital_cold_after_month_change(
+    tmp_path: Path, instance: Instance, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """T177/V43: packaged 10-seed-capital cold-runs with token after month roll.
+
+    Template no longer pins 072026; freezegun host = September → Period
+    092026 on present, pre-snapshot, and post-delta. Stale July pin would
+    have failed the expect (delta +0 on wrong period).
+    """
+    from importlib.resources import files
+
+    packaged = (
+        files("acumatica_cli")
+        .joinpath("templates/scenario/10-seed-capital.yaml")
+        .read_text(encoding="utf-8")
+    )
+    assert "${current_period}" in packaged
+    assert "072026" not in packaged
+    path = tmp_path / "10-seed-capital.yaml"
+    path.write_text(packaged)
+    periods: list[str] = []
+    balances = {"n": 0.0}
+
+    def server(request: httpx.Request) -> httpx.Response:
+        path_s = request.url.path
+        if request.method == "PUT" and path_s.endswith("/AccountSummaryInquiry"):
+            body = json.loads(request.content)
+            periods.append(body["Period"]["value"])
+            # cold: present + pre-snapshot at 0; after release bump for post
+            bal = balances["n"]
+            return httpx.Response(
+                200,
+                json={
+                    "Results": [
+                        wrap({"Account": "10100", "EndingBalance": bal}),
+                        wrap({"Account": "30000", "EndingBalance": bal}),
+                    ]
+                },
+            )
+        if request.method == "PUT" and path_s.endswith("/JournalTransaction"):
+            return httpx.Response(
+                200, json=wrap({"Module": "GL", "BatchNbr": "000099"})
+            )
+        if path_s.endswith("/ReleaseJournalTransaction"):
+            balances["n"] = 50000.0
+            return httpx.Response(204)
+        if "JournalTransaction" in path_s and request.method == "GET":
+            return httpx.Response(
+                200,
+                json=wrap({"Module": "GL", "BatchNbr": "000099", "Status": "Posted"}),
+            )
+        return httpx.Response(200, json={})
+
+    scenario = run.load_scenario(path)
+    client = AcumaticaClient(instance, transport=httpx.MockTransport(server))
+    client.poll_interval = 0.0
+    assert run.run(client, scenario) is True
+    out = capsys.readouterr().out
+    assert "(once: already present)" not in out
+    # present + 2 pre-snapshots (10100, 30000 expects) + 2 post-deltas
+    assert all(p == "092026" for p in periods)
+    assert len(periods) >= 3
+    assert "+ JournalTransaction [GL, 000099].Status = 'Posted'" in out

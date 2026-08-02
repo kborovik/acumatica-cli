@@ -186,7 +186,7 @@ T173|x|period helper + run interpolator built-in `${current_period}` (host-local
 T174|x|package scenario templates Period/FinPeriod → `${current_period}` where calendar-relative|V43,I.data,T173
 T175|x|offline tests: period_mmYYYY + freezegun month boundary + interpolator expect/once/step; view path no expand|V13,V33,V43,T173
 T176|x|docs + help: period token vs pinned views; ERP business-date skew; CHANGELOG Unreleased (gh #28)|V12,V19,V33,V43,T173,T174
-T177|.|e2e or offline cold seed-capital run green w/ token after mock month change; suite green|V4,V13,V43,T174,T175
+T177|x|e2e or offline cold seed-capital run green w/ token after mock month change; suite green|V4,V13,V43,T174,T175
 
 ## §B BUGS
 
