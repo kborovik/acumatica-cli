@@ -524,6 +524,33 @@ def test_inquire_empty_results(
     assert obs.rows == []
 
 
+def test_view_params_do_not_expand_current_period_token(
+    tmp_path: Path,
+    make_client: Callable[[], AcumaticaClient],
+    server: _Server,
+) -> None:
+    """V33/V43: acu state leaves params pinned; ${current_period} is literal.
+
+    Run owns the period token; views never call period_mmYYYY / _subst.
+    """
+    text = """\
+name: trial-balance
+source:
+  inquire: AccountSummaryInquiry
+  params: {Ledger: ACTUAL, Period: "${current_period}"}
+key: [Account]
+capture: [EndingBalance]
+decimals: 2
+"""
+    server.inquire_results = [{"Account": "30000", "EndingBalance": 1.0}]
+    view = state.load_view(_write_view(tmp_path, text))
+    with make_client() as client:
+        state.capture_view(client, view)
+    assert server.last_inquire_body is not None
+    # token must NOT become MMyyyy — state path has no interpolator
+    assert server.last_inquire_body["Period"]["value"] == "${current_period}"
+
+
 def test_inquire_inventory_qty_fixed_point(
     tmp_path: Path,
     make_client: Callable[[], AcumaticaClient],

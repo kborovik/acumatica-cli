@@ -6,10 +6,12 @@ the real client (wrap, invoke poll, _checked).
 """
 
 import json
+from datetime import date
 from pathlib import Path
 
 import httpx
 import pytest
+from freezegun import freeze_time
 
 from acumatica_cli import run
 from acumatica_cli.client import AcumaticaClient, wrap
@@ -482,3 +484,154 @@ def test_once_dry_run_annotates(
     out = capsys.readouterr().out
     assert "once: present AccountSummaryInquiry" in out
     assert "would PUT JournalTransaction" in out
+
+
+# --- V43 period token -------------------------------------------------------
+
+
+def test_period_mmYYYY_formats_host_local_month() -> None:
+    """V43: pure helper is sole MMyyyy format (zero-pad month + 4-digit year)."""
+    assert run.period_mmYYYY(date(2026, 8, 1)) == "082026"
+    assert run.period_mmYYYY(date(2026, 1, 15)) == "012026"
+    assert run.period_mmYYYY(date(1999, 12, 31)) == "121999"
+
+
+@freeze_time("2026-08-15")
+def test_builtin_current_period_from_host_date() -> None:
+    """V43: builtins pin current_period at process start from date.today()."""
+    assert run._builtin_variables() == {"current_period": "082026"}  # pyright: ignore[reportPrivateUsage]
+    assert run._builtin_variables(today=date(2026, 7, 1)) == {  # pyright: ignore[reportPrivateUsage]
+        "current_period": "072026"
+    }
+
+
+@freeze_time("2026-07-31")
+def test_period_mmYYYY_month_boundary_via_freezegun() -> None:
+    """T175: freezegun month-end → 072026; next day would be 082026."""
+    assert run.period_mmYYYY(date.today()) == "072026"
+    with freeze_time("2026-08-01"):
+        assert run.period_mmYYYY(date.today()) == "082026"
+
+
+def test_subst_current_period_builtin() -> None:
+    """V43: ${current_period} expands like any other variable when seeded."""
+    subst = run._subst  # pyright: ignore[reportPrivateUsage]
+    variables = run._builtin_variables(today=date(2026, 8, 1))  # pyright: ignore[reportPrivateUsage]
+    assert subst("${current_period}", variables) == "082026"
+    assert subst(
+        {"Ledger": "ACTUAL", "Period": "${current_period}"}, variables
+    ) == {"Ledger": "ACTUAL", "Period": "082026"}
+
+
+PERIOD_SCENARIO = """\
+scenario: period-token
+once: true
+present:
+  inquire: AccountSummaryInquiry
+  parameters: { Ledger: ACTUAL, Period: "${current_period}" }
+  match: { Account: "30000" }
+  when:
+    EndingBalance: { gte: 50000 }
+steps:
+  - id: seed
+    put: JournalTransaction
+    record:
+      Module: GL
+      Description: "period ${current_period}"
+      Hold: false
+      Details:
+        - { Account: '10100', DebitAmount: 50000.0 }
+        - { Account: '30000', CreditAmount: 50000.0 }
+    capture: { BatchNbr: je }
+expect:
+  - get: { entity: JournalTransaction, keys: [GL, "${je}"] }
+    fields: { Status: Balanced }
+  - inquire: AccountSummaryInquiry
+    parameters: { Ledger: ACTUAL, Period: "${current_period}" }
+    match: { Account: "30000" }
+    delta: { EndingBalance: 50000.0 }
+"""
+
+
+@freeze_time("2026-08-01")
+def test_run_expands_current_period_on_present_expect_and_step(
+    tmp_path: Path, instance: Instance
+) -> None:
+    """V43: token expands on once.present params, step record, and expect params.
+
+    Cold path (EndingBalance 0): present probe + expect snapshot + put
+    body + post-run expect all send Period=082026 (freezegun host date).
+    """
+    periods: list[str] = []
+    descriptions: list[str] = []
+    balances = {"pre": 0.0, "post": 0.0}
+
+    def server(request: httpx.Request) -> httpx.Response:
+        path = request.url.path
+        if request.method == "PUT" and path.endswith("/AccountSummaryInquiry"):
+            body = json.loads(request.content)
+            periods.append(body["Period"]["value"])
+            # first two inquires are present + pre-snapshot (both 0);
+            # after release bump, post-run expect sees 50000
+            bal = balances["post"] if len(periods) > 2 else balances["pre"]
+            return httpx.Response(
+                200,
+                json={
+                    "Results": [
+                        wrap({"Account": "30000", "EndingBalance": bal}),
+                    ]
+                },
+            )
+        if request.method == "PUT" and path.endswith("/JournalTransaction"):
+            body = json.loads(request.content)
+            descriptions.append(body["Description"]["value"])
+            balances["post"] = 50000.0
+            return httpx.Response(200, json=wrap({"BatchNbr": "000042"}))
+        if "JournalTransaction" in path and request.method == "GET":
+            return httpx.Response(200, json=wrap({"Status": "Balanced"}))
+        return httpx.Response(200, json={})
+
+    scenario = run.load_scenario(_write(tmp_path, PERIOD_SCENARIO))
+    client = AcumaticaClient(instance, transport=httpx.MockTransport(server))
+    assert run.run(client, scenario) is True
+    # present + pre-snapshot + post-delta = 3 inquire PUTs, all 082026
+    assert periods == ["082026", "082026", "082026"]
+    assert descriptions == ["period 082026"]
+
+
+@freeze_time("2026-09-15")
+def test_run_once_skip_sends_current_period_on_present(
+    tmp_path: Path, instance: Instance, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """V43: warm once-skip still expands ${current_period} on present params."""
+    periods: list[str] = []
+
+    def server(request: httpx.Request) -> httpx.Response:
+        if request.method == "PUT" and request.url.path.endswith(
+            "/AccountSummaryInquiry"
+        ):
+            body = json.loads(request.content)
+            periods.append(body["Period"]["value"])
+            return httpx.Response(
+                200,
+                json={
+                    "Results": [
+                        wrap({"Account": "30000", "EndingBalance": 50000.0}),
+                    ]
+                },
+            )
+        return httpx.Response(200, json={})
+
+    scenario = run.load_scenario(_write(tmp_path, PERIOD_SCENARIO))
+    client = AcumaticaClient(instance, transport=httpx.MockTransport(server))
+    assert run.run(client, scenario) is True
+    assert periods == ["092026"]
+    assert "(once: already present)" in capsys.readouterr().out
+
+
+def test_subst_unknown_still_hard_error_with_builtins() -> None:
+    """V43: unknown ${…} still hard-fails even when builtins are present."""
+    subst = run._subst  # pyright: ignore[reportPrivateUsage]
+    variables = run._builtin_variables(today=date(2026, 8, 1))  # pyright: ignore[reportPrivateUsage]
+    with pytest.raises(SystemExit, match=r"unknown scenario variable '\$\{nope\}'"):
+        subst("${nope}", variables)
