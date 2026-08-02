@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## [v0.21.0] - 2026-08-01
+
 ### Added
 
 - **`${current_period}` on `acu run` (gh #28 / V43):** scenario interpolator
