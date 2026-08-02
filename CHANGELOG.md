@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## [v0.24.1] - 2026-08-02
+
 ### Changed
 
 - **`acu check` leaves the rebuilt tenant (V47):** lifecycle is now
