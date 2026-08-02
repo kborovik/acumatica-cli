@@ -6,7 +6,6 @@
 
 # instance config at repo root — decrypted secrets and their ciphertext, never committed
 /.env
-/.env.gpg
 
 # dumped API schemas — regenerate with acu schema
 schemas/
