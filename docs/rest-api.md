@@ -19,7 +19,7 @@ Each `config/views/*.yaml` view picks **exactly one** source kind (V33):
 
 | Kind | HTTP | Notes |
 | ---- | ---- | ----- |
-| `inquire:` | `PUT /entity/Default/<api_version>/<Inquiry>?$expand=Results` | Same contract-inquiry idiom as `run` `expect` / `present`. View `params` are the PUT body (pinned in YAML). Optional `match:` filters Results rows. |
+| `inquire:` | `PUT /entity/Default/<api_version>/<Inquiry>?$expand=Results` | Same contract-inquiry idiom as `run` `expect` / `present`. View `params` are the PUT body (**pinned** in YAML — no `${current_period}` expand; V33/V43). Optional `match:` filters Results rows. Scenario `run` may use `${current_period}` → host-local `MMyyyy` on inquire params; `state` never does. |
 | `entity:` | `GET /entity/Default/<api_version>/<Entity>` | Contract REST list. No per-view `endpoint:` pin in v1. |
 | `gi:` | OData GI (below) | Optional when a GI is V12-verified and **Expose via OData** is on. |
 

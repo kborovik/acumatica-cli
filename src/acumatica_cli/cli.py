@@ -983,8 +983,11 @@ def run_cmd(inst: Instance, files: tuple[Path, ...], dry_run: bool) -> None:
     they default to the data repo's scenario/ directory. Transactions are
     executed forward (the server assigns document numbers), never upserted;
     delta expectations snapshot before the first step and compare after the
-    last, so a scenario re-runs safely on a warm tenant. Exit 0 when every
-    expectation holds, 1 on any step error or expectation miss.
+    last, so a scenario re-runs safely on a warm tenant. Built-in
+    ``${current_period}`` expands to host-local MMyyyy on steps, expect
+    params, and once.present params (views for ``acu state`` stay pinned).
+    Exit 0 when every expectation holds, 1 on any step error or expectation
+    miss.
     """
     assert_target_compatible(inst)
     if not files:

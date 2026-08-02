@@ -64,6 +64,25 @@ Unlike `extract` / `diff`, `state` never writes seed trees, never carries `endpo
 
 **Migration (T112–T114):** CLI verb is `state` only (no `snapshot` alias). Bare defaults hard-cut to `config/views/` and `state/`. Prior `config/snapshot/` is not a fallback — move views or pass explicit paths.
 
+### Period token (`${current_period}`) vs pinned views
+
+| Surface | Period handling |
+| ------- | --------------- |
+| `acu run` scenario YAML | Built-in `${current_period}` → host-local `MMyyyy` at process start (V43). Expands on steps, `expect` params, and `once.present` params. Package lifecycle scenarios use the token so month roll does not require hand-editing inquire Period. |
+| `acu state` / `config/views/` | **Pinned literals only.** No `${current_period}` expand (V33). Package TB view keeps a fixed Period for e2e/mock alignment and reproducible committed `state/` rows. Operators hand-set Period when capturing the live current-month window. |
+
+Why the split: scenario expects measure the period transactions just posted (calendar-relative). Committed observations under `state/` are git evidence — expanding a token at capture time would rewrite files every month without a real ERP change.
+
+**ERP business-date skew:** the token uses the **host** local date, not an ERP business-date probe and not a `--as-of` / `--period` flag (v1). If the ERP business date differs from the host calendar, set Period explicitly in the scenario or align the host date.
+
+```yaml
+# scenario expect / once.present (calendar-relative)
+parameters: {Ledger: ACTUAL, Period: "${current_period}"}
+
+# config/views (pinned for reproducible state/)
+params: {Ledger: ACTUAL, Period: "082026"}
+```
+
 ## Dual readers: inventory vs extract vs state
 
 Three different products — same tenant, different jobs (V35 dual-reader single-writer):

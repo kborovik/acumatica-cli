@@ -2,6 +2,17 @@
 
 ## Unreleased
 
+### Added
+
+- **`${current_period}` on `acu run` (gh #28 / V43):** scenario interpolator
+  expands the built-in token to host-local `MMyyyy` at process start on every
+  `${var}` site — steps, `expect` inquire params, and `once.present` params.
+  Package lifecycle scenarios use the token for AccountSummaryInquiry Period;
+  `config/views` / `acu state` stay pinned literals (reproducible `state/`
+  commits). Unknown `${…}` still hard-fails. No ERP business-date probe and
+  no `--as-of` / `--period` CLI in v1 (host calendar can skew from ERP
+  business date if those differ).
+
 ## [v0.20.2] - 2026-07-31
 
 ### Changed

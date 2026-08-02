@@ -87,7 +87,7 @@ acu [--tenant NAME] [--url URL] [--ssh USER@HOST] [--api-version V]
 
 `apply` and `diff` without FILES prefer `config/<name>/` when any seed child exists under `config/`; otherwise root `bootstrap/`, `baseline/`, `setup/`, then `master/` when present.
 A path like `config/` expands nested seed dirs in that fixed order.
-`run` without FILES defaults to `scenario/`.
+`run` without FILES defaults to `scenario/`. Scenario YAML may use `${current_period}` (host-local `MMyyyy`) on steps, expect params, and once.present params; `config/views` / `state` keep Period pinned (see [docs/demo-seed.md](docs/demo-seed.md#period-token-current_period-vs-pinned-views)).
 `state` without FILES defaults to `config/views/`; writes go to `state/` (`--out`).
 `extract` always writes under `config/{bootstrap,baseline,setup,master}/` (catalog-driven; never root SEED_DIRS).
 `inventory` is offline (no REST/SSH/password): SM203520 Settings XML ZIP or `ac.exe export xml` folder writes to `inventory/`.

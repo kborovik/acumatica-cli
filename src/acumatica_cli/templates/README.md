@@ -44,11 +44,13 @@ Bare `acu apply` / `acu diff` also prefer `config/` when those trees exist.
 | `config/baseline/` | GL foundation (COA, ledger, subaccounts, UOMs) |
 | `config/setup/` | Financial year, master calendar, open periods |
 | `config/master/` | Numbering (`05-numbering-sequences`) before module prefs; inventory, warehouse, items, vendors, customers; roles/users (`90-roles` then `91-users`) |
-| `scenario/10-seed-capital.yaml` | Once-class owner capital JE (skip-if-present when present) |
+| `scenario/10-seed-capital.yaml` | Once-class owner capital JE (skip-if-present when present); Period = `${current_period}` |
 | `scenario/20-buy.yaml` | Additive component PO → receipt → bill → AP pay |
 | `scenario/30-build.yaml` | Additive kit assembly |
 | `scenario/40-sell.yaml` | Additive SO → ship → invoice → AR pay |
-| `config/views/10-trial-balance.yaml` | Observer view (EndingBalance inquire; not SEED_DIRS) |
+| `config/views/10-trial-balance.yaml` | Observer view (EndingBalance inquire; Period pinned literal; not SEED_DIRS) |
 | `state/` | Written by `acu state` (derived-state observations) |
+
+`acu run` expands `${current_period}` to host-local `MMyyyy`. Views for `acu state` stay pinned so committed `state/` rows do not rewrite every month.
 
 Monoscenario `buy-sell` is not part of this package.
