@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## [v0.23.0] - 2026-08-01
+
 ### Fixed
 
 - **Bootstrap NumberingSequence view maps (T159):** CS201010 graph is
