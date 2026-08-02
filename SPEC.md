@@ -191,7 +191,7 @@ T178|x|drop data-repo project.xml resolve; load_contract always packaged bootstr
 T179|x|config init never scaffolds project.xml; drop INIT_TEMPLATES sentinel + special-case package copy|V28,I.cmd,T178
 T180|x|offline tests: package-only contract; present override → hard error; flip hybrid prefer/override cases|V13,V2,V21,T178,T179
 T181|x|docs README + demo-seed + templates README + seed_catalog comments + CHANGELOG Unreleased — package SoT; data repos must not keep project.xml|V12,V19,T178,T179
-T182|.|suite green make check after package-SoT bootstrap contract|V13,T178,T179,T180,T181
+T182|x|suite green make check after package-SoT bootstrap contract|V13,T178,T179,T180,T181
 
 ## §B BUGS
 
