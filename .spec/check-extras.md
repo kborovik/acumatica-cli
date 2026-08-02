@@ -32,6 +32,11 @@ for granular /sdd:check runs.
 - `NO_COLOR`/`FORCE_COLOR` respected; markup/emoji/highlighting off; table box ASCII; spinner ASCII
 - expected failure = one `x` line, no traceback (`ACU_DEBUG=1` re-raises); validation error → `SystemExit("msg")`
 - transport/network class (`httpx.TransportError` + subclasses: connect/timeout/TLS) @ `main` choke → rewrite to one friendly `x` line (class + `base_url` or host + action hint: check `ACU_BASE_URL` / network / instance); never `str(exc)` dump for that class; HTTP status + Acumatica `exceptionMessage` path unchanged; `config check` rest fail lines may reuse same rewrite; `ACU_DEBUG=1` re-raises full chain
+- once-skip line `skip <path> (once: already present)` on stdout data path (gh #19)
+- no `--json` — plain text = machine interface
+- `tenant list` table title `Tenants on <hostname>` — host from `base_url` (urlparse), never full URL (closes §B.27)
+- progress: long single-op (SSH ac.exe, pool recycle, swagger dump, artifact parse, reconcile load/compare) → `output.step` (TTY spinner / piped stderr process line)
+- multi-unit (apply/diff/extract/run/state file|row|view) → stdout per-unit banner before unit work; never silence through multi-second work
 
 ## §V.16 — option-convention recipe (extracted from SPEC.md §V.16)
 
@@ -53,6 +58,8 @@ for granular /sdd:check runs.
 - diff read-back survives delegate-view entities — list-GET optimization-500 → key-URL single-record GET fallback (closes §B.9)
 - multi-view entity composite key legal, first key ! primary-view field filterable alone — cross-view `$filter` AND answers 200 `[]` while each predicate alone matches, key-URL GET 500s non-B9 so B9 fallback never fires; diff read-back filters on first key only, matches remaining key fields client-side; key-tuple uniqueness → §V.25 (closes §B.14)
 - action file (`setup/*.yaml`) realizes state via contract action, not upsert — `done_when` live-state probe = verify gate both directions: apply skip (probe non-empty → `skip <action> (already done)`), diff drift (probe empty → `action <name>: not applied`, exit 2); probe coarse present/absent — action leaves no keyed record to field-diff
+- scenario `once` skip-if-present via authored `present` inquire-absolute probe (not marker file; cold expects skipped on skip) (gh #19)
+- `$filter` key literal types by YAML scalar — bool/number bare, string quoted (closes §B.23)
 
 ## §V.5 — tenant-map symptom recipe (extracted from SPEC.md §V.5)
 
@@ -80,6 +87,8 @@ for granular /sdd:check runs.
 - extract-derived files strip server-derived fields — PUT-tolerated, server keeps own derivation, sourced value = permanent drift (ChartOfAccountsOrder/CashAccount class, Translation* sibling)
 - shipped init template set self-closing: templates' `features.yaml` enables every feature the shipped baseline templates require (closes §B.15)
 - template set ships every recorded dependency-chain link its own verify chain needs — GL-posting chain = ledger + org-ledger link + GL prefs + calendar + open periods (closes §B.16)
+- dir expansion alphabetical = sole ordering mechanism within a seed dir; umbrella expands SEED_DIRS order first; filename prefixes encode order
+- feature file resolve: `config/bootstrap/features.yaml` or `bootstrap/features.yaml`
 
 ## §V.2 — bootstrap source closure (extracted from SPEC.md §V.2)
 
@@ -168,6 +177,7 @@ for granular /sdd:check runs.
 - exit 0 write or compare (change fine bare); exit 1 op fail; exit 2 only `--assert-unchanged` when moved
 - `--diff` write nothing; `--dry-run` local only
 - CLI verb `state` only — hard-cut drop `snapshot` alias (T112)
+- ! SM203520 tenant snapshot; ! inventory/ ! findings/ (those = dual-reader products V35, not balances)
 
 ## §V.33 — observation-source recipe (extracted from SPEC.md §V.33)
 
@@ -179,3 +189,55 @@ for granular /sdd:check runs.
 - stem `trial-balance` ! capture ≥1 numeric money field (fixed-point @ `decimals`) — roster-only `entity: Account` forbidden for that stem
 - distribution golden: TB → EndingBalance-class (`inquire: AccountSummaryInquiry` or `gi:` LAB5-TrialBalance)
 - inventory-summary QtyOnHand golden ! shipped this pass (`InventorySummaryInquiry` warehouse-only → empty Results on live; optional later)
+- params pinned literals — no runtime calendar or `${current_period}` resolve (scenario run tokens = V43, not views)
+
+## §V.34 — seed-catalog completeness (extracted from SPEC.md §V.34)
+
+- every packaged `templates/config/**` seed yaml (except `project.xml`, features synthesis, `config/views/`) ! exactly one `seed_catalog.yaml` row
+- multi-file same entity ! filter-split (one row per numbered file + optional filter/match partition)
+- template file set = catalog file set = extract emit paths
+- no hand_only markers
+- golden seed ! claim fields GET never returns (B11 class; packaging UOMs drop until verified read-back)
+
+## §V.35 — dual-reader single-writer + vocab (extracted from SPEC.md §V.35)
+
+- REST = live data-plane transport only
+- entity = contract/REST identity
+- seed = `config/` SEED_DIRS YAML (CaC artifact, ! synonym for REST)
+- tenant-snapshot artifact = SM203520 XML ZIP or `ac.exe export xml` folder (ingress only; ! side name like XMLDUMP; bare "snapshot" ! `state`)
+- table/DAC = artifact identity
+- inventory/ = offline IR (`tables/<Table>.yaml`)
+- reconcile map = table↔entity (`snapshot_map` or identity match) never seed-name↔inventory-name
+- readers = REST `extract` (seed under `config/`) + offline `inventory` (artifact → `inventory/`)
+- sole tenant mutator = `apply` PUT (V4)
+- never SM203520 restore / `ac.exe import` / binary import
+- `inventory/` + `findings/` never SEED_DIRS never `apply`/`diff` load
+- v1 artifact path writes `inventory/` + `findings/` only — never `config/` from artifact
+- `extract` REST-only
+
+## §V.38 — reconcile-normalize (extracted from SPEC.md §V.38)
+
+- entity-vs-table compare ! pad-trim both sides on string keys+fields
+- seed→inv key/field aliases declarative via snapshot_map (or package defaults); v1 `{table,entity}` rows still load
+- FK fields resolve inv int IDs → CD via inventory lookup indexes (prefer compare in seed/CD space)
+- first targets Account+Sub for *AcctID/*SubID on ReasonCode/VendorClass-class + PostingClass/CashAccount/OrderType freight
+- global enums: per-row field→enum fold REST labels → DAC codes (Usage, Account Type/PostOption, bool_bit Active, CreditTerms Due/Disc/Visible, …)
+- decimal-looking strings collapse trailing zeros (0 vs 0.000000) without mangling bare CDs like 000000
+- never silent promote config/ (V36)
+
+## §V.42 — inventory-map-coverage (extracted from SPEC.md §V.42)
+
+- dual-reader masters (catalog entity or demo seed claims) ! snapshot_map table→entity (+ aliases/resolves/enums as needed) so `acu reconcile` findings = real gaps not join-alias noise
+- intentional unmapped (txn/history/Notes/LoginTrace/ScreenPreferences/FeaturesSet-via-plugin) ! short docs table
+- demo-not-seeded Default master → explicit non-goal note ok
+- ! Bootstrap bump for map/catalog-only polish (gh #27)
+
+## §V.43 — period-token (extracted from SPEC.md §V.43)
+
+- `acu run` interpolates `${current_period}` → `MMyyyy` from host-local date @ process start
+- expand every run `${var}` site (steps + expect + once present params)
+- pure `period_mmYYYY(date)` sole format
+- built-in available pre-steps (present ok); capture `${var}` still post-capture only
+- `config/views` / `acu state` ! expand token (params pinned literals)
+- unknown `${…}` hard fail
+- no ERP business-date probe; no `--as-of`/`--period` CLI v1 (gh #28)

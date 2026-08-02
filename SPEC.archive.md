@@ -93,6 +93,48 @@ T87|x|distribution init rehome (gh #19) — scaffold under config/; lifecycle sc
 T88|x|offline unit tests once skip + config/ path expansion (gh #19)|V4,V9,V13,V30,T84,T86
 T89|x|docs + warm capital non-stack path (gh #19) — README/distribution notes; e2e or documented live prove Owner Capital stays 50000 on second run scenario/|V4,V12,V28,T86,T87
 T90|x|dual-shape `parse_entity_list` — accept array + `{endpoints:[...]}`; unit tests array/wrapper/fail-closed; `config check` endpoints green when Default listed under wrapper (gh #20)|V12,V31,I.cmd
+T91|x|docs `rest-api.md` — document 26.x GET /entity wrapper + array as legacy when still seen (gh #20)|V12,V31
+T92|x|optional: `config check` ERP probe from wrapper `version.acumaticaBuildVersion` when present (gh #20; T76 follow)|V12,V27,I.cmd,T76
+T93|x|snapshot engine — view model + capture render/parse + determinism rules + write/diff/assert paths|V32,V33,V10
+T94|x|`acu snapshot` CLI — selection like apply/diff/run; `--out` default `snapshots/`; `--diff`; `--assert-unchanged`; `--dry-run`; exit matrix; verb-map + V27 allowlist extras|V9,V15,V16,V27,V32,I.cmd,T93
+T95|x|entity: + gi: backends — contract REST entity list + OData GI; params `$metadata` validate fail-closed|V12,V27,V33,T93
+T96|x|offline tests: byte-identical twice, order shuffle, schema-tolerance allowlist, float formats → fixed string, key collision exit 1, exit codes|V13,V32,T93,T94
+T97|x|distribution scaffold: `snapshot/` trial-balance + inventory-summary views; GI defs in `config/master`; optional cold `snapshots/`|V28,V33,I.data,T94
+T98|x|e2e: after `run scenario/`, snapshot write; warm re-run + `snapshot --assert-unchanged` exit 0|V4,V32,T86,T94,T97
+T99|x|docs: snapshot vs extract/diff; OData GI expose; idempotence gate recipe|V12,T94
+T100|x|snapshot path hard-cut — bare default `config/snapshot/`; `--out` default `state/`; drop root `snapshot/` + `snapshots/` defaults|V32,I.cmd,I.data
+T101|x|scaffold: finance `config/snapshot/10-trial-balance.yaml`; distribution rehome TB+inventory → `config/snapshot/`; package templates|V28,V32,I.cmd,T100
+T102|x|tests + docs + e2e: path strings `config/snapshot` + `state/`; missing-dir message; migration note root `snapshot/`/`snapshots/`|V9,V13,T100,T101
+T103|x|snapshot `inquire:` backend — contract inquiry PUT `$expand=Results`; project Results rows via key+capture; optional match filter; params pinned (V33)|V10,V12,V32,V33,I.data,T93,T95
+T104|x|package swap golden snapshot views — finance TB + distribution TB/inventory → numeric inquire (or gi) capture; drop roster-only Account/StockItem for those stems|V28,V33,I.data,T97,T101,T103
+T105|x|tests + e2e: `state/` rows carry EndingBalance / QtyOnHand fixed-point after scenario; offline mock inquire; warm `--assert-unchanged` still green|V4,V13,V32,V33,T98,T103,T104
+T106|x|docs: rest-api + distribution README — inquire: snapshot source; numeric stem rule; GI still optional when V12-verified|V12,V33,T99,T104
+T107|x|drop distribution inventory-summary snapshot scaffold — package template + init map + offline/e2e asserts + docs; golden `state/` = trial-balance only|V28,V33,I.data,I.cmd
+T108|x|drop `--flavor` CLI + dual `templates_for` / `INIT_FLAVORS`; single template map|V28,I.cmd
+T109|x|package templates from `acumatica-gitops` seed trees (`config/*` + `scenario/` + snapshot + meta); drop `templates/finance` + `templates/distribution` split; align scenario `20-buy`; prune non-seed extras|V28,V29,I.data,T108
+T110|x|offline tests + e2e: single full scaffold; drop flavor-param coverage; e2e still green|V13,V28,T108,T109
+T111|x|docs sweep: README + retire/merge distribution flavor docs + help text; next-step cmds `apply config/`|V12,V28,T108,T109
+T112|x|rename CLI verb `snapshot`→`state`; module `snapshot.py`→`state.py`; hard-cut drop `snapshot` alias|V15,V32,I.cmd,T94
+T113|x|defaults `config/views/` + `state/`; package template rehome `config/snapshot`→`config/views`; init map + scaffold path|V28,V32,I.data,I.cmd,T112
+T114|x|check-extras V15/V27/V28/V32/V33 verb+path; tests + e2e + docs README migration note hard-cut|V9,V12,V13,V15,T112,T113
+T115|x|extract hard-cut emit `config/`; rename `extract_manifest.yaml`→`seed_catalog.yaml`; rehome catalog file paths; offline path tests|V30,V34,I.cmd,I.data
+T116|x|catalog completeness offline: template seed set equals catalog file set; unit gate|V34
+T117|x|catalog rows for full packaged seed incl master; filter-split multi-file entities; include/strip archaeology large Default surfaces|V34,V22,I.data
+T118|x|drop WeightUOM/VolumeUOM + other not-returned packaging claims from templates/seed; prove `diff config/` green path on LAB5-class|V22,V34,B26
+T119|x|e2e full extract round-trip: apply → extract → apply on B → `diff config/` clean → re-extract byte-identical incl master|V4,V22,V24,V34,T115,T117,T118
+T120|x|docs + help + changelog: extract inverse of apply under `config/`; entity map = catalog mirror; root-emit migration note|V12,I.cmd,T115
+T121|x|extract per-row progress stdout matching apply banner (`path -> tenant on url (entity)`) + keep skip/write/would-write outcome + end summary|V9,I.cmd
+T122|x|strip `#` comments from package template YAML — scope: `src/acumatica_cli/templates/**/*.yaml` grep `^\s*#` + trailing `\s#\s`; data only; offline unit gate no-comment; narrative stays sibling gitops separate files|V28
+T123|x|friendly network/transport errors — map httpx TransportError class @ main choke → one `x` line (class + base_url + reachability hint); covers all data-plane via main (apply/diff/run/state/extract/bootstrap/config-check REST); offline unit tests connect/timeout; ACU_DEBUG still re-raises|V9,I.cmd
+T124|x|default ACU_SSH from ACU_BASE_URL host — `Administrator@<hostname>` when key absent; blank key = hosted opt-out; drop ACU_SSH from scaffold env; docs + tests + check-extras V3; verify make check|V3,I.cfg,I.cmd
+T125|x|api_version from target.yaml — `load_instance` flag ? else `default_api` else `25.200.001`; drop `ACU_API_VERSION` env+scaffold; source-merge over dual-source match; check/show source; offline tests|V27,V2,V3,I.cfg,I.cmd,I.env
+T126|x|docs sweep: README + rest-api + templates env/README + target template comments — sole data-repo Default pin = `target.yaml` `default_api`; no operator `ACU_API_VERSION` pin; changelog note|V12,V27,I.cmd,T125
+T127|x|SnapshotArtifact IR parse — SM203520 XML ZIP + ac.exe export xml folder; reject .adb; deterministic table/row model + summary fields|V10,V35,V37,I.cmd,I.data
+T128|x|`acu inventory` CLI — artifact → inventory/ summary + tables; --out/--force/--dry-run; offline no session; exit 0/1; V15 verb map + V27 allowlist extras as needed|V9,V15,V16,V35,V37,I.cmd,T127
+T129|x|`acu reconcile` CLI — inventory + optional config/ → findings/ only; never write config/; unmapped + REST gaps + rest-vs-snapshot deltas|V9,V15,V16,V35,V36,I.cmd,I.data,T128
+T130|x|offline tests: parse fixtures ZIP+folder, inventory byte-stable, binary reject, version pin vs target.yaml, reconcile findings, apply/diff ignore inventory/findings paths|V13,V35,V36,V37,T127,T128,T129
+T131|x|docs + help + changelog: inventory vs extract vs state; dual-reader layout; ac-exe export + SM203520 Settings XML note; README CLI map|V12,V35,I.cmd,T128,T129
+T132|x|M2 pad-trim string keys+fields on reconcile join/compare both sides|V38,I.cmd,T129
 
 ## §B BUGS
 
