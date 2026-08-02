@@ -8,11 +8,10 @@ virgin tenant, so bootstrap = publish a package whose CustomizationPlugin
 cannot write CS100000 at all (T3 verdict) — and whose Bootstrap contract
 endpoint exposes the seeding surface (serialization verified T12).
 
-Contract ownership is hybrid (T69/V2/T81/T85): the data repo's
-``config/bootstrap/project.xml`` is preferred, then root
-``bootstrap/project.xml``; else the packaged full company
-``bootstrap_project.xml`` (``Bootstrap/1.3.0``) so package-only and offline
-virgin paths still bootstrap the full surface.
+Bootstrap endpoint contract is package SoT (V2/V21/T178): always the
+packaged full company ``bootstrap_project.xml`` (``Bootstrap/1.3.0``).
+Data-repo ``config/bootstrap/project.xml`` or ``bootstrap/project.xml`` is
+not a seed — present → hard error naming package SoT (no dual contract line).
 
 Customization publishes are tenant-scoped, so the package must be published
 per tenant; publish() is idempotent on content — the skip gate compares the
@@ -22,7 +21,7 @@ built now, and the plugin's UpdateDatabase is a keyed update on re-run.
 The feature set the plugin enables is data, not code (V2): load_features()
 reads config/bootstrap/features.yaml then root bootstrap/features.yaml
 (absent -> the built-in six) and package_zip() splices it into the plugin
-source at build time.
+source at build time. Features still dual-resolve; the contract does not.
 """
 
 import hashlib
@@ -73,18 +72,34 @@ def packaged_contract_xml() -> bytes:
     return (resources.files("acumatica_cli") / "bootstrap_project.xml").read_bytes()
 
 
+def _reject_data_repo_contract(root: Path | None) -> None:
+    """Hard-error when a data-repo project.xml exists (V2/V21 package SoT).
+
+    Contract is never dual-resolved (unlike features.yaml). Operators must
+    remove the file so seed trees cannot pin a second Bootstrap identity.
+    """
+    if root is None:
+        return
+    for path in (
+        root / "config" / "bootstrap" / "project.xml",
+        root / "bootstrap" / "project.xml",
+    ):
+        if path.is_file():
+            raise SystemExit(
+                f"{path}: Bootstrap contract is package SoT "
+                f"(packaged bootstrap_project.xml); remove data-repo project.xml"
+            )
+
+
 def load_contract_xml(root: Path | None = None) -> bytes:
-    """Active contract bytes: data-repo override when present, else packaged.
+    """Active contract bytes: always the packaged full company contract.
 
     ``root`` is the data-repo discovery root (the dir holding ``.env``).
-    Prefer ``config/bootstrap/project.xml``, then root ``bootstrap/project.xml``
-    (V30 dual resolve). Absent root or file falls back to the packaged full
-    company contract (V2/T81, same absence pattern as features.yaml).
+    Present ``config/bootstrap/project.xml`` or ``bootstrap/project.xml`` →
+    hard error naming package SoT (V2/V21/T178). Features still dual-resolve
+    via ``load_features``; the contract path does not.
     """
-    if root is not None:
-        path = _bootstrap_file(root, "project.xml")
-        if path is not None:
-            return path.read_bytes()
+    _reject_data_repo_contract(root)
     return packaged_contract_xml()
 
 
@@ -147,9 +162,9 @@ def package_zip(
     ``Enabled`` set at the ACU_FEATURES sentinel — the one point where the
     data repo's feature list enters the package (V2).
 
-    Contract XML (V2/T69/T81/T85): ``contract`` when given; else
-    ``config/bootstrap/project.xml`` then ``bootstrap/project.xml`` under
-    ``root`` when present; else the packaged full company template.
+    Contract XML (V2/V21/T178): ``contract`` when given; else always the
+    packaged full company template. When ``root`` is set (or discovered),
+    a present data-repo ``project.xml`` hard-errors via ``load_contract_xml``.
     """
     pkg = resources.files("acumatica_cli")
     if contract is None:
@@ -196,8 +211,8 @@ def package_description(zip_bytes: bytes) -> str:
     offers (verified live vs 26.101.0225): the import's projectDescription
     comes back only in the root description attribute of getProject's
     re-serialized project.xml — getPublished rows hold names alone.
-    Root description is read from the package's own project.xml so a
-    data-repo contract carries its own prose (V2).
+    Root description is read from the package's own project.xml (packaged
+    contract SoT — V2/V21).
     """
     with zipfile.ZipFile(io.BytesIO(zip_bytes)) as zf:
         desc = ET.fromstring(zf.read("project.xml")).get("description", "")

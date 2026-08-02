@@ -63,9 +63,9 @@ from .client import OPTIMIZATION_500, AcumaticaClient, unwrap
 from .config import find_data_root
 from .models import Model, validation_summary
 
-# Packaged-fallback defaults (no data-repo contract) — full company surface
-# (T81). Prefer active_bootstrap() at call sites so a data-repo
-# bootstrap/project.xml wins (V2/V20).
+# Packaged Bootstrap contract (V2/V21/T178 package SoT) — full company surface.
+# active_bootstrap() rejects a present data-repo project.xml then returns
+# the same packaged endpoint/entity set.
 BOOTSTRAP_ENDPOINT, BOOTSTRAP_ENTITIES = bootstrap.parse_endpoint(
     bootstrap.packaged_contract_xml()
 )
@@ -92,11 +92,11 @@ _DIFF_IGNORE_FIELDS = PASSWORD_FIELDS | NUMBERING_RUNTIME_FIELDS
 
 
 def active_bootstrap(root: Path | None = None) -> tuple[str, frozenset[str]]:
-    """Active Bootstrap endpoint name/version + entity set (V2/V20).
+    """Active Bootstrap endpoint name/version + entity set (V2/V20/V21).
 
-    Prefers data-repo ``bootstrap/project.xml`` when present; else the
-    packaged full company contract. ``root`` defaults to the cwd walk-up
-    discovery root (same as features.yaml).
+    Always the packaged full company contract. Present data-repo
+    ``project.xml`` → hard error (package SoT). ``root`` defaults to the
+    cwd walk-up discovery root (same as features.yaml).
     """
     if root is None:
         root = find_data_root()
@@ -221,8 +221,8 @@ class ActionFile(Model):
 def load_baseline(path: Path) -> BaselineFile | ActionFile:
     """Parse and validate one seed YAML file, dispatching on the action: key.
 
-    Symbolic ``endpoint: bootstrap`` resolves to the active package version
-    at load (data-repo contract when present, else packaged full company — V20/T81).
+    Symbolic ``endpoint: bootstrap`` resolves to the packaged contract
+    version at load (V20/V21/T178 package SoT).
     Symbolic ``endpoint: default`` stays on the model and resolves at HTTP
     time via ``client._url`` (never load-rewritten — version is where).
     An entity the active Bootstrap contract serves still needs an explicit
