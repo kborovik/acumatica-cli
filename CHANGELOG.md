@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## [v0.22.0] - 2026-08-01
+
 ### Changed
 
 - **Bootstrap contract is package SoT only:** `load_contract` / publish /
