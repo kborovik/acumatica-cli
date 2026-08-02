@@ -32,23 +32,28 @@ Scenario file format (SPEC I.data):
       - get: { entity: Payment, keys: [Payment, "${pmt}"] }
         fields: { Status: Closed }
       - inquire: AccountSummaryInquiry          # delta = post - pre
-        parameters: { Ledger: ACTUAL, Period: "062026" }
+        parameters: { Ledger: ACTUAL, Period: "${current_period}" }
         match: { Account: "40000" }
         delta: { EndingBalance: 4138.00 }
 
 Steps run in order; `capture` lifts server-assigned fields into ${var}
-tokens for later steps. `expect` delta assertions snapshot before the
-first step and re-probe after the last, comparing the difference - the
-scenario re-runs safely on a warm tenant (document numbers differ, the
-deltas hold). `get` assertions are absolute (statuses of documents
-created in this run). `once: true` + authored `present` inquire-absolute
-gate skips steps and expects when the probe already holds (capital
-non-stack; V4/gh #19). Exit 0 = every expectation holds or once-skip;
-1 = any step error or expectation miss (2 stays diff's drift code).
+tokens for later steps. Built-in ``${current_period}`` (V43) expands to
+host-local ``MMyyyy`` at process start on every ``${var}`` site — steps,
+expect params, and once.present params — so calendar month roll does not
+require hand-editing Period pins. Unknown ``${…}`` is a hard error.
+`expect` delta assertions snapshot before the first step and re-probe
+after the last, comparing the difference - the scenario re-runs safely
+on a warm tenant (document numbers differ, the deltas hold). `get`
+assertions are absolute (statuses of documents created in this run).
+`once: true` + authored `present` inquire-absolute gate skips steps and
+expects when the probe already holds (capital non-stack; V4/gh #19).
+Exit 0 = every expectation holds or once-skip; 1 = any step error or
+expectation miss (2 stays diff's drift code).
 """
 
 import re
 import time
+from datetime import date
 from pathlib import Path
 from typing import Any
 
@@ -62,6 +67,25 @@ from .seed import _norm  # pyright: ignore[reportPrivateUsage]
 
 _VAR = re.compile(r"\$\{([A-Za-z0-9_]+)\}")
 _PATH = re.compile(r"([A-Za-z0-9_]+)(?:\[(\d+)\])?")
+
+
+def period_mmYYYY(d: date) -> str:
+    """Format a calendar date as Acumatica financial period ``MMyyyy`` (V43).
+
+    Host-local only — no ERP business-date probe. Sole format for the
+    built-in ``${current_period}`` token on ``acu run``.
+    """
+    return f"{d.month:02d}{d.year:04d}"
+
+
+def _builtin_variables(today: date | None = None) -> dict[str, Any]:
+    """Built-in scenario variables available pre-steps (V43).
+
+    ``current_period`` is pinned at process start from host-local date
+    so present probes, expect params, and steps share one period string.
+    """
+    d = date.today() if today is None else today
+    return {"current_period": period_mmYYYY(d)}
 
 
 class ActionSpec(Model):
@@ -193,7 +217,9 @@ class PresentSpec(Model):
 
     Author-owned inquiry + optional row ``match`` + per-field ``when``
     (eq|gte). Probe true → skip steps and expects; false → run cold.
-    No ``${var}`` interpolation — the gate runs before any step capture.
+    ``parameters`` (and other ``${var}`` sites) interpolate built-ins such
+    as ``${current_period}`` (V43); capture ``${var}`` is not available
+    pre-steps.
     """
 
     inquire: str
@@ -308,21 +334,27 @@ def _inquiry_totals(
     client: AcumaticaClient,
     probe: Expect | PresentSpec,
     field_names: list[str],
+    variables: dict[str, Any],
 ) -> dict[str, float]:
-    """Probe a contract inquiry; sum named fields over matching Results rows."""
+    """Probe a contract inquiry; sum named fields over matching Results rows.
+
+    ``parameters`` (and ``match`` values) interpolate via ``variables`` so
+    built-in ``${current_period}`` works on present + expect sites (V43).
+    """
     assert probe.inquire is not None
     body = client.put(
         probe.inquire,
-        probe.parameters or {},
+        _subst(probe.parameters or {}, variables),
         endpoint=probe.endpoint,
         params={"$expand": "Results"},
     )
     totals = dict.fromkeys(field_names, 0.0)
+    match = _subst(probe.match, variables) if probe.match else None
     for row in body.get("Results") or []:
         values = unwrap(row)
-        if probe.match and any(
+        if match and any(
             field not in values or _norm(values[field]) != _norm(want)
-            for field, want in probe.match.items()
+            for field, want in match.items()
         ):
             continue
         for field in totals:
@@ -330,16 +362,20 @@ def _inquiry_totals(
     return totals
 
 
-def _inquire(client: AcumaticaClient, expect: Expect) -> dict[str, float]:
+def _inquire(
+    client: AcumaticaClient, expect: Expect, variables: dict[str, Any]
+) -> dict[str, float]:
     """Probe a contract inquiry; sum each delta field over matching rows."""
     assert expect.inquire is not None
     assert expect.delta is not None
-    return _inquiry_totals(client, expect, list(expect.delta))
+    return _inquiry_totals(client, expect, list(expect.delta), variables)
 
 
-def _present(client: AcumaticaClient, present: PresentSpec) -> bool:
+def _present(
+    client: AcumaticaClient, present: PresentSpec, variables: dict[str, Any]
+) -> bool:
     """True when every present.when predicate holds (absolute, not delta)."""
-    totals = _inquiry_totals(client, present, list(present.when))
+    totals = _inquiry_totals(client, present, list(present.when), variables)
     for field, pred in present.when.items():
         got = totals[field]
         if pred.gte is not None and got < float(pred.gte):
@@ -499,11 +535,14 @@ def _check_get(
 
 
 def _check_delta(
-    client: AcumaticaClient, expect: Expect, snapshot: dict[str, float]
+    client: AcumaticaClient,
+    expect: Expect,
+    snapshot: dict[str, float],
+    variables: dict[str, Any],
 ) -> bool:
     """Delta assertions: post-run probe minus the pre-run snapshot."""
     assert expect.delta is not None
-    after = _inquire(client, expect)
+    after = _inquire(client, expect, variables)
     ok = True
     for field, want in expect.delta.items():
         got = after[field] - snapshot[field]
@@ -527,6 +566,11 @@ def run(
     snapshot BEFORE the first step (V4): the comparison is post minus
     pre, so a warm tenant re-runs clean.
 
+    Built-in ``${current_period}`` (V43) is seeded at process start from
+    host-local date and expands on every ``${var}`` site (steps, expect
+    params, once.present params). Capture variables layer on top after
+    each step.
+
     ``once: true`` (V4/gh #19): inquire-absolute ``present`` probe first.
     Probe true → stdout ``skip <path> (once: already present)``, no step
     HTTP, no expects, exit 0. Probe false → steps + expects as usual.
@@ -536,15 +580,16 @@ def run(
         _dry_run(scenario)
         return True
     assert client is not None  # non-dry-run callers pass a live session
+    variables: dict[str, Any] = _builtin_variables()
     if scenario.once:
         assert scenario.present is not None
-        if _present(client, scenario.present):
+        if _present(client, scenario.present, variables):
             output.data(f"skip {scenario.path} (once: already present)")
             return True
     before = [
-        _inquire(client, expect) if expect.inquire else {} for expect in scenario.expect
+        _inquire(client, expect, variables) if expect.inquire else {}
+        for expect in scenario.expect
     ]
-    variables: dict[str, Any] = {}
     for step in scenario.steps:
         _run_step(client, step, variables)
     ok = True
@@ -552,5 +597,5 @@ def run(
         if expect.get is not None:
             ok = _check_get(client, expect, variables) and ok
         else:
-            ok = _check_delta(client, expect, snapshot) and ok
+            ok = _check_delta(client, expect, snapshot, variables) and ok
     return ok

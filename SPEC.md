@@ -182,7 +182,7 @@ T169|x|tenant delete progress — wrap ac.exe delete in output.step matching cre
 T170|x|inventory progress — output.step around artifact parse; keep banner + write/skip emit; offline assert|V9,I.cmd
 T171|x|reconcile progress — output.step around load+compare; keep emit write/skip; offline assert|V9,I.cmd
 T172|x|CHANGELOG Unreleased — CLI progress (delete/inventory/reconcile); suite green|V19,T169,T170,T171
-T173|.|period helper + run interpolator built-in `${current_period}` (host-local MMyyyy); expand steps+expect+once present; unknown token fail|V43,I.cmd
+T173|x|period helper + run interpolator built-in `${current_period}` (host-local MMyyyy); expand steps+expect+once present; unknown token fail|V43,I.cmd
 T174|.|package scenario templates Period/FinPeriod → `${current_period}` where calendar-relative|V43,I.data,T173
 T175|.|offline tests: period_mmYYYY + freezegun month boundary + interpolator expect/once/step; view path no expand|V13,V33,V43,T173
 T176|.|docs + help: period token vs pinned views; ERP business-date skew; CHANGELOG Unreleased (gh #28)|V12,V19,V33,V43,T173,T174
