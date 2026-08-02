@@ -40,7 +40,7 @@ Bare `acu apply` / `acu diff` also prefer `config/` when those trees exist.
 
 | Path | Role |
 |------|------|
-| `config/bootstrap/` | Company, features, credit terms, Bootstrap `project.xml` (Bootstrap/1.3.0) |
+| `config/bootstrap/` | Company, features, credit terms (Bootstrap contract is package SoT — never scaffolded) |
 | `config/baseline/` | GL foundation (COA, ledger, subaccounts, UOMs) |
 | `config/setup/` | Financial year, master calendar, open periods |
 | `config/master/` | Numbering (`05-numbering-sequences`) before module prefs; inventory, warehouse, items, vendors, customers; roles/users (`90-roles` then `91-users`) |

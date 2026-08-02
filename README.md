@@ -117,12 +117,13 @@ See [docs/ac-exe.md](docs/ac-exe.md) for export / SM203520 notes and [docs/demo-
 ## The data repo
 
 Your configuration lives in its own git repo.
-`acu config init` scaffolds a **single full seed** under `config/` (Bootstrap `project.xml` at `Bootstrap/1.3.0`, expanded COA, masters) plus lifecycle `scenario/`, observer `config/views/`, and README.
+`acu config init` scaffolds a **single full seed** under `config/` (features, company, credit terms, expanded COA, masters) plus lifecycle `scenario/`, observer `config/views/`, and README.
+The Bootstrap endpoint contract is package SoT (`bootstrap_project.xml` inside the CLI — `Bootstrap/1.3.0`); `config init` never writes `project.xml`, and data repos must not keep one (present file → hard error on bootstrap/publish).
 There is no `--flavor`.
 
 | Path | What it holds |
 | ---- | ------------- |
-| `config/bootstrap/` | virgin-tenant config: features, company, credit terms, `project.xml` |
+| `config/bootstrap/` | virgin-tenant config: features, company, credit terms (no `project.xml`) |
 | `config/baseline/` | reference data: subaccounts, COA, ledger, UOMs |
 | `config/setup/` | one-time actions: financial year, master calendar, open periods |
 | `config/master/` | inventory/distribution masters: numbering (`05-…`) before prefs, warehouse, items, parties + Role/User (`90-roles` then `91-users`) |
@@ -158,7 +159,7 @@ Dual-served entities (on both Bootstrap and Default) need an explicit `endpoint:
 | Value | Resolves to |
 | ----- | ----------- |
 | omitted | `Default/<api_version>` for Default-only entities |
-| `bootstrap` | active `Bootstrap/<ver>` from `bootstrap/project.xml` or the packaged contract |
+| `bootstrap` | active `Bootstrap/<ver>` from the packaged contract only |
 | `default` | `Default/<api_version>` — tracks the resolved API version |
 | `Bootstrap/1.3.0` or `Default/25.200.001` | literal pin (ignores the resolved Default version) |
 

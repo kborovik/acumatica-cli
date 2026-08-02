@@ -505,7 +505,7 @@ not in the catalog, not extracted.
 | `scenario/30-build.yaml` | KitAssembly | default | IN307000 | run only |
 | `scenario/40-sell.yaml` | SO / ship / invoice / AR pay | default | SO/IN/AR | run only |
 
-`endpoint: bootstrap` resolves to the active Bootstrap package version from `config/bootstrap/project.xml` (or root `bootstrap/project.xml` on legacy layout).
+`endpoint: bootstrap` resolves to the active Bootstrap package version from the packaged CLI contract (`bootstrap_project.xml` — package SoT). Data-repo `project.xml` is not a seed; remove it if present.
 
 `endpoint: default` (or omitted on Default-only entities) resolves to `Default/<api_version>` where `api_version` comes from `--api-version`, else `target.yaml` `default_api`, else the code default.
 

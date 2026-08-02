@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+### Changed
+
+- **Bootstrap contract is package SoT only:** `load_contract` / publish /
+  symbolic `endpoint: bootstrap` always use packaged `bootstrap_project.xml`.
+  Data-repo `config/bootstrap/project.xml` or `bootstrap/project.xml` is not a
+  seed — present → hard error naming package SoT. `acu config init` no longer
+  scaffolds `project.xml`. Remove any checked-in data-repo copy on upgrade.
+
 ## [v0.21.0] - 2026-08-01
 
 ### Added
