@@ -118,7 +118,7 @@ See [docs/ac-exe.md](docs/ac-exe.md) for export / SM203520 notes and [docs/demo-
 
 Your configuration lives in its own git repo.
 `acu config init` scaffolds a **single full seed** under `config/` (features, company, credit terms, expanded COA, masters) plus lifecycle `scenario/`, observer `config/views/`, and README.
-The Bootstrap endpoint contract is package SoT (`bootstrap_project.xml` inside the CLI — `Bootstrap/1.3.0`); `config init` never writes `project.xml`, and data repos must not keep one (present file → hard error on bootstrap/publish).
+The Bootstrap endpoint contract is package SoT (`bootstrap_project.xml` inside the CLI — `Bootstrap/1.3.0`); `config init` never writes `project.xml`, and data repos must not keep one (a present file hard-errors on bootstrap/publish).
 There is no `--flavor`.
 
 | Path | What it holds |
