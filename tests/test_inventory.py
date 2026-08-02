@@ -245,7 +245,7 @@ def test_assert_erp_matches_mismatch() -> None:
         source="snap.zip",
         tables=[],
     )
-    with pytest.raises(SystemExit, match=r"does not match target\.yaml erp"):
+    with pytest.raises(SystemExit, match=r"does not match matrix cell erp"):
         inventory.assert_erp_matches(art, "25.200.001")
 
 
@@ -458,20 +458,24 @@ def test_cli_inventory_custom_out_and_zip(tmp_path: Path) -> None:
 def test_cli_inventory_erp_mismatch_exit_1(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """V37: target.yaml erp pin fails when artifact build differs."""
+    """V37: matrix cell erp pin fails when artifact build differs."""
     zpath = _write_zip(
         tmp_path,
         {"manifest.xml": MANIFEST_XML, "Account.xml": ACCOUNT_XML},
     )
     (tmp_path / ".env").write_text("ACU_BASE_URL=http://x/\n", encoding="utf-8")
-    (tmp_path / "target.yaml").write_text(
-        "erp: 25.200.001\ndefault_api: 25.200.001\n",
+    (tmp_path / "matrix.yaml").write_text(
+        "cells:\n"
+        "  - id: default\n"
+        "    erp: 25.200.001\n"
+        "    default_api: 25.200.001\n"
+        "    base_url: http://x/\n",
         encoding="utf-8",
     )
     monkeypatch.chdir(tmp_path)
     result = CliRunner().invoke(cli.cli, ["inventory", str(zpath)])
     assert result.exit_code == 1
-    assert "does not match target.yaml erp" in result.output
+    assert "does not match matrix cell erp" in result.output
 
 
 def test_cli_inventory_erp_match_ok(
@@ -482,8 +486,12 @@ def test_cli_inventory_erp_match_ok(
         {"manifest.xml": MANIFEST_XML, "Account.xml": ACCOUNT_XML},
     )
     (tmp_path / ".env").write_text("ACU_BASE_URL=http://x/\n", encoding="utf-8")
-    (tmp_path / "target.yaml").write_text(
-        "erp: 26.101.0225\ndefault_api: 25.200.001\n",
+    (tmp_path / "matrix.yaml").write_text(
+        "cells:\n"
+        "  - id: default\n"
+        "    erp: 26.101.0225\n"
+        "    default_api: 25.200.001\n"
+        "    base_url: http://x/\n",
         encoding="utf-8",
     )
     monkeypatch.chdir(tmp_path)

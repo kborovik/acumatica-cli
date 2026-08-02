@@ -145,7 +145,7 @@ def assert_erp_matches(artifact: SnapshotArtifact, erp: str) -> None:
     got = artifact.erp.strip()
     if got != want:
         raise SystemExit(
-            f"snapshot erp/build {got!r} does not match target.yaml erp {want!r} "
+            f"snapshot erp/build {got!r} does not match matrix cell erp {want!r} "
             f"(source: {artifact.source})"
         )
 

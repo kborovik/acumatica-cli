@@ -344,7 +344,7 @@ def live_erp_build(client: AcumaticaClient) -> str:
     """Live ERP build id for observation ``erp:`` header (V32).
 
     Prefers ``GET /entity`` wrapper ``version.acumaticaBuildVersion`` (T92);
-    falls back to claimed ``target.yaml`` erp is not available here — use
+    falls back to claimed matrix cell erp is not available here — use
     the configured default string when the wrapper omits build.
     """
     try:

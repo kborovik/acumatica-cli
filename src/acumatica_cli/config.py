@@ -5,14 +5,14 @@ env prefix ``ACU_``, and the sole config file is ``.env`` (found by walking
 up from cwd) carrying where + secrets as ``ACU_*`` vars. The file is
 optional - flags plus the process environment can supply the full config.
 Per key the first set value wins: flag, ``ACU_*`` var (process environment
-over a found ``.env``), code default — exclusion ``api_version`` (V27/T125):
-``--api-version`` flag ? → else data-repo ``target.yaml`` ``default_api``
-when present → else code default ``25.200.001``; never ``ACU_API_VERSION``
-(unknown ``ACU_*`` ignored). ``base_url`` is the only required address
-(REST data plane). ``ssh`` defaults to ``Administrator@`` + the
-``base_url`` hostname when the key is absent (V3/T124); a present blank
-key is the hosted opt-out (empty = data-plane only; tenant cmds hard-error
-when empty post-default — V1/V3). The password must resolve via
+over a found ``.env``), code default — exclusion ``api_version`` (V27):
+``--api-version`` flag ? → else active ``matrix.yaml`` cell ``default_api``
+when matrix present → else code default ``25.200.001``; never
+``ACU_API_VERSION`` (unknown ``ACU_*`` ignored). ``base_url`` is the only
+required address (REST data plane). ``ssh`` defaults to ``Administrator@``
++ the ``base_url`` hostname when the key is absent (V3/T124); a present
+blank key is the hosted opt-out (empty = data-plane only; tenant cmds
+hard-error when empty post-default — V1/V3). The password must resolve via
 ``--password`` or ``ACU_PASSWORD``.
 """
 
@@ -30,7 +30,7 @@ from .models import validation_summary
 PLACEHOLDER_HOST = "erp.example.com"
 DEFAULT_SSH_USER = "Administrator"
 DEFAULT_API_VERSION = "25.200.001"
-# V44: data-repo overlays keyed by Default half (target.yaml default_api)
+# V44: data-repo overlays keyed by Default half (matrix cell default_api)
 OVERLAYS_DIRNAME = "overlays"
 OVERLAY_DIR_PREFIX = "default-"
 
@@ -133,7 +133,7 @@ INIT_TEMPLATES = (
     ("scenario/20-buy.yaml", "scenario/20-buy.yaml"),
     ("scenario/30-build.yaml", "scenario/30-build.yaml"),
     ("scenario/40-sell.yaml", "scenario/40-sell.yaml"),
-    # Default-half overlays (V44): keyed by target.yaml default_api
+    # Default-half overlays (V44): keyed by matrix cell default_api
     ("overlays/README.md", "overlays/README.md"),
     (
         "overlays/default-24.200.001/README.md",
@@ -179,9 +179,10 @@ class Instance(BaseSettings):
     base_url: str  # REST root: scheme + host + site path
     ssh: str = ""  # control plane: full user@host; empty post-default = data-plane only
     tenant: str = ""
-    # V11/V27: version half only; resolved in load_instance (flag → target →
-    # code default), never ACU_API_VERSION env. Default here is the code pin
-    # only; env values for this field are discarded post-build (T125).
+    # V11/V27: version half only; resolved in load_instance (flag → active
+    # matrix cell default_api → code default), never ACU_API_VERSION env.
+    # Default here is the code pin only; env values for this field are
+    # discarded post-build (T125).
     api_version: str = DEFAULT_API_VERSION  # V11: /entity/Default/<api_version>/
     user: str = "admin"  # ACU_USER; the --username flag maps here
     # required, but enforced in load_instance so a blank scaffolded
@@ -254,7 +255,7 @@ def scaffold(directory: Path, host: str | None = None) -> Iterator[tuple[str, Pa
 def pin_overlay_dir(root: Path, api_version: str) -> Path | None:
     """``{root}/overlays/default-<api_version>`` when that directory exists.
 
-    Overlay identity is the Default contract half (``target.yaml``
+    Overlay identity is the Default contract half (matrix cell
     ``default_api`` / resolved ``Instance.api_version``), not the ERP
     marketing line. Missing dir → None (trunk-only host).
     """
@@ -303,9 +304,10 @@ def load_instance(overrides: Mapping[str, str | None] | None = None) -> Instance
 
     ``overrides`` carries the global flags keyed by Instance field name;
     per key the first set value wins (flag, ACU_* var - process environment
-    over a found .env - code default). Exclusion ``api_version`` (V27/T125):
-    ``--api-version`` flag ? → else ``target.yaml`` ``default_api`` when
-    present → else ``DEFAULT_API_VERSION``; ``ACU_API_VERSION`` is ignored.
+    over a found .env - code default). Exclusion ``api_version`` (V27):
+    ``--api-version`` flag ? → else active ``matrix.yaml`` cell
+    ``default_api`` when matrix present → else ``DEFAULT_API_VERSION``;
+    ``ACU_API_VERSION`` is ignored.
     No .env is fine (V3): the hard error comes only when a required value
     (base_url, password) is still unresolved after the merge, naming the
     missing key. ``ssh`` defaults from the base_url host when the key is
@@ -314,15 +316,17 @@ def load_instance(overrides: Mapping[str, str | None] | None = None) -> Instance
     """
     flags = {k: v for k, v in dict(overrides or {}).items() if v is not None}
     root = find_data_root()
-    # V27/T125: resolve api_version outside env. Init kwargs beat dotenv/env,
+    # V27: resolve api_version outside env. Init kwargs beat dotenv/env,
     # so always inject — ACU_API_VERSION (valid or invalid) is ignored.
     if "api_version" not in flags:
-        # Local import avoids config↔target cycle (target imports Instance).
-        from .target import load_target
+        # Local import avoids config↔matrix cycle (matrix imports Instance).
+        from .matrix import active_cell, load_matrix
 
-        target = load_target(root)
+        matrix = load_matrix(root)
         flags["api_version"] = (
-            target.default_api if target is not None else DEFAULT_API_VERSION
+            active_cell(matrix).default_api
+            if matrix is not None
+            else DEFAULT_API_VERSION
         )
     env_file = root / ".env" if root is not None else None
     try:

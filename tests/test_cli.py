@@ -1485,7 +1485,7 @@ def test_config_check_all_probes_ok(
     assert lines[0].startswith("ok discovery (")
     assert lines[0].endswith(".env)")
     assert lines[1] == "ok secrets (ACU_PASSWORD set)"
-    assert lines[2].startswith("warn target: no target.yaml under ")
+    assert lines[2].startswith("warn matrix: no matrix.yaml under ")
     assert lines[3] == "ok rest (http://acu.test/AcumaticaERP, tenant T1)"
     assert lines[4] == "ok endpoints (Default/25.200.001 present)"
     assert lines[5] == "ok ssh (Administrator@acu.test)"
@@ -1542,7 +1542,7 @@ def test_config_check_flags_only_passes(
     lines = result.output.splitlines()
     assert lines[0] == "ok discovery (no .env - flags only)"
     assert lines[1] == "ok secrets (--password)"
-    assert lines[2] == "skip target (no data root)"
+    assert lines[2] == "skip matrix (no data root)"
     assert lines[3] == "ok rest (http://acu.test/AcumaticaERP, tenant T1)"
     assert lines[4] == "ok endpoints (Default/25.200.001 present)"
     assert lines[5] == "ok ssh (user@acu.test)"
@@ -1631,7 +1631,7 @@ def test_config_check_skips_ssh_when_blank(
     lines = result.output.splitlines()
     assert lines[0].startswith("ok discovery (")
     assert lines[1] == "ok secrets (ACU_PASSWORD set)"
-    assert lines[2].startswith("warn target: no target.yaml under ")
+    assert lines[2].startswith("warn matrix: no matrix.yaml under ")
     assert lines[3] == "ok rest (http://acu.test/AcumaticaERP, tenant T1)"
     assert lines[4] == "ok endpoints (Default/25.200.001 present)"
     assert lines[5] == "skip ssh (ACU_SSH not set)"

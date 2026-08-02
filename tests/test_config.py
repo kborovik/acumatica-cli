@@ -78,26 +78,34 @@ def test_acu_api_version_env_is_ignored(
     data_root: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     # V27/T125: ACU_API_VERSION is not a config key — unknown ACU_* ignored;
-    # code default (or target.yaml) wins even when env spells a different pin
+    # code default (or matrix.yaml) wins even when env spells a different pin
     (data_root / ".env").write_text(MINIMAL_ENV + "ACU_API_VERSION=24.200.001\n")
     monkeypatch.setenv("ACU_API_VERSION", "23.200.001")
     inst = load_instance()
     assert inst.api_version == "25.200.001"
 
 
-def test_api_version_from_target_yaml(data_root: Path) -> None:
-    # V27/T125: present target.yaml default_api sources Instance.api_version
-    (data_root / "target.yaml").write_text(
-        'erp: "26.101.0225"\ndefault_api: "24.200.001"\n'
+def test_api_version_from_matrix_yaml(data_root: Path) -> None:
+    # V27: present matrix.yaml active-cell default_api sources Instance.api_version
+    (data_root / "matrix.yaml").write_text(
+        "cells:\n"
+        '  - id: "default"\n'
+        '    erp: "26.101.0225"\n'
+        '    default_api: "24.200.001"\n'
+        '    base_url: "http://acu.test/AcumaticaERP"\n'
     )
     inst = load_instance()
     assert inst.api_version == "24.200.001"
 
 
-def test_api_version_flag_beats_target_yaml(data_root: Path) -> None:
-    # V27: --api-version overrides target for ad-hoc probes
-    (data_root / "target.yaml").write_text(
-        'erp: "26.101.0225"\ndefault_api: "24.200.001"\n'
+def test_api_version_flag_beats_matrix_yaml(data_root: Path) -> None:
+    # V27: --api-version overrides matrix for ad-hoc probes
+    (data_root / "matrix.yaml").write_text(
+        "cells:\n"
+        '  - id: "default"\n'
+        '    erp: "26.101.0225"\n'
+        '    default_api: "24.200.001"\n'
+        '    base_url: "http://acu.test/AcumaticaERP"\n'
     )
     inst = load_instance({"api_version": "23.200.001"})
     assert inst.api_version == "23.200.001"

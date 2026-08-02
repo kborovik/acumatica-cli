@@ -124,7 +124,7 @@ def resolve_endpoint(
         if not api_version:
             raise SystemExit(
                 "endpoint: default requires a configured api_version "
-                "(target.yaml default_api or --api-version)"
+                "(matrix cell default_api or --api-version)"
             )
         return f"{_DEFAULT_ENDPOINT_NAME}/{api_version}"
     return endpoint

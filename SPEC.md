@@ -165,7 +165,7 @@ T188|x|decide overlay: data-repo-only vs apply --overlay; docs; implement CLI on
 T189|x|investigate User Roles membership apply/diff for built-in soadmin/apadmin/aradmin; fix or docs limit|V4,V39,I.data
 T190|x|CHANGELOG Unreleased + suite green after matrix/apply-error work|V19,V13,T183,T184,T186
 T191|x|optional later: curated compat profile by Default half for proven rewrites; no full swagger trees|V44,V11
-T192|.|matrix.yaml load+models (cells id/erp/default_api/base_url); unique ids; ordered; drop target.yaml loader|V27,I.data
+T192|x|matrix.yaml load+models (cells id/erp/default_api/base_url); unique ids; ordered; drop target.yaml loader|V27,I.data
 T193|.|global --cell; default first cell; resolve base_url+api_version+erp from active cell|V27,I.cmd
 T194|.|config init/show/check: matrix surface; init one-cell scaffold; retire target template|V27,V28,I.cmd
 T195|.|acu check lifecycle create→apply→run→diff→delete; --yes; tenant+SSH gates|V47,I.cmd
