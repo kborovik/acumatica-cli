@@ -40,11 +40,10 @@ DB_NAME = "AcumaticaDB"
 # Dotfiles are stored dotless (wheel tooling tends to drop dotfiles) and
 # mapped to their real names on write.
 #
-# Single full seed (V28/T108/T109): no --flavor. Package resources mirror
-# dest layout under templates/ (derived from sibling acumatica-gitops seed
-# trees; prune demo/, Makefile, live .env, state/, packaged project.xml).
-# bootstrap project.xml is not a templates/ file: scaffold copies the
-# packaged full company contract (bootstrap_project.xml) → Bootstrap/1.3.0.
+# Single full seed (V28/T108/T109/T179): no --flavor. Package resources
+# mirror dest layout under templates/ (derived from sibling acumatica-gitops
+# seed trees; prune demo/, Makefile, live .env, state/, project.xml).
+# Bootstrap contract stays packaged SoT (V2/V21) — never scaffolded.
 INIT_TEMPLATES = (
     ("env", ".env"),
     ("gitignore", ".gitignore"),
@@ -53,10 +52,6 @@ INIT_TEMPLATES = (
     ("config/bootstrap/company.yaml", "config/bootstrap/company.yaml"),
     ("config/bootstrap/credit-terms.yaml", "config/bootstrap/credit-terms.yaml"),
     ("config/bootstrap/features.yaml", "config/bootstrap/features.yaml"),
-    (
-        "config/bootstrap/project.xml",
-        "config/bootstrap/project.xml",
-    ),  # sentinel; see scaffold
     ("config/baseline/10-subaccounts.yaml", "config/baseline/10-subaccounts.yaml"),
     ("config/baseline/20-accounts.yaml", "config/baseline/20-accounts.yaml"),
     ("config/baseline/40-ledger.yaml", "config/baseline/40-ledger.yaml"),
@@ -234,14 +229,7 @@ def scaffold(directory: Path, host: str | None = None) -> Iterator[tuple[str, Pa
         if target.exists():
             yield "skip", target
             continue
-        # Single full contract (T81/T82): scaffold from the packaged
-        # bootstrap_project.xml so init cannot diverge from the fallback.
-        if dest == "config/bootstrap/project.xml":
-            content = (
-                resources.files("acumatica_cli") / "bootstrap_project.xml"
-            ).read_text(encoding="utf-8")
-        else:
-            content = (pkg / resource).read_text(encoding="utf-8")
+        content = (pkg / resource).read_text(encoding="utf-8")
         if host and dest == ".env":
             content = content.replace(PLACEHOLDER_HOST, host)
         target.parent.mkdir(parents=True, exist_ok=True)

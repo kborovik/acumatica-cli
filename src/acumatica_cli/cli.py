@@ -551,10 +551,11 @@ def config_init(host: str | None, directory: Path | None) -> None:
     Templates ship with the package; every value is a placeholder or a
     verified example - no secrets. Single full seed under ``config/``
     (bootstrap/baseline/setup/master) + lifecycle ``scenario/`` +
-    ``config/views/`` + README; full company ``project.xml``
-    (Bootstrap/1.3.0). No ``--flavor`` (V28/T108). Existing files are
-    never overwritten (reported as skipped). DIRECTORY defaults to the
-    current directory and is created if absent. No git init, no gpg.
+    ``config/views/`` + README. Bootstrap contract stays package SoT
+    (never scaffolds ``project.xml`` — V2/V21/V28). No ``--flavor``
+    (V28/T108). Existing files are never overwritten (reported as
+    skipped). DIRECTORY defaults to the current directory and is created
+    if absent. No git init, no gpg.
     """
     target = directory or Path.cwd()
     for action, path in scaffold(target, host=host):
