@@ -216,10 +216,10 @@ cells:
     base_url: "http://acu-dev1.vm.internal/AcumaticaERP"
 ```
 
-`--cell <id>` selects a cell (omit → first cell). When present, live commands
-source `api_version` from cell `default_api` and `base_url` from the cell when
-flag/env leave them unset. `acu config check` reports
-`ok matrix (cell=…; api_version from default_api=…; …)`.
+`--cell <id>` selects a cell (omit means first cell).
+When present, live commands source `api_version` from cell `default_api` and
+`base_url` from the cell when flag/env leave them unset.
+`acu config check` reports `ok matrix (cell=...; api_version from default_api=...; ...)`.
 Missing `matrix.yaml` only warns on `config check` unless you pass `--strict`.
 `acu check` (lifecycle) **requires** matrix.
 
