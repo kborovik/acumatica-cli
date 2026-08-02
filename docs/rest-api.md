@@ -130,9 +130,11 @@ unless the flag overrides.
 ### Multi-host matrix (V44)
 
 Data repos pin hosts with per-checkout `target.yaml` (`erp` + `default_api`)
-on a single trunk seed. Optional Default-half overlays are ordinary seed
-directories applied after trunk via path args — the CLI has no `--overlay`
-flag. Never commit multi-version OpenAPI trees; use `acu schema` live dumps.
+on a single trunk seed. Optional Default-half overlays live under
+`overlays/default-<default_api>/` (scaffolded by `config init`). Bare
+`apply` / `diff` / `run` auto-compose the pin overlay when path args are
+omitted; explicit path args stay manual. The CLI has no `--overlay` flag.
+Never commit multi-version OpenAPI trees; use `acu schema` live dumps.
 See README "Multi-host matrix" and
 [acumatica-gitops#2](https://github.com/kborovik/acumatica-gitops/issues/2).
 

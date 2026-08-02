@@ -942,6 +942,9 @@ def test_config_init_scaffolds_data_repo(tmp_path: Path) -> None:
         "scenario/20-buy.yaml",
         "scenario/30-build.yaml",
         "scenario/40-sell.yaml",
+        "overlays/README.md",
+        "overlays/default-24.200.001/README.md",
+        "overlays/default-24.200.001/scenario/30-build.yaml",
     ]
     for rel in expected:
         assert (repo / rel).is_file(), rel
@@ -951,6 +954,11 @@ def test_config_init_scaffolds_data_repo(tmp_path: Path) -> None:
     assert not (repo / "snapshot").exists()
     writes = [ln for ln in result.output.splitlines() if ln.startswith("write ")]
     assert len(writes) == len(INIT_TEMPLATES)
+    overlay_build = (
+        repo / "overlays" / "default-24.200.001" / "scenario" / "30-build.yaml"
+    ).read_text()
+    assert "Type: Assembly" in overlay_build
+    assert "Type: Production" not in overlay_build
     target = (repo / "target.yaml").read_text()
     assert "default_api:" in target
     assert "erp:" in target
@@ -1347,6 +1355,85 @@ def test_expand_files_leaf_dir_unchanged(tmp_path: Path) -> None:
     paths = [p.name for p in cli.expand_files((d,))]
 
     assert paths == ["a.yaml", "b.yaml"]
+
+
+def test_default_scenario_files_pin_overlay_replaces_basename(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # V44 bare run: overlays/default-<api>/scenario/<name> replaces trunk
+    (tmp_path / ".env").write_text("ACU_BASE_URL=http://h/AcumaticaERP\n")
+    sc = tmp_path / "scenario"
+    sc.mkdir()
+    (sc / "10-seed-capital.yaml").write_text("scenario: c\nsteps: []\n")
+    (sc / "30-build.yaml").write_text("scenario: build\nsteps: []\n")
+    ov = tmp_path / "overlays" / "default-24.200.001" / "scenario"
+    ov.mkdir(parents=True)
+    (ov / "30-build.yaml").write_text("scenario: build-overlay\nsteps: []\n")
+    monkeypatch.chdir(tmp_path)
+    inst = Instance(
+        base_url="http://h/AcumaticaERP",
+        password="x",
+        api_version="24.200.001",
+    )
+
+    paths = [p.as_posix() for p in cli.default_scenario_files(inst)]
+
+    assert paths == [
+        "scenario/10-seed-capital.yaml",
+        "overlays/default-24.200.001/scenario/30-build.yaml",
+    ]
+
+
+def test_default_scenario_files_no_overlay_when_half_unmatched(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # trunk half (25.200.001): no overlays/default-25.200.001 → trunk only
+    (tmp_path / ".env").write_text("ACU_BASE_URL=http://h/AcumaticaERP\n")
+    sc = tmp_path / "scenario"
+    sc.mkdir()
+    (sc / "30-build.yaml").write_text("scenario: build\nsteps: []\n")
+    ov = tmp_path / "overlays" / "default-24.200.001" / "scenario"
+    ov.mkdir(parents=True)
+    (ov / "30-build.yaml").write_text("scenario: build-overlay\nsteps: []\n")
+    monkeypatch.chdir(tmp_path)
+    inst = Instance(
+        base_url="http://h/AcumaticaERP",
+        password="x",
+        api_version="25.200.001",
+    )
+
+    paths = [p.as_posix() for p in cli.default_scenario_files(inst)]
+
+    assert paths == ["scenario/30-build.yaml"]
+
+
+def test_default_apply_dirs_appends_overlay_config(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # V44 bare apply: pin overlay config/ SEED_DIRS appended after trunk
+    (tmp_path / ".env").write_text("ACU_BASE_URL=http://h/AcumaticaERP\n")
+    seed = "entity: UnitsOfMeasure\nkey: UnitID\nrecords: []\n"
+    for name in ("bootstrap", "baseline", "setup", "master"):
+        d = tmp_path / "config" / name
+        d.mkdir(parents=True)
+        (d / f"{name}.yaml").write_text(seed)
+    ov_m = tmp_path / "overlays" / "default-24.200.001" / "config" / "master"
+    ov_m.mkdir(parents=True)
+    (ov_m / "99-rewrite.yaml").write_text(seed)
+    monkeypatch.chdir(tmp_path)
+    inst = Instance(
+        base_url="http://h/AcumaticaERP",
+        password="x",
+        api_version="24.200.001",
+    )
+
+    dirs = [p.as_posix() for p in cli.default_apply_dirs(inst)]
+
+    assert "config/master" in dirs
+    assert "overlays/default-24.200.001/config/master" in dirs
+    assert dirs.index("config/master") < dirs.index(
+        "overlays/default-24.200.001/config/master"
+    )
 
 
 @pytest.fixture

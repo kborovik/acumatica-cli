@@ -16,13 +16,15 @@ acu config check
 acu bootstrap
 
 # 3. Seed config umbrella (bootstrap → baseline → setup → master)
-acu apply config/
+#    bare `acu apply` also appends overlays/default-<default_api>/ when present
+acu apply
 
 # 4. Lifecycle scenarios (once capital → buy → build → sell)
-acu run scenario/
+#    bare `acu run` replaces same-name files from pin overlay scenario/
+acu run
 
 # 5. Prove no drift
-acu diff config/
+acu diff
 
 # 6. Capture derived-state observations (EndingBalance trial-balance)
 acu state
@@ -48,6 +50,8 @@ Bare `acu apply` / `acu diff` also prefer `config/` when those trees exist.
 | `scenario/20-buy.yaml` | Additive component PO → receipt → bill → AP pay |
 | `scenario/30-build.yaml` | Additive kit assembly |
 | `scenario/40-sell.yaml` | Additive SO → ship → invoice → AR pay |
+| `overlays/` | Default-half rewrites (`default-<default_api>/`); bare apply/run/diff auto-compose |
+| `overlays/default-24.200.001/` | Lab 25r1 half: KitAssembly Type Assembly |
 | `config/views/10-trial-balance.yaml` | Observer view (EndingBalance inquire; Period pinned literal; not SEED_DIRS) |
 | `state/` | Written by `acu state` (derived-state observations) |
 

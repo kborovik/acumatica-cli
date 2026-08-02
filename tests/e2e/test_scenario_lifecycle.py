@@ -122,6 +122,10 @@ def test_full_scaffold_layout(scenario_repo: Path) -> None:
     assert (scenario_repo / "scenario" / "30-build.yaml").is_file()
     assert (scenario_repo / "scenario" / "40-sell.yaml").is_file()
     assert not (scenario_repo / "scenario" / "buy-sell.yaml").exists()
+    assert (scenario_repo / "overlays" / "README.md").is_file()
+    assert (
+        scenario_repo / "overlays" / "default-24.200.001" / "scenario" / "30-build.yaml"
+    ).is_file()
     assert (scenario_repo / "config" / "views" / "10-trial-balance.yaml").is_file()
     # T107/V28/V33: golden state/ = trial-balance only (B25)
     assert not (

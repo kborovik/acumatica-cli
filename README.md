@@ -230,19 +230,29 @@ One **trunk seed** in the data repo serves every host. Version fan-out is
 | Optional overlays | Surgical seed deltas keyed by Default half (e.g. `overlays/default-24.200.001/`) |
 | OpenAPI | Live `acu schema` dump only (gitignored); never multi-version swagger trees in package or data repo |
 
-**Overlays are data-repo-only** — no `acu apply --overlay` flag. Pass overlay
-dirs as ordinary path args after the trunk tree so later files win for the
-same entity keys you rewrite:
+**Overlays** live under `overlays/default-<default_api>/` (scaffolded by
+`acu config init`). No `--overlay` flag.
+
+**Bare compose (pin auto):** when path args are omitted, `acu apply` /
+`acu diff` append overlay config seed dirs when present; `acu run` replaces
+same-basename scenario files from the pin overlay. Pin =
+resolved `api_version` (`target.yaml` `default_api`). Explicit path args
+disable auto-compose.
 
 ```sh
-# host pinned to Default 24.200.001 needs a KitAssembly Type rewrite
+# target.yaml default_api: 24.200.001 → uses overlays/default-24.200.001/
+acu apply
+acu run
+acu diff
+
+# explicit path args (no auto) — later path wins same keys
 acu apply config/ overlays/default-24.200.001/
 acu diff config/ overlays/default-24.200.001/
 ```
 
-A future optional **compat profile** (curated rewrites by Default half inside
-the CLI) is deferred until overlays prove out in data repos; it will not ship
-full OpenAPI trees (V11/V44).
+Add a future half by creating `overlays/default-<new-half>/` with the
+minimal rewrite; no long-running product branches and no multi-version
+OpenAPI trees (V11/V44).
 
 Sibling data-repo retirement of release branches:
 [acumatica-gitops#2](https://github.com/kborovik/acumatica-gitops/issues/2).

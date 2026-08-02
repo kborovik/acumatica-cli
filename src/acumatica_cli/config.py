@@ -30,6 +30,9 @@ from .models import validation_summary
 PLACEHOLDER_HOST = "erp.example.com"
 DEFAULT_SSH_USER = "Administrator"
 DEFAULT_API_VERSION = "25.200.001"
+# V44: data-repo overlays keyed by Default half (target.yaml default_api)
+OVERLAYS_DIRNAME = "overlays"
+OVERLAY_DIR_PREFIX = "default-"
 
 ACU_INSTANCE_NAME = "AcumaticaERP"  # ac.exe -iname; IIS app-pool name
 ACU_INSTANCE_PATH = "C:\\Acumatica\\AcumaticaERP"  # ac.exe -h
@@ -130,6 +133,16 @@ INIT_TEMPLATES = (
     ("scenario/20-buy.yaml", "scenario/20-buy.yaml"),
     ("scenario/30-build.yaml", "scenario/30-build.yaml"),
     ("scenario/40-sell.yaml", "scenario/40-sell.yaml"),
+    # Default-half overlays (V44): keyed by target.yaml default_api
+    ("overlays/README.md", "overlays/README.md"),
+    (
+        "overlays/default-24.200.001/README.md",
+        "overlays/default-24.200.001/README.md",
+    ),
+    (
+        "overlays/default-24.200.001/scenario/30-build.yaml",
+        "overlays/default-24.200.001/scenario/30-build.yaml",
+    ),
 )
 
 
@@ -218,9 +231,10 @@ def scaffold(directory: Path, host: str | None = None) -> Iterator[tuple[str, Pa
     placeholder host inside the scaffolded .env ``ACU_BASE_URL`` only
     (``ACU_SSH`` is omitted — defaults from the base_url host at resolve;
     hosted opt-out = present blank ``ACU_SSH=``). Secrets stay placeholders
-    (V2). Single full seed under ``config/`` + lifecycle ``scenario/``
-    (V28/T108; no flavor). The directory is created if absent. No git init,
-    no gpg - version control and secret encryption stay the operator's call.
+    (V2). Single full seed under ``config/`` + lifecycle ``scenario/`` +
+    pin-keyed ``overlays/`` (V28/T108/V44; no flavor). The directory is
+    created if absent. No git init, no gpg - version control and secret
+    encryption stay the operator's call.
     """
     pkg = resources.files("acumatica_cli") / "templates"
     directory.mkdir(parents=True, exist_ok=True)
@@ -235,6 +249,17 @@ def scaffold(directory: Path, host: str | None = None) -> Iterator[tuple[str, Pa
         target.parent.mkdir(parents=True, exist_ok=True)
         target.write_text(content, encoding="utf-8")
         yield "write", target
+
+
+def pin_overlay_dir(root: Path, api_version: str) -> Path | None:
+    """``{root}/overlays/default-<api_version>`` when that directory exists.
+
+    Overlay identity is the Default contract half (``target.yaml``
+    ``default_api`` / resolved ``Instance.api_version``), not the ERP
+    marketing line. Missing dir → None (trunk-only host).
+    """
+    path = root / OVERLAYS_DIRNAME / f"{OVERLAY_DIR_PREFIX}{api_version}"
+    return path if path.is_dir() else None
 
 
 def find_data_root() -> Path | None:

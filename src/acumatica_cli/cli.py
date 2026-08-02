@@ -30,6 +30,7 @@ from .config import (
     data_root,
     find_data_root,
     load_instance,
+    pin_overlay_dir,
     read_env_values,
     scaffold,
 )
@@ -850,6 +851,65 @@ def default_seed_dirs() -> tuple[Path, ...]:
     return dirs
 
 
+def _overlay_seed_parents(overlay: Path) -> list[Path]:
+    """SEED_DIRS under ``overlay/config/`` or ``overlay/`` (later path wins)."""
+    for parent in (overlay / "config", overlay):
+        children = _seed_child_dirs(parent)
+        if children:
+            return children
+    return []
+
+
+def default_apply_dirs(inst: Instance) -> tuple[Path, ...]:
+    """Bare apply/diff: trunk seed dirs + pin overlay config when present (V44).
+
+    Explicit path args skip this helper. Overlay identity =
+    ``overlays/default-<api_version>/`` from resolved ``Instance.api_version``.
+    """
+    dirs = list(default_seed_dirs())
+    root = data_root()
+    overlay = pin_overlay_dir(root, inst.api_version)
+    if overlay is not None:
+        extra = _overlay_seed_parents(overlay)
+        if extra:
+            output.data(
+                f"overlay {overlay.relative_to(root)}/ (default_api={inst.api_version})"
+            )
+            dirs.extend(Path(os.path.relpath(d)) for d in extra)
+    return tuple(dirs)
+
+
+def default_scenario_files(inst: Instance) -> tuple[Path, ...]:
+    """Bare run: trunk scenario/*.yaml with pin overlay basenames replacing.
+
+    Same-name files under ``overlays/default-<api>/scenario/`` win over trunk
+    (V44). Explicit path args skip this helper.
+    """
+    root = data_root()
+    scenario = root / "scenario"
+    if not scenario.is_dir():
+        raise SystemExit(f"{scenario}: scenario directory does not exist")
+    by_name: dict[str, Path] = {}
+    for path in sorted(scenario.glob("*.yaml")):
+        by_name[path.name] = path
+    overlay = pin_overlay_dir(root, inst.api_version)
+    replaced = False
+    if overlay is not None:
+        overlay_sc = overlay / "scenario"
+        if overlay_sc.is_dir():
+            for path in sorted(overlay_sc.glob("*.yaml")):
+                by_name[path.name] = path
+                replaced = True
+    if not by_name:
+        raise SystemExit(f"{scenario}: no scenario *.yaml files")
+    if replaced and overlay is not None:
+        output.data(
+            f"overlay {overlay.relative_to(root)}/scenario/ "
+            f"(default_api={inst.api_version})"
+        )
+    return tuple(Path(os.path.relpath(by_name[name])) for name in sorted(by_name))
+
+
 def _leaf_yaml(directory: Path) -> list[Path]:
     """Sorted ``*.yaml`` in a leaf seed dir; skip ``features.yaml`` (I.data)."""
     return sorted(p for p in directory.glob("*.yaml") if p.name != "features.yaml")
@@ -893,7 +953,8 @@ def apply_cmd(inst: Instance, files: tuple[Path, ...], dry_run: bool) -> None:
     FILES are baseline YAML files or directories containing them. A dir with
     SEED_DIRS children (e.g. config/) expands nested trees in fixed order.
     Omitted, defaults prefer config/<name>/ when present, else root SEED_DIRS
-    (V30).
+    (V30), then pin overlay config under overlays/default-<api>/ when present
+    (V44).
 
     Per-record failure isolation (V45): one failed PUT reports and continues;
     later records and files still run. Exit 1 with a multi-error summary when
@@ -903,7 +964,7 @@ def apply_cmd(inst: Instance, files: tuple[Path, ...], dry_run: bool) -> None:
     total_ok = 0
     all_errors: list[str] = []
     with AcumaticaClient(inst) as client:
-        for path in expand_files(files or default_seed_dirs()):
+        for path in expand_files(files or default_apply_dirs(inst)):
             baseline = seed.load_baseline(path)
             output.data(
                 f"{path} -> {inst.tenant} on {inst.base_url} ({baseline.entity})"
@@ -964,10 +1025,11 @@ def diff_cmd(inst: Instance, files: tuple[Path, ...]) -> None:
     FILES are baseline YAML files or directories containing them. A dir with
     SEED_DIRS children (e.g. config/) expands nested trees in fixed order.
     Omitted, defaults prefer config/<name>/ when present, else root SEED_DIRS
-    (V30).
+    (V30), then pin overlay config under overlays/default-<api>/ when present
+    (V44).
     """
     assert_target_compatible(inst)
-    paths = expand_files(files or default_seed_dirs())
+    paths = expand_files(files or default_apply_dirs(inst))
     drifts: list[str] = []
     with AcumaticaClient(inst) as client:
         for path in paths:
@@ -997,22 +1059,18 @@ def run_cmd(inst: Instance, files: tuple[Path, ...], dry_run: bool) -> None:
     """Execute transaction scenario YAML against the live tenant.
 
     FILES are scenario YAML files or directories containing them. Omitted,
-    they default to the data repo's scenario/ directory. Transactions are
-    executed forward (the server assigns document numbers), never upserted;
-    delta expectations snapshot before the first step and compare after the
-    last, so a scenario re-runs safely on a warm tenant. Built-in
-    ``${current_period}`` expands to host-local MMyyyy on steps, expect
-    params, and once.present params (views for ``acu state`` stay pinned).
-    Exit 0 when every expectation holds, 1 on any step error or expectation
-    miss.
+    they default to the data repo's scenario/ directory with pin overlay
+    basenames under overlays/default-<api>/scenario/ replacing trunk (V44).
+    Transactions are executed forward (the server assigns document numbers),
+    never upserted; delta expectations snapshot before the first step and
+    compare after the last, so a scenario re-runs safely on a warm tenant.
+    Built-in ``${current_period}`` expands to host-local MMyyyy on steps,
+    expect params, and once.present params (views for ``acu state`` stay
+    pinned). Exit 0 when every expectation holds, 1 on any step error or
+    expectation miss.
     """
     assert_target_compatible(inst)
-    if not files:
-        default = data_root() / "scenario"
-        if not default.is_dir():
-            raise SystemExit(f"{default}: scenario directory does not exist")
-        files = (Path(os.path.relpath(default)),)
-    paths = expand_files(files)
+    paths = list(default_scenario_files(inst)) if not files else expand_files(files)
     scenarios = [run.load_scenario(path) for path in paths]
     ok = True
     if dry_run:

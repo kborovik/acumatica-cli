@@ -2,6 +2,18 @@
 
 ## Unreleased
 
+### Added
+
+- **Overlays in `config init` template (V44):** scaffold `overlays/README.md` +
+  `overlays/default-24.200.001/` (KitAssembly Type `Assembly` for lab 25r1 /
+  Default half `24.200.001`). Future halves = new `overlays/default-<half>/`
+  dirs; no long-running product branches.
+- **Bare pin auto-compose (V44):** when path args are omitted, `acu apply` /
+  `acu diff` append `overlays/default-<api>/` config seed dirs when present;
+  `acu run` replaces same-basename files from
+  `overlays/default-<api>/scenario/`. Explicit path args stay fully manual.
+  `api` = resolved `Instance.api_version` (`target.yaml` `default_api`).
+
 ## [v0.23.1] - 2026-08-02
 
 ### Added
