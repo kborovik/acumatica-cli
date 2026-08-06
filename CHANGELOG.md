@@ -2,6 +2,16 @@
 
 ## Unreleased
 
+### Changed
+
+- **Agent-oriented CLI help:** root `acu --help` now carries a full mental
+  model (data repo layout, REST vs SSH planes, sole writer / drift /
+  transactions), typical SSH + hosted workflows, config resolution order,
+  command map by intent, exit codes, and default paths. Every subcommand
+  help adds prerequisites, concrete examples, exit codes, and related
+  commands so LLM agents can learn the tool from `--help` alone. Also
+  accepts `-h` and widens help layout. README points agents at root help.
+
 ## [v0.24.2] - 2026-08-06
 
 ### Fixed

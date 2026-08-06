@@ -651,6 +651,45 @@ def test_extract_help_documents_config_hard_cut(wired: Instance) -> None:
     assert "seed_catalog.yaml" in result.output
 
 
+def test_root_help_is_agent_oriented(wired: Instance) -> None:
+    """Root --help carries mental model + workflow so agents need no skill."""
+    result = CliRunner().invoke(cli.cli, ["--help"])
+
+    assert result.exit_code == 0
+    out = result.output
+    assert "MENTAL MODEL" in out
+    assert "TYPICAL WORKFLOW" in out
+    assert "COMMAND MAP" in out
+    assert "EXIT CODES" in out
+    assert "CONFIG RESOLUTION" in out
+    assert "REST data plane" in out
+    assert "SSH control plane" in out
+    # sole writer + drift contract
+    assert "apply" in out
+    assert "diff" in out
+    # disambiguate the two check commands
+    assert "config check" in out
+    assert "-h, --help" in out or "--help" in out
+
+
+def test_apply_help_lists_examples_and_exit_codes(wired: Instance) -> None:
+    result = CliRunner().invoke(cli.cli, ["apply", "--help"])
+
+    assert result.exit_code == 0
+    assert "Examples" in result.output
+    assert "acu --tenant DEV apply" in result.output
+    assert "sole tenant writer" in result.output.lower()
+
+
+def test_check_help_distinguishes_config_check(wired: Instance) -> None:
+    result = CliRunner().invoke(cli.cli, ["check", "--help"])
+
+    assert result.exit_code == 0
+    assert "config check" in result.output
+    assert "delete" in result.output.lower()
+    assert "Examples" in result.output
+
+
 def test_provision_cmd_is_gone(wired: Instance) -> None:
     # T45: tenant create chains the bootstrap publish itself; the separate
     # provision command must not exist

@@ -1,4 +1,86 @@
-"""acu - Acumatica configuration as code."""
+"""acu - Acumatica configuration as code (GitOps CLI).
+
+Configure Acumatica ERP from YAML in a git data repo. No UI wizards.
+
+\b
+MENTAL MODEL
+  Data repo = directory with .env (walk-up from cwd). Holds:
+    config/{bootstrap,baseline,setup,master}/  seed YAML (apply/diff/extract)
+    config/views/                              observer views (state)
+    scenario/                                  transaction scripts (run)
+    matrix.yaml                                multi-host pin (erp, api, url)
+    .env                                       secrets + optional overrides
+    state/ inventory/ findings/ schemas/       command outputs (not seed)
+  Two planes (do not mix):
+    REST data plane — apply diff run bootstrap extract state schema
+      needs: base_url, tenant, password (SSH optional)
+    SSH control plane — tenant list|create|delete|recycle
+      needs: non-empty ACU_SSH (user@host)
+  Sole tenant writer = apply (keyed PUT upserts)
+  Drift detector     = diff (exit 2 when seed != live)
+  Transactions       = run (forward docs, not upserts)
+
+\b
+TYPICAL WORKFLOW (SSH box — create your own tenant)
+  1. acu config init --host erp.example.com my-erp && cd my-erp
+  2. edit .env          # set ACU_PASSWORD, ACU_TENANT
+  3. acu config check   # read-only preflight (REST + optional SSH)
+  4. acu tenant create --login DEV          # create + bootstrap
+  5. acu --tenant DEV apply config/         # seed -> tenant
+  6. acu --tenant DEV run scenario/         # capital -> buy -> build -> sell
+  7. acu --tenant DEV diff config/          # prove zero drift (exit 2 = drift)
+  8. acu --tenant DEV state                 # capture trial-balance etc.
+
+\b
+HOSTED (tenant already exists, no SSH)
+  Set blank ACU_SSH= in .env (scaffold omits the key; without it acu defaults
+  SSH to Administrator@<host>). Then:
+    acu config check
+    acu --tenant DEV bootstrap
+    acu --tenant DEV apply config/
+    acu --tenant DEV diff config/
+  Offline UI fallback: acu bootstrap --export AcuBootstrap.zip  # SM204505
+
+\b
+CONFIG RESOLUTION (per key, highest wins)
+  CLI global flag  ->  ACU_* env (.env or process)  ->  matrix.yaml cell  ->  default
+  Globals only BEFORE the subcommand:
+    acu --tenant DEV --cell lab apply config/
+  matrix.yaml cell supplies base_url + api_version (default_api) + erp claim
+  --cell ID selects a cell (omit = first cell)
+
+\b
+COMMAND MAP (pick by intent)
+  setup        config init | config show | config check
+  tenants      tenant list | create | delete | recycle   (SSH)
+  bootstrap    bootstrap [--export PATH]                 (REST or zip)
+  seed write   apply [--dry-run] [FILES...]              (sole mutator)
+  seed check   diff [FILES...]                           (exit 2 on drift)
+  txns         run [--dry-run] [FILES...]
+  cold CI      check [--all] [--tenant LOGIN]            (!= config check)
+  pull seed    extract [--only ENTITY]...                (inverse of apply)
+  observe      state [--diff|--assert-unchanged]
+  offline      inventory ARTIFACT | reconcile
+  reference    schema
+
+\b
+EXIT CODES (common)
+  0  success
+  1  operational / parse / expectation failure
+  2  seed drift (diff) or state moved (state --assert-unchanged)
+  check (lifecycle) never exits 2 — drift fails the cell as exit 1
+
+\b
+DEFAULT PATHS (when FILES omitted)
+  apply/diff  -> config/<seed dirs>/ if present, else root bootstrap|...|master/
+                then overlays/default-<api>/ when present
+  run         -> scenario/ (overlay same-basename wins)
+  state       -> config/views/ -> writes state/
+  extract     -> always writes config/{bootstrap,baseline,setup,master}/
+
+Run `acu <command> --help` for flags, examples, and prerequisites.
+See package README and docs/demo-seed.md for seed YAML shape.
+"""
 
 import functools
 import json
@@ -36,6 +118,12 @@ from .config import (
 )
 from .matrix import active_cell, assert_matrix_compatible, load_matrix
 from .tenant import TenantManager
+
+# Wider help + -h for agents/operators scanning docs offline.
+_HELP_CTX: dict[str, object] = {
+    "help_option_names": ["-h", "--help"],
+    "max_content_width": 100,
+}
 
 
 def _version() -> str:
@@ -90,7 +178,7 @@ def _emit_completion(
     ctx.exit()
 
 
-@click.group(help=__doc__)
+@click.group(help=__doc__, context_settings=_HELP_CTX)
 @click.version_option(version=_version(), prog_name="acu")
 @click.option(
     "--completion",
@@ -101,45 +189,45 @@ def _emit_completion(
     is_eager=True,
     callback=_emit_completion,
     metavar="[bash|zsh|fish]",
-    help="Print the shell completion script and exit; a bare --completion "
-    "detects the shell from $SHELL. Enable by sourcing the output.",
+    help="Print shell completion script and exit (bash|zsh|fish). "
+    "Bare --completion detects $SHELL. Source the output to enable.",
 )
 @click.option(
     "--cell",
     default=None,
-    help="matrix.yaml cell id (omit = first cell when matrix present)",
+    help="matrix.yaml cell id (omit = first cell). Sets base_url + api pin.",
 )
 @click.option(
     "--tenant",
     default=None,
-    help="Acumatica tenant name",
+    help="Acumatica tenant login name (else ACU_TENANT / .env).",
 )
 @click.option(
     "--url",
     "base_url",
     default=None,
-    help="REST root URL - https://erp.example.com/AcumaticaERP",
+    help="REST root, e.g. https://erp.example.com/AcumaticaERP (else ACU_BASE_URL).",
 )
 @click.option(
     "--ssh",
     default=None,
-    help="Control-plane SSH as user@host",
+    help="Control-plane SSH user@host (else ACU_SSH). Required for tenant *.",
 )
 @click.option(
     "--api-version",
     default=None,
-    help="Contract API version",
+    help="Contract API half, e.g. 25.200.001 (else matrix default_api).",
 )
 @click.option(
     "--username",
     "user",
     default=None,
-    help="API username (ACU_USER, default: admin)",
+    help="API username (ACU_USER, default: admin).",
 )
 @click.option(
     "--password",
     default=None,
-    help="API password (ACU_PASSWORD)",
+    help="API password (ACU_PASSWORD). Prefer .env over the flag.",
 )
 @click.pass_context
 def cli(ctx: click.Context, **flags: str | None) -> None:
@@ -148,7 +236,7 @@ def cli(ctx: click.Context, **flags: str | None) -> None:
     Resolution stays out of the group callback so commands that need no
     target (config init) never trigger it; per key a flag beats the
     ACU_* var (.env or process) beats the code default (I.cmd precedence).
-    ``--cell`` selects a matrix.yaml cell for base_url + api_version + erp
+    `--cell` selects a matrix.yaml cell for base_url + api_version + erp
     (V27); not an Instance field — load_instance peels it off.
     """
     ctx.obj = {k: v for k, v in flags.items() if v is not None}
@@ -191,7 +279,7 @@ def _format_transport_error(
 ) -> str:
     """Friendly one-line body for connect/timeout/TLS (V9 / T123).
 
-    Never surface raw httpx/OS dumps (e.g. ``[Errno 61] Connection refused``).
+    Never surface raw httpx/OS dumps (e.g. `[Errno 61] Connection refused`).
     """
     raw = str(exc).lower()
     if "ssl" in raw or "certificate" in raw or "tls" in raw:
@@ -215,7 +303,7 @@ def _format_failure(exc: BaseException, *, target: str | None = None) -> str:
     """Map expected failures to one greppable error line body (V9).
 
     Transport/network class → friendly rewrite; other RuntimeError / HTTPError
-    keep ``str(exc)`` (server ``exceptionMessage`` path unchanged).
+    keep `str(exc)` (server `exceptionMessage` path unchanged).
     """
     if isinstance(exc, httpx.TransportError):
         return _format_transport_error(exc, target=target)
@@ -238,15 +326,43 @@ def main() -> None:
         raise SystemExit(1) from exc
 
 
-@cli.group("tenant")
+@cli.group("tenant", context_settings=_HELP_CTX)
 def tenant_group() -> None:
-    """Tenant CRUD on the instance (ac.exe CompanyConfig over SSH)."""
+    """Tenant CRUD over SSH (ac.exe CompanyConfig) — control plane only.
+
+    Requires non-empty ACU_SSH (user@host). Hosted / blank ACU_SSH hard-errors
+    before any remote. Not the data-plane path: use bootstrap/apply/diff/run
+    for REST work after a tenant exists.
+
+    \b
+    Subcommands
+      list                 table: CompanyID, Login, CD, Type
+      create --login NAME  create (or re-init) + bootstrap → ready for apply
+      delete --id N | --login NAME [--yes]
+      recycle [--yes]      site-wide app-pool restart (frees API license slots)
+
+    \b
+    Examples
+      acu tenant list
+      acu tenant create --login DEV
+      acu tenant create --login LAB --type SalesDemo
+      acu tenant delete --login DEV --yes
+      acu tenant recycle --yes
+    """
 
 
 @tenant_group.command("list")
 @pass_instance
 def tenant_list(inst: Instance) -> None:
-    """List tenants: CompanyID, sign-in name, internal CD, type."""
+    """List tenants: CompanyID, sign-in name, internal CD, type.
+
+    SSH control plane. Banner shows hostname only (from base_url), never the
+    full URL. Use Login column values as --tenant / --login elsewhere.
+
+    \b
+    Example
+      acu tenant list
+    """
     tenants = TenantManager(inst).list()
     # V9/B27: control-plane identity is the host, never scheme+path
     host = urlparse(inst.base_url).hostname or inst.base_url
@@ -272,7 +388,7 @@ def tenant_list(inst: Instance) -> None:
     "--login",
     "login_name",
     required=True,
-    help="Acumatica tenant name as shown on the sign-in page",
+    help="Tenant name on the sign-in page (required). Becomes REST --tenant.",
 )
 @click.option(
     "--type",
@@ -281,15 +397,22 @@ def tenant_list(inst: Instance) -> None:
     # is the system-tenant dataset, deliberately not offered
     type=click.Choice(["SalesDemo", "T100", "U100"]),
     default=None,
-    help="Data set inserted at creation (omit for a clean tenant); "
-    "T100/U100 are the Acumatica University training sets",
+    help="Data set at creation: SalesDemo|T100|U100 (omit = clean empty tenant).",
 )
-@click.option("--parent", "parent_id", type=int, default=1, show_default=True)
-@click.option("--hidden", is_flag=True, help="Do not show on the sign-in page")
+@click.option(
+    "--parent",
+    "parent_id",
+    type=int,
+    default=1,
+    show_default=True,
+    help="Parent CompanyID for the new company.",
+)
+@click.option("--hidden", is_flag=True, help="Hide tenant on the sign-in page")
 @click.option(
     "--no-init",
     is_flag=True,
-    help="Skip app-pool recycle, first-login password change, and bootstrap",
+    help="Skip recycle + first-login + bootstrap "
+    "(tenant invisible to REST until recycle)",
 )
 @pass_instance
 def tenant_create(
@@ -301,31 +424,32 @@ def tenant_create(
     hidden: bool,
     no_init: bool,
 ) -> None:
-    """Create a tenant and bootstrap it - ready for `acu apply` in one step.
+    """Create a tenant and bootstrap it — ready for `acu apply` in one step.
 
-    Chains the verified steps (docs/ac-exe.md, docs/rest-api.md): ac.exe
-    CompanyConfig with the admin password preset, an app-pool recycle so the
-    running app sees the tenant, a REST login check (with the sign-in
-    screen's first-login password-change flow as fallback), then the
-    bootstrap package publish that makes the virgin tenant configurable
-    (features on, Bootstrap endpoint up). --no-init skips everything after
-    the create: an unrecycled tenant is invisible to REST, so the bootstrap
-    chain cannot run either.
+    SSH control plane. Chains: ac.exe CompanyConfig → app-pool recycle →
+    REST first-login/password → AcuBootstrap publish (features + endpoint).
+    After success, run `acu --tenant <login> apply config/`.
 
-    --login is required; --id is optional (V16 login-only). Omit --id →
-    next free CompanyID = max(live list)+1 (ac.exe never auto-picks). When
-    the login already exists: omit --id → adopt the live CompanyID; pass
-    --id → must match, else hard error naming both.
+    \b
+    Identity
+      --login required (sign-in / REST tenant name).
+      --id optional: omit → next free CompanyID = max(list)+1.
+      Login already exists → skip ac.exe create, still run init+bootstrap
+      (re-run create to republish bootstrap). --id if given must match live.
 
-    Resumable (V4, closes B17): when the login already exists on the
-    instance (tenant list probe - live state, never a marker) the ac.exe
-    create is skipped and the init + digest-gated publish chain still runs,
-    so re-running create is the republish route for existing tenants.
+    \b
+    Flags
+      --type SalesDemo|T100|U100  optional dataset (omit = clean tenant)
+      --no-init                   create only; no recycle/login/bootstrap
 
-    After create (or on exists-skip), CompanyCD is set equal to --login.
-    ac.exe only writes LoginName into CompanyKey and auto-generates CD
-    (Company2, Company3, …); the align step matches what operators do on
-    the Companies screen so ``acu tenant list`` shows Login = CD.
+    \b
+    Examples
+      acu tenant create --login DEV
+      acu tenant create --login LAB --type T100
+      acu tenant create --login DEV --id 3     # must match if already exists
+
+    \b
+    Next: `acu --tenant DEV apply config/` then `run` / `diff`.
     """
     mgr = TenantManager(inst)
     tenants = mgr.list()
@@ -440,20 +564,27 @@ def _bootstrap_tenant(inst: Instance, mgr: TenantManager, login_name: str) -> No
     "export_path",
     type=click.Path(path_type=Path, dir_okay=False),
     default=None,
-    help="Write the package zip to PATH (offline; no REST, no SSH) "
-    "for Customization Projects UI import",
+    help="Write package zip to PATH (offline; no REST/SSH) for SM204505 UI import",
 )
 @click.pass_context
 def bootstrap_cmd(ctx: click.Context, export_path: Path | None) -> None:
     """Publish AcuBootstrap into the session tenant (or export the package zip).
 
-    Hosted / no-SSH path: CustomizationApi publish is pure REST, so this
-    command never requires ACU_SSH. When SSH is set, an app-pool recycle
-    follows publish so feature-gated screens load; when unset, a warning
-    notes that the site may need another restart before apply.
+    Makes a virgin tenant configurable (features on, Bootstrap endpoint up).
+    Pure REST — never requires ACU_SSH. Prefer this on hosted boxes; on SSH
+    boxes `acu tenant create` already chains bootstrap for you.
 
-    --export writes the same feature-spliced package that publish would
-    import, with no HTTP and no password — the SM204505 UI-import fallback.
+    When ACU_SSH is set, an app-pool recycle follows publish so feature-gated
+    screens load. When unset, a warning notes the site may need another
+    restart before apply. Requires --tenant / ACU_TENANT unless --export.
+
+    \b
+    Examples
+      acu --tenant DEV bootstrap
+      acu bootstrap --export AcuBootstrap.zip   # offline; import on SM204505
+
+    \b
+    Next: `acu --tenant DEV apply config/`.
     """
     features = _bootstrap_features()
     if export_path is not None:
@@ -480,7 +611,7 @@ def bootstrap_cmd(ctx: click.Context, export_path: Path | None) -> None:
     "company_id",
     type=int,
     default=None,
-    help="CompanyID (from `acu tenant list`)",
+    help="CompanyID from `acu tenant list`",
 )
 @click.option(
     "--login",
@@ -495,8 +626,13 @@ def tenant_delete(
 ) -> None:
     """Delete the tenant and all its data, then recycle the app pool.
 
-    Pass exactly one of --id or --login (login = sign-in name from
-    `acu tenant list`). Confirm prompt; --yes skips.
+    SSH control plane. Pass exactly one of --id or --login. Confirm prompt;
+    --yes skips. Irreversible — all company data is removed.
+
+    \b
+    Examples
+      acu tenant delete --login DEV --yes
+      acu tenant delete --id 3 --yes
     """
     if (company_id is None) == (login_name is None):
         raise SystemExit("pass exactly one of --id or --login")
@@ -524,10 +660,14 @@ def tenant_delete(
 def tenant_recycle(inst: Instance) -> None:
     """Recycle the IIS app pool for the instance (site-wide; no tenant --id).
 
-    Control plane only (SSH): ``Restart-WebAppPool`` for the instance pool.
-    Reloads the tenant map (V5) and drops every in-flight session so concurrent
-    API-user license slots free up. Hosted / empty ACU_SSH hard-errors before
-    any remote (same as other tenant cmds).
+    SSH control plane: Restart-WebAppPool. Reloads the tenant map and drops
+    every in-flight session so concurrent API-user license slots free up.
+    Use after stuck sessions / "license" API errors. Hosted / empty ACU_SSH
+    hard-errors. Confirm prompt; --yes skips.
+
+    \b
+    Example
+      acu tenant recycle --yes
     """
     mgr = TenantManager(inst)
     with output.step("recycling app pool (tenant map + free API-user sessions)"):
@@ -535,11 +675,18 @@ def tenant_recycle(inst: Instance) -> None:
     output.success("app pool recycled")
 
 
-@cli.group("config")
+@cli.group("config", context_settings=_HELP_CTX)
 def config_group() -> None:
-    """Configuration ops.
+    """Data-repo setup and preflight (local + read-only live).
 
-    init = local write, show = local read, check = live read-only preflight.
+    \b
+    Subcommands
+      init [DIR]     scaffold full data repo (local write, no network)
+      show           print resolved config as a complete .env (password redacted)
+      check          read-only live preflight (REST + optional SSH)
+
+    Not the same as `acu check` (cold lifecycle rebuild). Start here on a
+    new machine: init → edit .env → config check → tenant create / bootstrap.
     """
 
 
@@ -547,8 +694,8 @@ def config_group() -> None:
 @click.option(
     "--host",
     default=None,
-    help="Hostname substituted into scaffolded matrix.yaml cell base_url "
-    "(default: erp.example.com); ACU_SSH is omitted and defaults from that host",
+    help="Hostname for matrix.yaml base_url (default: erp.example.com). "
+    "ACU_SSH omitted from .env and defaults from that host.",
 )
 @click.argument(
     "directory", required=False, type=click.Path(file_okay=False, path_type=Path)
@@ -556,14 +703,19 @@ def config_group() -> None:
 def config_init(host: str | None, directory: Path | None) -> None:
     """Scaffold a data repo: .env, matrix.yaml, config/ seed, scenario/.
 
-    Templates ship with the package; every value is a placeholder or a
-    verified example - no secrets. Single full seed under ``config/``
-    (bootstrap/baseline/setup/master) + lifecycle ``scenario/`` +
-    ``config/views/`` + one-cell ``matrix.yaml`` + README. Bootstrap
-    contract stays package SoT (never scaffolds ``project.xml`` —
-    V2/V21/V28). No ``target.yaml``, no ``--flavor`` (V27/V28). Existing
-    files are never overwritten (reported as skipped). DIRECTORY defaults
-    to the current directory and is created if absent. No git init, no gpg.
+    Local only (no network, no secrets written). Creates config/{bootstrap,
+    baseline,setup,master}/, scenario/, config/views/, one-cell matrix.yaml,
+    README. Existing files are never overwritten (reported as skipped).
+    DIRECTORY defaults to cwd and is created if absent. No git init, no gpg.
+    Never scaffolds project.xml (bootstrap contract is package-owned).
+
+    \b
+    Examples
+      acu config init --host erp.example.com my-erp
+      cd my-erp && $EDITOR .env    # ACU_PASSWORD, ACU_TENANT
+      acu config check
+
+    Prints a numbered next: list after scaffold.
     """
     target = directory or Path.cwd()
     for action, path in scaffold(target, host=host):
@@ -588,16 +740,16 @@ def config_init(host: str | None, directory: Path | None) -> None:
 def config_show(inst: Instance) -> None:
     """Print the fully resolved configuration as a complete .env document.
 
-    Resolves through the same load_instance path every live command uses,
-    so the printed values are exactly what a live command would trust -
-    global flag overrides (--url, --ssh, ...) included. The password is
-    never emitted in any form (V2): no ACU_PASSWORD key, no value.
-    ``ACU_API_VERSION`` is never emitted (V27 — api pin is not env; source
-    is active matrix cell ``default_api`` or ``--api-version``). When
-    ``matrix.yaml`` is present, surfaces active cell id/erp/default_api/
-    base_url as comments and notes the api_version source (still exit 0 —
-    no hard gate). Redirect to a file and edit: the output loads back
-    through load_instance unchanged, the password supplied out of band.
+    Same resolution path live commands use (flags → env → matrix → default).
+    Password is never emitted (no ACU_PASSWORD key). ACU_API_VERSION is never
+    emitted (api pin comes from matrix default_api or --api-version). When
+    matrix.yaml is present, cell id/erp/default_api/base_url appear as
+    comments. Safe to redirect and edit; supply password out of band.
+
+    \b
+    Examples
+      acu config show
+      acu --cell lab --tenant DEV config show
     """
     output.data("# resolved by `acu config show` - a complete .env")
     output.data("# ACU_PASSWORD comes from .env or the environment, never from here")
@@ -652,18 +804,28 @@ def config_show(inst: Instance) -> None:
 )
 @click.pass_context
 def config_check(ctx: click.Context, strict: bool) -> None:
-    """Read-only preflight of the resolved target, one ok/fail/warn/skip line.
+    """Read-only preflight of the resolved target (ok/fail/warn/skip lines).
 
-    Dependency order: discovery (.env walk-up + parse + ACU_BASE_URL), then
-    secrets (ACU_PASSWORD resolved), then local matrix.yaml probe, then REST
-    (login, landed-tenant verify, logout) and ssh probed independently -
-    ssh set → trivial remote; ssh unset → skip (ACU_SSH optional, V3 hosted
-    path), never fail. A discovery or secrets failure stops; a REST failure
-    still probes ssh when set and vice versa. Discovery is lax (V3): no
-    .env passes when --url covers base_url, and flags-only runs (no .env
-    anywhere) are valid. Writes nothing: no PUTs, no tenant CRUD. Exit 0
-    when no fail line (warns allowed); --strict promotes missing matrix to
-    fail; exit 1 on any failure.
+    Proves connectivity before apply/run. Writes nothing (no PUT, no tenant
+    CRUD). Not `acu check` (that is a destructive cold lifecycle rebuild).
+
+    \b
+    Probe order
+      discovery  .env walk-up + base_url resolve
+      secrets    ACU_PASSWORD present
+      matrix     local matrix.yaml (warn if missing; --strict → fail)
+      rest       login + landed tenant + Default/<api> listed
+      ssh        ping if ACU_SSH set; skip if unset (hosted OK)
+
+    \b
+    Exit  0 = no fail lines (warns OK) · 1 = any fail
+    Discovery/secrets failure stops early; REST and SSH are independent.
+
+    \b
+    Examples
+      acu config check
+      acu config check --strict
+      acu --url https://erp/AcumaticaERP --password SECRET config check
     """
     overrides: dict[str, str] = ctx.obj or {}
     cell_id = overrides.get("cell")
@@ -794,11 +956,11 @@ def _probe_matrix(
     cell_id: str | None = None,
     base_url_from_flag_or_env: bool = False,
 ) -> tuple[bool, str | None]:
-    """Emit local matrix probe; return ``(failed, claimed_erp?)`` (V27).
+    """Emit local matrix probe; return `(failed, claimed_erp?)` (V27).
 
     Invalid matrix hard-exits (any loader). Missing under data root warns
-    unless --strict. No data root → skip. Match → ok + claimed ``erp`` for
-    the live ERP probe after REST (T92). Active cell = ``--cell`` or first.
+    unless --strict. No data root → skip. Match → ok + claimed `erp` for
+    the live ERP probe after REST (T92). Active cell = `--cell` or first.
     """
     try:
         matrix = load_matrix(root)
@@ -852,7 +1014,7 @@ def _probe_endpoints(endpoints: list[tuple[str, str]], inst: Instance) -> bool:
     """Emit endpoints probe; return True on pass, False on fail (V12/V27).
 
     Exact match: a Default entry whose version half equals
-    ``Instance.api_version``. Caller already fail-closed on unparseable GET.
+    `Instance.api_version`. Caller already fail-closed on unparseable GET.
     """
     want = f"Default/{inst.api_version}"
     defaults = [v for name, v in endpoints if name == "Default"]
@@ -878,8 +1040,8 @@ def _major_minor(version: str) -> str:
 def _probe_erp(claimed: str, live: str | None) -> bool:
     """Emit ERP probe; return True on pass/skip, False on fail (T92).
 
-    Live id comes from 26.x ``GET /entity`` wrapper
-    ``version.acumaticaBuildVersion``. Bare array → skip (no HTTP surface).
+    Live id comes from 26.x `GET /entity` wrapper
+    `version.acumaticaBuildVersion`. Bare array → skip (no HTTP surface).
     Compare major.minor only — patch builds may drift within a claimed line.
     """
     if live is None:
@@ -919,16 +1081,31 @@ def check_cmd(
 ) -> None:
     """Cold matrix lifecycle: delete → create → apply → run → diff (leave tenant).
 
-    Distinct from ``acu config check`` (read-only preflight). Requires
-    ``matrix.yaml``, non-empty ACU_SSH (tenant CRUD), and a tenant login
-    (``--tenant`` / global / ACU_TENANT). ``--cell`` selects one cell
-    (default first); ``--all`` walks every cell in matrix order, continues
-    on failure, and aggregates exit ≠0 when any cell fails. Diff drift is
-    a cell fail (exit 1 overall; never 2 — V47). Bare apply/run/diff use
-    pin overlay auto-compose (V44). Pre-clean delete is always unattended;
-    the rebuilt tenant is left on the host after a green run (and after
-    failure) for manual inspect / Account Summary / ``acu state``.
-    ``--yes`` is accepted for operator muscle-memory only.
+    Destructive rebuild for CI / matrix verification. Not `acu config check`
+    (read-only preflight). Requires matrix.yaml, non-empty ACU_SSH, and a
+    tenant login (--tenant / ACU_TENANT). Pre-clean delete is always
+    unattended; rebuilt tenant is left on the host for inspect / state.
+    --yes is accepted for muscle-memory only.
+
+    \b
+    Per cell
+      delete tenant (if present) → create+bootstrap → apply → run → diff
+      Diff drift fails the cell as exit 1 (never exit 2 from this command).
+
+    \b
+    Selection
+      default     first matrix.yaml cell
+      --cell ID   that cell only (global flag)
+      --all       every cell, continue-on-fail, aggregate exit
+
+    \b
+    Examples
+      acu check --tenant DEV
+      acu check --all --tenant DEV
+      acu --cell lab check --tenant LAB5
+
+    Prefer `config check` for "can I connect?" Prefer this for "rebuild
+    green from empty."
     """
     _ = yes
     matrix = _require_matrix_for_check()
@@ -1118,16 +1295,16 @@ SEED_DIRS = ("bootstrap", "baseline", "setup", "master")
 
 
 def _seed_child_dirs(parent: Path) -> list[Path]:
-    """SEED_DIRS children of ``parent`` that exist, fixed order (V22/V30)."""
+    """SEED_DIRS children of `parent` that exist, fixed order (V22/V30)."""
     return [parent / name for name in SEED_DIRS if (parent / name).is_dir()]
 
 
 def default_seed_dirs() -> tuple[Path, ...]:
-    """Default apply/diff dirs: prefer ``config/`` SEED_DIRS, else root (V30).
+    """Default apply/diff dirs: prefer `config/` SEED_DIRS, else root (V30).
 
-    When the data-repo ``config/`` has any SEED_DIRS child, only those
-    ``config/<name>/`` paths are returned (dual layout never merges with
-    root). Else root ``bootstrap/``…``master/`` for present names
+    When the data-repo `config/` has any SEED_DIRS child, only those
+    `config/<name>/` paths are returned (dual layout never merges with
+    root). Else root `bootstrap/`…`master/` for present names
     (legacy root layout). The data repo is the .env dir (V3 walk-up). None
     existing is an error - an empty default would make a bare run a silent
     no-op. Paths come back relative to cwd so a bare run prints exactly
@@ -1149,7 +1326,7 @@ def default_seed_dirs() -> tuple[Path, ...]:
 
 
 def _overlay_seed_parents(overlay: Path) -> list[Path]:
-    """SEED_DIRS under ``overlay/config/`` or ``overlay/`` (later path wins)."""
+    """SEED_DIRS under `overlay/config/` or `overlay/` (later path wins)."""
     for parent in (overlay / "config", overlay):
         children = _seed_child_dirs(parent)
         if children:
@@ -1161,7 +1338,7 @@ def default_apply_dirs(inst: Instance) -> tuple[Path, ...]:
     """Bare apply/diff: trunk seed dirs + pin overlay config when present (V44).
 
     Explicit path args skip this helper. Overlay identity =
-    ``overlays/default-<api_version>/`` from resolved ``Instance.api_version``.
+    `overlays/default-<api_version>/` from resolved `Instance.api_version`.
     """
     dirs = list(default_seed_dirs())
     root = data_root()
@@ -1179,7 +1356,7 @@ def default_apply_dirs(inst: Instance) -> tuple[Path, ...]:
 def default_scenario_files(inst: Instance) -> tuple[Path, ...]:
     """Bare run: trunk scenario/*.yaml with pin overlay basenames replacing.
 
-    Same-name files under ``overlays/default-<api>/scenario/`` win over trunk
+    Same-name files under `overlays/default-<api>/scenario/` win over trunk
     (V44). Explicit path args skip this helper.
     """
     root = data_root()
@@ -1208,16 +1385,16 @@ def default_scenario_files(inst: Instance) -> tuple[Path, ...]:
 
 
 def _leaf_yaml(directory: Path) -> list[Path]:
-    """Sorted ``*.yaml`` in a leaf seed dir; skip ``features.yaml`` (I.data)."""
+    """Sorted `*.yaml` in a leaf seed dir; skip `features.yaml` (I.data)."""
     return sorted(p for p in directory.glob("*.yaml") if p.name != "features.yaml")
 
 
 def expand_files(files: tuple[Path, ...]) -> list[Path]:
-    """Expand directory arguments into seed ``*.yaml`` files (V22/V30).
+    """Expand directory arguments into seed `*.yaml` files (V22/V30).
 
-    A dir with any SEED_DIRS child (umbrella e.g. ``config/``) expands those
-    nested subdirs in fixed SEED_DIRS order, then leaf ``*.yaml`` per subdir.
-    A leaf dir expands its own ``*.yaml`` only. ``features.yaml`` is skipped:
+    A dir with any SEED_DIRS child (umbrella e.g. `config/`) expands those
+    nested subdirs in fixed SEED_DIRS order, then leaf `*.yaml` per subdir.
+    A leaf dir expands its own `*.yaml` only. `features.yaml` is skipped:
     it configures the bootstrap package build, not an entity/records seed.
     """
     paths: list[Path] = []
@@ -1245,17 +1422,30 @@ def expand_files(files: tuple[Path, ...]) -> list[Path]:
 @click.option("--dry-run", is_flag=True, help="Show what would be PUT without writing")
 @pass_instance
 def apply_cmd(inst: Instance, files: tuple[Path, ...], dry_run: bool) -> None:
-    """Seed baseline YAML into the tenant (idempotent PUT upserts).
+    """Push seed YAML into the tenant (idempotent PUT upserts).
 
-    FILES are baseline YAML files or directories containing them. A dir with
-    SEED_DIRS children (e.g. config/) expands nested trees in fixed order.
-    Omitted, defaults prefer config/<name>/ when present, else root SEED_DIRS
-    (V30), then pin overlay config under overlays/default-<api>/ when present
-    (V44).
+    Sole tenant writer. REST data plane. FILES = seed YAML files or dirs.
+    A dir with seed children (e.g. config/) expands nested trees in fixed
+    order: bootstrap → baseline → setup → master. Omitted FILES → prefer
+    config/<name>/ when present, else root seed dirs, then
+    overlays/default-<api>/ when present.
 
-    Per-record failure isolation (V45): one failed PUT reports and continues;
-    later records and files still run. Exit 1 with a multi-error summary when
-    any record failed; never silent partial. Exit 2 stays with ``diff``.
+    Per-record failure isolation: one failed PUT reports and continues;
+    exit 1 with multi-error summary if any failed (never silent partial).
+    Exit 2 is reserved for `diff` drift.
+
+    \b
+    Prerequisites
+      Tenant exists and is bootstrapped (tenant create or acu bootstrap).
+      ACU_PASSWORD + base_url + tenant resolved (config check first).
+
+    \b
+    Examples
+      acu --tenant DEV apply config/
+      acu --tenant DEV apply --dry-run config/master/
+      acu --tenant DEV apply config/baseline/20-accounts.yaml
+
+    Related: `diff` (drift) · `extract` (inverse pull) · `run` (txns).
     """
     assert_matrix_compatible(inst)
     total_ok = 0
@@ -1290,10 +1480,15 @@ def apply_cmd(inst: Instance, files: tuple[Path, ...], dry_run: bool) -> None:
 )
 @pass_instance
 def schema_cmd(inst: Instance, out_dir: Path | None) -> None:
-    """Dump the endpoint's OpenAPI schema (swagger.json) into schemas/.
+    """Dump the endpoint OpenAPI schema (swagger.json) into schemas/.
 
-    The schema is the authoritative field-level reference for the exact
-    build - regenerate rather than version (the file is ~3 MB).
+    Authoritative field-level reference for the exact Default/<api> build
+    (~3 MB). Regenerate rather than version-control. REST; needs password.
+
+    \b
+    Example
+      acu schema
+      acu --api-version 25.200.001 schema --out ./schemas
     """
     assert_matrix_compatible(inst)
     if out_dir is None:
@@ -1317,13 +1512,21 @@ def schema_cmd(inst: Instance, out_dir: Path | None) -> None:
 )
 @pass_instance
 def diff_cmd(inst: Instance, files: tuple[Path, ...]) -> None:
-    """Compare baseline YAML against the live tenant; exit 2 on drift.
+    """Compare seed YAML against the live tenant; exit 2 on drift.
 
-    FILES are baseline YAML files or directories containing them. A dir with
-    SEED_DIRS children (e.g. config/) expands nested trees in fixed order.
-    Omitted, defaults prefer config/<name>/ when present, else root SEED_DIRS
-    (V30), then pin overlay config under overlays/default-<api>/ when present
-    (V44).
+    Read-only REST. Same FILES rules as apply (config/ expansion, overlays).
+    Use after apply to prove the tenant matches the repo, or in CI as the
+    drift gate. Prints DRIFT lines then exits 2 when seed ≠ live.
+
+    \b
+    Exit  0 = no drift · 1 = op failure · 2 = drift detected
+
+    \b
+    Examples
+      acu --tenant DEV diff config/
+      acu --tenant DEV diff config/master/90-roles.yaml
+
+    Related: `apply` (fix) · `extract` (pull) · `state` (balances).
     """
     assert_matrix_compatible(inst)
     paths = expand_files(files or default_apply_dirs(inst))
@@ -1355,16 +1558,27 @@ def diff_cmd(inst: Instance, files: tuple[Path, ...]) -> None:
 def run_cmd(inst: Instance, files: tuple[Path, ...], dry_run: bool) -> None:
     """Execute transaction scenario YAML against the live tenant.
 
-    FILES are scenario YAML files or directories containing them. Omitted,
-    they default to the data repo's scenario/ directory with pin overlay
-    basenames under overlays/default-<api>/scenario/ replacing trunk (V44).
-    Transactions are executed forward (the server assigns document numbers),
-    never upserted; delta expectations snapshot before the first step and
-    compare after the last, so a scenario re-runs safely on a warm tenant.
-    Built-in ``${current_period}`` expands to host-local MMyyyy on steps,
-    expect params, and once.present params (views for ``acu state`` stay
-    pinned). Exit 0 when every expectation holds, 1 on any step error or
-    expectation miss.
+    REST data plane. Not seed upserts — documents are posted forward (server
+    assigns numbers). Delta expectations snapshot before the first step and
+    compare after the last, so re-runs are safe on a warm tenant. Omitted
+    FILES → scenario/ with overlays/default-<api>/scenario/ same-basename
+    replacements. Built-in `${current_period}` → host-local MMyyyy on
+    steps/expect/once (state views stay period-pinned separately).
+
+    \b
+    Exit  0 = all expectations hold · 1 = step error or expectation miss
+
+    \b
+    Prerequisites
+      Seed applied (apply config/) so masters/parties/items exist.
+
+    \b
+    Examples
+      acu --tenant DEV run scenario/
+      acu --tenant DEV run --dry-run scenario/10-seed-capital.yaml
+      acu --tenant DEV run scenario/20-buy.yaml scenario/40-sell.yaml
+
+    Related: `apply` · `diff` · `state`.
     """
     assert_matrix_compatible(inst)
     paths = list(default_scenario_files(inst)) if not files else expand_files(files)
@@ -1403,15 +1617,15 @@ def _complete_only(
     "out_dir",
     type=click.Path(file_okay=False, path_type=Path),
     default=None,
-    help="Output directory (default: current directory)",
+    help="Data-repo root for writes (default: .); always config/{bootstrap,...}/",
 )
 @click.option(
     "--only",
     multiple=True,
     shell_complete=_complete_only,
-    help="Limit to matching catalog rows (entity name or file stem); repeatable",
+    help="Limit to catalog entity name or file stem; repeatable",
 )
-@click.option("--force", is_flag=True, help="Overwrite existing files")
+@click.option("--force", is_flag=True, help="Overwrite existing seed files")
 @click.option(
     "--dry-run", is_flag=True, help="Show what would be written without writing"
 )
@@ -1423,17 +1637,26 @@ def extract_cmd(
     force: bool,
     dry_run: bool,
 ) -> None:
-    """Extract live tenant state into seed YAML under config/ (inverse of apply).
+    """Extract live tenant into seed YAML under config/ (inverse of apply).
 
-    Catalog-driven (packaged ``seed_catalog.yaml`` is the verified entity
-    registry): each row is read from the live tenant and written under
-    ``config/{bootstrap,baseline,setup,master}/`` (hard-cut; never root
-    SEED_DIRS; no ``--layout``). Apply and diff consume those files
-    unchanged. Features synthesize to ``config/bootstrap/features.yaml``.
-    Existing files are skipped unless --force; an entity with no live
-    records produces no file. A failing row is reported and the run
-    continues (a virgin tenant extracts whole). Exit 0 when every row
-    wrote or skipped clean, 1 when any row failed - drift stays with diff.
+    REST reader. Packaged seed_catalog.yaml is the entity registry. Writes
+    only under config/{bootstrap,baseline,setup,master}/ (never root seed
+    dirs). Features → config/bootstrap/features.yaml. Existing files skip
+    unless --force; empty live sets produce no file. Row failures continue;
+    exit 1 if any failed. Drift detection stays with `diff`.
+
+    Not inventory (offline snapshot tables) and not state (derived balances).
+
+    \b
+    Exit  0 = all rows wrote/skipped clean · 1 = any row failed
+
+    \b
+    Examples
+      acu --tenant DEV extract
+      acu --tenant DEV extract --only Account --only Vendor
+      acu --tenant DEV extract --force --dry-run
+
+    Related: `apply` · `diff` · `inventory` · `state`.
     """
     assert_matrix_compatible(inst)
     with AcumaticaClient(inst) as client:
@@ -1482,17 +1705,24 @@ def inventory_cmd(
     force: bool,
     dry_run: bool,
 ) -> None:
-    """Parse a snapshot artifact into inventory/ (offline dual-reader).
+    """Parse a snapshot artifact into inventory/ (offline, no REST/SSH).
 
-    ARTIFACT is an SM203520 Settings XML ZIP (manifest.xml + table XML) or
-    an ac.exe export xml folder. Both normalize to one IR (V37). Binary
-    .adb is rejected. No REST, no SSH, no password. Writes summary.yaml
-    and tables/<Table>.yaml under --out (default inventory/). Existing
-    files are skipped unless --force. When data-repo matrix.yaml is
-    present and the artifact reports a build, active-cell erp must match
-    or the run fails. Exit 0 clean, 1 parse/format/version fail; never 2
-    (drift is not this command). Not extract (REST seed into config/), not
-    state (derived balances) — never writes config/ or state/ (V35).
+    ARTIFACT = SM203520 Settings XML ZIP (manifest.xml + table XML) or an
+    ac.exe `export xml` folder. Binary .adb is rejected. Writes
+    summary.yaml + tables/<Table>.yaml under --out (default inventory/).
+    Existing files skip unless --force. If matrix.yaml is present and the
+    artifact reports a build, active-cell erp must match.
+
+    Not extract (REST → config/ seed). Not state (balances). Never writes
+    config/ or state/. Feed inventory/ into `acu reconcile`.
+
+    \b
+    Exit  0 = clean · 1 = parse/format/version fail · never 2
+
+    \b
+    Examples
+      acu inventory ./export-xml/
+      acu inventory Settings.zip --out inventory/ --force
     """
     # V9 long single-op: artifact parse (ZIP/folder IR) via step; banner +
     # per-table write/skip emit stay multi-unit stdout after.
@@ -1516,7 +1746,7 @@ def inventory_cmd(
     "inventory_dir",
     type=click.Path(file_okay=False, path_type=Path),
     default=None,
-    help="Inventory tree directory (default: inventory/)",
+    help="Inventory tree from `acu inventory` (default: inventory/)",
 )
 @click.option(
     "--config",
@@ -1545,22 +1775,22 @@ def reconcile_cmd(
     force: bool,
     dry_run: bool,
 ) -> None:
-    """Compare inventory/ to optional config/ and write findings/ (offline).
+    """Compare inventory/ to optional config/; write findings/ (offline).
 
-    Dual-reader cross-check (V35/V36): reads an inventory tree from
-    `acu inventory` plus an optional prior-extract config/ seed tree;
-    emits FindingsBundle under --out (default findings/). Never writes
-    config/ (not extract promote) and never captures state/ — unmapped
-    tables, REST gaps, rest-vs-snapshot field deltas, and Usr* custom
-    columns land in findings files only. No REST, no SSH, no password.
-    Exit 0 clean, 1 IO/parse fail; never 2 (conflicts are findings, not
-    drift). Optional snapshot_map.yaml maps DAC tables to catalog
-    entities (absent → identity match on entity name) and may declare
-    keys:/fields: seed→inv aliases, resolvers:/resolves: for FK int→CD,
-    and enums: label→code (package defaults cover Sub/UOM aliases,
-    ReasonCode/VendorClass/PostingClass/CashAccount Account+Sub,
-    ReasonCode.Usage + Account Type/Active bools, etc.). Compare always
-    pad-trims strings.
+    Cross-check snapshot tables vs seed. No REST, no SSH, no password.
+    Never writes config/ (not extract promote) and never captures state/.
+    Gaps, field deltas, unmapped tables, Usr* columns → findings/ only.
+    Optional snapshot_map.yaml maps DAC tables → catalog entities (aliases,
+    FK resolvers, enums); package defaults cover common LAB maps. Conflicts
+    are findings, not exit-2 drift.
+
+    \b
+    Exit  0 = ran clean · 1 = IO/parse fail · never 2
+
+    \b
+    Examples
+      acu inventory export.zip && acu reconcile
+      acu reconcile --inventory inv/ --config config/ --out findings/
     """
     inv = (
         inventory_dir
@@ -1620,15 +1850,25 @@ def state_cmd(
     assert_unchanged: bool,
     dry_run: bool,
 ) -> None:
-    """Capture live derived state into committed observation files.
+    """Capture live derived state (balances/totals) into state/ files.
 
-    FILES are view YAML files or directories. Omitted, they default to the
-    data repo's config/views/ directory (hard-cut; no config/snapshot/
-    fallback). Default write target is state/ (--out). Bare capture writes
-    observations (change is fine). --diff compares live to disk without
-    writing. --assert-unchanged is the warm-run idempotence gate (exit 2
-    when moved). Never writes seed trees or endpoint: symbols (V32). Exit 0
-    ok, 1 op fail, 2 only under --assert-unchanged when state moved.
+    REST observer. Not seed (config/) and not inventory (snapshot tables).
+    FILES = view YAML under config/views/ (default when omitted). Writes
+    observations to state/ (--out). Bare capture always writes (change OK).
+    --diff compares live vs disk without writing. --assert-unchanged is the
+    warm-run idempotence gate (exit 2 when moved).
+
+    \b
+    Exit  0 = ok · 1 = op fail · 2 = only with --assert-unchanged when moved
+
+    \b
+    Examples
+      acu --tenant DEV state
+      acu --tenant DEV state --diff
+      acu --tenant DEV state --assert-unchanged
+      acu --tenant DEV state config/views/10-trial-balance.yaml
+
+    Related: `run` (moves balances) · `diff` (seed drift) · `extract`.
     """
     assert_matrix_compatible(inst)
     if not files:

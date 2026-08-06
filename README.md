@@ -96,7 +96,9 @@ A path like `config/` expands nested seed dirs in that fixed order.
 Optional `snapshot_map.yaml` (data-repo root or package defaults) maps DAC tables to catalog entities and normalizes join (pad-trim, key/field aliases, Account/Sub FK CD resolve, enum label to code).
 See [docs/demo-seed.md](docs/demo-seed.md).
 `acu --completion` emits a completion script for bash, zsh, or fish — source it from your shell profile.
-Run `acu <command> --help` for details on any command.
+Run `acu --help` for the full mental model (workflow, planes, exit codes,
+command map) — enough for an agent to learn the tool without extra docs.
+Run `acu <command> --help` (or `-h`) for flags, examples, and prerequisites.
 
 ### Dual readers, one writer
 
