@@ -316,10 +316,15 @@ entities:
   - ReceiptNumberingID
   - AutoReleaseAP
 
+# Active-only: inactive system types (SA/TR/…) often lack insert surface
+# (Behavior, DefaultOperation, …). Virgin apply of Active:false stubs
+# INSERTs incomplete rows → 422. Template seeds SO only; extract should
+# match (Active eq true keeps SO + freight FKs from LAB5-class).
 - entity: OrderType
   endpoint: bootstrap
   keys: [OrderType]
   file: config/master/58-order-types.yaml
+  filter: Active eq true
   include:
   - Active
   - FreightAcctID
