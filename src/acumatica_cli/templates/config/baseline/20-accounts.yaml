@@ -26,8 +26,6 @@ records:
   Secured: false
   Type: Asset
   UseDefaultSubaccount: false
-  # Control Account Module (Default Account custom field) — required so AR
-  # payments/invoices accept this account without "not a control account" warn.
   custom:
     AccountRecords:
       ControlAccountModule: AR

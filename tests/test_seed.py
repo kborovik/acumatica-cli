@@ -1602,8 +1602,9 @@ records:
 
 
 def test_custom_param_from_seed_bag() -> None:
+    custom_param = seed._custom_param  # pyright: ignore[reportPrivateUsage]
     assert (
-        seed._custom_param(
+        custom_param(
             {
                 "AccountCD": "11000",
                 "custom": {
@@ -1616,12 +1617,13 @@ def test_custom_param_from_seed_bag() -> None:
         )
         == "AccountRecords.AllowManualEntry,AccountRecords.ControlAccountModule"
     )
-    assert seed._custom_param({"AccountCD": "11000"}) is None
-    assert seed._custom_param({"custom": {}}) is None
+    assert custom_param({"AccountCD": "11000"}) is None
+    assert custom_param({"custom": {}}) is None
 
 
 def test_expand_paths_skips_top_level_custom() -> None:
-    paths = seed._expand_paths(
+    expand_paths = seed._expand_paths  # pyright: ignore[reportPrivateUsage]
+    paths = expand_paths(
         {
             "AccountCD": "11000",
             "MainContact": {"Address": {"Country": "US"}},
@@ -1632,9 +1634,7 @@ def test_expand_paths_skips_top_level_custom() -> None:
     assert not any(p.startswith("custom") for p in paths)
 
 
-def test_fetch_requests_custom_query_param(
-    tmp_path: Path, instance: Instance
-) -> None:
+def test_fetch_requests_custom_query_param(tmp_path: Path, instance: Instance) -> None:
     # Contract custom fields are not $expand — they need $custom=View.Field
     # or GET omits them and control-account seed permanently drifts.
     baseline = seed.load_baseline(_write(tmp_path, ACCOUNT_CUSTOM_YAML))
@@ -1657,9 +1657,7 @@ def test_fetch_requests_custom_query_param(
     assert request.url.params["$custom"] == "AccountRecords.ControlAccountModule"
 
 
-def test_apply_puts_custom_control_account(
-    tmp_path: Path, instance: Instance
-) -> None:
+def test_apply_puts_custom_control_account(tmp_path: Path, instance: Instance) -> None:
     baseline = seed.load_baseline(_write(tmp_path, ACCOUNT_CUSTOM_YAML))
     recorder = Recorder()
     seed.apply(_client(instance, recorder), baseline)
