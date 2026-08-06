@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+### Fixed
+
+- **Contract custom fields on seed fetch:** GET uses `$custom=View.Field`
+  built from the seed `custom` bag (not `$expand`). Control-account module
+  values round-trip instead of permanent drift. Baseline AR, IN, AP, PO, and
+  TX accounts mark `ControlAccountModule`.
+
 ## [v0.24.1] - 2026-08-02
 
 ### Changed
