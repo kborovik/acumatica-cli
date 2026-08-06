@@ -100,6 +100,7 @@ known-first-party = ["acumatica_cli"]
 [tool.ruff.lint.per-file-ignores]
 "src/acumatica_cli/cli.py" = [
     "PLR0913", # Click commands have many parameters by design
+    "PLR0917", # same: Click injects many positional params on command handlers
     "D301",  # help uses Click \b (backspace) no-rewrap markers — not raw r"""
 ]
 "tests/*" = [
