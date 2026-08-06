@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## [v0.24.2] - 2026-08-06
+
 ### Fixed
 
 - **Contract custom fields on seed fetch:** GET uses `$custom=View.Field`
