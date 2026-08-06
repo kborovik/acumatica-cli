@@ -290,15 +290,45 @@ def _expand_paths(record: dict[str, Any], prefix: str = "") -> list[str]:
     A list field is a detail array - expands by name; a dict field is a
     linked entity - expands by name plus the slash path of every nested
     dict (`MainContact`, `MainContact/Address`).
+
+    ``custom`` is not an $expand path — contract custom fields ride the
+    ``$custom=View.Field`` query option (see ``_custom_param``).
     """
     paths: list[str] = []
     for field, value in record.items():
+        if field == "custom" and not prefix:
+            continue
         if isinstance(value, list):
             paths.append(f"{prefix}{field}")
         elif isinstance(value, dict):
             paths.append(f"{prefix}{field}")
             paths.extend(_expand_paths(value, f"{prefix}{field}/"))
     return sorted(paths)
+
+
+def _custom_param(record: dict[str, Any]) -> str | None:
+    """Build ``$custom=View.Field,…`` from a seed ``custom`` bag.
+
+    Shape (plain YAML, value-wrapped on PUT by ``wrap``)::
+
+        custom:
+          AccountRecords:
+            ControlAccountModule: AR
+
+    Returns ``AccountRecords.ControlAccountModule`` or None when the bag
+    is absent/empty. View→field leaves only; nested linked-entity style
+    under custom is not supported (contract custom fields are flat per view).
+    """
+    bag = record.get("custom")
+    if not isinstance(bag, dict) or not bag:
+        return None
+    paths: list[str] = []
+    for view, fields in bag.items():
+        if not isinstance(fields, dict):
+            continue
+        for field in fields:
+            paths.append(f"{view}.{field}")
+    return ",".join(sorted(paths)) if paths else None
 
 
 def _probe(client: AcumaticaClient, action: ActionFile) -> bool:
@@ -493,10 +523,13 @@ def _fetch(
     derives from the record's own shape - a list field expands by name,
     a dict field by its slash path (`MainContact/Address`).
     """
-    params = {"$filter": _filter_for(record, baseline.keys[:1])}
+    params: dict[str, str] = {"$filter": _filter_for(record, baseline.keys[:1])}
     expand = _expand_paths(record)
     if expand:
         params["$expand"] = ",".join(expand)
+    custom = _custom_param(record)
+    if custom:
+        params["$custom"] = custom
     try:
         live = client.get_list(
             baseline.entity, params=params, endpoint=baseline.endpoint
@@ -504,11 +537,14 @@ def _fetch(
     except RuntimeError as err:
         if OPTIMIZATION_500 not in str(err):
             raise
+        key_params = {
+            k: params[k] for k in ("$expand", "$custom") if k in params
+        } or None
         return client.get_record(
             baseline.entity,
             [record[k] for k in baseline.keys],
             baseline.endpoint,
-            params={"$expand": params["$expand"]} if expand else None,
+            params=key_params,
         )
     for row in live:
         actual = unwrap(row)

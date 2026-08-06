@@ -1589,6 +1589,86 @@ def test_fetch_expands_linked_entity_paths(tmp_path: Path, instance: Instance) -
     assert request.url.params["$expand"] == "MainContact,MainContact/Address"
 
 
+ACCOUNT_CUSTOM_YAML = """\
+entity: Account
+key: AccountCD
+records:
+  - AccountCD: "11000"
+    Description: Accounts Receivable
+    custom:
+      AccountRecords:
+        ControlAccountModule: AR
+"""
+
+
+def test_custom_param_from_seed_bag() -> None:
+    assert (
+        seed._custom_param(
+            {
+                "AccountCD": "11000",
+                "custom": {
+                    "AccountRecords": {
+                        "ControlAccountModule": "AR",
+                        "AllowManualEntry": False,
+                    }
+                },
+            }
+        )
+        == "AccountRecords.AllowManualEntry,AccountRecords.ControlAccountModule"
+    )
+    assert seed._custom_param({"AccountCD": "11000"}) is None
+    assert seed._custom_param({"custom": {}}) is None
+
+
+def test_expand_paths_skips_top_level_custom() -> None:
+    paths = seed._expand_paths(
+        {
+            "AccountCD": "11000",
+            "MainContact": {"Address": {"Country": "US"}},
+            "custom": {"AccountRecords": {"ControlAccountModule": "AR"}},
+        }
+    )
+    assert paths == ["MainContact", "MainContact/Address"]
+    assert not any(p.startswith("custom") for p in paths)
+
+
+def test_fetch_requests_custom_query_param(
+    tmp_path: Path, instance: Instance
+) -> None:
+    # Contract custom fields are not $expand — they need $custom=View.Field
+    # or GET omits them and control-account seed permanently drifts.
+    baseline = seed.load_baseline(_write(tmp_path, ACCOUNT_CUSTOM_YAML))
+    live = {
+        "AccountCD": {"value": "11000"},
+        "Description": {"value": "Accounts Receivable"},
+        "custom": {
+            "AccountRecords": {
+                "ControlAccountModule": {
+                    "type": "CustomStringField",
+                    "value": "AR",
+                }
+            }
+        },
+    }
+    recorder = Recorder({"/Account": httpx.Response(200, json=[live])})
+    assert seed.diff(_client(instance, recorder), baseline) == []
+    (request,) = recorder.requests
+    assert "$expand" not in request.url.params
+    assert request.url.params["$custom"] == "AccountRecords.ControlAccountModule"
+
+
+def test_apply_puts_custom_control_account(
+    tmp_path: Path, instance: Instance
+) -> None:
+    baseline = seed.load_baseline(_write(tmp_path, ACCOUNT_CUSTOM_YAML))
+    recorder = Recorder()
+    seed.apply(_client(instance, recorder), baseline)
+    body = json.loads(recorder.requests[-1].content)
+    assert body["custom"] == {
+        "AccountRecords": {"ControlAccountModule": {"value": "AR"}}
+    }
+
+
 def test_diff_nested_reports_changed_and_missing(
     tmp_path: Path, instance: Instance
 ) -> None:

@@ -26,6 +26,11 @@ records:
   Secured: false
   Type: Asset
   UseDefaultSubaccount: false
+  # Control Account Module (Default Account custom field) — required so AR
+  # payments/invoices accept this account without "not a control account" warn.
+  custom:
+    AccountRecords:
+      ControlAccountModule: AR
 - AccountCD: '12100'
   Active: true
   Description: Inventory - Components
@@ -34,6 +39,9 @@ records:
   Secured: false
   Type: Asset
   UseDefaultSubaccount: false
+  custom:
+    AccountRecords:
+      ControlAccountModule: IN
 - AccountCD: '12200'
   Active: true
   Description: Inventory - Finished Goods
@@ -42,6 +50,9 @@ records:
   Secured: false
   Type: Asset
   UseDefaultSubaccount: false
+  custom:
+    AccountRecords:
+      ControlAccountModule: IN
 - AccountCD: '12300'
   Active: true
   Description: Work In Progress
@@ -50,6 +61,9 @@ records:
   Secured: false
   Type: Asset
   UseDefaultSubaccount: false
+  custom:
+    AccountRecords:
+      ControlAccountModule: IN
 - AccountCD: '12400'
   Active: true
   Description: Inventory In Transit
@@ -58,6 +72,9 @@ records:
   Secured: false
   Type: Asset
   UseDefaultSubaccount: false
+  custom:
+    AccountRecords:
+      ControlAccountModule: IN
 - AccountCD: '15000'
   Active: true
   Description: Prepaid Expenses
@@ -82,6 +99,9 @@ records:
   Secured: false
   Type: Liability
   UseDefaultSubaccount: false
+  custom:
+    AccountRecords:
+      ControlAccountModule: AP
 - AccountCD: '20200'
   Active: true
   Description: PO Accrual
@@ -90,6 +110,9 @@ records:
   Secured: false
   Type: Liability
   UseDefaultSubaccount: false
+  custom:
+    AccountRecords:
+      ControlAccountModule: PO
 - AccountCD: '22000'
   Active: true
   Description: Accrued Expenses
@@ -106,6 +129,9 @@ records:
   Secured: false
   Type: Liability
   UseDefaultSubaccount: false
+  custom:
+    AccountRecords:
+      ControlAccountModule: TX
 - AccountCD: '30000'
   Active: true
   Description: Owner Capital
