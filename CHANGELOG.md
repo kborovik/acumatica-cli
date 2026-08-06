@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## [v0.25.0] - 2026-08-06
+
 ### Changed
 
 - **Agent-oriented CLI help:** root `acu --help` now carries a full mental
