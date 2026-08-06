@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## [v0.25.1] - 2026-08-06
+
 ### Fixed
 
 - **OrderType extract active-only:** seed catalog filters `Active eq true`.
