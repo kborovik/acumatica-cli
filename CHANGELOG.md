@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+### Fixed
+
+- **OrderType extract active-only:** seed catalog filters `Active eq true`.
+  Inactive system types (SA/TR/…) often lack insert fields; seeding
+  `Active:false` stubs produced incomplete INSERTs and 422s. Template seeds
+  SO only; extract now matches.
+
 ## [v0.25.0] - 2026-08-06
 
 ### Changed
