@@ -84,7 +84,7 @@ install: .venv ## Install acu globally as an editable uv tool
 # give the part words no-op recipes so make does not try to build them.
 part := $(word 1,$(filter major minor patch,$(MAKECMDGOALS)))
 
-release: check ## Bump version, promote CHANGELOG, commit, tag, push; CI publishes GH release
+release: check ## Bump version, promote CHANGELOG, commit, tag, push; CI publishes GH release + PyPI
 	test -n "$(part)" || { echo "usage: gmake release major|minor|patch"; exit 1; }
 	git diff --quiet && git diff --cached --quiet \
 		|| { echo "working tree not clean — commit or stash first"; exit 1; }
@@ -99,9 +99,9 @@ release: check ## Bump version, promote CHANGELOG, commit, tag, push; CI publish
 	git add pyproject.toml uv.lock CHANGELOG.md
 	git commit -m "chore: release v$$version"
 	git tag "v$$version"
-	$(call header,Pushing v$$version tag (CI will check, then publish GH release))
+	$(call header,Pushing v$$version tag (CI will check, then publish GH release + PyPI))
 	git push && git push --tags
-	echo "$(green)Tagged v$$version — GitHub Actions runs check, then publishes GH release$(reset)"
+	echo "$(green)Tagged v$$version — GitHub Actions runs check, then publishes GH release + PyPI$(reset)"
 
 major minor patch:
 	@:

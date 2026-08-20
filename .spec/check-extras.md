@@ -138,8 +138,8 @@ for granular /sdd:check runs.
 - Keep-a-Changelog root `CHANGELOG.md`: user-facing work appends under `## Unreleased` (`### Added` / `### Changed` / `### Fixed`) during development
 - `make release` promote: move Unreleased body → `## [vX.Y.Z] - YYYY-MM-DD` (version = post-bump `uv version --short`); leave empty `## Unreleased` heading block; empty/no bullet Unreleased → hard fail (nothing to ship)
 - release commit includes `CHANGELOG.md` + `pyproject.toml` (+ lock if bumped) together
-- tag `v*` → `release.yml` re-runs CI check (`workflow_call` → `ci.yml`) then `uv build` + GH release create with `dist/*` artifacts + notes from promoted CHANGELOG version section (not sole `--generate-notes`)
-- no PyPI publish (private repo); no PyPI API token or OIDC trusted-publisher setup
+- tag `v*` → `release.yml` re-runs CI check (`workflow_call` → `ci.yml`) then `uv build` + `pypa/gh-action-pypi-publish` OIDC (`id-token: write`) + GH release create with `dist/*` artifacts + notes from promoted CHANGELOG version section (not sole `--generate-notes`)
+- trusted publisher on pypi.org: owner `kborovik`, repo `acumatica-cli`, workflow `release.yml`; no PyPI API token
 - tag `v<version>` == pyproject `version`
 - CI also runs on every push/PR to `main`
 

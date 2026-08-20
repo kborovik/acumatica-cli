@@ -186,3 +186,12 @@ def test_release_yml_notes_from_changelog() -> None:
     assert "--notes-file" in text
     assert "--generate-notes" not in text
     assert "gh release create" in text
+
+
+def test_release_yml_pypi_oidc_trusted_publish() -> None:
+    """V19: tag publish uses OIDC trusted publisher, no PyPI API token."""
+    text = RELEASE_YML.read_text()
+    assert "id-token: write" in text
+    assert "pypa/gh-action-pypi-publish" in text
+    assert "PYPI_API_TOKEN" not in text
+    assert "password:" not in text

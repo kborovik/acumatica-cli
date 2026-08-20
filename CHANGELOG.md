@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+### Changed
+
+- **Public PyPI publish restored:** `release.yml` again publishes
+  sdist+wheel to pypi.org via OIDC trusted publishing
+  (`pypa/gh-action-pypi-publish`, no API token) after CI, then creates the
+  GitHub Release from the promoted CHANGELOG section. Install with
+  `uv tool install acumatica-cli`. Repo URL is
+  https://github.com/kborovik/acumatica-cli.
+
 ## [v0.25.1] - 2026-08-06
 
 ### Fixed

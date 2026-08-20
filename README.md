@@ -17,7 +17,7 @@ Acumatica configuration normally lives in the web UI: wizards, screens, and manu
 ## Quick start
 
 ```sh
-uv tool install git+https://github.com/kborovik/acu-cli.git
+uv tool install acumatica-cli
 
 acu config init --host erp.example.com my-erp
 cd my-erp                                # edit .env: set ACU_PASSWORD, ACU_TENANT
@@ -173,17 +173,18 @@ Prefer symbolic `default` over a pinned `Default/25.200.001` so the seed tree tr
 ## Installation
 
 Requires Python 3.14 or newer.
-This is a **private** package — not published to PyPI.
 
 ```sh
-uv tool install git+https://github.com/kborovik/acu-cli.git
+uv tool install acumatica-cli
 ```
+
+`pipx install acumatica-cli` and `pip install acumatica-cli` work too.
 
 Or clone and install editable for development:
 
 ```sh
-git clone https://github.com/kborovik/acu-cli.git
-cd acu-cli
+git clone https://github.com/kborovik/acumatica-cli.git
+cd acumatica-cli
 gmake install    # editable install as a global uv tool
 ```
 
@@ -292,8 +293,8 @@ On macOS use Homebrew's `gmake` (`brew install make`); `/usr/bin/make` is 3.81 a
 Elsewhere plain `make` is fine when it is GNU Make.
 
 ```sh
-git clone https://github.com/kborovik/acu-cli.git
-cd acu-cli
+git clone https://github.com/kborovik/acumatica-cli.git
+cd acumatica-cli
 gmake install    # editable install as a global uv tool
 gmake check      # offline gate: ruff, basedpyright strict, pytest
 ```
@@ -321,9 +322,7 @@ gmake release patch   # or minor | major
 4. Promote Unreleased body to `## [vX.Y.Z] - YYYY-MM-DD`, leave an empty `## Unreleased`
 5. Commit `CHANGELOG.md` + `pyproject.toml` (+ lock if bumped) together, tag `vX.Y.Z`, push
 
-GitHub Actions on tag `v*` re-runs CI, builds sdist+wheel, and creates a GitHub Release whose notes are the promoted CHANGELOG section for that tag (plus the artifacts).
-There is no PyPI publish — the repo is private.
-Install via git URL or editable clone.
+GitHub Actions on tag `v*` re-runs CI, builds sdist+wheel, publishes to PyPI via OIDC trusted publishing, and creates a GitHub Release whose notes are the promoted CHANGELOG section for that tag (plus the artifacts).
 
 ### Live end-to-end tier
 
