@@ -23,20 +23,23 @@ YAML in git is the source of truth; the live tenant is the target. `apply` is th
 | Seed a tenant from YAML | `apply` | Idempotent PUT of `config/` into the live tenant |
 | Detect drift | `diff` | Compare seed YAML to live (exit 2 when they diverge) |
 | Pull live config into YAML | `extract` | Inverse of `apply` — GET into `config/{bootstrap,baseline,setup,master}/` |
-| Run transaction scripts | `run` | Forward documents from `scenario/` (capital → buy → build → sell) |
+| Run transaction scripts | `run` | Forward documents from `scenario/` (capital, buy, build, sell) |
 | Capture derived balances | `state` | Inquire trial-balance etc. into `state/` (not seed) |
 | Create and destroy tenants | `tenant` | SSH control plane: list / create / delete / recycle |
 | Publish the Bootstrap contract | `bootstrap` | REST publish of AcuBootstrap (or `--export` zip for the UI) |
-| Prove a cold rebuild | `check` | create → apply → run → diff on a fresh tenant |
-| Snapshot a site offline | `inventory` | SM203520 XML ZIP or `ac.exe export xml` → `inventory/` |
-| Cross-check snapshot vs seed | `reconcile` | `inventory/` + optional `config/` → `findings/` only |
+| Prove a cold rebuild | `check` | create, then apply, then run, then diff on a fresh tenant |
+| Snapshot a site offline | `inventory` | SM203520 XML ZIP or `ac.exe export xml` writes `inventory/` |
+| Cross-check snapshot vs seed | `reconcile` | `inventory/` plus optional `config/` writes `findings/` only |
 | Dump the contract schema | `schema` | OpenAPI `swagger.json` for the pinned endpoint |
 | Scaffold a data repo | `config init` | Full `config/`, `scenario/`, `matrix.yaml` tree |
 | Preflight a target | `config check` | Discovery, secrets, matrix, REST, endpoints, SSH |
 
 Seed YAML covers features, company, credit terms, subaccounts, chart of accounts, ledger, UOMs, financial year / calendar / periods, numbering sequences, inventory and distribution masters, roles, and users.
 
-REST is the data plane (`apply`, `diff`, `run`, `extract`, `state`, `bootstrap`, `schema`). SSH is the control plane (`tenant *`). Hosted sites skip SSH.
+REST is the data plane (`apply`, `diff`, `run`, `extract`, `state`, `bootstrap`, `schema`).
+SSH is the control plane (`tenant *`).
+
+Hosted sites skip SSH.
 
 ## Quick start
 
@@ -61,7 +64,8 @@ acu check --yes --tenant DEV             # cold lifecycle create→apply→run�
 Bare `apply` / `diff` (no path args) also prefer `config/` when those trees exist.
 See [docs/demo-seed.md](docs/demo-seed.md) for the entity map, once-guard, apply-order notes, NumberingSequence vs prefs `*NumberingID`, curated *Preferences field depth (V41), and Role/User + password seed rules.
 
-**Hosted Acumatica (no SSH):** the tenant already exists; set a blank `ACU_SSH=` in `.env` (scaffold omits the key — without it, acu defaults to `Administrator@<ACU_BASE_URL host>` for SSH boxes).
+**Hosted Acumatica (no SSH):** the tenant already exists; set a blank `ACU_SSH=` in `.env`.
+The scaffold omits the key — without it, acu defaults to `Administrator@<ACU_BASE_URL host>` for SSH boxes.
 
 ```sh
 acu config init --host customer.acumatica.com my-erp
@@ -110,18 +114,35 @@ acu [--cell ID] [--tenant NAME] [--url URL] [--ssh USER@HOST] [--api-version V]
     └── check [--strict]              preflight: discovery, secrets, matrix, REST, endpoints, SSH
 ```
 
-`apply` and `diff` without FILES prefer `config/<name>/` when any seed child exists under `config/`; otherwise root `bootstrap/`, `baseline/`, `setup/`, then `master/` when present.
-A path like `config/` expands nested seed dirs in that fixed order.
-`run` without FILES defaults to `scenario/`. Scenario YAML may use `${current_period}` (host-local `MMyyyy`) on steps, expect params, and once.present params; `config/views` / `state` keep Period pinned (see [docs/demo-seed.md](docs/demo-seed.md#period-token-current_period-vs-pinned-views)).
-`state` without FILES defaults to `config/views/`; writes go to `state/` (`--out`).
+When you omit FILES:
+
+- `apply` / `diff` prefer `config/<name>/` if any seed child exists under `config/`.
+  Otherwise they walk root `bootstrap/`, `baseline/`, `setup/`, then `master/` when present.
+  A path like `config/` expands those nested seed dirs in the same order.
+- `run` defaults to `scenario/`.
+- `state` defaults to `config/views/`; writes go to `state/` (`--out`).
+
+Scenario YAML may use `${current_period}` (host-local `MMyyyy`) on steps, expect params, and `once.present` params.
+`config/views` and `state` keep Period pinned — see [docs/demo-seed.md](docs/demo-seed.md#period-token-current_period-vs-pinned-views).
+
 `extract` always writes under `config/{bootstrap,baseline,setup,master}/` (catalog-driven; never root SEED_DIRS).
-`inventory` is offline (no REST/SSH/password): SM203520 Settings XML ZIP or `ac.exe export xml` folder writes to `inventory/`.
-`reconcile` is offline: compare `inventory/` to optional `config/` and write `findings/` only (never writes seed).
-Optional `snapshot_map.yaml` (data-repo root or package defaults) maps DAC tables to catalog entities and normalizes join (pad-trim, key/field aliases, Account/Sub FK CD resolve, enum label to code).
+
+`inventory` and `reconcile` are offline (no REST, SSH, or password).
+`inventory` turns an SM203520 Settings XML ZIP or `ac.exe export xml` folder into `inventory/`.
+
+`reconcile` compares `inventory/` to optional `config/` and writes `findings/` only.
+It never writes seed.
+
+Optional `snapshot_map.yaml` (data-repo root, or package defaults) maps DAC tables to catalog entities.
+It normalizes the join: pad-trim, key/field aliases, Account/Sub FK CD resolve, enum label to code.
+
 See [docs/demo-seed.md](docs/demo-seed.md).
+
 `acu --completion` emits a completion script for bash, zsh, or fish — source it from your shell profile.
-Run `acu --help` for the full mental model (workflow, planes, exit codes,
-command map) — enough for an agent to learn the tool without extra docs.
+
+Run `acu --help` for the full mental model (workflow, planes, exit codes, command map).
+That is enough for an agent to learn the tool without extra docs.
+
 Run `acu <command> --help` (or `-h`) for flags, examples, and prerequisites.
 
 ### Dual readers, one writer
@@ -139,13 +160,17 @@ Do not confuse them with each other or with `state`:
 
 `inventory/` and `findings/` are engagement outputs: not SEED_DIRS, never loaded by `apply`/`diff`, not scaffolded by `config init`.
 Binary `.adb` snapshots are rejected (XML only).
+
 See [docs/ac-exe.md](docs/ac-exe.md) for export / SM203520 notes and [docs/demo-seed.md](docs/demo-seed.md) for the extract/state/inventory map.
 
 ## The data repo
 
 Your configuration lives in its own git repo.
 `acu config init` scaffolds a **single full seed** under `config/` (features, company, credit terms, expanded COA, masters) plus lifecycle `scenario/`, observer `config/views/`, and README.
-The Bootstrap endpoint contract is package SoT (`bootstrap_project.xml` inside the CLI — `Bootstrap/1.4.0`); `config init` never writes `project.xml`, and data repos must not keep one (a present file hard-errors on bootstrap/publish).
+
+The Bootstrap endpoint contract is package SoT (`bootstrap_project.xml` inside the CLI — `Bootstrap/1.4.0`).
+`config init` never writes `project.xml`, and data repos must not keep one (a present file hard-errors on bootstrap/publish).
+
 There is no `--flavor`.
 
 | Path | What it holds |
@@ -169,9 +194,15 @@ Commit `matrix.yaml` with the seeds so every clone knows verified ERP line, Defa
 
 Seed YAML is state: `apply` upserts it, `diff` proves it.
 `acu extract` is the inverse of `apply`: GET live tenant rows into seed YAML under `config/{bootstrap,baseline,setup,master}/` (hard-cut).
-Packaged `seed_catalog.yaml` is the sole extract registry (entity, endpoint, keys, file, strip/include, filter-split); the demo entity map in [docs/demo-seed.md](docs/demo-seed.md) mirrors those catalog paths.
+
+Packaged `seed_catalog.yaml` is the sole extract registry (entity, endpoint, keys, file, strip/include, filter-split).
+The demo entity map in [docs/demo-seed.md](docs/demo-seed.md) mirrors those catalog paths.
+
 Features synthesize to `config/bootstrap/features.yaml`.
-Existing files skip unless `--force`; empty live sets skip; row failures continue (exit 1 only if any row failed — drift stays with `diff`).
+Existing files skip unless `--force`; empty live sets skip.
+
+Row failures continue (exit 1 only if any row failed).
+Drift stays with `diff`.
 
 ```sh
 acu --tenant DEV extract --out . --force   # refresh config/** from live tenant
@@ -192,6 +223,7 @@ Dual-served entities (on both Bootstrap and Default) need an explicit `endpoint:
 
 `api_version` resolves as `--api-version` flag, else active `matrix.yaml` cell `default_api`, else code default `25.200.001` (never `ACU_API_VERSION` in `.env`).
 `base_url` resolves as `--url`, else `ACU_BASE_URL`, else active cell `base_url`.
+
 Prefer symbolic `default` over a pinned `Default/25.200.001` so the seed tree travels with the dataset pin.
 
 ## Installation
@@ -216,9 +248,10 @@ Verify with `acu --version`.
 
 ## Configuration
 
-Secrets live in one `.env` file (`ACU_*` vars). Non-secret **where** and the
-Default contract pin live in committed `matrix.yaml` (cell `base_url` +
-`default_api`). Optional `ACU_BASE_URL` overrides cell where for ad-hoc probes.
+Secrets live in one `.env` file (`ACU_*` vars).
+Non-secret **where** and the Default contract pin live in committed `matrix.yaml` (cell `base_url` + `default_api`).
+
+Optional `ACU_BASE_URL` overrides cell where for ad-hoc probes.
 
 ```sh
 # ACU_BASE_URL optional when matrix.yaml cell carries base_url
@@ -244,16 +277,17 @@ cells:
 ```
 
 `--cell <id>` selects a cell (omit means first cell).
-When present, live commands source `api_version` from cell `default_api` and
-`base_url` from the cell when flag/env leave them unset.
+When present, live commands source `api_version` from cell `default_api` and `base_url` from the cell when flag/env leave them unset.
+
 `acu config check` reports `ok matrix (cell=...; api_version from default_api=...; ...)`.
 Missing `matrix.yaml` only warns on `config check` unless you pass `--strict`.
+
 `acu check` (lifecycle) **requires** matrix.
 
 ### Multi-host matrix (V44)
 
-One **trunk seed** in the data repo serves every host. Version fan-out is
-**not** long-running product branches (`acu-25r1`, `acu-26r1`, …).
+One **trunk seed** in the data repo serves every host.
+Version fan-out is **not** long-running product branches (`acu-25r1`, `acu-26r1`, …).
 
 | Piece | Role |
 | ----- | ---- |
@@ -262,14 +296,14 @@ One **trunk seed** in the data repo serves every host. Version fan-out is
 | Optional overlays | Surgical seed deltas keyed by Default half (e.g. `overlays/default-24.200.001/`) |
 | OpenAPI | Live `acu schema` dump only (gitignored); never multi-version swagger trees in package or data repo |
 
-**Overlays** live under `overlays/default-<default_api>/` (scaffolded by
-`acu config init`). No `--overlay` flag.
+**Overlays** live under `overlays/default-<default_api>/` (scaffolded by `acu config init`).
+No `--overlay` flag.
 
-**Bare compose (pin auto):** when path args are omitted, `acu apply` /
-`acu diff` append overlay config seed dirs when present; `acu run` replaces
-same-basename scenario files from the pin overlay. Pin =
-resolved `api_version` (matrix cell `default_api`). Explicit path args
-disable auto-compose.
+**Bare compose (pin auto):** when path args are omitted, `acu apply` / `acu diff` append overlay config seed dirs when present.
+`acu run` replaces same-basename scenario files from the pin overlay.
+
+Pin = resolved `api_version` (matrix cell `default_api`).
+Explicit path args disable auto-compose.
 
 ```sh
 # matrix cell default_api: 24.200.001 → uses overlays/default-24.200.001/
@@ -314,6 +348,7 @@ acu apply --dry-run        # show what would be written, write nothing
 
 Requires **GNU Make at least 3.82** — the Makefile uses `.ONESHELL`.
 On macOS use Homebrew's `gmake` (`brew install make`); `/usr/bin/make` is 3.81 and fails the guard.
+
 Elsewhere plain `make` is fine when it is GNU Make.
 
 ```sh
@@ -325,6 +360,7 @@ gmake check      # offline gate: ruff, basedpyright strict, pytest
 
 The default test suite is fully offline.
 REST is faked with `httpx.MockTransport`, SSH with a monkeypatched `subprocess.run` — no live instance is needed.
+
 `gmake check` must pass before every commit.
 GitHub Actions runs the same gate on every push and pull request to `main`.
 
@@ -332,6 +368,7 @@ GitHub Actions runs the same gate on every push and pull request to `main`.
 
 Human release notes live in root [`CHANGELOG.md`](CHANGELOG.md) (Keep a Changelog).
 During development, append user-facing work under `## Unreleased` in `### Added` / `### Changed` / `### Fixed` as appropriate.
+
 Empty Unreleased (no bullets) hard-fails the release — nothing to ship.
 
 ```sh
@@ -357,6 +394,7 @@ Configuration is one file: a decrypted `.env` at the repo root names the instanc
 
 The tier is self-contained.
 Each run scaffolds a synthetic single-org company from the packaged `acu config init` templates into a temporary directory, copies the real `.env` into it, and runs the installed `acu` binary from there — no data repo, no pre-existing fixtures on the instance.
+
 Scratch tenants (`E2E`, `E2EA`, `E2EB`, `E2ESCEN`) are created on the way in and always deleted on the way out, so nothing persists.
 The packaged full `config init` seed (under `config/`) is the only scaffold.
 
@@ -370,6 +408,7 @@ gmake e2e FILE=test_scenario_lifecycle   # scenario + state focus
 
 This project is licensed under the PolyForm Noncommercial License 1.0.0.
 Noncommercial use is free under that license.
+
 Commercial use requires a separate license — contact [lab5.ca](https://lab5.ca).
 
 See [LICENSE](LICENSE) and [NOTICE](NOTICE).

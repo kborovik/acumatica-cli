@@ -50,10 +50,13 @@ point `source.gi:` at the name. Observations land under `state/<name>.yaml`
 /AcumaticaERP/t/<tenant>/api/odata/gi/$metadata
 ```
 
-The GI must have **Expose via OData** enabled on SM208000. View `params`
+The GI must have **Expose via OData** enabled on SM208000.
+View `params`
 are validated against `$metadata` at capture time (fail-closed): unknown
 parameter names hard-error rather than silently returning an unfiltered
-result set. Cookie session from contract login is reused (same
+result set.
+
+Cookie session from contract login is reused (same
 `AcumaticaClient`).
 
 Legacy `/OData/<Tenant>/<Name>` remains for older builds; this CLI uses
@@ -65,6 +68,7 @@ Authenticated `GET /entity` returns the published contract endpoints.
 
 **26.x shape (verified 26.101.0225).**
 The body is a wrapper object.
+
 Rows live under `endpoints`.
 A `version` object may carry the live ERP build id
 (`acumaticaBuildVersion`, `databaseVersion`):
@@ -106,7 +110,8 @@ array of the same row objects:
 
 `parse_entity_list` accepts both shapes (V31).
 Each row needs string `name` and `version`.
-Unparseable body → fail-closed with status, content-type, and a short
+
+Unparseable body fails closed with status, content-type, and a short
 raw hint — never silent skip (V12).
 
 `acu config check` requires a `Default` row whose `version` equals
@@ -123,17 +128,23 @@ The Default contract version half is **not** an env pin. Resolution:
 There is no `ACU_API_VERSION` key — unknown `ACU_*` vars are ignored.
 `acu config show` never emits `ACU_API_VERSION`; when `matrix.yaml` is
 present it comments `erp` / `default_api` and notes the `api_version`
-source. Dual-source match-gate (env pin must equal `default_api`) is
+source.
+
+Dual-source match-gate (env pin must equal `default_api`) is
 retired: source-merge means a present target *is* the configured version
 unless the flag overrides.
 
 ### Multi-host matrix (V44)
 
 Data repos pin hosts with per-checkout `matrix.yaml` (`erp` + `default_api`)
-on a single trunk seed. Optional Default-half overlays live under
-`overlays/default-<default_api>/` (scaffolded by `config init`). Bare
-`apply` / `diff` / `run` auto-compose the pin overlay when path args are
-omitted; explicit path args stay manual. The CLI has no `--overlay` flag.
+on a single trunk seed.
+Optional Default-half overlays live under
+`overlays/default-<default_api>/` (scaffolded by `config init`).
+
+Bare `apply` / `diff` / `run` auto-compose the pin overlay when path args are
+omitted; explicit path args stay manual.
+The CLI has no `--overlay` flag.
+
 Never commit multi-version OpenAPI trees; use `acu schema` live dumps.
 See README "Multi-host matrix" and
 [acumatica-gitops#2](https://github.com/kborovik/acumatica-gitops/issues/2).
@@ -152,7 +163,10 @@ should not need curl to see which field the contract rejected.
 When `GET /entity` returns the 26.x wrapper and
 `version.acumaticaBuildVersion` is a non-empty string, `config check`
 compares that live id to the claimed `erp` on **major.minor** (first two
-dotted segments). Match → `ok erp (…)`; mismatch → `fail erp: …`.
+dotted segments).
+
+Match prints `ok erp (…)`.
+Mismatch prints `fail erp: …`.
 
 When the body is a bare array (no build id), or `matrix.yaml` is not in
 the match path, check emits:
@@ -294,17 +308,24 @@ package closes both gaps.
 
 ## Verified: no tenant works before bootstrap — and the API can't bootstrap alone
 
-Scratch-tenant experiment, 2026-07-07. Attribution note: because tenant 3 was
+Scratch-tenant experiment, 2026-07-07.
+Attribution note: because tenant 3 was
 not yet loaded into the app (the recycle hadn't run), every probe in this
 experiment actually ran against **tenant 2 (`Company`)** — which turned out to
 be just as unconfigured as the freshly created tenant 3 (`FeaturesSet` empty
 for all tenants; explicit `tenant: Company` probe confirmed identical
-failures). The instance has never been through initial setup, so bootstrap is
-required for *every* tenant, not just new ones. The uoms.yaml proof worked
-only because CS203500 has no setup dependency. **Re-run done (2026-07-08):**
+failures).
+
+The instance has never been through initial setup, so bootstrap is
+required for *every* tenant, not just new ones.
+The uoms.yaml proof worked
+only because CS203500 has no setup dependency.
+
+**Re-run done (2026-07-08):**
 after the recycle + screen-flow password change, the probe against the real
 tenant 3 returned an identical map — same three classes, `CompaniesStructure`
-still dead, CustomizationApi 200 ("no published projects"). The findings
+still dead, CustomizationApi 200 ("no published projects").
+The findings
 below stand on a genuinely virgin tenant.
 
 Entity access on an unconfigured tenant falls into three classes:
@@ -403,11 +424,14 @@ Facts that matter for tooling:
 
 So features cannot be enabled through the contract API surface at all, no
 matter what endpoint fronts CS100000 — the fallback (C# CustomizationPlugin
-writing `FeaturesSet` on publish) ships in the bootstrap package. **The
-fallback is verified working (T11, 2026-07-08):** after publish + recycle,
+writing `FeaturesSet` on publish) ships in the bootstrap package.
+
+**The fallback is verified working (T11, 2026-07-08):** after publish + recycle,
 `CustomerClass`/`ItemClass` (the 403 feature-gated class) answer 200 on a
 freshly provisioned tenant; `VendorClass` moves to the setup-chain class
-(GL Preferences), which baseline seeding owns. See the CustomizationApi
+(GL Preferences), which baseline seeding owns.
+
+See the CustomizationApi
 section for the plugin-side landmines.
 
 **Where to read server errors when the API only 302s to `/ui/error`:**

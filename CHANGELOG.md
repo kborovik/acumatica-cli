@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+### Changed
+
+- **Docs prose:** human-facing Markdown (`README.md`, `docs/*.md`, packaged
+  template READMEs) keeps each paragraph at most two sentences.
+
 ## [v0.25.2] - 2026-08-20
 
 ### Changed

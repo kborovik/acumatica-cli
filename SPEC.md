@@ -177,7 +177,7 @@ T198|x|docs README+templates+CHANGELOG matrix.yaml + acu check; suite green|V12,
 T199|x|drop acu check post-clean delete; leave tenant after green (fail path leave too)|V47,I.cmd
 T200|x|offline test green leaves tenant; README+CHANGELOG lifecycle leave-tenant; suite green|V13,V12,V19,V47,T199
 T201|x|agent-oriented root+subcommand --help (mental model, workflow, map, exit codes, -h, wide layout); offline tests; README agent pointer|V48,I.cmd
-T202|.|sweep human-facing md prose → ≤2 sentences/paragraph, sparse (scope: `README.md` `docs/*.md` `src/acumatica_cli/templates/**/*.md`)|V49
+T202|x|sweep human-facing md prose → ≤2 sentences/paragraph, sparse (scope: `README.md` `docs/*.md` `src/acumatica_cli/templates/**/*.md`)|V49
 
 ## §B BUGS
 

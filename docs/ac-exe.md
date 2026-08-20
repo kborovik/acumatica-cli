@@ -1,9 +1,11 @@
 # ac.exe — verified CLI reference
 
 Distilled notes on the Acumatica Configuration Wizard CLI, covering only what
-this repo uses. **Verified against the 26.101.0225 binary on acu-dev1**
-(`ac.exe -?` output) and the official docs, 2026-07-07. Re-verify on version
-upgrades — run `ac.exe -?` on the box; the binary is the ground truth.
+this repo uses.
+**Verified against the 26.101.0225 binary on acu-dev1**
+(`ac.exe -?` output) and the official docs, 2026-07-07.
+
+Re-verify on version upgrades — run `ac.exe -?` on the box; the binary is the ground truth.
 
 Sources:
 - [Command-Line Tool: Possible Parameters and Values](https://help.acumatica.com/(W(8))/Wiki/Print.aspx?wikiname=HelpRoot_Install&PageID=9e64f453-3f47-4b2b-979b-3b5c22ae1f8b)
@@ -46,7 +48,9 @@ Sources:
 Adds new tenants or deletes existing ones in an existing instance's database.
 Combine with the DB connection flags (`-dbsrvname`, `-dbname`,
 `-dbsrvwinauth` / `-dbsrvuser` + `-dbsrvpass`) and one `-company` parameter
-per tenant. **Also pass `-dbnew:"False"`** — the flag defaults to `True`
+per tenant.
+
+**Also pass `-dbnew:"False"`** — the flag defaults to `True`
 (create database), which is wrong for operating on an existing DB.
 
 **Two undocumented flags are both required** (verified 2026-07-08 on 26.101);
@@ -139,8 +143,10 @@ delete it (both verified 2026-07-08):
 
 The insert-data sets are the folders under
 `C:\Program Files\Acumatica ERP\Database\Data`: `SalesDemo`, `System`, `T100`,
-`U100`. T100/U100 are Acumatica University training datasets (579+ table XMLs
+`U100`.
+T100/U100 are Acumatica University training datasets (579+ table XMLs
 including AP invoices and payments — transactional data, not clean baselines).
+
 None of them is a bootstrap shortcut for a clean client baseline.
 
 ## Instance creation — `-cm:NewInstance`
@@ -178,23 +184,31 @@ tenant produced 10 files; a `SalesDemo` tenant would produce hundreds).
 The format is exactly the shipped-dataset format under
 `C:\Program Files\Acumatica ERP\Database\Data\<DataSet>\` — a `<data>`
 document with a typed `<table><col .../></table>` schema header followed by
-`<rows><row Attr="value" .../></rows>`. In other words, `SalesDemo` *is* an
+`<rows><row Attr="value" .../></rows>`.
+
+In other words, `SalesDemo` *is* an
 `ac.exe export xml` dump, and `CompanyType` at tenant creation is the
 import path for it.
 
 Caveats before treating this as an editing surface: rows are raw table
 data — internal integer IDs cross-reference across files, and imports
 bypass all business logic (no defaults, validations, or side effects run,
-unlike REST). The schema header is version-coupled to the build. `import`
-is **unverified** (it mutates; test on a scratch tenant first).
+unlike REST).
+The schema header is version-coupled to the build.
+
+`import` is **unverified** (it mutates; test on a scratch tenant first).
 
 ### Offline dual-reader: `acu inventory` consumes this folder
 
 The `export xml` **folder** is a first-class input to `acu inventory`
-(V35/V37 dual-reader). The CLI normalizes it to one IR and writes
+(V35/V37 dual-reader).
+The CLI normalizes it to one IR and writes
 `inventory/summary.yaml` + `inventory/tables/<Table>.yaml` — **not** seed
-under `config/`, never an apply path. Binary `export adb` / `.adb` files
-are **rejected** (fail-closed named error). Example:
+under `config/`, never an apply path.
+
+Binary `export adb` / `.adb` files
+are **rejected** (fail-closed named error).
+Example:
 
 ```sh
 # on the Windows box (or after scp of the folder):
@@ -210,8 +224,10 @@ See also SM203520 Settings **XML** ZIP below (same IR after normalize).
 ## Snapshots: NOT created/restored by ac.exe — verified finding
 
 Neither the 26.101 binary help nor the current parameter docs expose any
-snapshot save/restore operation. The Part 1 spec's assumption ("ac.exe
+snapshot save/restore operation.
+The Part 1 spec's assumption ("ac.exe
 creates the tenant, then load a snapshot" with a CLI flag) **does not hold**.
+
 `acu` never creates, restores, or imports SM203520 snapshots or `.adb`
 binaries (V35 sole mutator = REST `apply`).
 

@@ -41,8 +41,10 @@ rewrites under a data-repo overlay directory and pass it after trunk:
 acu apply config/ overlays/default-24.200.001/
 ```
 
-No long-running release branches for version fan-out. No `apply --overlay`
-flag (data-repo path args are enough). Cross-link:
+No long-running release branches for version fan-out.
+No `apply --overlay` flag (data-repo path args are enough).
+
+Cross-link:
 [acumatica-gitops#2](https://github.com/kborovik/acumatica-gitops/issues/2).
 
 Legacy data repos may still use root `bootstrap/`…`master/`; init no longer scaffolds that layout.
@@ -67,7 +69,11 @@ acu extract --only StockItem --force # catalog rows matching entity or file stem
 acu apply config/ && acu diff config/  # round-trip: expect clean diff after apply
 ```
 
-**Migration (root emit to `config/`):** older extract wrote `bootstrap/`…`master/` at the data-repo root. That path is gone (no `--layout`). Re-extract into a `config/` data repo, or move root trees under `config/` before the next apply. Package data renamed `extract_manifest.yaml` becomes `seed_catalog.yaml`.
+**Migration (root emit to `config/`):** older extract wrote `bootstrap/`…`master/` at the data-repo root.
+That path is gone (no `--layout`).
+
+Re-extract into a `config/` data repo, or move root trees under `config/` before the next apply.
+Package data renamed `extract_manifest.yaml` becomes `seed_catalog.yaml`.
 
 ## State observations
 
@@ -80,7 +86,10 @@ acu apply config/ && acu diff config/  # round-trip: expect clean diff after app
 
 Unlike `extract` / `diff`, `state` never writes seed trees, never carries `endpoint:` symbols, and never participates in apply. Exit codes invert `diff`'s default: bare capture treats change as normal (exit 0); exit 2 only under `--assert-unchanged` when state moved.
 
-**Migration (T112–T114):** CLI verb is `state` only (no `snapshot` alias). Bare defaults hard-cut to `config/views/` and `state/`. Prior `config/snapshot/` is not a fallback — move views or pass explicit paths.
+**Migration (T112–T114):** CLI verb is `state` only (no `snapshot` alias).
+Bare defaults hard-cut to `config/views/` and `state/`.
+
+Prior `config/snapshot/` is not a fallback — move views or pass explicit paths.
 
 ### Period token (`${current_period}`) vs pinned views
 
@@ -130,7 +139,10 @@ acu reconcile --inventory inv/ --config config/ --out findings/
 acu --tenant DEV state
 ```
 
-`reconcile` never writes `config/` (V36): unmapped tables, REST gaps, rest-vs-snapshot field deltas, and custom `Usr*` columns land under `findings/` only. When `matrix.yaml` is present and the artifact reports a build, `inventory` requires `erp` match (sibling of V27). `config init` does not scaffold `inventory/` or `findings/` — engagement-generated (gitignored by the scaffolded `.gitignore`).
+`reconcile` never writes `config/` (V36): unmapped tables, REST gaps, rest-vs-snapshot field deltas, and custom `Usr*` columns land under `findings/` only.
+When `matrix.yaml` is present and the artifact reports a build, `inventory` requires `erp` match (sibling of V27).
+
+`config init` does not scaffold `inventory/` or `findings/` — engagement-generated (gitignored by the scaffolded `.gitignore`).
 
 ### `snapshot_map.yaml` (table→entity + normalize)
 
@@ -174,9 +186,13 @@ tables:
 ```
 
 Without aliases, renamed DACs clear **unmapped** but skip row compare (key
-names miss). Without resolvers, ReasonCode/VendorClass report false
-CD-vs-int deltas. Without enums, Usage/Account Type/Active report false
-label-vs-code deltas. Findings report seed-side field names and resolved
+names miss).
+Without resolvers, ReasonCode/VendorClass report false
+CD-vs-int deltas.
+
+Without enums, Usage/Account Type/Active report false
+label-vs-code deltas.
+Findings report seed-side field names and resolved
 inventory values (codes after enum fold).
 
 ### Inventory table → entity → endpoint (V42)
@@ -236,12 +252,14 @@ Default scaffold golden is **trial-balance only** (V28/V33):
 
 Roster-only `entity: Account` is forbidden for that stem.
 `inventory-summary` / `QtyOnHand` is not packaged this pass (B25:
-`InventorySummaryInquiry` warehouse-only yields empty Results). Custom views via
-`inquire:` or `gi:` remain supported when a V12-verified path is known.
+`InventorySummaryInquiry` warehouse-only yields empty Results).
+
+Custom views via `inquire:` or `gi:` remain supported when a V12-verified path is known.
 `gi:` stays optional when a GenericInquiry is V12-verified: enable **Expose via
 OData** on SM208000, seed the GI under `config/master/`, point `source.gi:` with
-params pinned in YAML (`$metadata` fail-closed). See [rest-api.md](rest-api.md)
-state view sources.
+params pinned in YAML (`$metadata` fail-closed).
+
+See [rest-api.md](rest-api.md) state view sources.
 
 Warm `--assert-unchanged` after a full `run scenario/` fails on purpose when
 buy/sell re-stack cash on the TB — re-run only once-class capital (skip path)
@@ -293,9 +311,12 @@ Reference closure: every foreign key must resolve to a tenant-native row or an e
 
 ## Role, User, and password seed
 
-Default contract has **no** Role or User surface. Both live on the **Bootstrap**
-endpoint only (`endpoint: bootstrap` → active package version, currently
-`Bootstrap/1.4.0`). Screens: Role = SM201005, User = SM201010.
+Default contract has **no** Role or User surface.
+Both live on the **Bootstrap**
+endpoint only (`endpoint: bootstrap` leads to the active package version, currently
+`Bootstrap/1.4.0`).
+
+Screens: Role = SM201005, User = SM201010.
 
 ### Apply order (V22)
 
@@ -306,9 +327,12 @@ Numbered prefixes under `config/master/` enforce **Role → User → membership*
 | `config/master/90-roles.yaml` | Role | key `Rolename`; fields `Rolename`, `Descr` |
 | `config/master/91-users.yaml` | User | key `Username`; identity fields + detail `Roles` |
 
-Membership is **not** a separate seed file. It is the User detail list
+Membership is **not** a separate seed file.
+It is the User detail list
 `Roles` (`detail_keys: { Roles: Rolename }`), each row `Rolename` +
-`Selected`. A role must exist (tenant-native or earlier Role seed) before a
+`Selected`.
+
+A role must exist (tenant-native or earlier Role seed) before a
 User PUT that selects it.
 
 Package demo: full pre-build role dump in `90-roles.yaml` + demo user
@@ -330,7 +354,10 @@ names, flags) round-trip; membership does not.
 | **Data repos** | Prefer identity-only User seed (e.g. soadmin/apadmin/aradmin without `Roles`); assign roles in UI or accept drift until a contract fix. |
 | **Package template** | Still ships sparse `soadmin` + `SO Admin` membership as the offline contract shape (T148); not a live membership guarantee. |
 
-Not a password issue (V39). Not fixed by re-apply order. Track contract/screen
+Not a password issue (V39).
+Not fixed by re-apply order.
+
+Track contract/screen
 gaps via V14 when re-verified on a new Bootstrap version.
 
 ### Password rule (V39)
@@ -363,14 +390,20 @@ records:
 ```
 
 Authoring a first-login password: put `Password` on the User record for the
-initial apply only. After that, omit it — warm re-apply and extract stay
-identity-only. Never commit password hashes from SM203520 / inventory dumps.
+initial apply only.
+After that, omit it — warm re-apply and extract stay
+identity-only.
+
+Never commit password hashes from SM203520 / inventory dumps.
 
 ## Numbering sequences
 
-Default contract has **no** Numbering Sequences surface. Sequences live on the
-**Bootstrap** endpoint only (`endpoint: bootstrap` → active package version,
-currently `Bootstrap/1.4.0`). Screen: CS201010 (Numbering Sequences).
+Default contract has **no** Numbering Sequences surface.
+Sequences live on the
+**Bootstrap** endpoint only (`endpoint: bootstrap` leads to the active package version,
+currently `Bootstrap/1.4.0`).
+
+Screen: CS201010 (Numbering Sequences).
 
 ### Apply order (V22)
 
@@ -427,9 +460,12 @@ alone.
 ## Module preferences field depth (V41)
 
 Bootstrap `*Preferences` entities are a **curated subset** of inventory
-`*Setup` tables — not a full DAC mirror (gh #26). Each seed/catalog field has
+`*Setup` tables — not a full DAC mirror (gh #26).
+Each seed/catalog field has
 a reason: demo need or rebuild risk when virgin ERP defaults drift across
-builds. Server-derived and runtime fields stay out (B11 class).
+builds.
+
+Server-derived and runtime fields stay out (B11 class).
 
 Active package: `Bootstrap/1.4.0` (shape change = version bump, V21).
 
@@ -489,9 +525,10 @@ master template **before** any IN prefs FK claim, map `INLotSerClass` →
 ## Entity map
 
 **Catalog mirror:** seed-file paths and entity/endpoint pairs below match packaged
-`seed_catalog.yaml` (templates ↔ catalog ↔ extract emit; V34). Screen IDs are
-operator notes only (not catalog fields). `scenario/` rows are `acu run` only —
-not in the catalog, not extracted.
+`seed_catalog.yaml` (templates ↔ catalog ↔ extract emit; V34).
+Screen IDs are operator notes only (not catalog fields).
+
+`scenario/` rows are `acu run` only — not in the catalog, not extracted.
 
 | Seed file | Entity / action | Endpoint | Screen | Extract |
 | -------- | --------------- | -------- | ------ | ------- |
