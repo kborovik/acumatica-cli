@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## [v0.25.2] - 2026-08-20
+
 ### Changed
 
 - **Public PyPI publish restored:** `release.yml` again publishes
