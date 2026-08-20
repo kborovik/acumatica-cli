@@ -14,6 +14,30 @@ Acumatica configuration normally lives in the web UI: wizards, screens, and manu
 
 `acu` moves that configuration into YAML files in a git repo, so a tenant can be rebuilt from scratch, audited in a pull request, and checked for drift like any other infrastructure.
 
+## What this tool is capable of
+
+YAML in git is the source of truth; the live tenant is the target. `apply` is the only writer.
+
+| You can | Command | Effect |
+| ------- | ------- | ------ |
+| Seed a tenant from YAML | `apply` | Idempotent PUT of `config/` into the live tenant |
+| Detect drift | `diff` | Compare seed YAML to live (exit 2 when they diverge) |
+| Pull live config into YAML | `extract` | Inverse of `apply` — GET into `config/{bootstrap,baseline,setup,master}/` |
+| Run transaction scripts | `run` | Forward documents from `scenario/` (capital → buy → build → sell) |
+| Capture derived balances | `state` | Inquire trial-balance etc. into `state/` (not seed) |
+| Create and destroy tenants | `tenant` | SSH control plane: list / create / delete / recycle |
+| Publish the Bootstrap contract | `bootstrap` | REST publish of AcuBootstrap (or `--export` zip for the UI) |
+| Prove a cold rebuild | `check` | create → apply → run → diff on a fresh tenant |
+| Snapshot a site offline | `inventory` | SM203520 XML ZIP or `ac.exe export xml` → `inventory/` |
+| Cross-check snapshot vs seed | `reconcile` | `inventory/` + optional `config/` → `findings/` only |
+| Dump the contract schema | `schema` | OpenAPI `swagger.json` for the pinned endpoint |
+| Scaffold a data repo | `config init` | Full `config/`, `scenario/`, `matrix.yaml` tree |
+| Preflight a target | `config check` | Discovery, secrets, matrix, REST, endpoints, SSH |
+
+Seed YAML covers features, company, credit terms, subaccounts, chart of accounts, ledger, UOMs, financial year / calendar / periods, numbering sequences, inventory and distribution masters, roles, and users.
+
+REST is the data plane (`apply`, `diff`, `run`, `extract`, `state`, `bootstrap`, `schema`). SSH is the control plane (`tenant *`). Hosted sites skip SSH.
+
 ## Quick start
 
 ```sh
