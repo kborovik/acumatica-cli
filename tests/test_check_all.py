@@ -34,7 +34,7 @@ def make_repo(tmp_path: Path, **files: str) -> Path:
     """Synthetic repo: runner + leg scripts in place, clean src overridable."""
     scripts = tmp_path / ".spec" / "scripts"
     scripts.mkdir(parents=True)
-    for name in ("check-all", "check-ascii", "check-extras.sh"):
+    for name in ("check-all", "check-ascii", "check-extras.sh", "check-md-prose"):
         shutil.copy(SCRIPTS / name, scripts / name)
     src = tmp_path / "src" / "acumatica_cli"
     src.mkdir(parents=True)

@@ -1,0 +1,150 @@
+#!/usr/bin/env python3
+"""check-md-prose - V49 human-facing Markdown paragraph density.
+
+Scope: README.md, docs/*.md, packaged template README.md under
+src/acumatica_cli/templates/. A prose paragraph (blank-line block) may
+have at most 2 sentences. List items, table rows, blockquotes, fenced
+code, and headings are exempt. SPEC.md / CHANGELOG / .spec stay out.
+
+Emits one extras-hook row (no header): V49|HOLD|... or
+V49|VIOLATE|path:line: N sentences. Exit 0 HOLD, 1 VIOLATE or error.
+ASCII-only (V9).
+"""
+
+from __future__ import annotations
+
+import re
+import sys
+from pathlib import Path
+
+SKIP_LINE = re.compile(r"^\s*(?:[-*] |\d+\. |\||>)")
+FENCE = re.compile(r"^```")
+ABBREV_END = ("e.g.", "i.e.", "vs.", "etc.", "Mr.", "Ms.", "Dr.")
+
+
+def repo_root() -> Path:
+    return Path(__file__).resolve().parent.parent.parent
+
+
+def scoped_files(root: Path) -> list[Path]:
+    files: list[Path] = []
+    readme = root / "README.md"
+    if readme.is_file():
+        files.append(readme)
+    docs = root / "docs"
+    if docs.is_dir():
+        files.extend(sorted(p for p in docs.glob("*.md") if p.is_file()))
+    templates = root / "src" / "acumatica_cli" / "templates"
+    if templates.is_dir():
+        files.extend(sorted(templates.rglob("README.md")))
+    return files
+
+
+def mask(text: str) -> str:
+    text = re.sub(r"`[^`]*`", lambda m: "X" * len(m.group(0)), text)
+    return re.sub(r"\*\*[^*]*\*\*", lambda m: "X" * len(m.group(0)), text)
+
+
+def split_sentences(text: str) -> list[str]:
+    masked = mask(text)
+    sents: list[str] = []
+    start = 0
+    i = 0
+    n = len(masked)
+    while i < n:
+        if masked[i] in ".?!":
+            j = i + 1
+            while j < n and masked[j] in " \t":
+                j += 1
+            if j >= n:
+                sents.append(text[start:].strip())
+                return sents
+            nxt = masked[j]
+            frag = text[start : i + 1]
+            if any(frag.rstrip().endswith(a) for a in ABBREV_END):
+                i += 1
+                continue
+            if nxt.isupper() or nxt in "*\"'([~":
+                sents.append(text[start : i + 1].strip())
+                start = j
+                i = j
+                continue
+        i += 1
+    rest = text[start:].strip()
+    if rest:
+        sents.append(rest)
+    return sents
+
+
+def is_heading(line: str) -> bool:
+    return line.lstrip().startswith("#")
+
+
+def scan_file(path: Path) -> list[tuple[int, int]]:
+    """Return (start_line, sentence_count) for each violating prose block."""
+    hits: list[tuple[int, int]] = []
+    lines = path.read_text(encoding="utf-8").splitlines()
+    in_fence = False
+    para: list[str] = []
+    para_start = 1
+
+    def flush() -> None:
+        if not para:
+            return
+        if any(SKIP_LINE.match(line) or is_heading(line) for line in para):
+            return
+        text = " ".join(line.strip() for line in para if line.strip())
+        if not text:
+            return
+        n = len(split_sentences(text))
+        if n >= 3:
+            hits.append((para_start, n))
+
+    for i, line in enumerate(lines, 1):
+        if FENCE.match(line):
+            if not in_fence:
+                flush()
+                para = []
+            in_fence = not in_fence
+            continue
+        if in_fence:
+            continue
+        if not line.strip():
+            flush()
+            para = []
+            para_start = i + 1
+            continue
+        if not para:
+            para_start = i
+        para.append(line)
+    flush()
+    return hits
+
+
+def emit(row: str) -> None:
+    sys.stdout.write(row + "\n")
+
+
+def main() -> int:
+    root = repo_root()
+    try:
+        first: tuple[Path, int, int] | None = None
+        for path in scoped_files(root):
+            hits = scan_file(path)
+            if hits and first is None:
+                line, n = hits[0]
+                first = (path, line, n)
+        if first is None:
+            emit("V49|HOLD|human-facing md prose paragraphs <= 2 sentences")
+            return 0
+        path, line, n = first
+        rel = path.relative_to(root).as_posix()
+        emit(f"V49|VIOLATE|{rel}:{line}: {n} sentences")
+        return 1
+    except Exception as exc:  # noqa: BLE001 - extras-hook must fail closed
+        emit(f"V49|VIOLATE|{type(exc).__name__}: {exc}")
+        return 1
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

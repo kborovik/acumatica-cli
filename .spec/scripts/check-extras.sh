@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# check-extras.sh - mechanical V1/V10/V18 drift greps (SPEC ST.19).
+# check-extras.sh - mechanical V1/V10/V18/V49 drift greps (SPEC ST.19).
 #
 # /sdd:check extras-hook contract: emit bare `id|verdict|evidence` rows
 # (no header, no prose) on stdout; the check run appends them verbatim.
@@ -66,6 +66,16 @@ else
     else
         row V18 HOLD "sole site $v18_hits inside _ssh"
     fi
+fi
+
+# V49 md-prose-density: human-facing Markdown prose paragraphs <= 2
+# sentences. The scanner lives in check-md-prose (sibling); this hook
+# forwards its extras-hook row.
+v49_row=$(python3 .spec/scripts/check-md-prose)
+v49_st=$?
+printf '%s\n' "$v49_row"
+if [ "$v49_st" -ne 0 ]; then
+    fail=1
 fi
 
 exit "$fail"

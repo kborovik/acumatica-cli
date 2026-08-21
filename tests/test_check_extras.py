@@ -1,4 +1,4 @@
-""".spec/scripts/check-extras.sh: the mechanized V1/V10/V18 drift greps.
+""".spec/scripts/check-extras.sh: the mechanized V1/V10/V18/V49 drift greps.
 
 The hook resolves the repo root from its own location, so VIOLATE branches
 are pinned via a synthetic repo tree in tmp_path (script copied under
@@ -30,6 +30,9 @@ def make_repo(tmp_path: Path, **files: str) -> Path:
     scripts = tmp_path / ".spec" / "scripts"
     scripts.mkdir(parents=True)
     shutil.copy(SCRIPT, scripts / "check-extras.sh")
+    shutil.copy(
+        REPO / ".spec" / "scripts" / "check-md-prose", scripts / "check-md-prose"
+    )
     src = tmp_path / "src" / "acumatica_cli"
     src.mkdir(parents=True)
     content = {
@@ -59,13 +62,13 @@ def rows(r: subprocess.CompletedProcess[str]) -> dict[str, tuple[str, str]]:
     return out
 
 
-def test_real_tree_emits_three_hold_rows() -> None:
+def test_real_tree_emits_four_hold_rows() -> None:
     r = run_hook()
     assert r.returncode == 0, r.stdout + r.stderr
     table = rows(r)
-    assert set(table) == {"V1", "V10", "V18"}
+    assert set(table) == {"V1", "V10", "V18", "V49"}
     assert all(verdict == "HOLD" for verdict, _ in table.values())
-    assert len(r.stdout.splitlines()) == 3  # no header, no prose
+    assert len(r.stdout.splitlines()) == 4  # no header, no prose
     r.stdout.encode("ascii")  # V9: the audit obeys the invariant it enforces
 
 
@@ -151,3 +154,42 @@ def test_v18_suffix_outside_ssh_def_violates(tmp_path: Path) -> None:
     verdict, evidence = rows(r)["V18"]
     assert verdict == "VIOLATE"
     assert "list" in evidence
+
+
+def test_v49_three_sentence_prose_violates(tmp_path: Path) -> None:
+    script = make_repo(tmp_path)
+    (tmp_path / "README.md").write_text(
+        "One sentence. Two sentences. Three sentences.\n"
+    )
+    r = run_hook(script)
+    assert r.returncode == 1
+    verdict, evidence = rows(r)["V49"]
+    assert verdict == "VIOLATE"
+    assert "README.md:1" in evidence
+    assert "3 sentences" in evidence
+    r.stdout.encode("ascii")
+
+
+def test_v49_two_sentence_prose_holds(tmp_path: Path) -> None:
+    script = make_repo(tmp_path)
+    (tmp_path / "README.md").write_text("One sentence. Two sentences.\n")
+    r = run_hook(script)
+    assert r.returncode == 0, r.stdout + r.stderr
+    assert rows(r)["V49"][0] == "HOLD"
+
+
+def test_v49_list_table_fence_exempt(tmp_path: Path) -> None:
+    script = make_repo(tmp_path)
+    (tmp_path / "README.md").write_text(
+        "- One. Two. Three.\n"
+        "\n"
+        "| A | B |\n"
+        "| One. Two. Three. | x |\n"
+        "\n"
+        "```\n"
+        "One. Two. Three.\n"
+        "```\n"
+    )
+    r = run_hook(script)
+    assert r.returncode == 0, r.stdout + r.stderr
+    assert rows(r)["V49"][0] == "HOLD"

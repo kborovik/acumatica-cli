@@ -3,7 +3,7 @@
 #
 # The build pre-commit entry: one command instead of three hand-copied
 # ones. Legs: ascii (check-ascii src/), extras (check-extras.sh V1/V10/
-# V18 drift greps), parity (SV.21 Bootstrap endpoint-version sweep - the
+# V18/V49 drift greps), parity (SV.21 Bootstrap endpoint-version sweep - the
 # sweep logic lives here and the doc references this script, so the
 # one-liner has a single spelling). No args = every leg; a leg argument
 # runs just that recipe (per-recipe granularity for /sdd:check).
