@@ -189,7 +189,7 @@ T209|x|drop ControlAccountModule IN on package `config/baseline/20-accounts.yaml
 T210|x|offline tests: 12300/12400 no ControlAccountModule IN; 12100/12200 still IN; INPreferences still 12300/12400|V13,V51,T209
 T211|x|e2e: package INPreferences apply succeeds after accounts; drop 15000 workaround in `test_segmented_key_length.py`|V4,V13,V51,B29,T209
 T212|x|docs/demo-seed — IN control on posting-class inventory assets only; WIP/transit not control; CHANGELOG Unreleased (gh #32)|V12,V19,V51,T209
-T213|.|drop `matrix.py` + `--cell`; Instance resolve `api_version` from `ACU_API_VERSION` env (flag > env > code default)|V27,I.cfg,I.env
+T213|x|drop `matrix.py` + `--cell`; Instance resolve `api_version` from `ACU_API_VERSION` env (flag > env > code default)|V27,I.cfg,I.env
 T214|.|config init/show/check: no matrix surface; `.env` scaffolds `ACU_BASE_URL` + `ACU_API_VERSION`; drop `--strict`|V27,V28,I.cmd
 T215|.|`acu check` single-instance from `.env`; drop `--all` cell walk|V47,I.cmd
 T216|.|overlays keyed by resolved `api_version`; drop inventory erp-match vs matrix cell|V37,V44,I.data

@@ -2,21 +2,20 @@
 
 pydantic-settings owns resolution: ``Instance`` is a ``BaseSettings`` with
 env prefix ``ACU_``, and the sole config file is ``.env`` (found by walking
-up from cwd) carrying where + secrets as ``ACU_*`` vars. The file is
+up from cwd) carrying where + pin + secrets as ``ACU_*`` vars. The file is
 optional - flags plus the process environment can supply the full config.
 Per key the first set value wins: flag, ``ACU_*`` var (process environment
-over a found ``.env``), code default — exclusion ``api_version`` (V27):
-``--api-version`` flag ? → else active ``matrix.yaml`` cell ``default_api``
-when matrix present → else code default ``25.200.001``; never
-``ACU_API_VERSION`` (unknown ``ACU_*`` ignored). ``base_url`` is the only
-required address (REST data plane). ``ssh`` defaults to ``Administrator@``
-+ the ``base_url`` hostname when the key is absent (V3/T124); a present
-blank key is the hosted opt-out (empty = data-plane only; tenant cmds
-hard-error when empty post-default — V1/V3). The password must resolve via
-``--password`` or ``ACU_PASSWORD``.
+over a found ``.env``), code default. ``api_version`` (V27):
+``--api-version`` flag ? → else ``ACU_API_VERSION`` env → else code default
+``25.200.001``. ``base_url`` is the only required address (REST data plane):
+``--url`` flag ? → else ``ACU_BASE_URL`` → else hard error naming sources.
+Leftover ``matrix.yaml`` is never loaded. ``ssh`` defaults to
+``Administrator@`` + the ``base_url`` hostname when the key is absent
+(V3/T124); a present blank key is the hosted opt-out (empty = data-plane
+only; tenant cmds hard-error when empty post-default — V1/V3). The
+password must resolve via ``--password`` or ``ACU_PASSWORD``.
 """
 
-import os
 from collections.abc import Iterator, Mapping
 from importlib import resources
 from pathlib import Path
@@ -31,7 +30,7 @@ from .models import validation_summary
 PLACEHOLDER_HOST = "erp.example.com"
 DEFAULT_SSH_USER = "Administrator"
 DEFAULT_API_VERSION = "25.200.001"
-# V44: data-repo overlays keyed by Default half (matrix cell default_api)
+# V44: data-repo overlays keyed by resolved Default half (api_version)
 OVERLAYS_DIRNAME = "overlays"
 OVERLAY_DIR_PREFIX = "default-"
 
@@ -184,10 +183,7 @@ class Instance(BaseSettings):
     base_url: str  # REST root: scheme + host + site path
     ssh: str = ""  # control plane: full user@host; empty post-default = data-plane only
     tenant: str = ""
-    # V11/V27: version half only; resolved in load_instance (flag → active
-    # matrix cell default_api → code default), never ACU_API_VERSION env.
-    # Default here is the code pin only; env values for this field are
-    # discarded post-build (T125).
+    # V11/V27: version half only; flag → ACU_API_VERSION env → code default.
     api_version: str = DEFAULT_API_VERSION  # V11: /entity/Default/<api_version>/
     user: str = "admin"  # ACU_USER; the --username flag maps here
     # required, but enforced in load_instance so a blank scaffolded
@@ -310,53 +306,24 @@ def read_env_values(env_file: Path) -> dict[str, Any]:
 def load_instance(overrides: Mapping[str, str | None] | None = None) -> Instance:
     """Resolve the target: global flags over ACU_* environment over defaults.
 
-    ``overrides`` carries the global flags keyed by Instance field name
-    (plus optional ``cell`` for matrix cell id — not an Instance field).
+    ``overrides`` carries the global flags keyed by Instance field name.
     Per key the first set value wins (flag, ACU_* var - process environment
-    over a found .env - code default). Exclusions (V27):
+    over a found .env - code default). V27:
 
-    - ``api_version``: ``--api-version`` flag ? → else active matrix cell
-      ``default_api`` → else ``DEFAULT_API_VERSION``; never ``ACU_API_VERSION``.
+    - ``api_version``: ``--api-version`` flag ? → else ``ACU_API_VERSION``
+      → else ``DEFAULT_API_VERSION``.
     - ``base_url``: ``--url`` flag ? → else ``ACU_BASE_URL`` (env/.env) →
-      else active cell ``base_url`` → else hard error naming sources.
+      else hard error naming sources.
 
-    Active cell = ``--cell`` id when set, else first cell when matrix
-    present; unknown id → hard error naming known ids; ``--cell`` without
-    matrix → hard error.
-    No .env is fine (V3): the hard error comes only when a required value
-    (base_url, password) is still unresolved after the merge, naming the
-    missing key. ``ssh`` defaults from the base_url host when the key is
-    absent; blank key = hosted path; tenant cmds hard-error when empty
-    post-default.
+    Leftover ``matrix.yaml`` is never loaded. No .env is fine (V3): the
+    hard error comes only when a required value (base_url, password) is
+    still unresolved after the merge, naming the missing key. ``ssh``
+    defaults from the base_url host when the key is absent; blank key =
+    hosted path; tenant cmds hard-error when empty post-default.
     """
-    raw = dict(overrides or {})
-    cell_id = raw.pop("cell", None)
-    flags = {k: v for k, v in raw.items() if v is not None}
+    flags = {k: v for k, v in dict(overrides or {}).items() if v is not None}
     root = find_data_root()
-    # Local import avoids config↔matrix cycle (matrix imports Instance).
-    from .matrix import active_cell, load_matrix
-
-    matrix = load_matrix(root)
-    if cell_id is not None and matrix is None:
-        raise SystemExit(
-            f"--cell {cell_id!r} requires matrix.yaml "
-            "(none found under data root; see acu config init)"
-        )
-    cell = active_cell(matrix, cell_id) if matrix is not None else None
-    # V27: resolve api_version outside env. Init kwargs beat dotenv/env,
-    # so always inject when flag absent — ACU_API_VERSION is ignored.
-    if "api_version" not in flags:
-        flags["api_version"] = (
-            cell.default_api if cell is not None else DEFAULT_API_VERSION
-        )
-    # V27: base_url from cell only when flag + env/.env leave it unset.
     env_file = root / ".env" if root is not None else None
-    if "base_url" not in flags and cell is not None:
-        env_has_url = bool(os.environ.get("ACU_BASE_URL"))
-        if not env_has_url:
-            file_vals = read_env_values(env_file) if env_file is not None else {}
-            if not file_vals.get("base_url"):
-                flags["base_url"] = cell.base_url
     try:
         # _env_file is a real BaseSettings init override; the synthesized
         # field-only __init__ signature hides it from the type checker

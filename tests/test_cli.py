@@ -841,8 +841,7 @@ def test_config_show_emits_env_without_password(wired: Instance) -> None:
     assert "ACU_BASE_URL=http://acu.test/AcumaticaERP" in result.output
     assert "ACU_SSH=user@acu.test" in result.output
     assert "ACU_TENANT=T1" in result.output
-    # V27/T125: api pin is not env — never emit ACU_API_VERSION
-    assert "ACU_API_VERSION" not in result.output
+    assert "ACU_API_VERSION=25.200.001" in result.output
     assert "ACU_USER=admin" in result.output
     assert "pw" not in result.output  # the password value, in no form
     key_lines = [
@@ -1076,6 +1075,8 @@ def test_config_init_scaffold_round_trips(
     CliRunner().invoke(cli.cli, ["config", "init", "--host", "erp.test", str(tmp_path)])
     monkeypatch.chdir(tmp_path)
     monkeypatch.setenv("ACU_PASSWORD", "secret")
+    # V27: leftover matrix.yaml ignored; where is ACU_BASE_URL
+    monkeypatch.setenv("ACU_BASE_URL", "http://erp.test/AcumaticaERP")
     monkeypatch.setattr(cli, "AcumaticaClient", DummyClient)
 
     shown = CliRunner().invoke(cli.cli, ["config", "show"])
@@ -1530,10 +1531,9 @@ def test_config_check_all_probes_ok(
     assert lines[0].startswith("ok discovery (")
     assert lines[0].endswith(".env)")
     assert lines[1] == "ok secrets (ACU_PASSWORD set)"
-    assert lines[2].startswith("warn matrix: no matrix.yaml under ")
-    assert lines[3] == "ok rest (http://acu.test/AcumaticaERP, tenant T1)"
-    assert lines[4] == "ok endpoints (Default/25.200.001 present)"
-    assert lines[5] == "ok ssh (Administrator@acu.test)"
+    assert lines[2] == "ok rest (http://acu.test/AcumaticaERP, tenant T1)"
+    assert lines[3] == "ok endpoints (Default/25.200.001 present)"
+    assert lines[4] == "ok ssh (Administrator@acu.test)"
     assert calls == ["enter", "exit", "ping"]
 
 
@@ -1587,10 +1587,9 @@ def test_config_check_flags_only_passes(
     lines = result.output.splitlines()
     assert lines[0] == "ok discovery (no .env - flags only)"
     assert lines[1] == "ok secrets (--password)"
-    assert lines[2] == "skip matrix (no data root)"
-    assert lines[3] == "ok rest (http://acu.test/AcumaticaERP, tenant T1)"
-    assert lines[4] == "ok endpoints (Default/25.200.001 present)"
-    assert lines[5] == "ok ssh (user@acu.test)"
+    assert lines[2] == "ok rest (http://acu.test/AcumaticaERP, tenant T1)"
+    assert lines[3] == "ok endpoints (Default/25.200.001 present)"
+    assert lines[4] == "ok ssh (user@acu.test)"
     assert "pw" not in result.output  # the secret value is never printed (V2)
 
 
@@ -1676,10 +1675,9 @@ def test_config_check_skips_ssh_when_blank(
     lines = result.output.splitlines()
     assert lines[0].startswith("ok discovery (")
     assert lines[1] == "ok secrets (ACU_PASSWORD set)"
-    assert lines[2].startswith("warn matrix: no matrix.yaml under ")
-    assert lines[3] == "ok rest (http://acu.test/AcumaticaERP, tenant T1)"
-    assert lines[4] == "ok endpoints (Default/25.200.001 present)"
-    assert lines[5] == "skip ssh (ACU_SSH not set)"
+    assert lines[2] == "ok rest (http://acu.test/AcumaticaERP, tenant T1)"
+    assert lines[3] == "ok endpoints (Default/25.200.001 present)"
+    assert lines[4] == "skip ssh (ACU_SSH not set)"
     assert probes == []
 
 
@@ -1702,8 +1700,8 @@ def test_tenant_list_fails_without_ssh(
 def test_config_check_discovery_fails_without_base_url(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    # I.cmd config check: discovery needs base_url from --url, ACU_BASE_URL,
-    # or matrix.yaml cell (V27); none → fail
+    # I.cmd config check: discovery needs base_url from --url or ACU_BASE_URL
+    # (V27); none → fail
     (tmp_path / ".env").write_text("ACU_SSH=Administrator@acu.test\n")
     monkeypatch.chdir(tmp_path)
 
@@ -1873,6 +1871,7 @@ def test_bare_apply_matches_explicit_dirs(
     CliRunner().invoke(cli.cli, ["config", "init", "--host", "erp.test", str(tmp_path)])
     monkeypatch.chdir(tmp_path)
     monkeypatch.setenv("ACU_PASSWORD", "secret")
+    monkeypatch.setenv("ACU_BASE_URL", "http://erp.test/AcumaticaERP")
     monkeypatch.setattr(cli, "AcumaticaClient", DummyClient)
 
     bare = CliRunner().invoke(cli.cli, ["apply", "--dry-run"])

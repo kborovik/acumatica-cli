@@ -455,10 +455,10 @@ def test_cli_inventory_custom_out_and_zip(tmp_path: Path) -> None:
     assert summary["export_mode"] == "xml-zip"
 
 
-def test_cli_inventory_erp_mismatch_exit_1(
+def test_cli_inventory_ignores_leftover_matrix_yaml(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """V37: matrix cell erp pin fails when artifact build differs."""
+    """V27: leftover matrix.yaml is never loaded; inventory does not erp-match."""
     zpath = _write_zip(
         tmp_path,
         {"manifest.xml": MANIFEST_XML, "Account.xml": ACCOUNT_XML},
@@ -468,28 +468,6 @@ def test_cli_inventory_erp_mismatch_exit_1(
         "cells:\n"
         "  - id: default\n"
         "    erp: 25.200.001\n"
-        "    default_api: 25.200.001\n"
-        "    base_url: http://x/\n",
-        encoding="utf-8",
-    )
-    monkeypatch.chdir(tmp_path)
-    result = CliRunner().invoke(cli.cli, ["inventory", str(zpath)])
-    assert result.exit_code == 1
-    assert "does not match matrix cell erp" in result.output
-
-
-def test_cli_inventory_erp_match_ok(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    zpath = _write_zip(
-        tmp_path,
-        {"manifest.xml": MANIFEST_XML, "Account.xml": ACCOUNT_XML},
-    )
-    (tmp_path / ".env").write_text("ACU_BASE_URL=http://x/\n", encoding="utf-8")
-    (tmp_path / "matrix.yaml").write_text(
-        "cells:\n"
-        "  - id: default\n"
-        "    erp: 26.101.0225\n"
         "    default_api: 25.200.001\n"
         "    base_url: http://x/\n",
         encoding="utf-8",

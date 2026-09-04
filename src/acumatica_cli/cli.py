@@ -8,8 +8,7 @@ MENTAL MODEL
     config/{bootstrap,baseline,setup,master}/  seed YAML (apply/diff/extract)
     config/views/                              observer views (state)
     scenario/                                  transaction scripts (run)
-    matrix.yaml                                multi-host pin (erp, api, url)
-    .env                                       secrets + optional overrides
+    .env                                       secrets + where + API pin
     state/ inventory/ findings/ schemas/       command outputs (not seed)
   Two planes (do not mix):
     REST data plane — apply diff run bootstrap extract state schema
@@ -43,11 +42,10 @@ HOSTED (tenant already exists, no SSH)
 
 \b
 CONFIG RESOLUTION (per key, highest wins)
-  CLI global flag  ->  ACU_* env (.env or process)  ->  matrix.yaml cell  ->  default
+  CLI global flag  ->  ACU_* env (.env or process)  ->  default
   Globals only BEFORE the subcommand:
-    acu --tenant DEV --cell lab apply config/
-  matrix.yaml cell supplies base_url + api_version (default_api) + erp claim
-  --cell ID selects a cell (omit = first cell)
+    acu --tenant DEV apply config/
+  ACU_BASE_URL is where; ACU_API_VERSION pins Default half (else 25.200.001)
 
 \b
 COMMAND MAP (pick by intent)
@@ -57,7 +55,7 @@ COMMAND MAP (pick by intent)
   seed write   apply [--dry-run] [FILES...]              (sole mutator)
   seed check   diff [FILES...]                           (exit 2 on drift)
   txns         run [--dry-run] [FILES...]
-  cold CI      check [--all] [--tenant LOGIN]            (!= config check)
+  cold CI      check [--tenant LOGIN]                    (!= config check)
   pull seed    extract [--only ENTITY]...                (inverse of apply)
   observe      state [--diff|--assert-unchanged]
   offline      inventory ARTIFACT | reconcile
@@ -68,7 +66,7 @@ EXIT CODES (common)
   0  success
   1  operational / parse / expectation failure
   2  seed drift (diff) or state moved (state --assert-unchanged)
-  check (lifecycle) never exits 2 — drift fails the cell as exit 1
+  check (lifecycle) never exits 2 — drift fails the run as exit 1
 
 \b
 DEFAULT PATHS (when FILES omitted)
@@ -116,7 +114,6 @@ from .config import (
     read_env_values,
     scaffold,
 )
-from .matrix import active_cell, assert_matrix_compatible, load_matrix
 from .tenant import TenantManager
 
 # Wider help + -h for agents/operators scanning docs offline.
@@ -193,11 +190,6 @@ def _emit_completion(
     "Bare --completion detects $SHELL. Source the output to enable.",
 )
 @click.option(
-    "--cell",
-    default=None,
-    help="matrix.yaml cell id (omit = first cell). Sets base_url + api pin.",
-)
-@click.option(
     "--tenant",
     default=None,
     help="Acumatica tenant login name (else ACU_TENANT / .env).",
@@ -216,7 +208,7 @@ def _emit_completion(
 @click.option(
     "--api-version",
     default=None,
-    help="Contract API half, e.g. 25.200.001 (else matrix default_api).",
+    help="Contract API half, e.g. 25.200.001 (else ACU_API_VERSION / 25.200.001).",
 )
 @click.option(
     "--username",
@@ -236,8 +228,6 @@ def cli(ctx: click.Context, **flags: str | None) -> None:
     Resolution stays out of the group callback so commands that need no
     target (config init) never trigger it; per key a flag beats the
     ACU_* var (.env or process) beats the code default (I.cmd precedence).
-    `--cell` selects a matrix.yaml cell for base_url + api_version + erp
-    (V27); not an Instance field — load_instance peels it off.
     """
     ctx.obj = {k: v for k, v in flags.items() if v is not None}
 
@@ -594,7 +584,6 @@ def bootstrap_cmd(ctx: click.Context, export_path: Path | None) -> None:
         output.success(f"wrote {export_path}")
         return
     inst = _resolve_instance(ctx)
-    assert_matrix_compatible(inst)
     if not inst.tenant:
         raise SystemExit(
             "tenant not set (pass --tenant, "
@@ -740,70 +729,25 @@ def config_init(host: str | None, directory: Path | None) -> None:
 def config_show(inst: Instance) -> None:
     """Print the fully resolved configuration as a complete .env document.
 
-    Same resolution path live commands use (flags → env → matrix → default).
-    Password is never emitted (no ACU_PASSWORD key). ACU_API_VERSION is never
-    emitted (api pin comes from matrix default_api or --api-version). When
-    matrix.yaml is present, cell id/erp/default_api/base_url appear as
-    comments. Safe to redirect and edit; supply password out of band.
+    Same resolution path live commands use (flags → env → default).
+    Password is never emitted (no ACU_PASSWORD key). ACU_API_VERSION is
+    emitted with the resolved pin. Safe to redirect and edit; supply
+    password out of band.
 
     \b
     Examples
       acu config show
-      acu --cell lab --tenant DEV config show
+      acu --tenant DEV --api-version 24.200.001 config show
     """
     output.data("# resolved by `acu config show` - a complete .env")
     output.data("# ACU_PASSWORD comes from .env or the environment, never from here")
-    # V27: api pin is not an env key — never emit ACU_API_VERSION
-    for field, value in inst.model_dump(exclude={"password", "api_version"}).items():
+    for field, value in inst.model_dump(exclude={"password"}).items():
         output.data(f"ACU_{field.upper()}={value}")
-    ctx = click.get_current_context()
-    overrides: dict[str, str] = ctx.obj or {}
-    cell_id = overrides.get("cell")
-    matrix = load_matrix()
-    if matrix is not None:
-        cell = active_cell(matrix, cell_id)
-        output.data(
-            f"# matrix.yaml cell={cell.id}: erp={cell.erp} "
-            f"default_api={cell.default_api} base_url={cell.base_url}"
-        )
-        if inst.api_version == cell.default_api:
-            output.data(
-                f"# api_version={inst.api_version} "
-                f"(from matrix cell {cell.id} default_api)"
-            )
-        else:
-            output.data(
-                f"# api_version={inst.api_version} (from --api-version; "
-                f"matrix cell {cell.id} default_api={cell.default_api})"
-            )
-        root = find_data_root()
-        env_vals = read_env_values(root / ".env") if root is not None else {}
-        if (
-            overrides.get("base_url")
-            or os.environ.get("ACU_BASE_URL")
-            or env_vals.get("base_url")
-        ):
-            output.data(
-                f"# base_url={inst.base_url} (from --url or ACU_BASE_URL; "
-                f"matrix cell {cell.id} base_url={cell.base_url})"
-            )
-        else:
-            output.data(f"# base_url={inst.base_url} (from matrix cell {cell.id})")
-    else:
-        output.data(
-            f"# api_version={inst.api_version} "
-            f"(code default or --api-version; no matrix.yaml)"
-        )
 
 
 @config_group.command("check")
-@click.option(
-    "--strict",
-    is_flag=True,
-    help="Promote warn classes (missing matrix.yaml) to fail",
-)
 @click.pass_context
-def config_check(ctx: click.Context, strict: bool) -> None:
+def config_check(ctx: click.Context) -> None:
     """Read-only preflight of the resolved target (ok/fail/warn/skip lines).
 
     Proves connectivity before apply/run. Writes nothing (no PUT, no tenant
@@ -813,7 +757,6 @@ def config_check(ctx: click.Context, strict: bool) -> None:
     Probe order
       discovery  .env walk-up + base_url resolve
       secrets    ACU_PASSWORD present
-      matrix     local matrix.yaml (warn if missing; --strict → fail)
       rest       login + landed tenant + Default/<api> listed
       ssh        ping if ACU_SSH set; skip if unset (hosted OK)
 
@@ -824,37 +767,22 @@ def config_check(ctx: click.Context, strict: bool) -> None:
     \b
     Examples
       acu config check
-      acu config check --strict
       acu --url https://erp/AcumaticaERP --password SECRET config check
     """
     overrides: dict[str, str] = ctx.obj or {}
-    cell_id = overrides.get("cell")
     # discovery (V3): lax walk-up + parse; base_url must resolve from flag,
-    # process env, found .env, or active matrix cell base_url (V27)
+    # process env, or found .env (V27)
     root = find_data_root()
     try:
         env_values = read_env_values(root / ".env") if root is not None else {}
-        matrix_for_discovery = load_matrix(root)
-        if cell_id is not None and matrix_for_discovery is None:
-            raise SystemExit(
-                f"--cell {cell_id!r} requires matrix.yaml "
-                "(none found under data root; see acu config init)"
-            )
-        cell_for_discovery = (
-            active_cell(matrix_for_discovery, cell_id)
-            if matrix_for_discovery is not None
-            else None
-        )
         if not (
             overrides.get("base_url")
             or os.environ.get("ACU_BASE_URL")
             or env_values.get("base_url")
-            or (cell_for_discovery.base_url if cell_for_discovery is not None else None)
         ):
             source = f"{root / '.env'}:" if root is not None else "no .env found and"
             raise SystemExit(
-                f"{source} missing required base_url "
-                "(pass --url, ACU_BASE_URL, or matrix.yaml cell base_url)"
+                f"{source} missing required base_url (pass --url or ACU_BASE_URL)"
             )
     except SystemExit as exc:
         output.data(f"fail discovery: {exc}")
@@ -878,19 +806,8 @@ def config_check(ctx: click.Context, strict: bool) -> None:
     # both live probes run through the exact objects live commands use, so
     # a pass here proves the real code path, not a parallel one
     inst = _resolve_instance(ctx)
-    url_from_flag_or_env = bool(
-        overrides.get("base_url")
-        or os.environ.get("ACU_BASE_URL")
-        or env_values.get("base_url")
-    )
-    failed, claimed_erp = _probe_matrix(
-        root,
-        inst,
-        strict=strict,
-        cell_id=cell_id,
-        base_url_from_flag_or_env=url_from_flag_or_env,
-    )
-    if not _probe_rest(inst, claimed_erp):
+    failed = False
+    if not _probe_rest(inst):
         failed = True
     if not _probe_ssh(inst):
         failed = True
@@ -898,39 +815,30 @@ def config_check(ctx: click.Context, strict: bool) -> None:
         raise SystemExit(1)
 
 
-def _probe_rest(inst: Instance, claimed_erp: str | None) -> bool:
-    """REST login + endpoints + optional ERP build; True = all passed.
+def _probe_rest(inst: Instance) -> bool:
+    """REST login + endpoints; True = all passed.
 
     Entering the client is the probe: login + landed-tenant verify (V5);
     context manager guarantees logout (V6). One GET /entity feeds endpoints
-    (T74/T90) and optional ERP build (T92).
+    (T74/T90).
     """
     try:
         with AcumaticaClient(inst) as client:
             output.data(f"ok rest ({inst.base_url}, tenant {inst.tenant})")
-            return _probe_entity_root(client, inst, claimed_erp)
+            return _probe_entity_root(client, inst)
     except (RuntimeError, httpx.HTTPError) as exc:
         output.data(f"fail rest: {_format_failure(exc, target=inst.base_url)}")
         return False
 
 
-def _probe_entity_root(
-    client: AcumaticaClient, inst: Instance, claimed_erp: str | None
-) -> bool:
-    """Endpoints (+ ERP when claimed); True = all passed."""
-    ok = True
+def _probe_entity_root(client: AcumaticaClient, inst: Instance) -> bool:
+    """Endpoints probe; True = passed."""
     try:
-        endpoints, live_build = client.entity_root()
+        endpoints, _live_build = client.entity_root()
     except (RuntimeError, httpx.HTTPError) as exc:
         output.data(f"fail endpoints: {_format_failure(exc, target=inst.base_url)}")
-        endpoints, live_build = [], None
-        ok = False
-    else:
-        if not _probe_endpoints(endpoints, inst):
-            ok = False
-    if claimed_erp is not None and not _probe_erp(claimed_erp, live_build):
-        ok = False
-    return ok
+        return False
+    return _probe_endpoints(endpoints, inst)
 
 
 def _probe_ssh(inst: Instance) -> bool:
@@ -946,68 +854,6 @@ def _probe_ssh(inst: Instance) -> bool:
     except RuntimeError as exc:
         output.data(f"fail ssh: {exc}")
         return False
-
-
-def _probe_matrix(
-    root: Path | None,
-    inst: Instance,
-    *,
-    strict: bool,
-    cell_id: str | None = None,
-    base_url_from_flag_or_env: bool = False,
-) -> tuple[bool, str | None]:
-    """Emit local matrix probe; return `(failed, claimed_erp?)` (V27).
-
-    Invalid matrix hard-exits (any loader). Missing under data root warns
-    unless --strict. No data root → skip. Match → ok + claimed `erp` for
-    the live ERP probe after REST (T92). Active cell = `--cell` or first.
-    """
-    try:
-        matrix = load_matrix(root)
-    except SystemExit as exc:
-        output.data(f"fail matrix: {exc}")
-        raise SystemExit(1) from exc
-    if root is None:
-        output.data("skip matrix (no data root)")
-        return False, None
-    if matrix is None:
-        msg = (
-            f"matrix: no matrix.yaml under {root} - dataset verified matrix "
-            "unknown; add matrix.yaml (see acu config init) or pass --strict "
-            "to require it"
-        )
-        output.data(f"{'fail' if strict else 'warn'} {msg}")
-        return strict, None
-    try:
-        cell = active_cell(matrix, cell_id)
-    except SystemExit as exc:
-        output.data(f"fail matrix: {exc}")
-        raise SystemExit(1) from exc
-    # V27: source-merge — api_version/base_url already from cell unless flag/env
-    api_src = (
-        f"api_version from default_api={cell.default_api}"
-        if inst.api_version == cell.default_api
-        else (
-            f"api_version={inst.api_version} from --api-version; "
-            f"default_api={cell.default_api}"
-        )
-    )
-    url_src = (
-        "base_url from --url or ACU_BASE_URL"
-        if base_url_from_flag_or_env
-        else "base_url from cell"
-    )
-    overlay = pin_overlay_dir(root, inst.api_version)
-    overlay_note = (
-        f"overlay=overlays/default-{inst.api_version}/"
-        if overlay is not None
-        else f"overlay=absent (default-{inst.api_version})"
-    )
-    output.data(
-        f"ok matrix (cell={cell.id}; {api_src}; {url_src}; "
-        f"erp={cell.erp} claimed; {overlay_note})"
-    )
-    return False, cell.erp
 
 
 def _probe_endpoints(endpoints: list[tuple[str, str]], inst: Instance) -> bool:
@@ -1029,41 +875,7 @@ def _probe_endpoints(endpoints: list[tuple[str, str]], inst: Instance) -> bool:
     return False
 
 
-def _major_minor(version: str) -> str:
-    """First two dotted segments (T76/T92 major.minor match)."""
-    parts = version.split(".")
-    if len(parts) >= 2:
-        return f"{parts[0]}.{parts[1]}"
-    return version
-
-
-def _probe_erp(claimed: str, live: str | None) -> bool:
-    """Emit ERP probe; return True on pass/skip, False on fail (T92).
-
-    Live id comes from 26.x `GET /entity` wrapper
-    `version.acumaticaBuildVersion`. Bare array → skip (no HTTP surface).
-    Compare major.minor only — patch builds may drift within a claimed line.
-    """
-    if live is None:
-        output.data(f"skip erp (live probe not available; claimed {claimed})")
-        return True
-    if _major_minor(live) == _major_minor(claimed):
-        output.data(f"ok erp ({live} matches claimed {claimed})")
-        return True
-    output.data(
-        f"fail erp: live {live} vs claimed {claimed} "
-        f"(major.minor {_major_minor(live)} vs {_major_minor(claimed)})"
-    )
-    return False
-
-
 @cli.command("check")
-@click.option(
-    "--all",
-    "all_cells",
-    is_flag=True,
-    help="Run lifecycle for every matrix.yaml cell (continue-on-fail)",
-)
 @click.option(
     "--yes",
     is_flag=True,
@@ -1076,64 +888,43 @@ def _probe_erp(claimed: str, live: str | None) -> bool:
     help="Tenant login for pre-clean create (else ACU_TENANT / global --tenant)",
 )
 @click.pass_context
-def check_cmd(
-    ctx: click.Context, all_cells: bool, yes: bool, tenant_login: str | None
-) -> None:
-    """Cold matrix lifecycle: delete → create → apply → run → diff (leave tenant).
+def check_cmd(ctx: click.Context, yes: bool, tenant_login: str | None) -> None:
+    """Cold lifecycle: delete → create → apply → run → diff (leave tenant).
 
-    Destructive rebuild for CI / matrix verification. Not `acu config check`
-    (read-only preflight). Requires matrix.yaml, non-empty ACU_SSH, and a
-    tenant login (--tenant / ACU_TENANT). Pre-clean delete is always
-    unattended; rebuilt tenant is left on the host for inspect / state.
-    --yes is accepted for muscle-memory only.
+    Destructive rebuild for CI. Not `acu config check` (read-only
+    preflight). Requires non-empty ACU_SSH and a tenant login (--tenant /
+    ACU_TENANT). Pre-clean delete is always unattended; rebuilt tenant is
+    left on the host for inspect / state. --yes is accepted for
+    muscle-memory only.
 
     \b
-    Per cell
+    Flow
       delete tenant (if present) → create+bootstrap → apply → run → diff
-      Diff drift fails the cell as exit 1 (never exit 2 from this command).
-
-    \b
-    Selection
-      default     first matrix.yaml cell
-      --cell ID   that cell only (global flag)
-      --all       every cell, continue-on-fail, aggregate exit
+      Diff drift fails the run as exit 1 (never exit 2 from this command).
 
     \b
     Examples
       acu check --tenant DEV
-      acu check --all --tenant DEV
-      acu --cell lab check --tenant LAB5
+      acu check --yes --tenant DEV
 
     Prefer `config check` for "can I connect?" Prefer this for "rebuild
     green from empty."
     """
     _ = yes
-    matrix = _require_matrix_for_check()
     overrides: dict[str, str] = dict(ctx.obj or {})
-    cell_id = overrides.get("cell")
-    if all_cells and cell_id is not None:
-        raise SystemExit("pass either --all or --cell, not both")
-    cells = matrix.cells if all_cells else [active_cell(matrix, cell_id)]
     tenant = _resolve_check_tenant(tenant_login, overrides)
-    failed = [c.id for c in cells if not _check_one_cell(c, overrides, tenant)]
-    if failed:
-        output.error(f"check: {len(failed)} cell(s) failed: {', '.join(failed)}")
-        raise SystemExit(1)
-    output.success(f"check: {len(cells)} cell(s) green")
-
-
-def _require_matrix_for_check():
-    """Load matrix.yaml or hard-fail (acu check requires matrix; V47)."""
     try:
-        matrix = load_matrix(find_data_root())
+        inst = load_instance({**overrides, "tenant": tenant})
     except SystemExit as exc:
         raise SystemExit(str(exc)) from exc
-    if matrix is None:
+    if not inst.ssh:
         raise SystemExit(
-            "matrix.yaml not found under data root "
-            "(acu check requires matrix; see acu config init)"
+            "ACU_SSH not set (pass --ssh, or put ACU_SSH in .env or the environment)"
         )
-    return matrix
+    output.data(f"check {inst.base_url} (api={inst.api_version})")
+    if _lifecycle_one_cell(inst, tenant) != 0:
+        raise SystemExit(1)
+    output.success("check: green")
 
 
 def _resolve_check_tenant(tenant_login: str | None, overrides: dict[str, str]) -> str:
@@ -1147,27 +938,6 @@ def _resolve_check_tenant(tenant_login: str | None, overrides: dict[str, str]) -
             "or put ACU_TENANT in .env or the environment)"
         )
     return tenant
-
-
-def _check_one_cell(cell: object, overrides: dict[str, str], tenant: str) -> bool:
-    """Run lifecycle for one matrix cell; True = green."""
-    from .matrix import MatrixCell
-
-    assert isinstance(cell, MatrixCell)
-    output.data(f"check cell={cell.id} ({cell.base_url}, api={cell.default_api})")
-    cell_overrides = {**overrides, "cell": cell.id, "tenant": tenant}
-    try:
-        inst = load_instance(cell_overrides)
-    except SystemExit as exc:
-        output.error(f"cell {cell.id}: {exc}")
-        return False
-    if not inst.ssh:
-        output.error(
-            f"cell {cell.id}: ACU_SSH not set "
-            "(pass --ssh, or put ACU_SSH in .env or the environment)"
-        )
-        return False
-    return _lifecycle_one_cell(inst, tenant) == 0
 
 
 def _lifecycle_one_cell(inst: Instance, tenant: str) -> int:
@@ -1192,7 +962,7 @@ def _lifecycle_one_cell(inst: Instance, tenant: str) -> int:
         # Leave tenant for manual inspect (no post-clean — V47).
         return 1
     output.success(
-        f"cell lifecycle green on {inst.base_url} tenant {tenant} (left for inspection)"
+        f"lifecycle green on {inst.base_url} tenant {tenant} (left for inspection)"
     )
     return 0
 
@@ -1447,7 +1217,6 @@ def apply_cmd(inst: Instance, files: tuple[Path, ...], dry_run: bool) -> None:
 
     Related: `diff` (drift) · `extract` (inverse pull) · `run` (txns).
     """
-    assert_matrix_compatible(inst)
     total_ok = 0
     all_errors: list[str] = []
     with AcumaticaClient(inst) as client:
@@ -1490,7 +1259,6 @@ def schema_cmd(inst: Instance, out_dir: Path | None) -> None:
       acu schema
       acu --api-version 25.200.001 schema --out ./schemas
     """
-    assert_matrix_compatible(inst)
     if out_dir is None:
         out_dir = data_root() / "schemas"
     out_file = out_dir / f"swagger-Default-{inst.api_version}.json"
@@ -1528,7 +1296,6 @@ def diff_cmd(inst: Instance, files: tuple[Path, ...]) -> None:
 
     Related: `apply` (fix) · `extract` (pull) · `state` (balances).
     """
-    assert_matrix_compatible(inst)
     paths = expand_files(files or default_apply_dirs(inst))
     drifts: list[str] = []
     with AcumaticaClient(inst) as client:
@@ -1580,7 +1347,6 @@ def run_cmd(inst: Instance, files: tuple[Path, ...], dry_run: bool) -> None:
 
     Related: `apply` · `diff` · `state`.
     """
-    assert_matrix_compatible(inst)
     paths = list(default_scenario_files(inst)) if not files else expand_files(files)
     scenarios = [run.load_scenario(path) for path in paths]
     ok = True
@@ -1658,7 +1424,6 @@ def extract_cmd(
 
     Related: `apply` · `diff` · `inventory` · `state`.
     """
-    assert_matrix_compatible(inst)
     with AcumaticaClient(inst) as client:
         failed = extract.run(
             client,
@@ -1710,8 +1475,7 @@ def inventory_cmd(
     ARTIFACT = SM203520 Settings XML ZIP (manifest.xml + table XML) or an
     ac.exe `export xml` folder. Binary .adb is rejected. Writes
     summary.yaml + tables/<Table>.yaml under --out (default inventory/).
-    Existing files skip unless --force. If matrix.yaml is present and the
-    artifact reports a build, active-cell erp must match.
+    Existing files skip unless --force.
 
     Not extract (REST → config/ seed). Not state (balances). Never writes
     config/ or state/. Feed inventory/ into `acu reconcile`.
@@ -1728,10 +1492,6 @@ def inventory_cmd(
     # per-table write/skip emit stay multi-unit stdout after.
     with output.step(f"parsing snapshot artifact {artifact}"):
         art = inventory.parse_artifact(artifact)
-    matrix = load_matrix()
-    if matrix is not None:
-        cell_id = (click.get_current_context().obj or {}).get("cell")
-        inventory.assert_erp_matches(art, active_cell(matrix, cell_id).erp)
     dest = out_dir if out_dir is not None else Path(inventory.DEFAULT_OUT)
     output.data(
         f"{artifact} -> {dest} ({len(art.tables)} table(s)"
@@ -1870,7 +1630,6 @@ def state_cmd(
 
     Related: `run` (moves balances) · `diff` (seed drift) · `extract`.
     """
-    assert_matrix_compatible(inst)
     if not files:
         default = data_root() / "config" / "views"
         if not default.is_dir():

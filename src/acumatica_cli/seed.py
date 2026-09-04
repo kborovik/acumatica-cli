@@ -124,7 +124,7 @@ def resolve_endpoint(
         if not api_version:
             raise SystemExit(
                 "endpoint: default requires a configured api_version "
-                "(matrix cell default_api or --api-version)"
+                "(ACU_API_VERSION or --api-version)"
             )
         return f"{_DEFAULT_ENDPOINT_NAME}/{api_version}"
     return endpoint

@@ -56,7 +56,7 @@ def test_env_file_values_override_defaults(data_root: Path) -> None:
     (data_root / ".env").write_text(FULL_ENV)
     inst = load_instance()
     assert inst.base_url == "https://edge.example/AcumaticaERP"  # trailing / stripped
-    assert inst.api_version == "25.200.001"  # V27: code default, not env
+    assert inst.api_version == "25.200.001"  # V27: code default when env unset
     assert inst.ssh == "user@jump.example"
     assert inst.tenant == "T1"
     assert inst.user == "api"
@@ -64,7 +64,6 @@ def test_env_file_values_override_defaults(data_root: Path) -> None:
 
 def test_api_version_flag_rejects_default_path_prefix(data_root: Path) -> None:
     # V11: version half only — Default/… nests as /entity/Default/Default/…
-    # Flag path still validates; ACU_API_VERSION env is ignored (V27/T125).
     with pytest.raises(SystemExit, match=r"version half only"):
         load_instance({"api_version": "Default/25.200.001"})
 
@@ -74,39 +73,38 @@ def test_api_version_flag_rejects_embedded_slash(data_root: Path) -> None:
         load_instance({"api_version": "25/200/001"})
 
 
-def test_acu_api_version_env_is_ignored(
+def test_acu_api_version_env_wins(
     data_root: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    # V27/T125: ACU_API_VERSION is not a config key — unknown ACU_* ignored;
-    # code default (or matrix.yaml) wins even when env spells a different pin
+    # V27: ACU_API_VERSION is the pin; process env beats .env
     (data_root / ".env").write_text(MINIMAL_ENV + "ACU_API_VERSION=24.200.001\n")
     monkeypatch.setenv("ACU_API_VERSION", "23.200.001")
     inst = load_instance()
-    assert inst.api_version == "25.200.001"
+    assert inst.api_version == "23.200.001"
 
 
-def test_api_version_from_matrix_yaml(data_root: Path) -> None:
-    # V27: present matrix.yaml active-cell default_api sources Instance.api_version
-    (data_root / "matrix.yaml").write_text(
-        "cells:\n"
-        '  - id: "default"\n'
-        '    erp: "26.101.0225"\n'
-        '    default_api: "24.200.001"\n'
-        '    base_url: "http://acu.test/AcumaticaERP"\n'
-    )
+def test_acu_api_version_dotenv_when_process_unset(data_root: Path) -> None:
+    (data_root / ".env").write_text(MINIMAL_ENV + "ACU_API_VERSION=24.200.001\n")
     inst = load_instance()
     assert inst.api_version == "24.200.001"
 
 
-def test_api_version_flag_beats_matrix_yaml(data_root: Path) -> None:
-    # V27: --api-version overrides matrix for ad-hoc probes
+def test_leftover_matrix_yaml_is_ignored(data_root: Path) -> None:
+    # V27: leftover matrix.yaml never loaded; pin stays env/code default
     (data_root / "matrix.yaml").write_text(
         "cells:\n"
         '  - id: "default"\n'
         '    erp: "26.101.0225"\n'
         '    default_api: "24.200.001"\n'
-        '    base_url: "http://acu.test/AcumaticaERP"\n'
+        '    base_url: "http://other.test/AcumaticaERP"\n'
     )
+    inst = load_instance()
+    assert inst.api_version == "25.200.001"
+    assert inst.base_url == "http://acu.test/AcumaticaERP"
+
+
+def test_api_version_flag_beats_env(data_root: Path) -> None:
+    (data_root / ".env").write_text(MINIMAL_ENV + "ACU_API_VERSION=24.200.001\n")
     inst = load_instance({"api_version": "23.200.001"})
     assert inst.api_version == "23.200.001"
 
