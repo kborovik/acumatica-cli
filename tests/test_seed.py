@@ -1071,6 +1071,39 @@ def _package_template(rel: str) -> Path:
     )
 
 
+def _control_account_module(record: dict[str, Any]) -> object:
+    custom = record.get("custom")
+    if not isinstance(custom, dict):
+        return None
+    records = custom.get("AccountRecords")
+    if not isinstance(records, dict):
+        return None
+    return records.get("ControlAccountModule")
+
+
+def test_package_in_progress_transit_accounts_are_not_in_control() -> None:
+    """T210/V51: 12300/12400 are not IN control; 12100/12200 stay IN.
+
+    INPreferences still names 12300/12400 as progress/transit. Load the
+    packaged templates, not a fixture copy.
+    """
+    accounts = seed.load_baseline(_package_template("config/baseline/20-accounts.yaml"))
+    assert isinstance(accounts, seed.BaselineFile)
+    by_cd = {str(r["AccountCD"]): r for r in accounts.records}
+    assert _control_account_module(by_cd["12100"]) == "IN"
+    assert _control_account_module(by_cd["12200"]) == "IN"
+    assert _control_account_module(by_cd["12300"]) is None
+    assert _control_account_module(by_cd["12400"]) is None
+
+    prefs = seed.load_baseline(
+        _package_template("config/master/20-in-preferences.yaml")
+    )
+    assert isinstance(prefs, seed.BaselineFile)
+    rec = prefs.records[0]
+    assert rec["INProgressAcctID"] == "12300"
+    assert rec["INTransitAcctID"] == "12400"
+
+
 def test_package_segmented_key_apply_body_widens_inventory_bizacct(
     instance: Instance,
 ) -> None:

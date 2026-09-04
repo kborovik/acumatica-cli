@@ -59,9 +59,6 @@ records:
   Secured: false
   Type: Asset
   UseDefaultSubaccount: false
-  custom:
-    AccountRecords:
-      ControlAccountModule: IN
 - AccountCD: '12400'
   Active: true
   Description: Inventory In Transit
@@ -70,9 +67,6 @@ records:
   Secured: false
   Type: Asset
   UseDefaultSubaccount: false
-  custom:
-    AccountRecords:
-      ControlAccountModule: IN
 - AccountCD: '15000'
   Active: true
   Description: Prepaid Expenses

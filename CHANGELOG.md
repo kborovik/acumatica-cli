@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+### Fixed
+
+- **INPreferences WIP/transit control (B29):** Package accounts `12300`
+  (Work In Progress) and `12400` (Inventory In Transit) no longer mark
+  `ControlAccountModule: IN`. IN Setup can use them as progress and
+  transit accounts. Inventory assets `12100`/`12200` stay IN control
+  for posting-class `InvtAcctID` (gh #32).
+
 ## [v0.26.0] - 2026-09-04
 
 ### Added
