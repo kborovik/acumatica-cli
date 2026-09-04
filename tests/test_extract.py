@@ -151,14 +151,26 @@ TABLES: dict[str, list[dict[str, Any]]] = {
             "LastModifiedDateTime": "2026-07-11T00:00:00+00:00",
         }
     ],
-    # T205 SegmentedKey (gh #30 / V50). Package seeds INVENTORY+BIZACCT
-    # Length 30 only; ACCOUNT/INSITE stay off this canned table so extract
-    # matches the template (T206 may add extras + filter).
+    # T206 SegmentedKey (gh #30 / V50). Canned live includes ACCOUNT+INSITE
+    # Length 10 so extract --force round-trips INVENTORY/BIZACCT Length 30
+    # without rewriting the untouched keys (include drops audit noise).
     "SegmentedKey": [
+        {
+            "DimensionID": "ACCOUNT",
+            "SegmentID": 1,
+            "Length": 10,
+            "LastModifiedDateTime": "2026-07-11T00:00:00+00:00",
+        },
         {
             "DimensionID": "BIZACCT",
             "SegmentID": 1,
             "Length": 30,
+            "LastModifiedDateTime": "2026-07-11T00:00:00+00:00",
+        },
+        {
+            "DimensionID": "INSITE",
+            "SegmentID": 1,
+            "Length": 10,
             "LastModifiedDateTime": "2026-07-11T00:00:00+00:00",
         },
         {
@@ -1431,6 +1443,38 @@ def test_package_segmented_key_template() -> None:
     assert "80-stock-items-parts.yaml" in master
     assert "75-vendors.yaml" in master
     assert "76-customers.yaml" in master
+
+
+def test_extract_force_round_trips_segmented_key_lengths(
+    instance: Instance, server: FakeServer, tmp_path: Path
+) -> None:
+    """T206/V50: extract --force writes INVENTORY/BIZACCT Length 30.
+
+    Include keeps SegmentID+Length (catalog row) and drops LastModifiedDateTime.
+    ACCOUNT/INSITE stay Length 10 when present on the tenant.
+    """
+    target = tmp_path / "config" / "bootstrap" / "segmented-key.yaml"
+    target.parent.mkdir(parents=True)
+    target.write_text("stale\n")
+    failed = _run(
+        instance, server, tmp_path, only=frozenset({"SegmentedKey"}), force=True
+    )
+    assert failed == 0
+    doc = yaml.safe_load(target.read_text())
+    assert doc["entity"] == "SegmentedKey"
+    assert doc["key"] == "DimensionID"
+    assert doc["endpoint"] == "bootstrap"
+    by_id = {r["DimensionID"]: r for r in doc["records"]}
+    assert set(by_id) == {"ACCOUNT", "BIZACCT", "INSITE", "INVENTORY"}
+    assert [r["DimensionID"] for r in doc["records"]] == sorted(by_id)
+    assert by_id["INVENTORY"]["Length"] == 30
+    assert by_id["BIZACCT"]["Length"] == 30
+    assert by_id["ACCOUNT"]["Length"] == 10
+    assert by_id["INSITE"]["Length"] == 10
+    for rec in by_id.values():
+        assert rec["SegmentID"] == 1
+        assert "LastModifiedDateTime" not in rec
+        assert set(rec) == {"DimensionID", "Length", "SegmentID"}
 
 
 def test_catalog_numbering_sequence_row() -> None:

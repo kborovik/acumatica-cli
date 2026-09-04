@@ -1071,6 +1071,29 @@ def _package_template(rel: str) -> Path:
     )
 
 
+def test_package_segmented_key_apply_body_widens_inventory_bizacct(
+    instance: Instance,
+) -> None:
+    """T206/V50: package SegmentedKey PUT carries DimensionID+SegmentID+Length 30."""
+    baseline = seed.load_baseline(
+        _package_template("config/bootstrap/segmented-key.yaml")
+    )
+    assert isinstance(baseline, seed.BaselineFile)
+    recorder = Recorder({"/SegmentedKey": httpx.Response(200, json=[])})
+    seed.apply(_client(instance, recorder), baseline)
+    puts = [r for r in recorder.requests if r.method == "PUT"]
+    assert len(puts) == 2
+    bodies = [json.loads(r.content) for r in puts]
+    by_id = {b["DimensionID"]["value"]: b for b in bodies}
+    assert set(by_id) == {"BIZACCT", "INVENTORY"}
+    for dim, body in by_id.items():
+        assert body["DimensionID"] == {"value": dim}
+        assert body["SegmentID"] == {"value": 1}
+        assert body["Length"] == {"value": 30}
+        assert "ACCOUNT" not in body
+        assert "INSITE" not in body
+
+
 def test_package_in_preferences_apply_body_includes_deepen_fields(
     instance: Instance,
 ) -> None:

@@ -182,7 +182,7 @@ T202|x|sweep human-facing md prose → ≤2 sentences/paragraph, sparse (scope: 
 T203|x|add V49 extras-hook `.spec/scripts/check-md-prose` + recipe; offline tests; suite green|V49,V13
 T204|x|bootstrap contract SegmentedKey (CS202000 DimensionMaint; Header Dimension key DimensionID; detail Segment SegmentID+Length); version bump|V21,I.data
 T205|x|seed_catalog + package template `config/bootstrap/` SegmentedKey; keys `[DimensionID]`; INVENTORY+BIZACCT segment 1 Length 30; ACCOUNT+INSITE unchanged; V22 bootstrap-before-master; V34 one catalog row|V22,V34,V50,I.data,T204
-T206|.|extract --force round-trips INVENTORY/BIZACCT Length 30; offline tests apply body + extract include + catalog row|V13,V34,V50,I.cmd,T205
+T206|x|extract --force round-trips INVENTORY/BIZACCT Length 30; offline tests apply body + extract include + catalog row|V13,V34,V50,I.cmd,T205
 T207|.|live/e2e: PUT StockItem 26-char InventoryID succeeds after SegmentedKey apply (e.g. RAW-ECH-EXT4)|V4,V13,V50,T205
 T208|.|docs/demo-seed — SegmentedKey entity, CS202000, DAC max 30, non-goals (no shrink; no INSITE/ACCOUNT widen); CHANGELOG Unreleased (gh #30)|V12,V19,V50,T204,T205
 
