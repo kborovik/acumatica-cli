@@ -108,7 +108,7 @@ for granular /sdd:check runs.
 
 - required keys post-merge: `ACU_BASE_URL`, `ACU_PASSWORD` — unresolved → hard error naming key(s)
 - `ACU_SSH`: key absent + base_url host → default `Administrator@<host>`; key present blank → empty (hosted/data-plane only); flag/env explicit wins; empty post-default fine for data-plane cmds
-- `api_version`: never from env (`ACU_API_VERSION` ignored if present); `--api-version` flag ? → else `target.yaml` `default_api` when present → else code default `25.200.001` (V27)
+- `api_version`: `--api-version` flag ? → else `ACU_API_VERSION` env → else code default `25.200.001` (V27)
 - tenant CRUD hard-errors when `ACU_SSH` empty post-default, names key
 
 ## §V.20 — seed endpoint resolution (extracted from SPEC.md §V.20)
@@ -129,15 +129,15 @@ for granular /sdd:check runs.
 - contract entity over org-scoped screen (GL201100 class) answers 200 [] on multi-org tenant w/o org parameter
 - multi-org verify gate applies only when multi-org surface in scope (single-org demo strategy, multi-org = paid engagement)
 
-## §V.27 — dataset-target gate (extracted from SPEC.md §V.27)
+## §V.27 — env-sole-config gate (extracted from SPEC.md §V.27)
 
-- allowlisted data-plane cmds: `apply`/`diff`/`run`/`extract`/`schema`/`bootstrap`/`state` + `config check`
-- present target → `load_instance` sets `Instance.api_version` = `default_api` when `--api-version` flag absent (source-merge; dual-source match gate retired); invalid → hard fail any loader
-- missing → warn on `config check` unless `--strict`; api_version stays flag or code default `25.200.001`
-- never `ACU_API_VERSION` env pin; unknown `ACU_*` ignored
-- gate ! inside bare `_resolve_instance`/`pass_instance` for hard-fail-on-mismatch (retired); target still loadable for erp claim + config check/show surface
-- `config check` target line: present → `ok target (api_version from default_api=…; erp=… claimed)`; no mismatch fail
-- `erp` live when `GET /entity` wrapper has `version.acumaticaBuildVersion` → major.minor match `target.erp` else fail; bare array / no build id → skip (claimed still on target line); never SSH/sqlcmd (V1)
+- allowlisted data-plane cmds: `apply`/`diff`/`run`/`extract`/`schema`/`bootstrap`/`state` + `config check` + `acu check` load `Instance` via `_resolve_instance`
+- `api_version`: `--api-version` flag ? → else `ACU_API_VERSION` env → else code default `25.200.001`
+- `base_url`: `--url` flag ? → else `ACU_BASE_URL` env → else hard error naming sources
+- never load `matrix.yaml` (present leftover ignored)
+- never `--cell`; never `target.yaml`
+- `config check` never matrix line; never erp-match
+- unknown `ACU_*` ignored except known keys incl `ACU_API_VERSION`
 
 ## §V.19 — release-pipeline recipe (extracted from SPEC.md §V.19)
 
@@ -167,6 +167,7 @@ for granular /sdd:check runs.
 - package `templates/**/*.yaml` ! data only — no `#` comments (full-line `^\s*#` or trailing `\s#\s`); unit gate offline
 - narrative/docs comments ! sibling `acumatica-gitops` separate files, never inlined package YAML
 - never scaffolds `project.xml` — Bootstrap contract stays packaged SoT (V2/V21); not a second Bootstrap identity in data repo
+- never scaffolds `matrix.yaml`; `.env` includes `ACU_BASE_URL` + `ACU_API_VERSION` placeholders
 - `config/views/` TB only w/ EndingBalance-class numeric money capture (V33)
 - inventory-summary ! golden this pass
 - golden `scenario/` lifecycle: `10-seed-capital` (once+present) + `20-buy` + `30-build` + `40-sell` + README (gitops names)
