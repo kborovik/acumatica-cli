@@ -5,7 +5,8 @@
   T150 bumps 1.1.0 -> 1.2.0 for NumberingSequence;
   T154/T155 bumps 1.2.0 -> 1.3.0 for *Preferences field depth, gh #26 / V41;
   T159 bumps 1.3.0 -> 1.4.0 for NumberingSequence view-name fix;
-  T204 bumps 1.4.0 -> 1.5.0 for SegmentedKey, gh #30 / V50).
+  T204 bumps 1.4.0 -> 1.5.0 for SegmentedKey, gh #30 / V50;
+  T207 bumps 1.5.0 -> 1.6.0 for SegmentedKey Detail view (B28)).
 
   package_zip() (bootstrap.py) prefers data-repo bootstrap/project.xml when
   present; otherwise this packaged template is the fallback so config init,
@@ -66,10 +67,11 @@
   T204 SegmentedKey (gh #30 / V50) - Default endpoint has no CS202000
   surface; DimensionMaint Segmented Keys:
   - PrimaryView Header (DAC Dimension): key DimensionID.
-  - Detail view Details (DAC Segment): SegmentID + Length. View names
-    from the issue (T159 class — live Header/Details, not Dimension/Segment).
+  - Grid DataMember Detail (DAC Segment): SegmentID + Length. Live aspx
+    CS202000 DataMember is Detail (singular), not Details — T159 class
+    (B28: Details maps silent 200, GET omits Length, mask stays 10).
   - Flat entity (NumberingSequence idiom): DimensionID on Header,
-    SegmentID/Length on Details. One segment row per DimensionID is the
+    SegmentID/Length on Detail. One segment row per DimensionID is the
     demo shape; multi-segment keys are out of v1. Seed updates existing
     DimensionID only (never insert). Length = ShortValue (PXDBShort).
 
@@ -108,7 +110,7 @@
 -->
 <Customization level="" description="acu bootstrap: CustomizationPlugin enables features on publish; Bootstrap endpoint exposes full company surface (company + credit terms + financial currency + GL chain + module preferences + vendor class + statement cycle + warehouse + order type + cash account + role + user + membership + numbering sequence + segmented key)" product-version="26.101">
   <EntityEndpoint>
-    <Endpoint xmlns="http://www.acumatica.com/entity/maintenance/5.31" name="Bootstrap" version="1.5.0" systemContractVersion="4">
+    <Endpoint xmlns="http://www.acumatica.com/entity/maintenance/5.31" name="Bootstrap" version="1.6.0" systemContractVersion="4">
       <TopLevelEntity name="Company" screen="CS101500">
         <Fields>
           <Field name="AcctCD" type="StringValue" />
@@ -1114,10 +1116,10 @@
             <To object="Header" field="DimensionID" />
           </Mapping>
           <Mapping field="SegmentID">
-            <To object="Details" field="SegmentID" />
+            <To object="Detail" field="SegmentID" />
           </Mapping>
           <Mapping field="Length">
-            <To object="Details" field="Length" />
+            <To object="Detail" field="Length" />
           </Mapping>
         </Mappings>
       </TopLevelEntity>
