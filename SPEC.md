@@ -103,6 +103,7 @@ V47: matrix-lifecycle-check — `acu check` ! pre-clean delete→create→apply�
 V48: agent-help — root `acu --help` ! MENTAL MODEL (data-repo layout, REST vs SSH planes, sole writer=`apply`, drift=`diff` exit 2, txns=`run`) + TYPICAL WORKFLOW (SSH box) + HOSTED path + CONFIG RESOLUTION + COMMAND MAP by intent + EXIT CODES + DEFAULT PATHS so LLM agents learn tool from `--help` alone (README points agents @ root help); every subcommand help ! prerequisites + concrete examples + exit codes + related cmds; accepts `-h` + `--help`; help layout wide (`max_content_width` ≥ 100)
 V49: md-prose-density — human-facing Markdown (`README.md`, `docs/*.md`, packaged template README) prose paragraph ≤ 2 sentences, sparse; list / table / fence exempt; SPEC.md / SPEC.archive.md / CHANGELOG.md / `.spec/*.md` out; mechanical: extras-hook `.spec/scripts/check-md-prose` via `.spec/scripts/check-extras.sh`; ≥3-sentence prose paragraph = VIOLATE
 V50: segmented-key-seed — SegmentedKey seed ! update existing `DimensionID` only (never insert new); package seeds `INVENTORY` + `BIZACCT` one alphanumeric segment `Length` 30 (DAC max); `ACCOUNT` + `INSITE` stay `Length` 10 (`SiteCD` NVarChar(10)); never shrink `Length` after data exists; key-URL GET after PUT ! return `SegmentID` + `Length`; PUT `Length` ! persist so live InventoryID mask accepts 30; silent HTTP 200 w/ omitted detail fields = mapping miss (closes §B.28) (gh #30)
+V51: in-prefs-control-account — INPreferences `INProgressAcctID`/`INTransitAcctID` ! accounts w/ `ControlAccountModule: IN`; package 12300/12400 drop it; 12100/12200 keep IN control (posting-class InvtAcctID); else 26r1 PUT 500 + IN Setup cascade (closes §B.29) (gh #32)
 
 ## §T TASKS
 
@@ -185,6 +186,10 @@ T205|x|seed_catalog + package template `config/bootstrap/` SegmentedKey; keys `[
 T206|x|extract --force round-trips INVENTORY/BIZACCT Length 30; offline tests apply body + extract include + catalog row|V13,V34,V50,I.cmd,T205
 T207|x|live/e2e: SegmentedKey GET key-URL returns Length 30 after apply; PUT StockItem 26-char InventoryID succeeds; contract mapping fix + version bump if shape change|V4,V13,V21,V50,B28,T205
 T208|x|docs/demo-seed — SegmentedKey entity, CS202000, DAC max 30, non-goals (no shrink; no INSITE/ACCOUNT widen); CHANGELOG Unreleased (gh #30)|V12,V19,V50,T204,T205
+T209|.|drop ControlAccountModule IN on package `config/baseline/20-accounts.yaml` 12300/12400; keep 12100/12200|V51,I.data,B29
+T210|.|offline tests: 12300/12400 no ControlAccountModule IN; 12100/12200 still IN; INPreferences still 12300/12400|V13,V51,T209
+T211|.|e2e: package INPreferences apply succeeds after accounts; drop 15000 workaround in `test_segmented_key_length.py`|V4,V13,V51,B29,T209
+T212|.|docs/demo-seed — IN control on posting-class inventory assets only; WIP/transit not control; CHANGELOG Unreleased (gh #32)|V12,V19,V51,T209
 
 ## §B BUGS
 
@@ -211,3 +216,4 @@ B25|2026-07-25|InventorySummaryInquiry warehouse-only params → empty Results; 
 B26|2026-07-27|seed claims WeightUOM/VolumeUOM (Company packaging + StockItem) but endpoint GET not return → permanent red diff (B11 class)|V34
 B27|2026-07-29|tenant list banner uses full base_url (scheme+path); wraps + shows REST path on SSH-plane list|V9
 B28|2026-09-03|SegmentedKey PUT 200 but key-URL GET returns DimensionID only; StockItem 26-char InventoryID 422s on mask `>CCCCCCCCCC`|V50
+B29|2026-09-04|INPreferences PUT 500 when INProgress/INTransit accounts marked ControlAccountModule IN; package 12300/12400; IN Setup cascade|V51
