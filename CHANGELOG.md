@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+### Added
+
+- **SegmentedKey seed (CS202000):** Bootstrap entity plus package template
+  `config/bootstrap/segmented-key.yaml` raises `INVENTORY` and `BIZACCT`
+  segment 1 to length 30 (DAC max) before StockItem / Vendor / Customer.
+  `ACCOUNT` and `INSITE` stay length 10. Never shrink length after data
+  exists. See `docs/demo-seed.md` (gh #30).
+
 ### Changed
 
 - **Docs prose:** human-facing Markdown (`README.md`, `docs/*.md`, packaged
