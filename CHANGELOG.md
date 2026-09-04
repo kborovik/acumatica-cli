@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## [v0.27.0] - 2026-09-04
+
 ### Fixed
 
 - **INPreferences WIP/transit control (B29):** Package accounts `12300`
