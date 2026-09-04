@@ -55,6 +55,10 @@ INIT_TEMPLATES = (
     ("README.md", "README.md"),
     ("config/bootstrap/company.yaml", "config/bootstrap/company.yaml"),
     ("config/bootstrap/credit-terms.yaml", "config/bootstrap/credit-terms.yaml"),
+    (
+        "config/bootstrap/segmented-key.yaml",
+        "config/bootstrap/segmented-key.yaml",
+    ),
     ("config/bootstrap/features.yaml", "config/bootstrap/features.yaml"),
     ("config/baseline/10-subaccounts.yaml", "config/baseline/10-subaccounts.yaml"),
     ("config/baseline/20-accounts.yaml", "config/baseline/20-accounts.yaml"),

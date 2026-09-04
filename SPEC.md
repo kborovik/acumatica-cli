@@ -102,7 +102,7 @@ V46: contract-field-error — PUT/action HTTP error (esp 422) ! surface field-le
 V47: matrix-lifecycle-check — `acu check` ! pre-clean delete→create→apply→run→diff per cell; leave tenant after green (manual inspect); fail path also leaves tenant (no post-clean); `--all` walks matrix order continue+aggregate fail; distinct from `acu config check` (preflight only); SSH + tenant login required; never exit 2
 V48: agent-help — root `acu --help` ! MENTAL MODEL (data-repo layout, REST vs SSH planes, sole writer=`apply`, drift=`diff` exit 2, txns=`run`) + TYPICAL WORKFLOW (SSH box) + HOSTED path + CONFIG RESOLUTION + COMMAND MAP by intent + EXIT CODES + DEFAULT PATHS so LLM agents learn tool from `--help` alone (README points agents @ root help); every subcommand help ! prerequisites + concrete examples + exit codes + related cmds; accepts `-h` + `--help`; help layout wide (`max_content_width` ≥ 100)
 V49: md-prose-density — human-facing Markdown (`README.md`, `docs/*.md`, packaged template README) prose paragraph ≤ 2 sentences, sparse; list / table / fence exempt; SPEC.md / SPEC.archive.md / CHANGELOG.md / `.spec/*.md` out; mechanical: extras-hook `.spec/scripts/check-md-prose` via `.spec/scripts/check-extras.sh`; ≥3-sentence prose paragraph = VIOLATE
-V50: segmented-key-seed — SegmentedKey seed ! update existing `DimensionID` only (never insert new); package seeds `INVENTORY` + `BIZACCT` one alphanumeric segment `Length` 30 (DAC max); `ACCOUNT` + `INSITE` stay `Length` 10 (`SiteCD` NVarChar(10)); never shrink `Length` after data exists (gh #30)
+V50: segmented-key-seed — SegmentedKey seed ! update existing `DimensionID` only (never insert new); package seeds `INVENTORY` + `BIZACCT` one alphanumeric segment `Length` 30 (DAC max); `ACCOUNT` + `INSITE` stay `Length` 10 (`SiteCD` NVarChar(10)); never shrink `Length` after data exists; key-URL GET after PUT ! return `SegmentID` + `Length`; PUT `Length` ! persist so live InventoryID mask accepts 30; silent HTTP 200 w/ omitted detail fields = mapping miss (closes §B.28) (gh #30)
 
 ## §T TASKS
 
@@ -181,10 +181,10 @@ T201|x|agent-oriented root+subcommand --help (mental model, workflow, map, exit 
 T202|x|sweep human-facing md prose → ≤2 sentences/paragraph, sparse (scope: `README.md` `docs/*.md` `src/acumatica_cli/templates/**/*.md`)|V49
 T203|x|add V49 extras-hook `.spec/scripts/check-md-prose` + recipe; offline tests; suite green|V49,V13
 T204|x|bootstrap contract SegmentedKey (CS202000 DimensionMaint; Header Dimension key DimensionID; detail Segment SegmentID+Length); version bump|V21,I.data
-T205|.|seed_catalog + package template `config/bootstrap/` SegmentedKey; keys `[DimensionID]`; INVENTORY+BIZACCT segment 1 Length 30; ACCOUNT+INSITE unchanged; V22 bootstrap-before-master; V34 one catalog row|V22,V34,V50,I.data,T204
-T206|.|extract --force round-trips INVENTORY/BIZACCT Length 30; offline tests apply body + extract include + catalog row|V13,V34,V50,I.cmd,T205
-T207|.|live/e2e: PUT StockItem 26-char InventoryID succeeds after SegmentedKey apply (e.g. RAW-ECH-EXT4)|V4,V13,V50,T205
-T208|.|docs/demo-seed — SegmentedKey entity, CS202000, DAC max 30, non-goals (no shrink; no INSITE/ACCOUNT widen); CHANGELOG Unreleased (gh #30)|V12,V19,V50,T204,T205
+T205|x|seed_catalog + package template `config/bootstrap/` SegmentedKey; keys `[DimensionID]`; INVENTORY+BIZACCT segment 1 Length 30; ACCOUNT+INSITE unchanged; V22 bootstrap-before-master; V34 one catalog row|V22,V34,V50,I.data,T204
+T206|x|extract --force round-trips INVENTORY/BIZACCT Length 30; offline tests apply body + extract include + catalog row|V13,V34,V50,I.cmd,T205
+T207|x|live/e2e: SegmentedKey GET key-URL returns Length 30 after apply; PUT StockItem 26-char InventoryID succeeds; contract mapping fix + version bump if shape change|V4,V13,V21,V50,B28,T205
+T208|x|docs/demo-seed — SegmentedKey entity, CS202000, DAC max 30, non-goals (no shrink; no INSITE/ACCOUNT widen); CHANGELOG Unreleased (gh #30)|V12,V19,V50,T204,T205
 
 ## §B BUGS
 
@@ -210,3 +210,4 @@ B24|2026-07-17|virgin-tenant single-session apply opens REST session pre-Company
 B25|2026-07-25|InventorySummaryInquiry warehouse-only params → empty Results; Results omit InventoryID → false-empty state/inventory-summary|V28,V33
 B26|2026-07-27|seed claims WeightUOM/VolumeUOM (Company packaging + StockItem) but endpoint GET not return → permanent red diff (B11 class)|V34
 B27|2026-07-29|tenant list banner uses full base_url (scheme+path); wraps + shows REST path on SSH-plane list|V9
+B28|2026-09-03|SegmentedKey PUT 200 but key-URL GET returns DimensionID only; StockItem 26-char InventoryID 422s on mask `>CCCCCCCCCC`|V50

@@ -296,6 +296,7 @@ Cross-directory order is fixed: bootstrap, then baseline, then setup, then maste
 | Phase | Must exist before later files |
 | ----- | ----------------------------- |
 | Features | `config/bootstrap/features.yaml` enables Inventory, DistributionModule, Warehouse, WarehouseLocation, KitAssemblies, SubAccount, … |
+| Segmented keys | `config/bootstrap/segmented-key.yaml` raises INVENTORY + BIZACCT Length 30 before master StockItem / Vendor / Customer — see [Segmented keys](#segmented-keys) |
 | Company | Org CD **LAB5** (single placeholder across ledger link, open periods, TransitBranchID, cash BranchID) |
 | COA / GL | Expanded accounts for inventory, in-transit, PO accrual, PPV/LCV, freight, discounts |
 | Setup calendar | Financial year, then master calendar, then open periods for LAB5 |
@@ -457,6 +458,64 @@ Do not author `LastNbr` in seed. Scenario documents that advance counters are
 out of scope for apply; warm re-apply of bounds must leave live `LastNbr`
 alone.
 
+## Segmented keys
+
+Default contract has **no** Segmented Keys surface.
+Keys live on the **Bootstrap** endpoint only (`endpoint: bootstrap` leads to the active package version, currently `Bootstrap/1.6.0`).
+
+Screen: CS202000 (`DimensionMaint`).
+Header view `Header` (DAC `Dimension`), key `DimensionID`; detail view `Detail` (DAC `Segment`) fields `SegmentID` + `Length`.
+
+Seed **updates existing** `DimensionID` rows only.
+Never insert a new dimension.
+
+### Apply order (V22)
+
+The file sits under `config/bootstrap/` so it applies before master StockItem, Vendor, and Customer:
+
+| File | Entity | Notes |
+| ---- | ------ | ----- |
+| `config/bootstrap/segmented-key.yaml` | SegmentedKey | key `DimensionID`; `Length` on segment 1 |
+
+Package demo raises `INVENTORY` and `BIZACCT` segment 1 to `Length` 30 (DAC max).
+`ACCOUNT` and `INSITE` stay `Length` 10 (`SiteCD` is `NVarChar(10)`) and are not in the seed file.
+
+### Length rules (V50)
+
+| Rule | Detail |
+| ---- | ------ |
+| Update existing only | Never insert a new `DimensionID` |
+| DAC max | One alphanumeric segment, `Length` 30 for `INVENTORY` + `BIZACCT` |
+| Leave alone | `ACCOUNT` and `INSITE` stay 10 |
+| Never shrink | Do not lower `Length` after data exists |
+
+```yaml
+# config/bootstrap/segmented-key.yaml (shape)
+entity: SegmentedKey
+key: DimensionID
+endpoint: bootstrap
+records:
+- DimensionID: BIZACCT
+  SegmentID: 1
+  Length: 30
+- DimensionID: INVENTORY
+  SegmentID: 1
+  Length: 30
+```
+
+A 26-character `InventoryID` (for example `FG-CARDIO-OMEGA-COQ10-60SG`) PUTs only after this seed is applied.
+The InventoryID mask may stay cached until an app-pool recycle (`acu tenant recycle`).
+
+Silent HTTP 200 that omits `SegmentID` / `Length` on the later key-URL GET is a contract mapping miss (B28).
+
+### Non-goals (gh #30 / V50)
+
+| Skip | Why |
+| ---- | --- |
+| Shrink `Length` | Existing IDs can exceed the new (smaller) mask |
+| Widen `ACCOUNT` | Chart of accounts segment stays 10 |
+| Widen `INSITE` | `SiteCD` is `NVarChar(10)` |
+
 ## Module preferences field depth (V41)
 
 Bootstrap `*Preferences` entities are a **curated subset** of inventory
@@ -535,6 +594,7 @@ Screen IDs are operator notes only (not catalog fields).
 | `config/bootstrap/company.yaml` | Company | bootstrap | CS101500 | catalog |
 | `config/bootstrap/credit-terms.yaml` | CreditTerms | bootstrap | CS206500 | catalog |
 | `config/bootstrap/features.yaml` | FeaturesSet gates (synthesized) | — | CS100000 | synth |
+| `config/bootstrap/segmented-key.yaml` | SegmentedKey | bootstrap | CS202000 | catalog |
 | `config/baseline/10-subaccounts.yaml` | Subaccount | default | GL203000 | catalog |
 | `config/baseline/20-accounts.yaml` | Account | default | GL202500 | catalog |
 | `config/baseline/40-ledger.yaml` | Ledger | default | GL201500 | catalog |
@@ -587,3 +647,4 @@ Screen IDs are operator notes only (not catalog fields).
 - Production cutover or opening balances from a legacy system
 - Replacing external data repos for production cutovers
 - **LotSerialClass** seed/catalog (demo never claims `DfltLotSerClassID`; see [LotSerialClass — non-goal](#lotserialclass--non-goal-gh-27--v42))
+- **SegmentedKey** shrink after data exists; no `ACCOUNT` / `INSITE` widen (`SiteCD` is `NVarChar(10)`; see [Segmented keys](#segmented-keys))

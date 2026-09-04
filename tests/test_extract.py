@@ -151,6 +151,35 @@ TABLES: dict[str, list[dict[str, Any]]] = {
             "LastModifiedDateTime": "2026-07-11T00:00:00+00:00",
         }
     ],
+    # T206 SegmentedKey (gh #30 / V50). Canned live includes ACCOUNT+INSITE
+    # Length 10 so extract --force round-trips INVENTORY/BIZACCT Length 30
+    # without rewriting the untouched keys (include drops audit noise).
+    "SegmentedKey": [
+        {
+            "DimensionID": "ACCOUNT",
+            "SegmentID": 1,
+            "Length": 10,
+            "LastModifiedDateTime": "2026-07-11T00:00:00+00:00",
+        },
+        {
+            "DimensionID": "BIZACCT",
+            "SegmentID": 1,
+            "Length": 30,
+            "LastModifiedDateTime": "2026-07-11T00:00:00+00:00",
+        },
+        {
+            "DimensionID": "INSITE",
+            "SegmentID": 1,
+            "Length": 10,
+            "LastModifiedDateTime": "2026-07-11T00:00:00+00:00",
+        },
+        {
+            "DimensionID": "INVENTORY",
+            "SegmentID": 1,
+            "Length": 30,
+            "LastModifiedDateTime": "2026-07-11T00:00:00+00:00",
+        },
+    ],
     "Subaccount": [
         {
             "SubaccountCD": "000000",
@@ -649,9 +678,10 @@ def test_packaged_manifest_is_self_consistent() -> None:
     """Packaged catalog: GL chain + master path rows, endpoint-explicit, keyed."""
     manifest = extract.load_manifest()
     files = [s.file for s in manifest.entities]
-    assert files[:8] == [
+    assert files[:9] == [
         "config/bootstrap/company.yaml",
         "config/bootstrap/credit-terms.yaml",
+        "config/bootstrap/segmented-key.yaml",
         "config/baseline/10-subaccounts.yaml",
         "config/baseline/20-accounts.yaml",
         "config/baseline/40-ledger.yaml",
@@ -1125,12 +1155,12 @@ def test_b9_fallback_selects_keys_then_key_urls(
         for r in server.requests
     ]
     assert currency_requests == [
-        ("Bootstrap/1.5.0/Currency", {"$filter": "IsFinancial eq true"}),
+        ("Bootstrap/1.6.0/Currency", {"$filter": "IsFinancial eq true"}),
         (
-            "Bootstrap/1.5.0/Currency",
+            "Bootstrap/1.6.0/Currency",
             {"$select": "CuryID", "$filter": "IsFinancial eq true"},
         ),
-        ("Bootstrap/1.5.0/Currency/EUR", {}),
+        ("Bootstrap/1.6.0/Currency/EUR", {}),
     ]
     text = extract._render(spec, records)  # pyright: ignore[reportPrivateUsage]
     assert "RealGainAcctID" in text
@@ -1362,6 +1392,89 @@ def test_catalog_filter_split_and_include_rows_declared() -> None:
     assert entities.count("Company") == 1
     assert entities.count("Warehouse") == 3
     assert entities.count("StockItem") == 2
+
+
+def test_catalog_segmented_key_row() -> None:
+    """T205: SegmentedKey catalog row; V22 bootstrap before master; V50 keys."""
+    manifest = extract.load_manifest()
+    by_file = {s.file: s for s in manifest.entities}
+    sk = by_file["config/bootstrap/segmented-key.yaml"]
+    assert sk.entity == "SegmentedKey"
+    assert sk.keys == ["DimensionID"]
+    assert sk.endpoint == "bootstrap"
+    assert set(sk.include) == {"SegmentID", "Length"}
+    files = [s.file for s in manifest.entities]
+    for later in (
+        "config/master/75-vendors.yaml",
+        "config/master/76-customers.yaml",
+        "config/master/80-stock-items-parts.yaml",
+        "config/master/82-stock-items-kits.yaml",
+    ):
+        assert later in by_file
+        assert files.index(sk.file) < files.index(later), later
+    # V34: exactly one catalog row for the template path
+    assert files.count(sk.file) == 1
+
+
+def test_package_segmented_key_template() -> None:
+    """T205/V50: package seeds INVENTORY+BIZACCT Length 30; ACCOUNT/INSITE out."""
+    root = Path(__file__).resolve().parents[1] / "src" / "acumatica_cli" / "templates"
+    path = root / "config/bootstrap/segmented-key.yaml"
+    sk = seed.load_baseline(path)
+    assert isinstance(sk, seed.BaselineFile)
+    assert sk.entity == "SegmentedKey"
+    assert sk.endpoint == seed.BOOTSTRAP_ENDPOINT
+    ids = [r["DimensionID"] for r in sk.records]
+    assert ids == sorted(ids)
+    assert set(ids) == {"BIZACCT", "INVENTORY"}
+    assert "ACCOUNT" not in ids
+    assert "INSITE" not in ids
+    for rec in sk.records:
+        assert rec["SegmentID"] == 1
+        assert rec["Length"] == 30
+    # V22: bootstrap/ file sorts before master StockItem/Vendor/Customer
+    bootstrap_dir = sorted(p.name for p in (root / "config/bootstrap").glob("*.yaml"))
+    master = sorted(p.name for p in (root / "config/master").glob("*.yaml"))
+    assert "segmented-key.yaml" in bootstrap_dir
+    assert "company.yaml" in bootstrap_dir
+    assert bootstrap_dir.index("company.yaml") < bootstrap_dir.index(
+        "segmented-key.yaml"
+    )
+    assert "80-stock-items-parts.yaml" in master
+    assert "75-vendors.yaml" in master
+    assert "76-customers.yaml" in master
+
+
+def test_extract_force_round_trips_segmented_key_lengths(
+    instance: Instance, server: FakeServer, tmp_path: Path
+) -> None:
+    """T206/V50: extract --force writes INVENTORY/BIZACCT Length 30.
+
+    Include keeps SegmentID+Length (catalog row) and drops LastModifiedDateTime.
+    ACCOUNT/INSITE stay Length 10 when present on the tenant.
+    """
+    target = tmp_path / "config" / "bootstrap" / "segmented-key.yaml"
+    target.parent.mkdir(parents=True)
+    target.write_text("stale\n")
+    failed = _run(
+        instance, server, tmp_path, only=frozenset({"SegmentedKey"}), force=True
+    )
+    assert failed == 0
+    doc = yaml.safe_load(target.read_text())
+    assert doc["entity"] == "SegmentedKey"
+    assert doc["key"] == "DimensionID"
+    assert doc["endpoint"] == "bootstrap"
+    by_id = {r["DimensionID"]: r for r in doc["records"]}
+    assert set(by_id) == {"ACCOUNT", "BIZACCT", "INSITE", "INVENTORY"}
+    assert [r["DimensionID"] for r in doc["records"]] == sorted(by_id)
+    assert by_id["INVENTORY"]["Length"] == 30
+    assert by_id["BIZACCT"]["Length"] == 30
+    assert by_id["ACCOUNT"]["Length"] == 10
+    assert by_id["INSITE"]["Length"] == 10
+    for rec in by_id.values():
+        assert rec["SegmentID"] == 1
+        assert "LastModifiedDateTime" not in rec
+        assert set(rec) == {"DimensionID", "Length", "SegmentID"}
 
 
 def test_catalog_numbering_sequence_row() -> None:

@@ -28,7 +28,7 @@ records:
 
 BOOTSTRAP_YAML = """\
 entity: CreditTerms
-endpoint: Bootstrap/1.5.0
+endpoint: Bootstrap/1.6.0
 key: TermsID
 records:
   - TermsID: NET30
@@ -37,7 +37,7 @@ records:
 SETUP_YAML = """\
 action: GenerateCalendar
 entity: MasterCalendar
-endpoint: Bootstrap/1.5.0
+endpoint: Bootstrap/1.6.0
 record:
   FinancialYear: 2026
 done_when:
@@ -971,6 +971,7 @@ def test_config_init_scaffolds_data_repo(tmp_path: Path) -> None:
         "config/baseline/90-uoms.yaml",
         "config/bootstrap/company.yaml",
         "config/bootstrap/credit-terms.yaml",
+        "config/bootstrap/segmented-key.yaml",
         "config/bootstrap/features.yaml",
         "config/setup/10-financial-year.yaml",
         "config/setup/20-master-calendar.yaml",

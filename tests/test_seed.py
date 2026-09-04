@@ -68,14 +68,14 @@ def test_load_baseline_rejects_record_without_key(tmp_path: Path) -> None:
 
 
 def test_load_baseline_parses_endpoint_override(tmp_path: Path) -> None:
-    text = BASELINE + "endpoint: Bootstrap/1.5.0\n"
-    assert seed.load_baseline(_write(tmp_path, text)).endpoint == "Bootstrap/1.5.0"
+    text = BASELINE + "endpoint: Bootstrap/1.6.0\n"
+    assert seed.load_baseline(_write(tmp_path, text)).endpoint == "Bootstrap/1.6.0"
 
 
 LEDGER_LINK_YAML = """\
 entity: LedgerCompany
 key: [LedgerCD, OrganizationID]
-endpoint: Bootstrap/1.5.0
+endpoint: Bootstrap/1.6.0
 records:
   - LedgerCD: ACTUAL
     OrganizationID: PRODUCTS
@@ -127,7 +127,7 @@ def test_bootstrap_entities_parsed_from_packaged_template() -> None:
     # V2/T81: the ambiguous set comes from the active contract (packaged
     # full company fallback), never a hand-list - parity pinned so a
     # template edit surfaces offline.
-    assert seed.BOOTSTRAP_ENDPOINT == "Bootstrap/1.5.0"
+    assert seed.BOOTSTRAP_ENDPOINT == "Bootstrap/1.6.0"
     assert {
         "Company",
         "CreditTerms",
@@ -170,7 +170,7 @@ def test_load_baseline_rejects_bootstrap_entity_without_endpoint(
     """
     with pytest.raises(
         SystemExit,
-        match=r"endpoint: default.*Bootstrap/1\.5\.0.*'bootstrap' \| 'default'",
+        match=r"endpoint: default.*Bootstrap/1\.6\.0.*'bootstrap' \| 'default'",
     ):
         seed.load_baseline(_write(tmp_path, AMBIGUOUS_YAML))
 
@@ -179,7 +179,7 @@ def test_load_baseline_bootstrap_entity_explicit_endpoint_passes(
     tmp_path: Path,
 ) -> None:
     # V20: explicit endpoint: disambiguates - either target is legitimate
-    for endpoint in ("Bootstrap/1.5.0", "Default/25.200.001", "default"):
+    for endpoint in ("Bootstrap/1.6.0", "Default/25.200.001", "default"):
         text = AMBIGUOUS_YAML + f"endpoint: {endpoint}\n"
         assert seed.load_baseline(_write(tmp_path, text)).endpoint == endpoint
 
@@ -187,7 +187,7 @@ def test_load_baseline_bootstrap_entity_explicit_endpoint_passes(
 def test_load_baseline_resolves_symbolic_bootstrap(tmp_path: Path) -> None:
     """Symbolic endpoint: bootstrap resolves to the active package version."""
     text = AMBIGUOUS_YAML + "endpoint: bootstrap\n"
-    assert seed.load_baseline(_write(tmp_path, text)).endpoint == "Bootstrap/1.5.0"
+    assert seed.load_baseline(_write(tmp_path, text)).endpoint == "Bootstrap/1.6.0"
 
 
 def test_load_baseline_keeps_symbolic_default(tmp_path: Path) -> None:
@@ -252,19 +252,19 @@ def test_active_bootstrap_package_only(
     (tmp_path / ".env").write_text("ACU_BASE_URL=https://example.com\n")
     monkeypatch.chdir(tmp_path)
     name, entities = seed.active_bootstrap()
-    assert name == "Bootstrap/1.5.0"
+    assert name == "Bootstrap/1.6.0"
     assert entities == seed.BOOTSTRAP_ENTITIES
     text = (
         "entity: Company\nkey: AcctCD\nendpoint: bootstrap\n"
         "records:\n  - AcctCD: MAIN\n"
     )
-    assert seed.load_baseline(_write(tmp_path, text)).endpoint == "Bootstrap/1.5.0"
+    assert seed.load_baseline(_write(tmp_path, text)).endpoint == "Bootstrap/1.6.0"
 
 
 def test_apply_and_diff_target_endpoint_override(
     tmp_path: Path, instance: Instance
 ) -> None:
-    text = BASELINE + "endpoint: Bootstrap/1.5.0\n"
+    text = BASELINE + "endpoint: Bootstrap/1.6.0\n"
     baseline = seed.load_baseline(_write(tmp_path, text))
     recorder = Recorder({"/UnitsOfMeasure": _live({"UOM": "KG"})})
 
@@ -272,7 +272,7 @@ def test_apply_and_diff_target_endpoint_override(
     seed.diff(_client(instance, recorder), baseline)
 
     paths = {r.url.path for r in recorder.requests}
-    assert paths == {"/AcumaticaERP/entity/Bootstrap/1.5.0/UnitsOfMeasure"}
+    assert paths == {"/AcumaticaERP/entity/Bootstrap/1.6.0/UnitsOfMeasure"}
 
 
 def test_norm_folds_booleans_and_strips() -> None:
@@ -565,7 +565,7 @@ def _session_client(instance: Instance, recorder: SessionRecorder) -> AcumaticaC
 COMPANY_YAML = """\
 entity: Company
 key: AcctCD
-endpoint: Bootstrap/1.5.0
+endpoint: Bootstrap/1.6.0
 records:
   - AcctCD: LAB5
     OrganizationName: Lab Five
@@ -588,11 +588,11 @@ def test_apply_company_relogins_once_per_session(
     assert methods_paths == [
         ("POST", "/AcumaticaERP/entity/auth/login"),
         ("GET", "/AcumaticaERP/Frames/Login.aspx"),
-        ("PUT", "/AcumaticaERP/entity/Bootstrap/1.5.0/Company"),
+        ("PUT", "/AcumaticaERP/entity/Bootstrap/1.6.0/Company"),
         ("POST", "/AcumaticaERP/entity/auth/logout"),
         ("POST", "/AcumaticaERP/entity/auth/login"),
         ("GET", "/AcumaticaERP/Frames/Login.aspx"),
-        ("PUT", "/AcumaticaERP/entity/Bootstrap/1.5.0/Company"),
+        ("PUT", "/AcumaticaERP/entity/Bootstrap/1.6.0/Company"),
         ("POST", "/AcumaticaERP/entity/auth/logout"),
     ]
 
@@ -615,7 +615,7 @@ def test_apply_retries_once_on_branch_empty(
     text = """\
 entity: INPreferences
 key: HoldEntry
-endpoint: Bootstrap/1.5.0
+endpoint: Bootstrap/1.6.0
 records:
   - HoldEntry: false
     TransitBranchID: LAB5
@@ -1071,6 +1071,29 @@ def _package_template(rel: str) -> Path:
     )
 
 
+def test_package_segmented_key_apply_body_widens_inventory_bizacct(
+    instance: Instance,
+) -> None:
+    """T206/V50: package SegmentedKey PUT carries DimensionID+SegmentID+Length 30."""
+    baseline = seed.load_baseline(
+        _package_template("config/bootstrap/segmented-key.yaml")
+    )
+    assert isinstance(baseline, seed.BaselineFile)
+    recorder = Recorder({"/SegmentedKey": httpx.Response(200, json=[])})
+    seed.apply(_client(instance, recorder), baseline)
+    puts = [r for r in recorder.requests if r.method == "PUT"]
+    assert len(puts) == 2
+    bodies = [json.loads(r.content) for r in puts]
+    by_id = {b["DimensionID"]["value"]: b for b in bodies}
+    assert set(by_id) == {"BIZACCT", "INVENTORY"}
+    for dim, body in by_id.items():
+        assert body["DimensionID"] == {"value": dim}
+        assert body["SegmentID"] == {"value": 1}
+        assert body["Length"] == {"value": 30}
+        assert "ACCOUNT" not in body
+        assert "INSITE" not in body
+
+
 def test_package_in_preferences_apply_body_includes_deepen_fields(
     instance: Instance,
 ) -> None:
@@ -1252,7 +1275,7 @@ def test_diff_multi_key_single_org_no_phantom_drift(
     text = """\
 entity: LedgerCompany
 key: [LedgerCD, OrganizationID]
-endpoint: Bootstrap/1.5.0
+endpoint: Bootstrap/1.6.0
 records:
   - LedgerCD: ACTUAL
     OrganizationID: COMPANY
@@ -1288,7 +1311,7 @@ NO_ENTITY_500 = httpx.Response(
 CURRENCY_YAML = """\
 entity: Currency
 key: CuryID
-endpoint: Bootstrap/1.5.0
+endpoint: Bootstrap/1.6.0
 records:
   - CuryID: EUR
     Description: Euro
@@ -1316,8 +1339,8 @@ def test_diff_falls_back_to_key_url_on_optimization_500(
     assert seed.diff(_client(instance, recorder), baseline) == []
     paths = [r.url.path for r in recorder.requests]
     assert [p.split("/entity/", 1)[1] for p in paths] == [
-        "Bootstrap/1.5.0/Currency",
-        "Bootstrap/1.5.0/Currency/EUR",
+        "Bootstrap/1.6.0/Currency",
+        "Bootstrap/1.6.0/Currency/EUR",
     ]
 
 
@@ -1347,7 +1370,7 @@ def test_diff_non_optimization_500_still_raises(
 ACTION_YAML = """\
 action: GenerateCalendar
 entity: MasterCalendar
-endpoint: Bootstrap/1.5.0
+endpoint: Bootstrap/1.6.0
 record:
   FinancialYear: 2026
 parameters:
@@ -1421,8 +1444,8 @@ def test_apply_action_invokes_on_204_never_following_location(
     assert [
         (r.method, r.url.path.split("/entity/", 1)[1]) for r in recorder.requests
     ] == [
-        ("GET", "Bootstrap/1.5.0/MasterCalendar"),
-        ("POST", "Bootstrap/1.5.0/MasterCalendar/GenerateCalendar"),
+        ("GET", "Bootstrap/1.6.0/MasterCalendar"),
+        ("POST", "Bootstrap/1.6.0/MasterCalendar/GenerateCalendar"),
     ]
     assert "invoke GenerateCalendar [MasterCalendar]" in capsys.readouterr().out
 
@@ -1451,7 +1474,7 @@ def test_apply_action_polls_202_location_to_completion(
     """202 = long-running: poll the Location status URL until it answers 204."""
     action = _action(tmp_path)
     status_path = (
-        "/AcumaticaERP/entity/Bootstrap/1.5.0/MasterCalendar"
+        "/AcumaticaERP/entity/Bootstrap/1.6.0/MasterCalendar"
         "/GenerateCalendar/status/abc"
     )
     polls: list[str] = []
@@ -1520,7 +1543,7 @@ def test_probe_routes_filter_and_defaults(tmp_path: Path, instance: Instance) ->
     seed.diff(_client(instance, recorder), action)
 
     (request,) = recorder.requests
-    assert request.url.path.endswith("/Bootstrap/1.5.0/MasterCalendar")
+    assert request.url.path.endswith("/Bootstrap/1.6.0/MasterCalendar")
     assert request.url.params["$filter"] == "FinancialYear eq '2026'"
 
 
