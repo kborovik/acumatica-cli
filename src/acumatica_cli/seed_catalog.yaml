@@ -68,6 +68,20 @@ entities:
   - DiscType
   - DiscPercent
 
+# SegmentedKey (T205/gh #30 / V50): V22 bootstrap/ sorts before master
+# StockItem / Vendor / Customer. Bootstrap only — Default has no CS202000
+# surface. Update existing DimensionID only (never insert). Seed INVENTORY
+# + BIZACCT one alphanumeric segment Length 30 (DAC max); ACCOUNT + INSITE
+# stay Length 10 (SiteCD NVarChar(10)) so they stay out of this file.
+
+- entity: SegmentedKey
+  endpoint: bootstrap
+  keys: [DimensionID]
+  file: config/bootstrap/segmented-key.yaml
+  include:
+  - SegmentID
+  - Length
+
 # config/baseline/ - numbered prefixes encode the V22 reference chain:
 # subaccounts < accounts < ledger < GL preferences < org-ledger link;
 # units of measure. Multicurrency Currency is not in the LAB5 template

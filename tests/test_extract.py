@@ -151,6 +151,23 @@ TABLES: dict[str, list[dict[str, Any]]] = {
             "LastModifiedDateTime": "2026-07-11T00:00:00+00:00",
         }
     ],
+    # T205 SegmentedKey (gh #30 / V50). Package seeds INVENTORY+BIZACCT
+    # Length 30 only; ACCOUNT/INSITE stay off this canned table so extract
+    # matches the template (T206 may add extras + filter).
+    "SegmentedKey": [
+        {
+            "DimensionID": "BIZACCT",
+            "SegmentID": 1,
+            "Length": 30,
+            "LastModifiedDateTime": "2026-07-11T00:00:00+00:00",
+        },
+        {
+            "DimensionID": "INVENTORY",
+            "SegmentID": 1,
+            "Length": 30,
+            "LastModifiedDateTime": "2026-07-11T00:00:00+00:00",
+        },
+    ],
     "Subaccount": [
         {
             "SubaccountCD": "000000",
@@ -649,9 +666,10 @@ def test_packaged_manifest_is_self_consistent() -> None:
     """Packaged catalog: GL chain + master path rows, endpoint-explicit, keyed."""
     manifest = extract.load_manifest()
     files = [s.file for s in manifest.entities]
-    assert files[:8] == [
+    assert files[:9] == [
         "config/bootstrap/company.yaml",
         "config/bootstrap/credit-terms.yaml",
+        "config/bootstrap/segmented-key.yaml",
         "config/baseline/10-subaccounts.yaml",
         "config/baseline/20-accounts.yaml",
         "config/baseline/40-ledger.yaml",
@@ -1362,6 +1380,57 @@ def test_catalog_filter_split_and_include_rows_declared() -> None:
     assert entities.count("Company") == 1
     assert entities.count("Warehouse") == 3
     assert entities.count("StockItem") == 2
+
+
+def test_catalog_segmented_key_row() -> None:
+    """T205: SegmentedKey catalog row; V22 bootstrap before master; V50 keys."""
+    manifest = extract.load_manifest()
+    by_file = {s.file: s for s in manifest.entities}
+    sk = by_file["config/bootstrap/segmented-key.yaml"]
+    assert sk.entity == "SegmentedKey"
+    assert sk.keys == ["DimensionID"]
+    assert sk.endpoint == "bootstrap"
+    assert set(sk.include) == {"SegmentID", "Length"}
+    files = [s.file for s in manifest.entities]
+    for later in (
+        "config/master/75-vendors.yaml",
+        "config/master/76-customers.yaml",
+        "config/master/80-stock-items-parts.yaml",
+        "config/master/82-stock-items-kits.yaml",
+    ):
+        assert later in by_file
+        assert files.index(sk.file) < files.index(later), later
+    # V34: exactly one catalog row for the template path
+    assert files.count(sk.file) == 1
+
+
+def test_package_segmented_key_template() -> None:
+    """T205/V50: package seeds INVENTORY+BIZACCT Length 30; ACCOUNT/INSITE out."""
+    root = Path(__file__).resolve().parents[1] / "src" / "acumatica_cli" / "templates"
+    path = root / "config/bootstrap/segmented-key.yaml"
+    sk = seed.load_baseline(path)
+    assert isinstance(sk, seed.BaselineFile)
+    assert sk.entity == "SegmentedKey"
+    assert sk.endpoint == seed.BOOTSTRAP_ENDPOINT
+    ids = [r["DimensionID"] for r in sk.records]
+    assert ids == sorted(ids)
+    assert set(ids) == {"BIZACCT", "INVENTORY"}
+    assert "ACCOUNT" not in ids
+    assert "INSITE" not in ids
+    for rec in sk.records:
+        assert rec["SegmentID"] == 1
+        assert rec["Length"] == 30
+    # V22: bootstrap/ file sorts before master StockItem/Vendor/Customer
+    bootstrap_dir = sorted(p.name for p in (root / "config/bootstrap").glob("*.yaml"))
+    master = sorted(p.name for p in (root / "config/master").glob("*.yaml"))
+    assert "segmented-key.yaml" in bootstrap_dir
+    assert "company.yaml" in bootstrap_dir
+    assert bootstrap_dir.index("company.yaml") < bootstrap_dir.index(
+        "segmented-key.yaml"
+    )
+    assert "80-stock-items-parts.yaml" in master
+    assert "75-vendors.yaml" in master
+    assert "76-customers.yaml" in master
 
 
 def test_catalog_numbering_sequence_row() -> None:
