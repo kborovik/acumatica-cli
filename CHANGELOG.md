@@ -10,6 +10,14 @@
   `ACCOUNT` and `INSITE` stay length 10. Never shrink length after data
   exists. See `docs/demo-seed.md` (gh #30).
 
+### Fixed
+
+- **SegmentedKey Length mapping (B28):** Bootstrap `1.5.0` mapped
+  `SegmentID`/`Length` to CS202000 view `Details`. PUT returned 200 but
+  GET omitted Length and the InventoryID mask stayed 10. Bump to `1.6.0`
+  maps those fields to `Detail`. Republish AcuBootstrap before applying
+  `config/bootstrap/segmented-key.yaml`.
+
 ### Changed
 
 - **Docs prose:** human-facing Markdown (`README.md`, `docs/*.md`, packaged

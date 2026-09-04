@@ -464,7 +464,7 @@ Default contract has **no** Segmented Keys surface.
 Keys live on the **Bootstrap** endpoint only (`endpoint: bootstrap` leads to the active package version, currently `Bootstrap/1.6.0`).
 
 Screen: CS202000 (`DimensionMaint`).
-Header view `Header` (DAC `Dimension`), key `DimensionID`; detail view `Details` (DAC `Segment`) fields `SegmentID` + `Length`.
+Header view `Header` (DAC `Dimension`), key `DimensionID`; detail view `Detail` (DAC `Segment`) fields `SegmentID` + `Length`.
 
 Seed **updates existing** `DimensionID` rows only.
 Never insert a new dimension.
@@ -504,6 +504,8 @@ records:
 ```
 
 A 26-character `InventoryID` (for example `FG-CARDIO-OMEGA-COQ10-60SG`) PUTs only after this seed is applied.
+The InventoryID mask may stay cached until an app-pool recycle (`acu tenant recycle`).
+
 Silent HTTP 200 that omits `SegmentID` / `Length` on the later key-URL GET is a contract mapping miss (B28).
 
 ### Non-goals (gh #30 / V50)
