@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## [v0.26.0] - 2026-09-04
+
 ### Added
 
 - **SegmentedKey seed (CS202000):** Bootstrap entity plus package template
