@@ -1,9 +1,8 @@
 """Live SegmentedKey length: 26-char StockItem PUT after apply (T207/B28).
 
-Contract maps Length to CS202000 DataMember Detail (not Details). This
-file applies bootstrap (SegmentedKey), then accounts plus package
-INPreferences (12300/12400, V51), then recycles so the CS202000 mask
-cache reloads before the StockItem PUT.
+Contract maps Length to CS202000 DataMember Detail (not Details). Order:
+bootstrap SegmentedKey, recycle for the mask cache, then accounts plus
+package INPreferences, then StockItem.
 """
 
 import subprocess
@@ -106,7 +105,6 @@ def test_long_inventory_id_put_after_segmented_key(
     )
     assert proc.returncode == 0, _combined(proc)
 
-    # V51: WIP/transit are not IN control, so package INPreferences PUTs.
     proc = acu(
         "--tenant",
         scratch_tenant.login,
