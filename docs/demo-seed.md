@@ -310,6 +310,20 @@ Feature closure: every feature-gated form used by a seed file must appear in `co
 
 Reference closure: every foreign key must resolve to a tenant-native row or an earlier-sorting seed file.
 
+## IN control accounts (V51)
+
+Posting-class inventory assets (`12100`, `12200`) stay `ControlAccountModule: IN`.
+WIP (`12300`) and in-transit (`12400`) are not IN control so IN Setup can use them as `INProgressAcctID` / `INTransitAcctID`.
+
+Marking those two as IN control makes the INPreferences PUT return 500 on 26r1 and blocks warehouse, item, and kit apply (B29).
+
+| AccountCD | Description | ControlAccountModule | Used as |
+| --------- | ----------- | -------------------- | ------- |
+| `12100` | Inventory - Components | IN | posting-class PARTS `InvtAcctID` |
+| `12200` | Inventory - Finished Goods | IN | posting-class KITS `InvtAcctID` |
+| `12300` | Work In Progress | (none) | INPreferences `INProgressAcctID` |
+| `12400` | Inventory In Transit | (none) | INPreferences `INTransitAcctID` |
+
 ## Role, User, and password seed
 
 Default contract has **no** Role or User surface.

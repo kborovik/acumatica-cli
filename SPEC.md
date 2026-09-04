@@ -189,7 +189,7 @@ T208|x|docs/demo-seed — SegmentedKey entity, CS202000, DAC max 30, non-goals (
 T209|x|drop ControlAccountModule IN on package `config/baseline/20-accounts.yaml` 12300/12400; keep 12100/12200|V51,I.data,B29
 T210|x|offline tests: 12300/12400 no ControlAccountModule IN; 12100/12200 still IN; INPreferences still 12300/12400|V13,V51,T209
 T211|x|e2e: package INPreferences apply succeeds after accounts; drop 15000 workaround in `test_segmented_key_length.py`|V4,V13,V51,B29,T209
-T212|.|docs/demo-seed — IN control on posting-class inventory assets only; WIP/transit not control; CHANGELOG Unreleased (gh #32)|V12,V19,V51,T209
+T212|x|docs/demo-seed — IN control on posting-class inventory assets only; WIP/transit not control; CHANGELOG Unreleased (gh #32)|V12,V19,V51,T209
 
 ## §B BUGS
 
