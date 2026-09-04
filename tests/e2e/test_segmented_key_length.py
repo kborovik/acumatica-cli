@@ -1,11 +1,9 @@
 """Live SegmentedKey length: 26-char StockItem PUT after apply (T207/B28).
 
-Contract maps Length to CS202000 DataMember Detail (not Details). Does
-not ride the full provision apply: package INPreferences currently 500s
-on this 26r1 host (IN transit account 12400 is an IN control account).
-This file applies bootstrap (SegmentedKey) plus the IN prereqs, PUTs
-INPreferences with a non-control transit account, then recycles so the
-CS202000 mask cache reloads before the StockItem PUT.
+Contract maps Length to CS202000 DataMember Detail (not Details). This
+file applies bootstrap (SegmentedKey), then accounts plus package
+INPreferences (12300/12400, V51), then recycles so the CS202000 mask
+cache reloads before the StockItem PUT.
 """
 
 import subprocess
@@ -97,8 +95,6 @@ def test_long_inventory_id_put_after_segmented_key(
             assert int(plain["SegmentID"]) == 1, plain
             assert int(plain["Length"]) == want, plain
 
-    # IN surface the package apply cannot currently close on this host:
-    # 12400 is ControlAccountModule IN, so package INPreferences 500s.
     proc = acu(
         "--tenant",
         scratch_tenant.login,
@@ -107,6 +103,23 @@ def test_long_inventory_id_put_after_segmented_key(
         "config/setup",
         str(data_repo / "config/master/05-numbering-sequences.yaml"),
         str(data_repo / "config/master/10-reason-codes.yaml"),
+    )
+    assert proc.returncode == 0, _combined(proc)
+
+    # V51: WIP/transit are not IN control, so package INPreferences PUTs.
+    proc = acu(
+        "--tenant",
+        scratch_tenant.login,
+        "apply",
+        str(data_repo / "config/master/20-in-preferences.yaml"),
+    )
+    assert proc.returncode == 0, _combined(proc)
+    assert "PUT INPreferences" in _combined(proc)
+
+    proc = acu(
+        "--tenant",
+        scratch_tenant.login,
+        "apply",
         str(data_repo / "config/master/30-availability-rules.yaml"),
         str(data_repo / "config/master/40-posting-classes.yaml"),
         str(data_repo / "config/master/53-tax-categories.yaml"),
@@ -114,32 +127,6 @@ def test_long_inventory_id_put_after_segmented_key(
     assert proc.returncode == 0, _combined(proc)
 
     with AcumaticaClient(inst) as client:
-        client.put(
-            "INPreferences",
-            {
-                "HoldEntry": False,
-                "INProgressAcctID": "15000",
-                "INProgressSubID": "000000",
-                "INTransitAcctID": "15000",
-                "INTransitSubID": "000000",
-                "TransitBranchID": "LAB5",
-                "UpdateGL": True,
-                "IssuesReasonCode": "INISSUE",
-                "ReceiptReasonCode": "INRECEIPT",
-                "AdjustmentReasonCode": "INADJUST",
-                "PIReasonCode": "INPI",
-                "BatchNumberingID": "BATCH",
-                "ReceiptNumberingID": "INRECEIPT",
-                "IssueNumberingID": "INISSUE",
-                "AdjustmentNumberingID": "INADJUST",
-                "KitAssemblyNumberingID": "INKITASSY",
-                "AutoPost": True,
-                "SummPost": False,
-                "NegQty": False,
-                "RequireControlTotal": True,
-            },
-            endpoint=BOOTSTRAP_ENDPOINT,
-        )
         client.put(
             "Warehouse",
             {
