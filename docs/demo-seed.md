@@ -476,7 +476,7 @@ alone.
 ## Segmented keys
 
 Default contract has **no** Segmented Keys surface.
-Keys live on the **Bootstrap** endpoint only (`endpoint: bootstrap` leads to the active package version, currently `Bootstrap/1.6.0`).
+Keys live on the **Bootstrap** endpoint only (`endpoint: bootstrap` leads to the active package version, currently `Bootstrap/1.7.0`).
 
 Screen: CS202000 (`DimensionMaint`).
 Header view `Header` (DAC `Dimension`), key `DimensionID`; detail view `Detail` (DAC `Segment`) fields `SegmentID` + `Length`.

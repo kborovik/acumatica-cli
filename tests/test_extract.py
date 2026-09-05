@@ -1155,12 +1155,12 @@ def test_b9_fallback_selects_keys_then_key_urls(
         for r in server.requests
     ]
     assert currency_requests == [
-        ("Bootstrap/1.6.0/Currency", {"$filter": "IsFinancial eq true"}),
+        ("Bootstrap/1.7.0/Currency", {"$filter": "IsFinancial eq true"}),
         (
-            "Bootstrap/1.6.0/Currency",
+            "Bootstrap/1.7.0/Currency",
             {"$select": "CuryID", "$filter": "IsFinancial eq true"},
         ),
-        ("Bootstrap/1.6.0/Currency/EUR", {}),
+        ("Bootstrap/1.7.0/Currency/EUR", {}),
     ]
     text = extract._render(spec, records)  # pyright: ignore[reportPrivateUsage]
     assert "RealGainAcctID" in text
@@ -1384,6 +1384,8 @@ def test_catalog_filter_split_and_include_rows_declared() -> None:
     assert "WeightUOM" not in by_file["config/master/80-stock-items-parts.yaml"].include
     assert "VolumeUOM" not in by_file["config/master/82-stock-items-kits.yaml"].include
     assert by_file["config/bootstrap/company.yaml"].include
+    assert "DecPlQty" in by_file["config/bootstrap/company.yaml"].include
+    assert "WeightUOM" in by_file["config/bootstrap/company.yaml"].include
     assert "config/baseline/91-company-packaging.yaml" not in by_file
     assert "MainContact" in by_file["config/master/75-vendors.yaml"].include
     assert "Locations" in by_file["config/master/51-warehouse-locations.yaml"].include

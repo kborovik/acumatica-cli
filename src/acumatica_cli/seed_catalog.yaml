@@ -6,7 +6,7 @@
 #   entity    contract entity name (the GET source and the emitted `entity:`)
 #   endpoint  omitted = the instance Default endpoint; the symbolic name
 #             `bootstrap` stays symbolic in emitted files and resolves to
-#             the packaged full company Bootstrap/1.6.0 at HTTP/load time
+#             the packaged full company Bootstrap/1.7.0 at HTTP/load time
 #             (package SoT - V20/V21/T178; data-repo project.xml forbidden)
 #   keys      key fields: the emitted `key:`, the record sort order, and
 #             the B9 fallback's $select projection; the tuple must
@@ -44,7 +44,10 @@ entities:
 
 # config/bootstrap/ - the virgin-tenant phase via the custom Bootstrap
 # endpoint: built-in endpoints cannot create the first organization (C).
-# Company packaging WeightUOM/VolumeUOM not claimed (B26: GET never returns).
+# Company packaging: DecPlQty + WeightUOM/VolumeUOM on CS101500 commonsetup
+# (gh #34). WeightUOM/VolumeUOM required to persist CommonSetup when
+# DistributionModule is on. B26 dropped unmapped packaging claims; mapped
+# fields that GET returns stay in include.
 
 - entity: Company
   endpoint: bootstrap
@@ -55,6 +58,9 @@ entities:
   - OrganizationType
   - BaseCuryID
   - CountryID
+  - DecPlQty
+  - WeightUOM
+  - VolumeUOM
 
 - entity: CreditTerms
   endpoint: bootstrap

@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+### Added
+
+- **Company quantity precision (gh #34):** Bootstrap `1.7.0` maps CS101500
+  `commonsetup` `DecPlQty`, `WeightUOM`, and `VolumeUOM` on Company. Kit
+  BOMs in milligram-scale KG need `DecPlQty: 3`. `WeightUOM`/`VolumeUOM`
+  are required to persist `CommonSetup` when DistributionModule is on.
+  Republish AcuBootstrap after upgrade.
+
 ### Changed
 
 - **`.env` sole config (V27):** `ACU_BASE_URL` is REST where;

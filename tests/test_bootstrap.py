@@ -130,7 +130,7 @@ def test_load_contract_xml_rejects_data_repo_project_xml(tmp_path: Path) -> None
 def test_load_contract_xml_package_only(tmp_path: Path) -> None:
     # No data-repo project.xml → always packaged full company surface
     name, entities = bootstrap.parse_endpoint(bootstrap.load_contract_xml(tmp_path))
-    assert name == "Bootstrap/1.6.0"
+    assert name == "Bootstrap/1.7.0"
     assert "Company" in entities
     assert "OnlyInDataRepo" not in entities
 
@@ -157,7 +157,7 @@ def test_package_zip_carries_the_bootstrap_endpoint() -> None:
     Verified vs 26.101.0225 by live import round-trip: the <Endpoint> child
     is the XmlSerializer form of Model.Endpoint in the entity/maintenance/5.31
     namespace; no .endpoint file is involved. Packaged contract is the single
-    full company surface (Bootstrap/1.6.0 package SoT — V2/V21/T178).
+    full company surface (Bootstrap/1.7.0 package SoT — V2/V21/T178).
     """
     ns = "{http://www.acumatica.com/entity/maintenance/5.31}"
     with zipfile.ZipFile(io.BytesIO(bootstrap.package_zip())) as zf:
@@ -165,10 +165,15 @@ def test_package_zip_carries_the_bootstrap_endpoint() -> None:
     (item,) = root.findall("EntityEndpoint")
     (endpoint,) = item.findall(f"{ns}Endpoint")
     assert endpoint.get("name") == "Bootstrap"
-    assert endpoint.get("version") == "1.6.0"
+    assert endpoint.get("version") == "1.7.0"
     # SystemContracts.V4 is the build's only IsCurrent implementation
     assert endpoint.get("systemContractVersion") == "4"
     entities = {e.get("name"): e for e in endpoint.findall(f"{ns}TopLevelEntity")}
+    company_fields = {
+        f.get("name") for f in entities["Company"].findall(f"{ns}Fields/{ns}Field")
+    }
+    # gh #34: CS101500 commonsetup qty precision + persist UOMs
+    assert {"DecPlQty", "WeightUOM", "VolumeUOM"} <= company_fields
     # T81 full company + T145 Role/User + T150 NumberingSequence + T204 SegmentedKey
     assert set(entities) == {
         "Company",
@@ -283,6 +288,9 @@ def test_package_zip_carries_the_bootstrap_endpoint() -> None:
             "OrganizationType": "OrganizationView",
             "BaseCuryID": "OrganizationView",
             "CountryID": "AddressDummy",
+            "DecPlQty": "commonsetup",
+            "WeightUOM": "commonsetup",
+            "VolumeUOM": "commonsetup",
         },
         "CreditTerms": dict.fromkeys(
             (
@@ -423,7 +431,7 @@ def test_segmented_key_maps_length_to_detail_view() -> None:
     with zipfile.ZipFile(io.BytesIO(bootstrap.package_zip())) as zf:
         root = ET.fromstring(zf.read("project.xml"))
     (endpoint,) = root.findall(f"EntityEndpoint/{ns}Endpoint")
-    assert endpoint.get("version") == "1.6.0"
+    assert endpoint.get("version") == "1.7.0"
     (entity,) = [
         e
         for e in endpoint.findall(f"{ns}TopLevelEntity")
@@ -448,7 +456,7 @@ def test_package_prefs_field_depth_curated_not_full_dac() -> None:
     with zipfile.ZipFile(io.BytesIO(bootstrap.package_zip())) as zf:
         root = ET.fromstring(zf.read("project.xml"))
     (endpoint,) = root.findall(f"EntityEndpoint/{ns}Endpoint")
-    assert endpoint.get("version") == "1.6.0"
+    assert endpoint.get("version") == "1.7.0"
     entities = {e.get("name"): e for e in endpoint.findall(f"{ns}TopLevelEntity")}
     gl_types = {
         f.get("name"): f.get("type")
