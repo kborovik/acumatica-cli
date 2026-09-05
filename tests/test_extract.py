@@ -125,7 +125,9 @@ def _client(instance: Instance, server: FakeServer) -> AcumaticaClient:
 
 # -- canned live state for the packaged catalog (GL + master, T117) --
 # Multi-file StockItem is filter-split (ItemClass); Warehouse phases share
-# the live row and partition via include. Packaging UOMs not claimed (B26).
+# the live row and partition via include. Company commonsetup fields GET
+# after the 1.7.0 map (V52); StockItem WeightUOM/VolumeUOM stay GET-omit
+# (B26).
 
 TABLES: dict[str, list[dict[str, Any]]] = {
     "Company": [
@@ -135,6 +137,9 @@ TABLES: dict[str, list[dict[str, Any]]] = {
             "OrganizationType": "Without Branches",
             "BaseCuryID": "USD",
             "CountryID": "US",
+            "DecPlQty": 3,
+            "WeightUOM": "KG",
+            "VolumeUOM": "LITER",
             # noise dropped by include
             "LastModifiedDateTime": "2026-07-11T00:00:00+00:00",
         }
@@ -1268,7 +1273,11 @@ def test_filter_split_stock_item_itemclass(
 def test_company_include_drops_audit_noise(
     instance: Instance, server: FakeServer, tmp_path: Path
 ) -> None:
-    """Company include: identity fields only; packaging UOMs not claimed (B26)."""
+    """Company include: identity + commonsetup qty/UOM; audit noise dropped.
+
+    Mapped WeightUOM/VolumeUOM GET-return on Company (V52). StockItem UOMs
+    stay omitted (B26).
+    """
     _run(instance, server, tmp_path, only=frozenset({"Company"}))
     identity = yaml.safe_load(
         (tmp_path / "config" / "bootstrap" / "company.yaml").read_text()
@@ -1279,11 +1288,13 @@ def test_company_include_drops_audit_noise(
             "AcctName": "Example Company",
             "BaseCuryID": "USD",
             "CountryID": "US",
+            "DecPlQty": 3,
             "OrganizationType": "Without Branches",
+            "VolumeUOM": "LITER",
+            "WeightUOM": "KG",
         }
     ]
     assert "LastModifiedDateTime" not in identity["records"][0]
-    assert "WeightUOM" not in identity["records"][0]
     assert not (tmp_path / "config" / "baseline" / "91-company-packaging.yaml").exists()
 
 
@@ -1386,6 +1397,7 @@ def test_catalog_filter_split_and_include_rows_declared() -> None:
     assert by_file["config/bootstrap/company.yaml"].include
     assert "DecPlQty" in by_file["config/bootstrap/company.yaml"].include
     assert "WeightUOM" in by_file["config/bootstrap/company.yaml"].include
+    assert "VolumeUOM" in by_file["config/bootstrap/company.yaml"].include
     assert "config/baseline/91-company-packaging.yaml" not in by_file
     assert "MainContact" in by_file["config/master/75-vendors.yaml"].include
     assert "Locations" in by_file["config/master/51-warehouse-locations.yaml"].include

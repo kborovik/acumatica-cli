@@ -1104,6 +1104,28 @@ def test_package_in_progress_transit_accounts_are_not_in_control() -> None:
     assert rec["INTransitAcctID"] == "12400"
 
 
+def test_package_company_apply_body_includes_decplqty_and_persist_uoms(
+    instance: Instance,
+) -> None:
+    """T222/V52: package Company PUT carries DecPlQty 3 + persist UOMs."""
+    baseline = seed.load_baseline(_package_template("config/bootstrap/company.yaml"))
+    assert isinstance(baseline, seed.BaselineFile)
+    rec = baseline.records[0]
+    assert rec["DecPlQty"] == 3
+    assert rec["WeightUOM"] == "KG"
+    assert rec["VolumeUOM"] == "LITER"
+    recorder = SessionRecorder()
+    with _session_client(instance, recorder) as client:
+        seed.apply(client, baseline)
+    puts = [r for r in recorder.requests if r.method == "PUT"]
+    assert len(puts) == 1
+    body = json.loads(puts[0].content)
+    assert body["DecPlQty"] == {"value": 3}
+    assert body["WeightUOM"] == {"value": "KG"}
+    assert body["VolumeUOM"] == {"value": "LITER"}
+    assert puts[0].url.path.endswith("/Bootstrap/1.7.0/Company")
+
+
 def test_package_segmented_key_apply_body_widens_inventory_bizacct(
     instance: Instance,
 ) -> None:

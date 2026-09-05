@@ -199,7 +199,7 @@ T218|x|offline tests: env pin; no matrix loader; check no `--all`; init no matri
 T219|x|docs README+templates+CHANGELOG `.env` sole config; drop matrix.yaml; suite green|V12,V19,V49,T213,T218
 T220|x|bootstrap contract Company DecPlQty (ShortValue) + WeightUOM/VolumeUOM map commonsetup; version bump 1.6.0→1.7.0|V21,V52,I.data
 T221|x|seed_catalog include DecPlQty+WeightUOM+VolumeUOM; package company.yaml seed DecPlQty: 3 + persist UOMs|V34,V52,I.data,T220
-T222|.|offline tests apply body + extract include + catalog row + commonsetup mapping asserts; StockItem still omit UOMs (B26)|V13,V34,V52,T221
+T222|x|offline tests apply body + extract include + catalog row + commonsetup mapping asserts; StockItem still omit UOMs (B26)|V13,V34,V52,T221
 T223|.|live/e2e GET DecPlQty after Company PUT; kit ComponentQty 0.012 round-trips after republish + Company PUT + kit apply|V4,V13,V52,B30,T221
 T224|.|docs/demo-seed Company DecPlQty CS101500 commonsetup; kit BOM precision 3; persist UOMs vs B26 extract; CHANGELOG Unreleased (gh #34)|V12,V19,V52,T220,T221
 
