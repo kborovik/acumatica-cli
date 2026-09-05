@@ -58,6 +58,9 @@ def test_check_all_flag_is_gone(data_root: Path) -> None:
     result = CliRunner().invoke(cli.cli, ["check", "--all", "--yes", "--tenant", "T1"])
     assert result.exit_code != 0
     assert "No such option" in result.output
+    help_result = CliRunner().invoke(cli.cli, ["check", "--help"])
+    assert help_result.exit_code == 0
+    assert "--all" not in help_result.output
 
 
 def test_leftover_matrix_yaml_does_not_source_pin(data_root: Path) -> None:
@@ -268,3 +271,38 @@ def test_check_lifecycle_mock_green(
     assert "inspection" in result.output
     assert len(store) == 1
     assert store[0].login_name == "T1"
+
+
+def test_check_ignores_leftover_multi_cell_matrix(
+    data_root: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """V47: leftover matrix.yaml cells are never walked; one .env instance."""
+    (data_root / "matrix.yaml").write_text(
+        "cells:\n"
+        '  - id: "a"\n'
+        '    erp: "26.101"\n'
+        '    default_api: "24.200.001"\n'
+        '    base_url: "http://cell-a.test/AcumaticaERP"\n'
+        '  - id: "b"\n'
+        '    erp: "26.101"\n'
+        '    default_api: "23.200.001"\n'
+        '    base_url: "http://cell-b.test/AcumaticaERP"\n'
+    )
+    (data_root / "config" / "baseline").mkdir(parents=True)
+    (data_root / "config" / "baseline" / "uom.yaml").write_text(
+        "entity: UnitsOfMeasure\nkey: UOM\nendpoint: default\nrecords:\n  - UOM: KG\n"
+    )
+    (data_root / "scenario").mkdir()
+    (data_root / "scenario" / "10-stub.yaml").write_text("scenario: stub\nsteps: []\n")
+    store: list[_FakeTenant] = []
+    _patch_lifecycle_ssh(monkeypatch, store)
+
+    result = CliRunner().invoke(cli.cli, ["check", "--yes", "--tenant", "T1"])
+
+    assert result.exit_code == 0, result.output
+    assert result.output.count("check http://acu.test/AcumaticaERP") == 1
+    assert "cell-a.test" not in result.output
+    assert "cell-b.test" not in result.output
+    assert "24.200.001" not in result.output
+    assert "23.200.001" not in result.output
+    assert len(store) == 1

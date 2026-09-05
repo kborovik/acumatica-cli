@@ -191,7 +191,7 @@ T211|x|e2e: package INPreferences apply succeeds after accounts; drop 15000 work
 T212|x|docs/demo-seed — IN control on posting-class inventory assets only; WIP/transit not control; CHANGELOG Unreleased (gh #32)|V12,V19,V51,T209
 T213|x|drop `matrix.py` + `--cell`; Instance resolve `api_version` from `ACU_API_VERSION` env (flag > env > code default)|V27,I.cfg,I.env
 T214|x|config init/show/check: no matrix surface; `.env` scaffolds `ACU_BASE_URL` + `ACU_API_VERSION`; drop `--strict`|V27,V28,I.cmd
-T215|.|`acu check` single-instance from `.env`; drop `--all` cell walk|V47,I.cmd
+T215|x|`acu check` single-instance from `.env`; drop `--all` cell walk|V47,I.cmd
 T216|.|overlays keyed by resolved `api_version`; drop inventory erp-match vs matrix cell|V37,V44,I.data
 T217|.|sweep remaining `matrix.yaml`/`--cell`/`load_matrix` sites (scope: `matrix\.yaml|--cell|load_matrix|DatasetMatrix|MATRIX_FILENAME`)|V27,V13
 T218|.|offline tests: env pin; no matrix loader; check no `--all`; init no matrix.yaml|V13,V27,T213,T214,T215

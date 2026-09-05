@@ -891,11 +891,11 @@ def _probe_endpoints(endpoints: list[tuple[str, str]], inst: Instance) -> bool:
 def check_cmd(ctx: click.Context, yes: bool, tenant_login: str | None) -> None:
     """Cold lifecycle: delete → create → apply → run → diff (leave tenant).
 
-    Destructive rebuild for CI. Not `acu config check` (read-only
-    preflight). Requires non-empty ACU_SSH and a tenant login (--tenant /
-    ACU_TENANT). Pre-clean delete is always unattended; rebuilt tenant is
-    left on the host for inspect / state. --yes is accepted for
-    muscle-memory only.
+    Destructive rebuild for CI against the resolved .env instance. Not
+    `acu config check` (read-only preflight). Requires non-empty ACU_SSH
+    and a tenant login (--tenant / ACU_TENANT). Pre-clean delete is
+    always unattended; rebuilt tenant is left on the host for inspect /
+    state. --yes is accepted for muscle-memory only.
 
     \b
     Flow
@@ -922,7 +922,7 @@ def check_cmd(ctx: click.Context, yes: bool, tenant_login: str | None) -> None:
             "ACU_SSH not set (pass --ssh, or put ACU_SSH in .env or the environment)"
         )
     output.data(f"check {inst.base_url} (api={inst.api_version})")
-    if _lifecycle_one_cell(inst, tenant) != 0:
+    if _run_lifecycle(inst, tenant) != 0:
         raise SystemExit(1)
     output.success("check: green")
 
@@ -940,7 +940,7 @@ def _resolve_check_tenant(tenant_login: str | None, overrides: dict[str, str]) -
     return tenant
 
 
-def _lifecycle_one_cell(inst: Instance, tenant: str) -> int:
+def _run_lifecycle(inst: Instance, tenant: str) -> int:
     """pre-clean→create→apply→run→diff; leave tenant (V47); return 0 or 1."""
     mgr = TenantManager(inst)
     _lifecycle_delete_best_effort(mgr, tenant, label="pre-clean")
