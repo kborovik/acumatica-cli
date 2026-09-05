@@ -1163,8 +1163,10 @@ def test_package_in_progress_transit_accounts_are_not_in_control() -> None:
 def test_package_company_apply_body_includes_decplqty_and_persist_uoms(
     instance: Instance,
 ) -> None:
-    """T222/V52: package Company PUT carries DecPlQty 3 + persist UOMs."""
-    baseline = seed.load_baseline(_package_template("config/bootstrap/company.yaml"))
+    """T222/V52: packaging Company PUT carries DecPlQty 3 + persist UOMs."""
+    baseline = seed.load_baseline(
+        _package_template("config/baseline/91-company-packaging.yaml")
+    )
     assert isinstance(baseline, seed.BaselineFile)
     rec = baseline.records[0]
     assert rec["DecPlQty"] == 3
@@ -1182,33 +1184,16 @@ def test_package_company_apply_body_includes_decplqty_and_persist_uoms(
     assert puts[0].url.path.endswith("/Bootstrap/1.7.0/Company")
 
 
-def test_company_decplqty_and_kit_componentqty_round_trip(
-    tmp_path: Path, instance: Instance
-) -> None:
-    """T223/V52/B30: GET DecPlQty 3 after Company PUT; ComponentQty 0.012 round-trips.
+def test_company_packaging_round_trip(instance: Instance) -> None:
+    """T222/V52: echo wrap/unwrap/diff keep DecPlQty 3 + persist UOMs.
 
-    Echo mock proves client wrap/unwrap/diff keep milligram-scale qty.
-    Live ERP rounding is the mapped CommonSetup.DecPlQty (issue 34 comment).
+    Kit ComponentQty 0.012 rounding is live e2e (T223), not this echo.
     """
     store = EchoStore()
-    company = seed.load_baseline(_package_template("config/bootstrap/company.yaml"))
-    assert isinstance(company, seed.BaselineFile)
-    kit = seed.load_baseline(
-        _write(
-            tmp_path,
-            """\
-entity: KitSpecification
-key: [KitInventoryID, RevisionID]
-detail_keys: { StockComponents: StockInventoryID }
-records:
-  - KitInventoryID: GW-EDGE
-    RevisionID: V1
-    StockComponents:
-      - { StockInventoryID: ENCL-STD, ComponentQty: 0.012, UOM: KG }
-""",
-        )
+    company = seed.load_baseline(
+        _package_template("config/baseline/91-company-packaging.yaml")
     )
-    assert isinstance(kit, seed.BaselineFile)
+    assert isinstance(company, seed.BaselineFile)
     with AcumaticaClient(instance, transport=httpx.MockTransport(store)) as client:
         seed.apply(client, company)
         rec = client.get_record("Company", ["LAB5"], seed.BOOTSTRAP_ENDPOINT)
@@ -1218,19 +1203,6 @@ records:
         assert plain["WeightUOM"] == "KG"
         assert plain["VolumeUOM"] == "LITER"
         assert seed.diff(client, company) == []
-
-        seed.apply(client, kit)
-        kit_rec = client.get_record(
-            "KitSpecification",
-            ["GW-EDGE", "V1"],
-            params={"$expand": "StockComponents"},
-        )
-        assert kit_rec is not None
-        kit_plain = unwrap(kit_rec)
-        qty = kit_plain["StockComponents"][0]["ComponentQty"]
-        assert qty == 0.012
-        assert qty != 0.01
-        assert seed.diff(client, kit) == []
 
 
 def test_package_segmented_key_apply_body_widens_inventory_bizacct(

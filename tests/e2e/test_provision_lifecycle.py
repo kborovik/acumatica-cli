@@ -32,6 +32,10 @@ from typing import Any, NamedTuple
 import pytest
 import yaml
 
+from acumatica_cli import firstlogin
+from acumatica_cli.client import AcumaticaClient, unwrap
+from acumatica_cli.config import Instance
+from acumatica_cli.seed import BOOTSTRAP_ENDPOINT
 from acumatica_cli.tenant import TenantManager
 
 pytestmark = pytest.mark.e2e
@@ -134,6 +138,46 @@ def test_diff_detects_injected_drift(
     proc = acu("--tenant", scratch_tenant.login, "diff", str(mutated))
     assert proc.returncode == 2, _combined(proc)
     assert "DRIFT" in _combined(proc)
+
+
+def test_kit_componentqty_round_trips_after_decplqty(
+    live_instance: Instance, scratch_tenant: ScratchTenant
+) -> None:
+    """T223/V52/B30: live kit ComponentQty 0.012 after Company DecPlQty 3.
+
+    Scratch revision is not in the demo seed, so config/ diff stays clean.
+    """
+    inst = live_instance.model_copy(update={"tenant": scratch_tenant.login})
+    firstlogin.initialize_admin_password(inst, tenant=scratch_tenant.login)
+    with AcumaticaClient(inst) as client:
+        company = client.get_record("Company", ["LAB5"], BOOTSTRAP_ENDPOINT)
+        assert company is not None
+        assert int(unwrap(company)["DecPlQty"]) == 3, unwrap(company)
+        client.put(
+            "KitSpecification",
+            {
+                "KitInventoryID": "GW-EDGE",
+                "RevisionID": "E2E",
+                "Description": "qty precision probe",
+                "Active": True,
+                "StockComponents": [
+                    {
+                        "StockInventoryID": "ENCL-STD",
+                        "ComponentQty": 0.012,
+                        "UOM": "EA",
+                    }
+                ],
+            },
+        )
+        kit = client.get_record(
+            "KitSpecification",
+            ["GW-EDGE", "E2E"],
+            params={"$expand": "StockComponents"},
+        )
+        assert kit is not None
+        qty = unwrap(kit)["StockComponents"][0]["ComponentQty"]
+        assert float(qty) == 0.012
+        assert float(qty) != 0.01
 
 
 def test_diff_against_nonexistent_tenant_exits_one(acu: RunAcu) -> None:

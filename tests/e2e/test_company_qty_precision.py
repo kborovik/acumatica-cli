@@ -1,12 +1,12 @@
-"""Live Company DecPlQty after bootstrap apply (T223/V52).
+"""Live Company DecPlQty after UOMs then packaging PUT (T223/V52).
 
-Kit milligram BOMs stay out of the LAB5 demo seed. Offline echo in
-``tests/test_seed.py`` covers ComponentQty 0.012 wrap/diff. This file
-proves GET returns mapped Company commonsetup fields after PUT.
+Kit milligram BOMs stay out of the LAB5 demo seed. Live kit 0.012 is
+``tests/e2e/test_provision_lifecycle.py`` after full apply.
 """
 
 import subprocess
 from collections.abc import Callable, Iterator
+from pathlib import Path
 from typing import NamedTuple
 
 import pytest
@@ -62,9 +62,20 @@ def test_company_get_returns_decplqty_after_put(
     acu: RunAcu,
     live_instance: Instance,
     scratch_tenant: ScratchTenant,
+    data_repo: Path,
 ) -> None:
-    """T223/V52: key-URL GET returns DecPlQty 3 after Company PUT."""
+    """T223/V52: key-URL GET returns DecPlQty 3 after packaging Company PUT."""
     proc = acu("--tenant", scratch_tenant.login, "apply", "config/bootstrap")
+    assert proc.returncode == 0, _combined(proc)
+    assert "PUT Company [LAB5]" in _combined(proc)
+
+    proc = acu(
+        "--tenant",
+        scratch_tenant.login,
+        "apply",
+        str(data_repo / "config/baseline/90-uoms.yaml"),
+        str(data_repo / "config/baseline/91-company-packaging.yaml"),
+    )
     assert proc.returncode == 0, _combined(proc)
     assert "PUT Company [LAB5]" in _combined(proc)
 

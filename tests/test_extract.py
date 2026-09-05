@@ -694,7 +694,7 @@ def test_packaged_manifest_is_self_consistent() -> None:
         "config/baseline/60-ledger-company.yaml",
         "config/baseline/90-uoms.yaml",
     ]
-    assert "config/baseline/91-company-packaging.yaml" not in files  # B26/T118
+    assert "config/baseline/91-company-packaging.yaml" in files
     assert "config/baseline/30-currencies.yaml" not in files  # V34: not in templates
     assert "config/master/05-numbering-sequences.yaml" in files
     assert "config/master/10-reason-codes.yaml" in files
@@ -984,15 +984,20 @@ def test_run_progress_banner_before_each_outcome(
 ) -> None:
     """T121: path -> tenant on url (entity) before write/skip/would write."""
     company = tmp_path / "config" / "bootstrap" / "company.yaml"
+    packaging = tmp_path / "config" / "baseline" / "91-company-packaging.yaml"
     company.parent.mkdir(parents=True)
+    packaging.parent.mkdir(parents=True)
     company.write_text("operator-edited\n")
+    packaging.write_text("operator-edited\n")
 
-    # exists skip: banner then skip
+    # exists skip: banner then skip (identity then packaging partition)
     _run(instance, server, tmp_path, only=frozenset({"Company"}))
     lines = [ln for ln in capsys.readouterr().out.splitlines() if ln]
     assert lines == [
         _progress_line(company, "Company", instance),
         f"skip {company} (exists)",
+        _progress_line(packaging, "Company", instance),
+        f"skip {packaging} (exists)",
     ]
 
     # write: banner then write
@@ -1000,6 +1005,8 @@ def test_run_progress_banner_before_each_outcome(
     lines = [ln for ln in capsys.readouterr().out.splitlines() if ln]
     assert lines[0] == _progress_line(company, "Company", instance)
     assert lines[1] == f"write {company} (1 records)"
+    assert lines[2] == _progress_line(packaging, "Company", instance)
+    assert lines[3] == f"write {packaging} (1 records)"
 
     # dry-run would write: banner then would write
     empty = tmp_path / "dry"
@@ -1039,16 +1046,25 @@ def test_run_skip_exists_and_force_overwrites(
     capsys: pytest.CaptureFixture[str],
 ) -> None:
     target = tmp_path / "config" / "bootstrap" / "company.yaml"
+    packaging = tmp_path / "config" / "baseline" / "91-company-packaging.yaml"
     target.parent.mkdir(parents=True)
+    packaging.parent.mkdir(parents=True)
     target.write_text("operator-edited\n")
+    packaging.write_text("operator-edited\n")
 
     _run(instance, server, tmp_path, only=frozenset({"Company"}))
-    assert f"skip {target} (exists)" in capsys.readouterr().out
+    out = capsys.readouterr().out
+    assert f"skip {target} (exists)" in out
+    assert f"skip {packaging} (exists)" in out
     assert target.read_text() == "operator-edited\n"
+    assert packaging.read_text() == "operator-edited\n"
 
     _run(instance, server, tmp_path, only=frozenset({"Company"}), force=True)
-    assert f"write {target}" in capsys.readouterr().out
+    out = capsys.readouterr().out
+    assert f"write {target}" in out
+    assert f"write {packaging}" in out
     assert "entity: Company" in target.read_text()
+    assert "entity: Company" in packaging.read_text()
 
 
 def test_run_skips_entity_with_no_live_records(
@@ -1104,7 +1120,7 @@ def test_rerun_skips_every_emitted_file(
     assert len(lines) == _FULL_ROWS * 2
     assert sum(1 for ln in lines if ln.startswith("write ")) == _FULL_WRITES
     assert any("80-stock-items-parts" in ln and ln.startswith("write ") for ln in lines)
-    assert not any("91-company-packaging" in ln for ln in lines)
+    assert any("91-company-packaging" in ln and ln.startswith("write ") for ln in lines)
 
 
 def test_run_only_filters_entity_name_or_file_stem(
@@ -1273,10 +1289,10 @@ def test_filter_split_stock_item_itemclass(
 def test_company_include_drops_audit_noise(
     instance: Instance, server: FakeServer, tmp_path: Path
 ) -> None:
-    """Company include: identity + commonsetup qty/UOM; audit noise dropped.
+    """Company include-partition: identity vs commonsetup qty/UOM.
 
     Mapped WeightUOM/VolumeUOM GET-return on Company (V52). StockItem UOMs
-    stay omitted (B26).
+    stay omitted (B26). Packaging PUT sorts after 90-uoms.yaml (V22).
     """
     _run(instance, server, tmp_path, only=frozenset({"Company"}))
     identity = yaml.safe_load(
@@ -1288,14 +1304,21 @@ def test_company_include_drops_audit_noise(
             "AcctName": "Example Company",
             "BaseCuryID": "USD",
             "CountryID": "US",
-            "DecPlQty": 3,
             "OrganizationType": "Without Branches",
+        }
+    ]
+    assert "LastModifiedDateTime" not in identity["records"][0]
+    packaging = yaml.safe_load(
+        (tmp_path / "config" / "baseline" / "91-company-packaging.yaml").read_text()
+    )
+    assert packaging["records"] == [
+        {
+            "AcctCD": "COMPANY",
+            "DecPlQty": 3,
             "VolumeUOM": "LITER",
             "WeightUOM": "KG",
         }
     ]
-    assert "LastModifiedDateTime" not in identity["records"][0]
-    assert not (tmp_path / "config" / "baseline" / "91-company-packaging.yaml").exists()
 
 
 def test_warehouse_include_partitions_bootstrap_locations_defaults(
@@ -1395,15 +1418,16 @@ def test_catalog_filter_split_and_include_rows_declared() -> None:
     assert "WeightUOM" not in by_file["config/master/80-stock-items-parts.yaml"].include
     assert "VolumeUOM" not in by_file["config/master/82-stock-items-kits.yaml"].include
     assert by_file["config/bootstrap/company.yaml"].include
-    assert "DecPlQty" in by_file["config/bootstrap/company.yaml"].include
-    assert "WeightUOM" in by_file["config/bootstrap/company.yaml"].include
-    assert "VolumeUOM" in by_file["config/bootstrap/company.yaml"].include
-    assert "config/baseline/91-company-packaging.yaml" not in by_file
+    assert "DecPlQty" not in by_file["config/bootstrap/company.yaml"].include
+    assert "WeightUOM" not in by_file["config/bootstrap/company.yaml"].include
+    assert "VolumeUOM" not in by_file["config/bootstrap/company.yaml"].include
+    assert "DecPlQty" in by_file["config/baseline/91-company-packaging.yaml"].include
+    assert "WeightUOM" in by_file["config/baseline/91-company-packaging.yaml"].include
+    assert "VolumeUOM" in by_file["config/baseline/91-company-packaging.yaml"].include
     assert "MainContact" in by_file["config/master/75-vendors.yaml"].include
     assert "Locations" in by_file["config/master/51-warehouse-locations.yaml"].include
-    # multi-file same entity counts (Company packaging row dropped T118/B26)
     entities = [s.entity for s in manifest.entities]
-    assert entities.count("Company") == 1
+    assert entities.count("Company") == 2
     assert entities.count("Warehouse") == 3
     assert entities.count("StockItem") == 2
 
@@ -1685,13 +1709,14 @@ def test_package_role_user_templates_prebuild_roles() -> None:
 def test_templates_do_not_claim_packaging_uoms() -> None:
     """B26/V34: StockItem golden seed never claims WeightUOM/VolumeUOM.
 
-    Company persist UOMs are required when DistributionModule is on (V52).
+    Company persist UOMs live on 91-company-packaging.yaml after 90-uoms
+    (V52/V22). Identity company.yaml does not send them on first insert.
     """
     root = Path(__file__).resolve().parents[1] / "src" / "acumatica_cli" / "templates"
-    company = root / "config" / "bootstrap" / "company.yaml"
+    packaging = root / "config" / "baseline" / "91-company-packaging.yaml"
     claims: list[str] = []
     for path in root.rglob("*.yaml"):
-        if path.resolve() == company.resolve():
+        if path.resolve() == packaging.resolve():
             continue
         text = path.read_text(encoding="utf-8")
         for i, line in enumerate(text.splitlines(), 1):
@@ -1703,10 +1728,10 @@ def test_templates_do_not_claim_packaging_uoms() -> None:
             ):
                 claims.append(f"{path.relative_to(root)}:{i}:{stripped}")
     assert claims == []
-    company_text = company.read_text(encoding="utf-8")
-    assert re.search(r"^  WeightUOM:\s*KG\s*$", company_text, re.M)
-    assert re.search(r"^  VolumeUOM:\s*LITER\s*$", company_text, re.M)
-    assert re.search(r"^  DecPlQty:\s*3\s*$", company_text, re.M)
+    packaging_text = packaging.read_text(encoding="utf-8")
+    assert re.search(r"^  WeightUOM:\s*KG\s*$", packaging_text, re.M)
+    assert re.search(r"^  VolumeUOM:\s*LITER\s*$", packaging_text, re.M)
+    assert re.search(r"^  DecPlQty:\s*3\s*$", packaging_text, re.M)
 
 
 def test_package_templates_have_no_yaml_comments() -> None:
