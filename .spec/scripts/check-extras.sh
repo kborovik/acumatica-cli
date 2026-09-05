@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# check-extras.sh - mechanical V1/V10/V18/V49 drift greps (SPEC ST.19).
+# check-extras.sh - mechanical V1/V10/V18/V27/V49 drift greps (SPEC ST.19).
 #
 # /sdd:check extras-hook contract: emit bare `id|verdict|evidence` rows
 # (no header, no prose) on stdout; the check run appends them verbatim.
@@ -66,6 +66,23 @@ else
     else
         row V18 HOLD "sole site $v18_hits inside _ssh"
     fi
+fi
+
+# V27 env-sole-config: src/ never ships live matrix.yaml / --cell /
+# load_matrix / DatasetMatrix / MATRIX_FILENAME. Leftover/never comments
+# that name the dropped files stay (present leftover ignored).
+v27_pat='matrix\.yaml|--cell|load_matrix|DatasetMatrix|MATRIX_FILENAME'
+v27_allow='never|leftover|no ``matrix\.yaml``'
+v27=$(
+    grep -RHn --include='*.py' --include='*.md' --include='*.yaml' \
+        --include='*.yml' -E "$v27_pat" "$SRC" 2>/dev/null \
+        | grep -Eiv "$v27_allow" | head -1
+)
+if [ -n "$v27" ]; then
+    row V27 VIOLATE "$v27 live matrix.yaml/--cell/load_matrix site"
+    fail=1
+else
+    row V27 HOLD "src/ free of live matrix.yaml/--cell/load_matrix"
 fi
 
 # V49 md-prose-density: human-facing Markdown prose paragraphs <= 2

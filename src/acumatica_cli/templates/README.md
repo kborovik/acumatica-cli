@@ -8,16 +8,14 @@ Tenant Factory class). Single full seed — no `--flavor`.
 ## Rebuild order
 
 ```sh
-# 1. Credentials in .env (ACU_PASSWORD, ACU_TENANT, …)
-#    Default API pin + REST where = committed matrix.yaml cell
-#    (default_api + base_url; not sticky ACU_BASE_URL / ACU_API_VERSION)
+# 1. Credentials in .env (ACU_PASSWORD, ACU_TENANT, ACU_BASE_URL, ACU_API_VERSION)
 acu config check
 
-# 2. Publish Bootstrap (features + contract from config/bootstrap/)
+# 2. Publish Bootstrap (features + contract from package)
 acu bootstrap
 
 # 3. Seed config umbrella (bootstrap → baseline → setup → master)
-#    bare `acu apply` also appends overlays/default-<default_api>/ when present
+#    bare `acu apply` also appends overlays/default-<api_version>/ when present
 acu apply
 
 # 4. Lifecycle scenarios (once capital → buy → build → sell)
@@ -32,7 +30,7 @@ acu state
 # warm gate: once-capital only — additive buy/sell moves numeric observations
 acu run scenario/10-seed-capital.yaml && acu state --assert-unchanged
 
-# 7. Cold matrix lifecycle (SSH + tenant; optional multi-cell --all)
+# 7. Cold lifecycle (SSH + tenant)
 # acu check --yes
 
 # Optional: re-seed from live (inverse of apply; always under config/)
@@ -46,7 +44,7 @@ Bare `acu apply` / `acu diff` also prefer `config/` when those trees exist.
 
 | Path | Role |
 |------|------|
-| `matrix.yaml` | Multi-host pin+where: cells `id`+`erp`+`default_api`+`base_url` (V27); `--cell` selects |
+| `.env` | Secrets + where (`ACU_BASE_URL`) + pin (`ACU_API_VERSION`) |
 | `config/bootstrap/` | Company, features, credit terms (Bootstrap contract is package SoT — never scaffolded) |
 | `config/baseline/` | GL foundation (COA, ledger, subaccounts, UOMs) |
 | `config/setup/` | Financial year, master calendar, open periods |
@@ -55,7 +53,7 @@ Bare `acu apply` / `acu diff` also prefer `config/` when those trees exist.
 | `scenario/20-buy.yaml` | Additive component PO → receipt → bill → AP pay |
 | `scenario/30-build.yaml` | Additive kit assembly |
 | `scenario/40-sell.yaml` | Additive SO → ship → invoice → AR pay |
-| `overlays/` | Default-half rewrites (`default-<default_api>/`); bare apply/run/diff auto-compose |
+| `overlays/` | Default-half rewrites (`default-<api_version>/`); bare apply/run/diff auto-compose |
 | `overlays/default-24.200.001/` | Lab 25r1 half: KitAssembly Type Assembly |
 | `config/views/10-trial-balance.yaml` | Observer view (EndingBalance inquire; Period pinned literal; not SEED_DIRS) |
 | `state/` | Written by `acu state` (derived-state observations) |

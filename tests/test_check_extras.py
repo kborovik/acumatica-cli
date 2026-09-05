@@ -1,4 +1,4 @@
-""".spec/scripts/check-extras.sh: the mechanized V1/V10/V18/V49 drift greps.
+""".spec/scripts/check-extras.sh: the mechanized V1/V10/V18/V27/V49 drift greps.
 
 The hook resolves the repo root from its own location, so VIOLATE branches
 are pinned via a synthetic repo tree in tmp_path (script copied under
@@ -62,13 +62,13 @@ def rows(r: subprocess.CompletedProcess[str]) -> dict[str, tuple[str, str]]:
     return out
 
 
-def test_real_tree_emits_four_hold_rows() -> None:
+def test_real_tree_emits_five_hold_rows() -> None:
     r = run_hook()
     assert r.returncode == 0, r.stdout + r.stderr
     table = rows(r)
-    assert set(table) == {"V1", "V10", "V18", "V49"}
+    assert set(table) == {"V1", "V10", "V18", "V27", "V49"}
     assert all(verdict == "HOLD" for verdict, _ in table.values())
-    assert len(r.stdout.splitlines()) == 4  # no header, no prose
+    assert len(r.stdout.splitlines()) == 5  # no header, no prose
     r.stdout.encode("ascii")  # V9: the audit obeys the invariant it enforces
 
 
@@ -154,6 +154,47 @@ def test_v18_suffix_outside_ssh_def_violates(tmp_path: Path) -> None:
     verdict, evidence = rows(r)["V18"]
     assert verdict == "VIOLATE"
     assert "list" in evidence
+
+
+def test_v27_load_matrix_violates(tmp_path: Path) -> None:
+    script = make_repo(tmp_path, **{"matrix.py": "def load_matrix():\n    pass\n"})
+    r = run_hook(script)
+    assert r.returncode == 1
+    verdict, evidence = rows(r)["V27"]
+    assert verdict == "VIOLATE"
+    assert "matrix.py:1" in evidence
+    assert rows(r)["V1"][0] == "HOLD"
+
+
+def test_v27_cell_option_violates(tmp_path: Path) -> None:
+    script = make_repo(tmp_path, **{"cli.py": '@click.option("--cell")\n'})
+    r = run_hook(script)
+    assert r.returncode == 1
+    verdict, evidence = rows(r)["V27"]
+    assert verdict == "VIOLATE"
+    assert "cli.py:1" in evidence
+
+
+def test_v27_leftover_comment_holds(tmp_path: Path) -> None:
+    script = make_repo(
+        tmp_path,
+        **{"config.py": '"""Leftover matrix.yaml is never loaded."""\n'},
+    )
+    r = run_hook(script)
+    assert r.returncode == 0, r.stdout + r.stderr
+    assert rows(r)["V27"][0] == "HOLD"
+
+
+def test_v27_readme_matrix_yaml_violates(tmp_path: Path) -> None:
+    script = make_repo(tmp_path)
+    readme = tmp_path / "src" / "acumatica_cli" / "templates" / "README.md"
+    readme.parent.mkdir(parents=True)
+    readme.write_text("| `matrix.yaml` | pin+where |\n")
+    r = run_hook(script)
+    assert r.returncode == 1
+    verdict, evidence = rows(r)["V27"]
+    assert verdict == "VIOLATE"
+    assert "templates/README.md:1" in evidence
 
 
 def test_v49_three_sentence_prose_violates(tmp_path: Path) -> None:

@@ -131,6 +131,9 @@ for granular /sdd:check runs.
 
 ## §V.27 — env-sole-config gate (extracted from SPEC.md §V.27)
 
+- cmd: `.spec/scripts/check-extras.sh` — V27 row; scope `src/`; pattern `matrix\.yaml|--cell|load_matrix|DatasetMatrix|MATRIX_FILENAME`
+- exemptions: leftover/never/`no ``matrix.yaml``` comments (present leftover ignored)
+- surviving match (`V27|VIOLATE|file:line: …`, exit 1) → bail: `live matrix.yaml/--cell/load_matrix site per §V.27 — leftover ignored, never loaded`
 - allowlisted data-plane cmds: `apply`/`diff`/`run`/`extract`/`schema`/`bootstrap`/`state` + `config check` + `acu check` load `Instance` via `_resolve_instance`
 - `api_version`: `--api-version` flag ? → else `ACU_API_VERSION` env → else code default `25.200.001`
 - `base_url`: `--url` flag ? → else `ACU_BASE_URL` env → else hard error naming sources

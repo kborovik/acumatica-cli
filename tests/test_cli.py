@@ -1000,6 +1000,10 @@ def test_config_init_scaffolds_data_repo(tmp_path: Path) -> None:
     ov_readme = (repo / "overlays" / "README.md").read_text()
     assert "matrix.yaml" not in ov_readme
     assert "api_version" in ov_readme
+    seed_readme = (repo / "README.md").read_text()
+    assert "matrix.yaml" not in seed_readme
+    assert "--cell" not in seed_readme
+    assert "ACU_API_VERSION" in seed_readme
     half_readme = (repo / "overlays" / "default-24.200.001" / "README.md").read_text()
     assert "default_api" not in half_readme
     assert "ACU_API_VERSION" in half_readme
