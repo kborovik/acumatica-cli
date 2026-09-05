@@ -298,7 +298,7 @@ Cross-directory order is fixed: bootstrap, then baseline, then setup, then maste
 | ----- | ----------------------------- |
 | Features | `config/bootstrap/features.yaml` enables Inventory, DistributionModule, Warehouse, WarehouseLocation, KitAssemblies, SubAccount, … |
 | Segmented keys | `config/bootstrap/segmented-key.yaml` raises INVENTORY + BIZACCT Length 30 before master StockItem / Vendor / Customer — see [Segmented keys](#segmented-keys) |
-| Company | Org CD **LAB5** (single placeholder across ledger link, open periods, TransitBranchID, cash BranchID) |
+| Company | Org CD **LAB5**; `DecPlQty: 3` plus persist UOMs — see [Company quantity precision](#company-quantity-precision) |
 | COA / GL | Expanded accounts for inventory, in-transit, PO accrual, PPV/LCV, freight, discounts |
 | Setup calendar | Financial year, then master calendar, then open periods for LAB5 |
 | Numbering | `05-numbering-sequences.yaml` before any prefs that may set `*NumberingID` — see [Numbering sequences](#numbering-sequences) |
@@ -310,6 +310,37 @@ Cross-directory order is fixed: bootstrap, then baseline, then setup, then maste
 Feature closure: every feature-gated form used by a seed file must appear in `config/bootstrap/features.yaml`.
 
 Reference closure: every foreign key must resolve to a tenant-native row or an earlier-sorting seed file.
+
+## Company quantity precision
+
+Quantity decimal places live on CS101500 `CommonSetup.DecPlQty` (aspx DataMember `commonsetup`).
+Bootstrap Company maps `DecPlQty` (`ShortValue`) plus persist `WeightUOM` and `VolumeUOM`.
+
+Package seed sets `DecPlQty: 3` so kit BOM quantities such as `0.012` KG store without rounding to `0.01`.
+The DAC default is 2.
+
+DistributionModule on requires `WeightUOM` and `VolumeUOM` on the same Company PUT (`CommonSetup_RowPersisting`).
+Extract keeps those fields on Company when GET returns them; StockItem still omits GET-omit UOMs (B26).
+
+Republish AcuBootstrap after a contract upgrade so the 1.7.0 maps are live.
+
+```yaml
+# config/bootstrap/company.yaml (shape)
+entity: Company
+key: AcctCD
+endpoint: bootstrap
+records:
+- AcctCD: LAB5
+  AcctName: LAB5 Electronics Inc.
+  OrganizationType: Without Branches
+  BaseCuryID: USD
+  CountryID: US
+  DecPlQty: 3
+  WeightUOM: KG
+  VolumeUOM: LITER
+```
+
+Unmapped `DecPlQty` PUT answers 200 and ignores the field (B30).
 
 ## IN control accounts (V51)
 
