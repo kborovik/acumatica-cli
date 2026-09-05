@@ -197,7 +197,7 @@ T216|x|overlays keyed by resolved `api_version`; drop inventory erp-match vs mat
 T217|x|sweep remaining `matrix.yaml`/`--cell`/`load_matrix` sites (scope: `matrix\.yaml|--cell|load_matrix|DatasetMatrix|MATRIX_FILENAME`)|V27,V13
 T218|x|offline tests: env pin; no matrix loader; check no `--all`; init no matrix.yaml|V13,V27,T213,T214,T215
 T219|x|docs README+templates+CHANGELOG `.env` sole config; drop matrix.yaml; suite green|V12,V19,V49,T213,T218
-T220|.|bootstrap contract Company DecPlQty (ShortValue) + WeightUOM/VolumeUOM map commonsetup; version bump 1.6.0→1.7.0|V21,V52,I.data
+T220|x|bootstrap contract Company DecPlQty (ShortValue) + WeightUOM/VolumeUOM map commonsetup; version bump 1.6.0→1.7.0|V21,V52,I.data
 T221|.|seed_catalog include DecPlQty+WeightUOM+VolumeUOM; package company.yaml seed DecPlQty: 3 + persist UOMs|V34,V52,I.data,T220
 T222|.|offline tests apply body + extract include + catalog row + commonsetup mapping asserts; StockItem still omit UOMs (B26)|V13,V34,V52,T221
 T223|.|live/e2e GET DecPlQty after Company PUT; kit ComponentQty 0.012 round-trips after republish + Company PUT + kit apply|V4,V13,V52,B30,T221
