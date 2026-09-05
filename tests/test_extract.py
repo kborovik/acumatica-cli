@@ -1671,10 +1671,16 @@ def test_package_role_user_templates_prebuild_roles() -> None:
 
 
 def test_templates_do_not_claim_packaging_uoms() -> None:
-    """B26/V34: golden seed never claims WeightUOM/VolumeUOM (not returned)."""
+    """B26/V34: StockItem golden seed never claims WeightUOM/VolumeUOM.
+
+    Company persist UOMs are required when DistributionModule is on (V52).
+    """
     root = Path(__file__).resolve().parents[1] / "src" / "acumatica_cli" / "templates"
+    company = root / "config" / "bootstrap" / "company.yaml"
     claims: list[str] = []
     for path in root.rglob("*.yaml"):
+        if path.resolve() == company.resolve():
+            continue
         text = path.read_text(encoding="utf-8")
         for i, line in enumerate(text.splitlines(), 1):
             stripped = line.lstrip()
@@ -1685,6 +1691,10 @@ def test_templates_do_not_claim_packaging_uoms() -> None:
             ):
                 claims.append(f"{path.relative_to(root)}:{i}:{stripped}")
     assert claims == []
+    company_text = company.read_text(encoding="utf-8")
+    assert re.search(r"^  WeightUOM:\s*KG\s*$", company_text, re.M)
+    assert re.search(r"^  VolumeUOM:\s*LITER\s*$", company_text, re.M)
+    assert re.search(r"^  DecPlQty:\s*3\s*$", company_text, re.M)
 
 
 def test_package_templates_have_no_yaml_comments() -> None:

@@ -7,3 +7,6 @@ records:
   OrganizationType: Without Branches
   BaseCuryID: USD
   CountryID: US
+  DecPlQty: 3
+  WeightUOM: KG
+  VolumeUOM: LITER
