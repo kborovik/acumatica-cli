@@ -12,7 +12,7 @@ import httpx
 import pytest
 
 from acumatica_cli import seed
-from acumatica_cli.client import AcumaticaClient, wrap
+from acumatica_cli.client import AcumaticaClient, unwrap, wrap
 from acumatica_cli.config import Instance
 
 BASELINE = """\
@@ -560,6 +560,62 @@ class SessionRecorder:
 
 def _session_client(instance: Instance, recorder: SessionRecorder) -> AcumaticaClient:
     return AcumaticaClient(instance, transport=httpx.MockTransport(recorder))
+
+
+class EchoStore:
+    """PUT-echo mock: store last wrapped body per entity; serve GET list/key-URL.
+
+    Auth paths match SessionRecorder so Company apply can relogin (V5).
+    """
+
+    def __init__(self, landed: str = "T1") -> None:
+        self.requests: list[httpx.Request] = []
+        self.store: dict[str, dict[str, Any]] = {}
+        self.landed = landed
+
+    def __call__(self, request: httpx.Request) -> httpx.Response:
+        self.requests.append(request)
+        path = request.url.path
+        if path.endswith("/auth/login") or path.endswith("/auth/logout"):
+            response = httpx.Response(204)
+        elif path.endswith("/Frames/Login.aspx"):
+            response = httpx.Response(
+                200,
+                text=(
+                    '<input name="ctl00$phUser$txtSingleCompany" type="hidden" '
+                    f'id="txtSingleCompany" value="{self.landed}" />'
+                ),
+            )
+        elif "/entity/" in path:
+            response = self._entity(request)
+        else:
+            response = httpx.Response(200, json={})
+        return response
+
+    def _entity(self, request: httpx.Request) -> httpx.Response:
+        _, rest = request.url.path.split("/entity/", 1)
+        parts = rest.split("/")
+        entity = parts[2] if len(parts) >= 3 else parts[-1]
+        keys = parts[3:] if len(parts) > 3 else []
+        if request.method == "PUT":
+            body = json.loads(request.content)
+            self.store[entity] = body
+            return httpx.Response(200, json=body)
+        stored = self.store.get(entity)
+        if request.method != "GET":
+            return httpx.Response(200, json={})
+        if stored is None and keys:
+            return httpx.Response(
+                500,
+                json={
+                    "exceptionType": (
+                        "PX.Api.ContractBased.NoEntitySatisfiesTheConditionException"
+                    ),
+                },
+            )
+        if stored is None:
+            return httpx.Response(200, json=[])
+        return httpx.Response(200, json=stored if keys else [stored])
 
 
 COMPANY_YAML = """\
@@ -1124,6 +1180,57 @@ def test_package_company_apply_body_includes_decplqty_and_persist_uoms(
     assert body["WeightUOM"] == {"value": "KG"}
     assert body["VolumeUOM"] == {"value": "LITER"}
     assert puts[0].url.path.endswith("/Bootstrap/1.7.0/Company")
+
+
+def test_company_decplqty_and_kit_componentqty_round_trip(
+    tmp_path: Path, instance: Instance
+) -> None:
+    """T223/V52/B30: GET DecPlQty 3 after Company PUT; ComponentQty 0.012 round-trips.
+
+    Echo mock proves client wrap/unwrap/diff keep milligram-scale qty.
+    Live ERP rounding is the mapped CommonSetup.DecPlQty (issue 34 comment).
+    """
+    store = EchoStore()
+    company = seed.load_baseline(_package_template("config/bootstrap/company.yaml"))
+    assert isinstance(company, seed.BaselineFile)
+    kit = seed.load_baseline(
+        _write(
+            tmp_path,
+            """\
+entity: KitSpecification
+key: [KitInventoryID, RevisionID]
+detail_keys: { StockComponents: StockInventoryID }
+records:
+  - KitInventoryID: GW-EDGE
+    RevisionID: V1
+    StockComponents:
+      - { StockInventoryID: ENCL-STD, ComponentQty: 0.012, UOM: KG }
+""",
+        )
+    )
+    assert isinstance(kit, seed.BaselineFile)
+    with AcumaticaClient(instance, transport=httpx.MockTransport(store)) as client:
+        seed.apply(client, company)
+        rec = client.get_record("Company", ["LAB5"], seed.BOOTSTRAP_ENDPOINT)
+        assert rec is not None
+        plain = unwrap(rec)
+        assert plain["DecPlQty"] == 3
+        assert plain["WeightUOM"] == "KG"
+        assert plain["VolumeUOM"] == "LITER"
+        assert seed.diff(client, company) == []
+
+        seed.apply(client, kit)
+        kit_rec = client.get_record(
+            "KitSpecification",
+            ["GW-EDGE", "V1"],
+            params={"$expand": "StockComponents"},
+        )
+        assert kit_rec is not None
+        kit_plain = unwrap(kit_rec)
+        qty = kit_plain["StockComponents"][0]["ComponentQty"]
+        assert qty == 0.012
+        assert qty != 0.01
+        assert seed.diff(client, kit) == []
 
 
 def test_package_segmented_key_apply_body_widens_inventory_bizacct(
