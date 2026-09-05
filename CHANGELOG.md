@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## [v0.28.0] - 2026-09-05
+
 ### Added
 
 - **Company quantity precision (gh #34):** Bootstrap `1.7.0` maps CS101500
