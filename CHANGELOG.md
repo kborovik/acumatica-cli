@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+### Changed
+
+- **`.env` sole config (V27):** `ACU_BASE_URL` is REST where;
+  `ACU_API_VERSION` pins Default half (`--api-version`, else env, else
+  `25.200.001`). `matrix.yaml`, `--cell`, `acu check --all`, and
+  `config check --strict` are gone. Leftover `matrix.yaml` is ignored.
+  Overlays stay keyed by resolved `api_version`. Docs: README,
+  [docs/rest-api.md](docs/rest-api.md), [docs/demo-seed.md](docs/demo-seed.md).
+
 ## [v0.27.0] - 2026-09-04
 
 ### Fixed

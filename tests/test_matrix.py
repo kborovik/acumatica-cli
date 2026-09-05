@@ -340,3 +340,22 @@ def test_check_ignores_leftover_multi_cell_matrix(
     assert "24.200.001" not in result.output
     assert "23.200.001" not in result.output
     assert len(store) == 1
+
+
+def test_docs_env_sole_config() -> None:
+    """T219/V12/V27: human-facing docs pin via .env, not matrix.yaml."""
+    repo = Path(__file__).resolve().parents[1]
+    readme = (repo / "README.md").read_text()
+    rest = (repo / "docs" / "rest-api.md").read_text()
+    demo = (repo / "docs" / "demo-seed.md").read_text()
+    for text in (readme, rest, demo):
+        assert "[--cell" not in text
+        assert "check --all" not in text
+        assert "ACU_API_VERSION" in text
+    assert "| `matrix.yaml` |" not in readme
+    assert "check [--all]" not in readme
+    assert "--strict" not in readme
+    assert "default_api" not in readme
+    assert "There is no `ACU_API_VERSION`" not in rest
+    assert "matrix.yaml `default_api`" not in demo
+    assert "matrix.yaml default_api" not in demo

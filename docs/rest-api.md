@@ -119,34 +119,28 @@ raw hint — never silent skip (V12).
 
 ### `Instance.api_version` resolution (V27)
 
-The Default contract version half is **not** an env pin. Resolution:
+The Default contract version half is an env pin. Resolution:
 
 1. `--api-version` global flag (ad-hoc override; version half only)
-2. else data-repo `matrix.yaml` `default_api` when the file is present
+2. else `ACU_API_VERSION` from `.env` or the process environment
 3. else code default `25.200.001`
 
-There is no `ACU_API_VERSION` key — unknown `ACU_*` vars are ignored.
-`acu config show` never emits `ACU_API_VERSION`; when `matrix.yaml` is
-present it comments `erp` / `default_api` and notes the `api_version`
-source.
+`acu config show` emits `ACU_API_VERSION` with the resolved pin.
+Leftover `matrix.yaml` is never loaded.
 
-Dual-source match-gate (env pin must equal `default_api`) is
-retired: source-merge means a present target *is* the configured version
-unless the flag overrides.
+### Multi-host overlays (V44)
 
-### Multi-host matrix (V44)
-
-Data repos pin hosts with per-checkout `matrix.yaml` (`erp` + `default_api`)
-on a single trunk seed.
+Data repos pin hosts with per-checkout `.env` (`ACU_BASE_URL` +
+`ACU_API_VERSION`) on a single trunk seed.
 Optional Default-half overlays live under
-`overlays/default-<default_api>/` (scaffolded by `config init`).
+`overlays/default-<api_version>/` (scaffolded by `config init`).
 
 Bare `apply` / `diff` / `run` auto-compose the pin overlay when path args are
 omitted; explicit path args stay manual.
 The CLI has no `--overlay` flag.
 
 Never commit multi-version OpenAPI trees; use `acu schema` live dumps.
-See README "Multi-host matrix" and
+See README "Multi-host overlays" and
 [acumatica-gitops#2](https://github.com/kborovik/acumatica-gitops/issues/2).
 
 ### HTTP error detail (V46)
@@ -159,25 +153,16 @@ should not need curl to see which field the contract rejected.
 
 ### Live ERP build probe
 
-`matrix.yaml` field `erp` is the claimed dataset matrix line (V27).
-When `GET /entity` returns the 26.x wrapper and
-`version.acumaticaBuildVersion` is a non-empty string, `config check`
-compares that live id to the claimed `erp` on **major.minor** (first two
-dotted segments).
+When `GET /entity` returns the 26.x wrapper,
+`version.acumaticaBuildVersion` is the live ERP build id.
+`acu state` writes that id into observation `erp:` headers (V32).
 
-Match prints `ok erp (…)`.
-Mismatch prints `fail erp: …`.
-
-When the body is a bare array (no build id), or `matrix.yaml` is not in
-the match path, check emits:
-
-```text
-skip erp (live probe not available; claimed …)
-```
+A bare array has no build id; `state` then records `erp: unknown`.
+`config check` does not erp-match — it only requires a `Default` row
+whose version equals `Instance.api_version`.
 
 Do not add an SSH/sqlcmd path for this — control plane stays tenant CRUD
 only (V1).
-Full build detail may still appear in README prose.
 
 The instance's own OpenAPI 3.0.1 schema is the authoritative field-level
 reference — dump it with `acu schema`

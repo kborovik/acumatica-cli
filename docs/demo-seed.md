@@ -13,7 +13,7 @@ Do not apply onto a half-configured company.
 ```sh
 acu config init --host erp.example.com my-erp
 cd my-erp
-# edit .env: ACU_PASSWORD, ACU_TENANT (Default API pin = matrix.yaml default_api)
+# edit .env: ACU_PASSWORD, ACU_TENANT, ACU_API_VERSION
 
 acu config check
 acu bootstrap                 # publishes Bootstrap + features from config/bootstrap/
@@ -34,8 +34,9 @@ error text (V46).
 
 ### Multi-host trunk + overlays (V44)
 
-Keep one trunk seed; pin each host with `matrix.yaml`; put version-specific
-rewrites under a data-repo overlay directory and pass it after trunk:
+Keep one trunk seed; pin each host with `.env` (`ACU_BASE_URL` +
+`ACU_API_VERSION`); put version-specific rewrites under a data-repo overlay
+directory and pass it after trunk:
 
 ```sh
 acu apply config/ overlays/default-24.200.001/
@@ -140,7 +141,7 @@ acu --tenant DEV state
 ```
 
 `reconcile` never writes `config/` (V36): unmapped tables, REST gaps, rest-vs-snapshot field deltas, and custom `Usr*` columns land under `findings/` only.
-When `matrix.yaml` is present and the artifact reports a build, `inventory` requires `erp` match (sibling of V27).
+`inventory` records artifact `erp` in `summary.yaml` when the source exposes it; it never erp-matches a config pin (V37).
 
 `config init` does not scaffold `inventory/` or `findings/` — engagement-generated (gitignored by the scaffolded `.gitignore`).
 
@@ -653,7 +654,7 @@ Screen IDs are operator notes only (not catalog fields).
 
 `endpoint: bootstrap` resolves to the active Bootstrap package version from the packaged CLI contract (`bootstrap_project.xml` — package SoT). Data-repo `project.xml` is not a seed; remove it if present.
 
-`endpoint: default` (or omitted on Default-only entities) resolves to `Default/<api_version>` where `api_version` comes from `--api-version`, else `matrix.yaml` `default_api`, else the code default.
+`endpoint: default` (or omitted on Default-only entities) resolves to `Default/<api_version>` where `api_version` comes from `--api-version`, else `ACU_API_VERSION`, else the code default.
 
 ## Non-goals
 
