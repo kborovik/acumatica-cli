@@ -1,5 +1,6 @@
 """V27: leftover matrix.yaml ignored; --cell gone; check is single-instance."""
 
+import importlib
 from pathlib import Path
 from types import TracebackType
 
@@ -48,6 +49,12 @@ def data_root(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
     return tmp_path
 
 
+def test_matrix_module_is_gone() -> None:
+    """T218/V27: no matrix loader — package has no acumatica_cli.matrix."""
+    with pytest.raises(ModuleNotFoundError, match=r"acumatica_cli\.matrix"):
+        importlib.import_module("acumatica_cli.matrix")
+
+
 def test_cell_flag_is_gone(data_root: Path) -> None:
     result = CliRunner().invoke(cli.cli, ["--cell", "x", "config", "show"])
     assert result.exit_code != 0
@@ -74,6 +81,33 @@ def test_leftover_matrix_yaml_does_not_source_pin(data_root: Path) -> None:
     inst = load_instance()
     assert inst.api_version == "25.200.001"
     assert inst.base_url == "http://acu.test/AcumaticaERP"
+
+
+def test_missing_env_does_not_fall_back_to_matrix(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """T218/V27: leftover matrix.yaml cannot supply pin+where with no .env."""
+    monkeypatch.chdir(tmp_path)
+    (tmp_path / "matrix.yaml").write_text(
+        "cells:\n"
+        '  - id: "default"\n'
+        '    erp: "26.101.0225"\n'
+        '    default_api: "24.200.001"\n'
+        '    base_url: "http://cell.test/AcumaticaERP"\n'
+    )
+    monkeypatch.setenv("ACU_PASSWORD", "secret")
+    with pytest.raises(SystemExit, match="base_url: Field required"):
+        load_instance()
+
+
+def test_config_init_never_writes_matrix_yaml(tmp_path: Path) -> None:
+    """T218/V27/V28: config init never scaffolds matrix.yaml."""
+    result = CliRunner().invoke(cli.cli, ["config", "init", str(tmp_path)])
+    assert result.exit_code == 0, result.output
+    assert not (tmp_path / "matrix.yaml").exists()
+    env = (tmp_path / ".env").read_text()
+    assert "ACU_API_VERSION=25.200.001" in env
+    assert "ACU_BASE_URL=" in env
 
 
 def test_config_show_emits_api_version(data_root: Path) -> None:

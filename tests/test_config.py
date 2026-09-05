@@ -194,6 +194,19 @@ def test_process_env_alone_resolves(
     assert inst.password == "envpw"
 
 
+def test_process_env_api_version_without_dotenv(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # T218/V27: ACU_API_VERSION is the pin even with no .env file
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv("ACU_BASE_URL", "http://env.test/AcumaticaERP")
+    monkeypatch.setenv("ACU_PASSWORD", "envpw")
+    monkeypatch.setenv("ACU_API_VERSION", "23.200.001")
+    inst = load_instance()
+    assert inst.api_version == "23.200.001"
+    assert inst.base_url == "http://env.test/AcumaticaERP"
+
+
 def test_data_root_found_in_parent_dir(
     data_root: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
