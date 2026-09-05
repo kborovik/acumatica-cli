@@ -103,6 +103,21 @@ def test_leftover_matrix_yaml_is_ignored(data_root: Path) -> None:
     assert inst.base_url == "http://acu.test/AcumaticaERP"
 
 
+def test_pin_overlay_dir_keys_by_api_version(tmp_path: Path) -> None:
+    # V44: overlay identity is resolved api_version, never matrix default_api
+    ov = tmp_path / "overlays" / "default-24.200.001"
+    ov.mkdir(parents=True)
+    (tmp_path / "matrix.yaml").write_text(
+        "cells:\n"
+        '  - id: "default"\n'
+        '    default_api: "24.200.001"\n'
+        '    erp: "26.101.0225"\n'
+        '    base_url: "http://h/AcumaticaERP"\n'
+    )
+    assert config.pin_overlay_dir(tmp_path, "24.200.001") == ov
+    assert config.pin_overlay_dir(tmp_path, "25.200.001") is None
+
+
 def test_api_version_flag_beats_env(data_root: Path) -> None:
     (data_root / ".env").write_text(MINIMAL_ENV + "ACU_API_VERSION=24.200.001\n")
     inst = load_instance({"api_version": "23.200.001"})

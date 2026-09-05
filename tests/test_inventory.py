@@ -225,40 +225,6 @@ def test_table_order_independent_of_file_order(tmp_path: Path) -> None:
     assert da == db
 
 
-# -- erp pin (V37) --
-
-
-def test_assert_erp_matches_ok() -> None:
-    art = inventory.SnapshotArtifact(
-        erp="26.101.0225",
-        export_mode="xml-zip",
-        source="x",
-        tables=[],
-    )
-    inventory.assert_erp_matches(art, "26.101.0225")  # no raise
-
-
-def test_assert_erp_matches_mismatch() -> None:
-    art = inventory.SnapshotArtifact(
-        erp="26.101.0225",
-        export_mode="xml-zip",
-        source="snap.zip",
-        tables=[],
-    )
-    with pytest.raises(SystemExit, match=r"does not match matrix cell erp"):
-        inventory.assert_erp_matches(art, "25.200.001")
-
-
-def test_assert_erp_matches_skips_when_artifact_erp_absent() -> None:
-    art = inventory.SnapshotArtifact(
-        erp=None,
-        export_mode="xml-folder",
-        source="export/",
-        tables=[],
-    )
-    inventory.assert_erp_matches(art, "26.101.0225")  # no raise
-
-
 # -- V10 models / V35 non-seed --
 
 
@@ -458,7 +424,7 @@ def test_cli_inventory_custom_out_and_zip(tmp_path: Path) -> None:
 def test_cli_inventory_ignores_leftover_matrix_yaml(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """V27: leftover matrix.yaml is never loaded; inventory does not erp-match."""
+    """V37: leftover matrix.yaml is never loaded; inventory does not erp-match."""
     zpath = _write_zip(
         tmp_path,
         {"manifest.xml": MANIFEST_XML, "Account.xml": ACCOUNT_XML},

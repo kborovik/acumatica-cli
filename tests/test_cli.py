@@ -997,6 +997,12 @@ def test_config_init_scaffolds_data_repo(tmp_path: Path) -> None:
     ).read_text()
     assert "Type: Assembly" in overlay_build
     assert "Type: Production" not in overlay_build
+    ov_readme = (repo / "overlays" / "README.md").read_text()
+    assert "matrix.yaml" not in ov_readme
+    assert "api_version" in ov_readme
+    half_readme = (repo / "overlays" / "default-24.200.001" / "README.md").read_text()
+    assert "default_api" not in half_readme
+    assert "ACU_API_VERSION" in half_readme
     assert not (repo / "matrix.yaml").exists()
     assert not (repo / "target.yaml").exists()
     # --host substitutes into ACU_BASE_URL; ACU_API_VERSION is the pin;
@@ -1397,7 +1403,7 @@ def test_expand_files_leaf_dir_unchanged(tmp_path: Path) -> None:
 
 
 def test_default_scenario_files_pin_overlay_replaces_basename(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:
     # V44 bare run: overlays/default-<api>/scenario/<name> replaces trunk
     (tmp_path / ".env").write_text("ACU_BASE_URL=http://h/AcumaticaERP\n")
@@ -1421,6 +1427,9 @@ def test_default_scenario_files_pin_overlay_replaces_basename(
         "scenario/10-seed-capital.yaml",
         "overlays/default-24.200.001/scenario/30-build.yaml",
     ]
+    banner = capsys.readouterr().out
+    assert "api_version=24.200.001" in banner
+    assert "default_api=" not in banner
 
 
 def test_default_scenario_files_no_overlay_when_half_unmatched(
@@ -1447,7 +1456,7 @@ def test_default_scenario_files_no_overlay_when_half_unmatched(
 
 
 def test_default_apply_dirs_appends_overlay_config(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:
     # V44 bare apply: pin overlay config/ SEED_DIRS appended after trunk
     (tmp_path / ".env").write_text("ACU_BASE_URL=http://h/AcumaticaERP\n")
@@ -1473,6 +1482,43 @@ def test_default_apply_dirs_appends_overlay_config(
     assert dirs.index("config/master") < dirs.index(
         "overlays/default-24.200.001/config/master"
     )
+    banner = capsys.readouterr().out
+    assert "api_version=24.200.001" in banner
+    assert "default_api=" not in banner
+
+
+def test_default_apply_dirs_ignores_leftover_matrix_default_api(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    # V44: leftover matrix.yaml default_api does not select the overlay
+    (tmp_path / ".env").write_text("ACU_BASE_URL=http://h/AcumaticaERP\n")
+    seed = "entity: UnitsOfMeasure\nkey: UnitID\nrecords: []\n"
+    for name in ("bootstrap", "baseline", "setup", "master"):
+        d = tmp_path / "config" / name
+        d.mkdir(parents=True)
+        (d / f"{name}.yaml").write_text(seed)
+    ov_m = tmp_path / "overlays" / "default-24.200.001" / "config" / "master"
+    ov_m.mkdir(parents=True)
+    (ov_m / "99-rewrite.yaml").write_text(seed)
+    (tmp_path / "matrix.yaml").write_text(
+        "cells:\n"
+        "  - id: default\n"
+        "    erp: 26.101.0225\n"
+        "    default_api: 24.200.001\n"
+        "    base_url: http://h/AcumaticaERP\n",
+        encoding="utf-8",
+    )
+    monkeypatch.chdir(tmp_path)
+    inst = Instance(
+        base_url="http://h/AcumaticaERP",
+        password="x",
+        api_version="25.200.001",
+    )
+
+    dirs = [p.as_posix() for p in cli.default_apply_dirs(inst)]
+
+    assert "overlays/default-24.200.001/config/master" not in dirs
+    assert "overlay" not in capsys.readouterr().out
 
 
 @pytest.fixture

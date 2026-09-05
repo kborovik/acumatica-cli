@@ -133,23 +133,6 @@ def parse_artifact(path: Path | str) -> SnapshotArtifact:
     raise SystemExit(f"{p}: artifact must be a ZIP file or a directory")
 
 
-def assert_erp_matches(artifact: SnapshotArtifact, erp: str) -> None:
-    """When both sides know a build, require equality (V37 sibling of V27).
-
-    No-op when the artifact has no ``erp`` (folder exports without a
-    header) or when ``erp`` is empty. Mismatch → ``SystemExit``.
-    """
-    want = erp.strip()
-    if not want or artifact.erp is None:
-        return
-    got = artifact.erp.strip()
-    if got != want:
-        raise SystemExit(
-            f"snapshot erp/build {got!r} does not match matrix cell erp {want!r} "
-            f"(source: {artifact.source})"
-        )
-
-
 # ---------------------------------------------------------------------------
 # Emit: inventory/ summary + tables (I.data inventory/; V35)
 # ---------------------------------------------------------------------------
@@ -210,8 +193,9 @@ def emit(
 
     Emits ``summary.yaml`` + ``tables/<Table>.yaml`` for every IR table.
     Skip-if-exists unless ``force``; dry-run reports would-write only.
-    Never writes SEED_DIRS / seed shape / ``endpoint:`` (V35). Exit status
-    is the caller's (parse/erp failures raise ``SystemExit`` before emit).
+    Never writes SEED_DIRS / seed shape / ``endpoint:`` (V35). Never
+    erp-matches a matrix cell (V37). Exit status is the caller's
+    (parse failures raise ``SystemExit`` before emit).
     """
     summary_path = out_dir / SUMMARY_NAME
     targets: list[tuple[Path, str, int]] = [

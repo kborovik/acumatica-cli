@@ -1117,7 +1117,7 @@ def default_apply_dirs(inst: Instance) -> tuple[Path, ...]:
         extra = _overlay_seed_parents(overlay)
         if extra:
             output.data(
-                f"overlay {overlay.relative_to(root)}/ (default_api={inst.api_version})"
+                f"overlay {overlay.relative_to(root)}/ (api_version={inst.api_version})"
             )
             dirs.extend(Path(os.path.relpath(d)) for d in extra)
     return tuple(dirs)
@@ -1149,7 +1149,7 @@ def default_scenario_files(inst: Instance) -> tuple[Path, ...]:
     if replaced and overlay is not None:
         output.data(
             f"overlay {overlay.relative_to(root)}/scenario/ "
-            f"(default_api={inst.api_version})"
+            f"(api_version={inst.api_version})"
         )
     return tuple(Path(os.path.relpath(by_name[name])) for name in sorted(by_name))
 

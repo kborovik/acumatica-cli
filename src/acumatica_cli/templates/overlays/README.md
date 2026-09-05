@@ -1,10 +1,11 @@
 # Overlays (Default API half)
 
 Surgical rewrites for hosts whose **Default contract half** differs from
-trunk. Keyed by `matrix.yaml` cell `default_api`, not ERP marketing year.
+trunk. Keyed by resolved `api_version` (`--api-version`, else
+`ACU_API_VERSION`, else code default), not ERP marketing year.
 
 ```
-overlays/default-<default_api>/
+overlays/default-<api_version>/
   config/…      # optional: same SEED_DIRS layout as trunk config/
   scenario/…    # optional: same basenames as trunk scenario/*.yaml
 ```
@@ -21,7 +22,7 @@ When you omit path args, `acu` appends the pin overlay when present:
 Explicit path args disable pin auto (you compose paths yourself).
 
 ```sh
-# host pinned default_api: 24.200.001 → uses overlays/default-24.200.001/
+# host pin ACU_API_VERSION=24.200.001 → uses overlays/default-24.200.001/
 acu apply
 acu run
 acu diff
@@ -30,9 +31,9 @@ acu diff
 acu apply config/ overlays/default-24.200.001/
 ```
 
-## Current lab matrix (ERP line → half → overlay)
+## Current lab halves (ERP line → half → overlay)
 
-| ERP line (typical) | `default_api` | Overlay dir | Notes |
+| ERP line (typical) | `api_version` | Overlay dir | Notes |
 |--------------------|---------------|-------------|--------|
 | 25r1 | `24.200.001` | `default-24.200.001/` | KitAssembly Type `Assembly` |
 | 25r2 | `25.200.001` | *(none — trunk)* | KitAssembly Type `Production` |
@@ -43,7 +44,7 @@ halves only need an overlay when the contract rejects trunk fields.
 
 ## Future halves
 
-1. Set host-true `matrix.yaml` cell (`erp` + `default_api` + `base_url`) from `acu config check`.
+1. Set host-true `ACU_API_VERSION` in `.env` (or `--api-version`) from `acu config check`.
 2. If bare apply/run fails on a contract field, add
    `overlays/default-<that-half>/…` with the minimal rewrite.
 3. Re-run bare `acu apply` / `acu run` / `acu diff` (pin auto picks it up).
