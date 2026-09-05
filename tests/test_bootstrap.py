@@ -30,6 +30,16 @@ def _plugin_source(features: list[str] | None = None) -> str:
     return graph.get("Source") or ""
 
 
+def _packaged_endpoint() -> tuple[str, ET.Element, dict[str | None, ET.Element]]:
+    """Endpoint element + name→entity map from the packaged project.xml."""
+    ns = "{http://www.acumatica.com/entity/maintenance/5.31}"
+    with zipfile.ZipFile(io.BytesIO(bootstrap.package_zip())) as zf:
+        root = ET.fromstring(zf.read("project.xml"))
+    (endpoint,) = root.findall(f"EntityEndpoint/{ns}Endpoint")
+    entities = {e.get("name"): e for e in endpoint.findall(f"{ns}TopLevelEntity")}
+    return ns, endpoint, entities
+
+
 def test_package_zip_holds_the_project_xml() -> None:
     with zipfile.ZipFile(io.BytesIO(bootstrap.package_zip())) as zf:
         assert zf.namelist() == ["project.xml"]
@@ -159,16 +169,11 @@ def test_package_zip_carries_the_bootstrap_endpoint() -> None:
     namespace; no .endpoint file is involved. Packaged contract is the single
     full company surface (Bootstrap/1.7.0 package SoT — V2/V21/T178).
     """
-    ns = "{http://www.acumatica.com/entity/maintenance/5.31}"
-    with zipfile.ZipFile(io.BytesIO(bootstrap.package_zip())) as zf:
-        root = ET.fromstring(zf.read("project.xml"))
-    (item,) = root.findall("EntityEndpoint")
-    (endpoint,) = item.findall(f"{ns}Endpoint")
+    ns, endpoint, entities = _packaged_endpoint()
     assert endpoint.get("name") == "Bootstrap"
     assert endpoint.get("version") == "1.7.0"
     # SystemContracts.V4 is the build's only IsCurrent implementation
     assert endpoint.get("systemContractVersion") == "4"
-    entities = {e.get("name"): e for e in endpoint.findall(f"{ns}TopLevelEntity")}
     company_fields = {
         f.get("name") for f in entities["Company"].findall(f"{ns}Fields/{ns}Field")
     }
@@ -427,16 +432,9 @@ def test_segmented_key_maps_length_to_detail_view() -> None:
     Mapping Length to a missing Details view PUT-200s and GET returns
     DimensionID only, so the InventoryID mask stays 10 chars.
     """
-    ns = "{http://www.acumatica.com/entity/maintenance/5.31}"
-    with zipfile.ZipFile(io.BytesIO(bootstrap.package_zip())) as zf:
-        root = ET.fromstring(zf.read("project.xml"))
-    (endpoint,) = root.findall(f"EntityEndpoint/{ns}Endpoint")
+    ns, endpoint, entities = _packaged_endpoint()
     assert endpoint.get("version") == "1.7.0"
-    (entity,) = [
-        e
-        for e in endpoint.findall(f"{ns}TopLevelEntity")
-        if e.get("name") == "SegmentedKey"
-    ]
+    entity = entities["SegmentedKey"]
     mappings = {
         m.get("field"): m.find(f"{ns}To")
         for m in entity.findall(f"{ns}Mappings/{ns}Mapping")
@@ -452,12 +450,8 @@ def test_segmented_key_maps_length_to_detail_view() -> None:
 
 def test_package_prefs_field_depth_curated_not_full_dac() -> None:
     """T154/T155/V41: curated *Preferences deepen (gh #26) — not full DAC."""
-    ns = "{http://www.acumatica.com/entity/maintenance/5.31}"
-    with zipfile.ZipFile(io.BytesIO(bootstrap.package_zip())) as zf:
-        root = ET.fromstring(zf.read("project.xml"))
-    (endpoint,) = root.findall(f"EntityEndpoint/{ns}Endpoint")
+    ns, endpoint, entities = _packaged_endpoint()
     assert endpoint.get("version") == "1.7.0"
-    entities = {e.get("name"): e for e in endpoint.findall(f"{ns}TopLevelEntity")}
     gl_types = {
         f.get("name"): f.get("type")
         for f in entities["GLPreferences"].findall(f"{ns}Fields/{ns}Field")
