@@ -683,20 +683,21 @@ def config_group() -> None:
 @click.option(
     "--host",
     default=None,
-    help="Hostname for matrix.yaml base_url (default: erp.example.com). "
+    help="Hostname for ACU_BASE_URL (default: erp.example.com). "
     "ACU_SSH omitted from .env and defaults from that host.",
 )
 @click.argument(
     "directory", required=False, type=click.Path(file_okay=False, path_type=Path)
 )
 def config_init(host: str | None, directory: Path | None) -> None:
-    """Scaffold a data repo: .env, matrix.yaml, config/ seed, scenario/.
+    """Scaffold a data repo: .env, config/ seed, scenario/.
 
     Local only (no network, no secrets written). Creates config/{bootstrap,
-    baseline,setup,master}/, scenario/, config/views/, one-cell matrix.yaml,
-    README. Existing files are never overwritten (reported as skipped).
-    DIRECTORY defaults to cwd and is created if absent. No git init, no gpg.
-    Never scaffolds project.xml (bootstrap contract is package-owned).
+    baseline,setup,master}/, scenario/, config/views/, .env with
+    ACU_BASE_URL + ACU_API_VERSION, README. Existing files are never
+    overwritten (reported as skipped). DIRECTORY defaults to cwd and is
+    created if absent. No git init, no gpg. Never scaffolds project.xml
+    (bootstrap contract is package-owned). Never scaffolds matrix.yaml.
 
     \b
     Examples
@@ -714,14 +715,13 @@ def config_init(host: str | None, directory: Path | None) -> None:
     output.data("")
     output.data("next:")
     output.data("  1. edit .env (set ACU_PASSWORD, ACU_TENANT)")
-    output.data("  2. edit matrix.yaml cell base_url/erp if needed")
-    output.data("  3. acu config check")
-    output.data("  4. acu bootstrap          # or: acu tenant create ... (SSH)")
-    output.data("  5. acu apply config/")
-    output.data("  6. acu run scenario/")
-    output.data("  7. acu diff config/")
-    output.data("  8. acu state")
-    output.data("  9. acu check              # cold lifecycle (SSH + tenant)")
+    output.data("  2. acu config check")
+    output.data("  3. acu bootstrap          # or: acu tenant create ... (SSH)")
+    output.data("  4. acu apply config/")
+    output.data("  5. acu run scenario/")
+    output.data("  6. acu diff config/")
+    output.data("  7. acu state")
+    output.data("  8. acu check              # cold lifecycle (SSH + tenant)")
 
 
 @config_group.command("show")

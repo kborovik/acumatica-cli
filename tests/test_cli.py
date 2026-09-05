@@ -960,7 +960,6 @@ def test_config_init_scaffolds_data_repo(tmp_path: Path) -> None:
     expected = [
         ".env",
         ".gitignore",
-        "matrix.yaml",
         "README.md",
         "config/baseline/10-subaccounts.yaml",
         "config/baseline/20-accounts.yaml",
@@ -998,18 +997,14 @@ def test_config_init_scaffolds_data_repo(tmp_path: Path) -> None:
     ).read_text()
     assert "Type: Assembly" in overlay_build
     assert "Type: Production" not in overlay_build
-    matrix = (repo / "matrix.yaml").read_text()
-    assert "default_api:" in matrix
-    assert "erp:" in matrix
-    assert 'base_url: "http://erp.test/AcumaticaERP"' in matrix
-    assert "id:" in matrix
+    assert not (repo / "matrix.yaml").exists()
     assert not (repo / "target.yaml").exists()
-    # --host substitutes into matrix cell base_url; ACU_BASE_URL omitted
-    # when cell carries where (V27/V28); ACU_SSH + ACU_API_VERSION omitted
+    # --host substitutes into ACU_BASE_URL; ACU_API_VERSION is the pin;
+    # ACU_SSH omitted (T124/V27/V28)
     env = (repo / ".env").read_text()
-    assert not any(ln.startswith("ACU_BASE_URL=") for ln in env.splitlines())
+    assert "ACU_BASE_URL=http://erp.test/AcumaticaERP" in env
+    assert "ACU_API_VERSION=25.200.001" in env
     assert not any(ln.startswith("ACU_SSH=") for ln in env.splitlines())
-    assert not any(ln.startswith("ACU_API_VERSION=") for ln in env.splitlines())
     # T104/V28/V33: TB is EndingBalance-class inquire, not roster Account
     tb = (repo / "config" / "views" / "10-trial-balance.yaml").read_text()
     assert "inquire: AccountSummaryInquiry" in tb
@@ -1024,16 +1019,16 @@ def test_config_init_defaults_to_cwd_with_placeholder_host(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     # I.cmd config init: <dir> optional (cwd), --host optional (placeholder);
-    # where lives in matrix.yaml cell base_url; ACU_SSH omitted (T124/V28)
+    # ACU_BASE_URL + ACU_API_VERSION in .env; ACU_SSH omitted (T124/V27/V28)
     monkeypatch.chdir(tmp_path)
     result = CliRunner().invoke(cli.cli, ["config", "init"])
 
     assert result.exit_code == 0
     env = (tmp_path / ".env").read_text()
-    assert not any(ln.startswith("ACU_BASE_URL=") for ln in env.splitlines())
+    assert "ACU_BASE_URL=http://erp.example.com/AcumaticaERP" in env
+    assert "ACU_API_VERSION=25.200.001" in env
     assert not any(ln.startswith("ACU_SSH=") for ln in env.splitlines())
-    matrix = (tmp_path / "matrix.yaml").read_text()
-    assert "http://erp.example.com/AcumaticaERP" in matrix
+    assert not (tmp_path / "matrix.yaml").exists()
 
 
 def test_config_init_rerun_skips_and_never_overwrites(tmp_path: Path) -> None:
@@ -1075,8 +1070,6 @@ def test_config_init_scaffold_round_trips(
     CliRunner().invoke(cli.cli, ["config", "init", "--host", "erp.test", str(tmp_path)])
     monkeypatch.chdir(tmp_path)
     monkeypatch.setenv("ACU_PASSWORD", "secret")
-    # V27: leftover matrix.yaml ignored; where is ACU_BASE_URL
-    monkeypatch.setenv("ACU_BASE_URL", "http://erp.test/AcumaticaERP")
     monkeypatch.setattr(cli, "AcumaticaClient", DummyClient)
 
     shown = CliRunner().invoke(cli.cli, ["config", "show"])
@@ -1497,6 +1490,13 @@ def check_repo(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
     )
     monkeypatch.chdir(tmp_path)
     return tmp_path
+
+
+def test_config_check_strict_flag_is_gone(check_repo: Path) -> None:
+    # T214/V27: --strict retired with the matrix probe
+    result = CliRunner().invoke(cli.cli, ["config", "check", "--strict"])
+    assert result.exit_code != 0
+    assert "No such option" in result.output
 
 
 def test_config_check_all_probes_ok(

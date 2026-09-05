@@ -50,7 +50,6 @@ DB_NAME = "AcumaticaDB"
 INIT_TEMPLATES = (
     ("env", ".env"),
     ("gitignore", ".gitignore"),
-    ("matrix", "matrix.yaml"),
     ("README.md", "README.md"),
     ("config/bootstrap/company.yaml", "config/bootstrap/company.yaml"),
     ("config/bootstrap/credit-terms.yaml", "config/bootstrap/credit-terms.yaml"),
@@ -137,7 +136,7 @@ INIT_TEMPLATES = (
     ("scenario/20-buy.yaml", "scenario/20-buy.yaml"),
     ("scenario/30-build.yaml", "scenario/30-build.yaml"),
     ("scenario/40-sell.yaml", "scenario/40-sell.yaml"),
-    # Default-half overlays (V44): keyed by matrix cell default_api
+    # Default-half overlays (V44): keyed by resolved api_version
     ("overlays/README.md", "overlays/README.md"),
     (
         "overlays/default-24.200.001/README.md",
@@ -230,14 +229,12 @@ def scaffold(directory: Path, host: str | None = None) -> Iterator[tuple[str, Pa
     """Write the data-repo template set into ``directory``, never overwriting.
 
     Yields ("write" | "skip", path) per template file. ``host`` replaces the
-    placeholder host inside the scaffolded ``matrix.yaml`` cell ``base_url``
-    (and any residual placeholder in ``.env``). ``ACU_BASE_URL`` is omitted
-    from the scaffolded env when the cell carries where (V27/V28); set it
-    only to override cell where. ``ACU_SSH`` is omitted — defaults from the
-    resolved base_url host at resolve; hosted opt-out = present blank
-    ``ACU_SSH=``. Secrets stay placeholders (V2). Single full seed under
-    ``config/`` + lifecycle ``scenario/`` + one-cell ``matrix.yaml`` +
-    pin-keyed ``overlays/`` (V28/T108/V44; no flavor; no ``target.yaml``).
+    placeholder host inside scaffolded ``ACU_BASE_URL``. ``ACU_SSH`` is
+    omitted — defaults from the resolved base_url host at resolve; hosted
+    opt-out = present blank ``ACU_SSH=``. Secrets stay placeholders (V2).
+    Single full seed under ``config/`` + lifecycle ``scenario/`` + ``.env``
+    with ``ACU_BASE_URL`` + ``ACU_API_VERSION`` + pin-keyed ``overlays/``
+    (V27/V28/T108/V44; no flavor; no ``matrix.yaml``; no ``target.yaml``).
     The directory is created if absent. No git init, no gpg - version
     control and secret encryption stay the operator's call.
     """
@@ -249,7 +246,7 @@ def scaffold(directory: Path, host: str | None = None) -> Iterator[tuple[str, Pa
             yield "skip", target
             continue
         content = (pkg / resource).read_text(encoding="utf-8")
-        if host and dest in (".env", "matrix.yaml"):
+        if host and dest == ".env":
             content = content.replace(PLACEHOLDER_HOST, host)
         target.parent.mkdir(parents=True, exist_ok=True)
         target.write_text(content, encoding="utf-8")
@@ -259,9 +256,9 @@ def scaffold(directory: Path, host: str | None = None) -> Iterator[tuple[str, Pa
 def pin_overlay_dir(root: Path, api_version: str) -> Path | None:
     """``{root}/overlays/default-<api_version>`` when that directory exists.
 
-    Overlay identity is the Default contract half (matrix cell
-    ``default_api`` / resolved ``Instance.api_version``), not the ERP
-    marketing line. Missing dir → None (trunk-only host).
+    Overlay identity is the Default contract half (resolved
+    ``Instance.api_version``), not the ERP marketing line. Missing dir
+    → None (trunk-only host).
     """
     path = root / OVERLAYS_DIRNAME / f"{OVERLAY_DIR_PREFIX}{api_version}"
     return path if path.is_dir() else None

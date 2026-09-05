@@ -1,15 +1,16 @@
-# scaffolded by `acu config init` - secrets + optional where override;
+# scaffolded by `acu config init` - secrets + where + pin;
 # print the fully resolved document with:
 #   acu config show
-# REST where + Default API pin live in committed matrix.yaml (cell base_url +
-# default_api), not sticky multi-host env keys. Optional ACU_BASE_URL overrides
-# the active cell where for ad-hoc probes. Control-plane SSH is omitted on
+# ACU_BASE_URL is REST where. ACU_API_VERSION pins Default half
+# (code default 25.200.001). Control-plane SSH is omitted on
 # purpose: when the key is absent, acu defaults to Administrator@ plus the
 # resolved base_url hostname (SSH boxes). Hosted / data-plane-only opt-out: add
 # the SSH key with an empty value. Tenant CRUD still needs a non-empty
-# value post-default. Never ACU_API_VERSION (see acu config check / --api-version).
+# value post-default.
 # Keep this file out of git (the scaffolded .gitignore already lists it;
 # encrypt at rest, e.g. .env.gpg).
+ACU_BASE_URL=http://erp.example.com/AcumaticaERP
+ACU_API_VERSION=25.200.001
 ACU_TENANT=
 ACU_USER=admin
 ACU_PASSWORD=
