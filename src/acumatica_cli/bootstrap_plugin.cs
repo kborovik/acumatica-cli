@@ -84,20 +84,20 @@ namespace AcuBootstrap
                 throw new PXException(
                     "AssignUser requires Username and Rolename");
             }
+            Guid userId = PXAccess.GetUserID();
+            DateTime now = DateTime.Now;
             var update = new List<PXDataFieldParam>
             {
                 new PXDataFieldRestrict("Username", PXDbType.NVarChar, username),
                 new PXDataFieldRestrict("Rolename", PXDbType.NVarChar, rolename),
                 new PXDataFieldRestrict("ApplicationName", PXDbType.VarChar, "/"),
-                new PXDataFieldAssign("Username", PXDbType.NVarChar, username),
-                new PXDataFieldAssign("Rolename", PXDbType.NVarChar, rolename),
-                new PXDataFieldAssign("ApplicationName", PXDbType.VarChar, "/"),
+                new PXDataFieldAssign("LastModifiedByID", PXDbType.UniqueIdentifier, userId),
+                new PXDataFieldAssign("LastModifiedByScreenID", PXDbType.Char, "SM201005"),
+                new PXDataFieldAssign("LastModifiedDateTime", PXDbType.DateTime, now),
             };
             bool updated = PXDatabase.Update<UsersInRoles>(update.ToArray());
             if (!updated)
             {
-                Guid userId = PXAccess.GetUserID();
-                DateTime now = DateTime.Now;
                 var insert = new List<PXDataFieldAssign>
                 {
                     new PXDataFieldAssign("Username", PXDbType.NVarChar, username),

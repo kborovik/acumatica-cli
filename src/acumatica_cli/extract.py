@@ -590,6 +590,13 @@ class _Extraction:
             if not live:
                 self._skip(target, "no records")
                 continue
+            # V53: Role.Users GET may stay empty; do not emit identity-only
+            # 92-role-users.yaml that would drop authored AssignUser rows.
+            if spec.include == ["Users"] and not any(
+                isinstance(r.get("Users"), list) and r["Users"] for r in records
+            ):
+                self._skip(target, "Users GET empty")
+                continue
             self._emit(target, _render(spec, records), len(records))
             produced.add(spec.file)
         return produced

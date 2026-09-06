@@ -1083,6 +1083,28 @@ def test_run_skips_entity_with_no_live_records(
     assert not target.exists()
 
 
+def test_run_skips_role_users_when_get_empty(
+    instance: Instance,
+    server: FakeServer,
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """V53: empty Users GET must not emit identity-only 92-role-users.yaml."""
+    server.tables = server.tables | {
+        "Role": [
+            {
+                "Rolename": "SO Admin",
+                "Descr": "Sales order administration",
+                "Users": [],
+            }
+        ]
+    }
+    _run(instance, server, tmp_path, only=frozenset({"Role"}))
+    target = tmp_path / "config" / "master" / "92-role-users.yaml"
+    assert f"skip {target} (Users GET empty)" in capsys.readouterr().out
+    assert not target.exists()
+
+
 def test_run_dry_run_writes_nothing(
     instance: Instance,
     server: FakeServer,

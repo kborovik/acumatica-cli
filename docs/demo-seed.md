@@ -398,6 +398,9 @@ Rows with `delete: true` are skipped; extra live members are not removed.
 SQL `UsersInRoles` on the session CompanyID is the proof.
 GET and `acu diff` of `User.Roles` may stay empty until a read path is confirmed.
 
+Republish AcuBootstrap after upgrade so Bootstrap 1.10.0 (`AssignUser`) is live.
+User seeds that still send `Selected` will 422.
+
 | Path | Practical rule |
 | ---- | -------------- |
 | **apply** | Role then User then Role.Users. Membership writes via `AssignUser`, not User.Roles PUT. |
@@ -520,7 +523,7 @@ alone.
 ## Segmented keys
 
 Default contract has **no** Segmented Keys surface.
-Keys live on the **Bootstrap** endpoint only (`endpoint: bootstrap` leads to the active package version, currently `Bootstrap/1.7.0`).
+Keys live on the **Bootstrap** endpoint only (`endpoint: bootstrap` leads to the active package version, currently `Bootstrap/1.10.0`).
 
 Screen: CS202000 (`DimensionMaint`).
 Header view `Header` (DAC `Dimension`), key `DimensionID`; detail view `Detail` (DAC `Segment`) fields `SegmentID` + `Length`.

@@ -909,7 +909,7 @@ def test_apply_role_then_user_membership_virgin(
     assert puts[2].url.path.endswith("/Role")
     membership_body = json.loads(puts[2].content)
     assert membership_body["Rolename"] == {"value": "SO Admin"}
-    assert membership_body["Users"] == [{"Username": {"value": "soadmin"}}]
+    assert "Users" not in membership_body
     assigns = [
         r
         for r in recorder.requests
@@ -946,11 +946,7 @@ def test_apply_role_users_warm_idempotent(tmp_path: Path, instance: Instance) ->
     seed.apply(_client(instance, recorder), membership)
     puts = [r for r in recorder.requests if r.method == "PUT"]
     body = json.loads(puts[-1].content)
-    users = body["Users"]
-    so = next(u for u in users if u.get("Username", {}).get("value") == "soadmin")
-    assert so["id"] == "guid-soadmin"
-    deletes = [u for u in users if u.get("delete") is True]
-    assert deletes == [{"id": "guid-admin", "delete": True}]
+    assert "Users" not in body
     assigns = [
         r
         for r in recorder.requests
@@ -963,6 +959,40 @@ def test_apply_role_users_warm_idempotent(tmp_path: Path, instance: Instance) ->
         r for r in recorder.requests if r.method == "POST" and "Unassign" in r.url.path
     ]
     assert unassigns == []
+
+
+def test_apply_role_users_missing_username_is_error(
+    tmp_path: Path, instance: Instance, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """V45/V53: a Users row without Username fails the Role record."""
+    path = tmp_path / "92-role-users.yaml"
+    path.write_text(
+        """\
+entity: Role
+key: Rolename
+endpoint: bootstrap
+detail_keys:
+  Users: Username
+records:
+  - Rolename: SO Admin
+    Users:
+      - Username: ""
+"""
+    )
+    membership = seed.load_baseline(path)
+    assert isinstance(membership, seed.BaselineFile)
+    recorder = Recorder({"/Role": httpx.Response(200, json=[])})
+    ok, errors = seed.apply(_client(instance, recorder), membership)
+    assert ok == 0
+    assert len(errors) == 1
+    assert "Users[0] missing Username" in errors[0]
+    assigns = [
+        r
+        for r in recorder.requests
+        if r.method == "POST" and r.url.path.endswith("/Role/AssignUser")
+    ]
+    assert assigns == []
+    capsys.readouterr()
 
 
 def test_apply_user_membership_warm_idempotent_no_password(

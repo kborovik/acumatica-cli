@@ -515,6 +515,9 @@ def test_plugin_source_assigns_users_in_roles() -> None:
     assert "class AcuRoleAccessExt : PXGraphExtension<RoleAccess>" in source
     assert "PXDatabase.Insert<UsersInRoles>" in source
     assert "AssignUserToRole" in source
+    method = source.split("public static void AssignUserToRole", 1)[1]
+    update_block = method.split("PXDatabase.Update<UsersInRoles>", 1)[0]
+    assert "LastModifiedDateTime" in update_block
 
 
 def test_segmented_key_maps_length_to_detail_view() -> None:

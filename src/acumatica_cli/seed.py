@@ -410,11 +410,18 @@ def apply(
         label = ", ".join(str(record[k]) for k in baseline.keys)
         if dry_run:
             output.data(f"  would PUT {baseline.entity} [{label}]")
-            _assign_role_users(client, baseline, record, dry_run=True)
-            ok += 1
+            try:
+                _assign_role_users(client, baseline, record, dry_run=True)
+                ok += 1
+            except RuntimeError as err:
+                msg = f"{baseline.entity} [{label}]: {err}"
+                output.error(msg)
+                errors.append(msg)
             continue
         try:
             body = _put_body(client, baseline, record)
+            if baseline.entity == "Role":
+                body.pop("Users", None)
             _put(client, baseline.entity, body, baseline.endpoint)
             if baseline.entity == "Company":
                 client.refresh_after_company()
@@ -439,6 +446,7 @@ def _assign_role_users(
 
     Additive-only: ``delete: true`` merge rows are skipped. Mapped GET of
     Users may be empty, so extra live members are not a persist delete.
+    Role PUT strips ``Users`` so additive-only does not depend on B33.
     """
     if baseline.entity != "Role":
         return
@@ -448,12 +456,17 @@ def _assign_role_users(
     rolename = record.get("Rolename")
     if not isinstance(rolename, str) or not rolename:
         return
-    for row in users:
-        if not isinstance(row, dict) or row.get("delete") is True:
+    to_assign: list[str] = []
+    for i, row in enumerate(users):
+        if isinstance(row, dict) and row.get("delete") is True:
             continue
+        if not isinstance(row, dict):
+            raise RuntimeError(f"Users[{i}] is not a mapping")
         username = row.get("Username")
         if not isinstance(username, str) or not username:
-            continue
+            raise RuntimeError(f"Users[{i}] missing Username")
+        to_assign.append(username)
+    for username in to_assign:
         if dry_run:
             output.data(f"  would invoke AssignUser [{rolename}/{username}]")
             continue
