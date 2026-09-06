@@ -1,7 +1,7 @@
-"""Live Role.Users PUT inserts UsersInRoles (T228/V53/B31/B32).
+"""Live Role AssignUser inserts UsersInRoles (T228/V53/B31/B32/B33).
 
-User.Roles contract-detail PUT never writes UsersInRoles (silent 200).
-Persist is SM201005 Role detail Users -> UsersByRole.Username.
+Mapped-detail PUT (User.Roles / Role.Users) never writes UsersInRoles
+(silent 200). Persist is Role action AssignUser -> PXDatabase UsersInRoles.
 SQL UsersInRoles on the session tenant CompanyID is the proof.
 GET/diff of User.Roles may stay empty until the read path is confirmed.
 """
@@ -119,7 +119,7 @@ def test_put_role_users_inserts_users_in_roles(
     scratch_tenant: ScratchTenant,
     data_repo: Path,
 ) -> None:
-    """T228/V53: PUT Role Users: [{Username}] inserts UsersInRoles."""
+    """T228/V53: apply Role Users invokes AssignUser; SQL UsersInRoles."""
     role_path = data_repo / "config" / "master" / "92-e2e-in-manager-role.yaml"
     user_path = data_repo / "config" / "master" / "93-e2e-in-manager-user.yaml"
     membership_path = data_repo / "config" / "master" / "94-e2e-in-manager-users.yaml"

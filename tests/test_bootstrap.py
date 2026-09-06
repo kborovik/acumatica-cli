@@ -140,7 +140,7 @@ def test_load_contract_xml_rejects_data_repo_project_xml(tmp_path: Path) -> None
 def test_load_contract_xml_package_only(tmp_path: Path) -> None:
     # No data-repo project.xml → always packaged full company surface
     name, entities = bootstrap.parse_endpoint(bootstrap.load_contract_xml(tmp_path))
-    assert name == "Bootstrap/1.9.0"
+    assert name == "Bootstrap/1.10.0"
     assert "Company" in entities
     assert "OnlyInDataRepo" not in entities
 
@@ -167,11 +167,11 @@ def test_package_zip_carries_the_bootstrap_endpoint() -> None:
     Verified vs 26.101.0225 by live import round-trip: the <Endpoint> child
     is the XmlSerializer form of Model.Endpoint in the entity/maintenance/5.31
     namespace; no .endpoint file is involved. Packaged contract is the single
-    full company surface (Bootstrap/1.9.0 package SoT — V2/V21/T178).
+    full company surface (Bootstrap/1.10.0 package SoT — V2/V21/T178).
     """
     ns, endpoint, entities = _packaged_endpoint()
     assert endpoint.get("name") == "Bootstrap"
-    assert endpoint.get("version") == "1.9.0"
+    assert endpoint.get("version") == "1.10.0"
     # SystemContracts.V4 is the build's only IsCurrent implementation
     assert endpoint.get("systemContractVersion") == "4"
     company_fields = {
@@ -362,8 +362,8 @@ def test_package_zip_carries_the_bootstrap_endpoint() -> None:
             "Filter",
         ),
         # T145/T225/T228 Role/User (gh #24/#35): SM201005 Roles + UsersByRole
-        # membership persist; SM201010 UserList + RolesByUser GET/diff shape
-        # (User.Roles PUT never writes UsersInRoles — B31/B32).
+        # mapped-detail fixture; SM201010 UserList + RolesByUser GET/diff
+        # shape (mapped-detail PUT never writes UsersInRoles — B31/B32/B33).
         "Role": {
             "Rolename": "Roles",
             "Descr": "Roles",
@@ -441,7 +441,7 @@ def test_user_roles_maps_to_roles_by_user() -> None:
     with empty UsersInRoles is a mapping miss (B31/B28 class).
     """
     ns, endpoint, entities = _packaged_endpoint()
-    assert endpoint.get("version") == "1.9.0"
+    assert endpoint.get("version") == "1.10.0"
     mappings = {
         m.get("field"): m.find(f"{ns}To")
         for m in entities["User"].findall(f"{ns}Mappings/{ns}Mapping")
@@ -463,13 +463,13 @@ def test_user_roles_maps_to_roles_by_user() -> None:
 
 
 def test_role_users_maps_to_users_by_role() -> None:
-    """T228/V53: Role.Users maps UsersByRole.Username (SM201005 Users tab).
+    """T228/V53: Role.Users maps UsersByRole (mapped-detail fixture).
 
-    User.Roles detail PUT never writes UsersInRoles (B31/B32). Persist is
-    Role.Users insert-row, not AllowedRoles/RoleList on AccessUsers.
+    Persist is Role AssignUser -> PXDatabase UsersInRoles (B33), not the
+    mapped UsersByRole PUT.
     """
     ns, endpoint, entities = _packaged_endpoint()
-    assert endpoint.get("version") == "1.9.0"
+    assert endpoint.get("version") == "1.10.0"
     mappings = {
         m.get("field"): m.find(f"{ns}To")
         for m in entities["Role"].findall(f"{ns}Mappings/{ns}Mapping")
@@ -490,6 +490,33 @@ def test_role_users_maps_to_users_by_role() -> None:
     assert user_maps["Username"].get("field") == "Username"
 
 
+def test_role_assign_user_action_maps_filter_username() -> None:
+    """T228/V53: Role AssignUser parameter maps AssignUserParams.Username."""
+    ns, _endpoint, entities = _packaged_endpoint()
+    actions = {
+        a.get("name"): a for a in entities["Role"].findall(f"{ns}Actions/{ns}Action")
+    }
+    assign = actions["AssignUser"]
+    assert assign.get("mappedTo") == "assignUser"
+    fields = {f.get("name") for f in assign.findall(f"{ns}Fields/{ns}Field")}
+    assert fields == {"Username"}
+    mappings = {
+        m.get("field"): m.find(f"{ns}To")
+        for m in assign.findall(f"{ns}Mappings/{ns}Mapping")
+    }
+    assert mappings["Username"] is not None
+    assert mappings["Username"].get("object") == "AssignUserParams"
+    assert mappings["Username"].get("field") == "Username"
+
+
+def test_plugin_source_assigns_users_in_roles() -> None:
+    """T228: packaged plugin writes UsersInRoles via PXDatabase.Insert."""
+    source = _plugin_source()
+    assert "class AcuRoleAccessExt : PXGraphExtension<RoleAccess>" in source
+    assert "PXDatabase.Insert<UsersInRoles>" in source
+    assert "AssignUserToRole" in source
+
+
 def test_segmented_key_maps_length_to_detail_view() -> None:
     """T207/B28: CS202000 aspx DataMember is Detail, not Details.
 
@@ -497,7 +524,7 @@ def test_segmented_key_maps_length_to_detail_view() -> None:
     DimensionID only, so the InventoryID mask stays 10 chars.
     """
     ns, endpoint, entities = _packaged_endpoint()
-    assert endpoint.get("version") == "1.9.0"
+    assert endpoint.get("version") == "1.10.0"
     entity = entities["SegmentedKey"]
     mappings = {
         m.get("field"): m.find(f"{ns}To")
@@ -515,7 +542,7 @@ def test_segmented_key_maps_length_to_detail_view() -> None:
 def test_package_prefs_field_depth_curated_not_full_dac() -> None:
     """T154/T155/V41: curated *Preferences deepen (gh #26) — not full DAC."""
     ns, endpoint, entities = _packaged_endpoint()
-    assert endpoint.get("version") == "1.9.0"
+    assert endpoint.get("version") == "1.10.0"
     gl_types = {
         f.get("name"): f.get("type")
         for f in entities["GLPreferences"].findall(f"{ns}Fields/{ns}Field")
@@ -663,6 +690,7 @@ def test_bootstrap_endpoint_carries_the_gl_setup_actions() -> None:
         "FinancialYearSettings": {"GeneratePeriods"},
         "MasterCalendar": {"GenerateCalendar"},
         "ManagePeriods": {"ProcessAll"},
+        "Role": {"AssignUser"},
     }
     assert actions["FinancialYearSettings"]["GeneratePeriods"].get("mappedTo") == (
         "AutoFill"

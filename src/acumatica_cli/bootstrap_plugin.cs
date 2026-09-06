@@ -16,10 +16,13 @@
 // "what", never tool source - B6): package_zip() substitutes the
 // ACU_FEATURES sentinel below with the data repo's bootstrap/features.yaml
 // list (built-in six when the file is absent) at package-build time.
+using System;
+using System.Collections;
 using System.Collections.Generic;
 using System.Reflection;
 using PX.Data;
 using PX.Objects.CS;
+using PX.SM;
 
 namespace AcuBootstrap
 {
@@ -69,6 +72,76 @@ namespace AcuBootstrap
                 }
                 tx.Complete();
             }
+        }
+
+        // V53/B33: mapped Role.Users / User.Roles PUT never writes
+        // UsersInRoles. Persist is a keyed PXDatabase write (same
+        // FeaturesSet idiom): ApplicationName='/' (ASP.NET membership).
+        public static void AssignUserToRole(string username, string rolename)
+        {
+            if (string.IsNullOrEmpty(username) || string.IsNullOrEmpty(rolename))
+            {
+                throw new PXException(
+                    "AssignUser requires Username and Rolename");
+            }
+            var update = new List<PXDataFieldParam>
+            {
+                new PXDataFieldRestrict("Username", PXDbType.NVarChar, username),
+                new PXDataFieldRestrict("Rolename", PXDbType.NVarChar, rolename),
+                new PXDataFieldRestrict("ApplicationName", PXDbType.VarChar, "/"),
+                new PXDataFieldAssign("Username", PXDbType.NVarChar, username),
+                new PXDataFieldAssign("Rolename", PXDbType.NVarChar, rolename),
+                new PXDataFieldAssign("ApplicationName", PXDbType.VarChar, "/"),
+            };
+            bool updated = PXDatabase.Update<UsersInRoles>(update.ToArray());
+            if (!updated)
+            {
+                Guid userId = PXAccess.GetUserID();
+                DateTime now = DateTime.Now;
+                var insert = new List<PXDataFieldAssign>
+                {
+                    new PXDataFieldAssign("Username", PXDbType.NVarChar, username),
+                    new PXDataFieldAssign("Rolename", PXDbType.NVarChar, rolename),
+                    new PXDataFieldAssign("ApplicationName", PXDbType.VarChar, "/"),
+                    new PXDataFieldAssign("CreatedByID", PXDbType.UniqueIdentifier, userId),
+                    new PXDataFieldAssign("CreatedByScreenID", PXDbType.Char, "SM201005"),
+                    new PXDataFieldAssign("CreatedDateTime", PXDbType.DateTime, now),
+                    new PXDataFieldAssign("LastModifiedByID", PXDbType.UniqueIdentifier, userId),
+                    new PXDataFieldAssign("LastModifiedByScreenID", PXDbType.Char, "SM201005"),
+                    new PXDataFieldAssign("LastModifiedDateTime", PXDbType.DateTime, now),
+                };
+                PXDatabase.Insert<UsersInRoles>(insert.ToArray());
+            }
+        }
+    }
+
+    public class AssignUserFilter : PXBqlTable, IBqlTable
+    {
+        [PXString(256, IsUnicode = true, InputMask = "")]
+        [PXUIField(DisplayName = "Username")]
+        public virtual string Username { get; set; }
+        public abstract class username : PX.Data.BQL.BqlString.Field<username> { }
+    }
+
+    // SM201005 RoleAccess extension: contract action AssignUser (T228).
+    public class AcuRoleAccessExt : PXGraphExtension<RoleAccess>
+    {
+        public static bool IsActive() => true;
+
+        public PXFilter<AssignUserFilter> AssignUserParams;
+
+        public PXAction<Roles> assignUser;
+
+        [PXButton(CommitChanges = true)]
+        [PXUIField(DisplayName = "Assign User", Visible = false)]
+        protected virtual IEnumerable AssignUser(PXAdapter adapter)
+        {
+            string username = AssignUserParams.Current != null
+                ? AssignUserParams.Current.Username : null;
+            Roles role = Base.Roles.Current;
+            string rolename = role != null ? role.Rolename : null;
+            AcuBootstrapPlugin.AssignUserToRole(username, rolename);
+            return adapter.Get();
         }
     }
 }

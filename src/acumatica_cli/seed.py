@@ -397,6 +397,10 @@ def apply(
     records in the same file. Returns ``(ok_count, error_messages)`` —
     never silent partial; caller exits 1 when any errors remain. Exit 2
     stays drift (``diff`` only).
+
+    Role.Users mapped-detail PUT is a no-op (V53/B33). After the Role PUT,
+    apply invokes contract action ``AssignUser`` per Username so persist
+    is PXDatabase UsersInRoles, not the mapped detail.
     """
     if isinstance(baseline, ActionFile):
         return _apply_action(client, baseline, dry_run)
@@ -406,6 +410,7 @@ def apply(
         label = ", ".join(str(record[k]) for k in baseline.keys)
         if dry_run:
             output.data(f"  would PUT {baseline.entity} [{label}]")
+            _assign_role_users(client, baseline, record, dry_run=True)
             ok += 1
             continue
         try:
@@ -414,12 +419,48 @@ def apply(
             if baseline.entity == "Company":
                 client.refresh_after_company()
             output.data(f"  PUT {baseline.entity} [{label}]")
+            _assign_role_users(client, baseline, record, dry_run=False)
             ok += 1
         except RuntimeError as err:
             msg = f"{baseline.entity} [{label}]: {err}"
             output.error(msg)
             errors.append(msg)
     return ok, errors
+
+
+def _assign_role_users(
+    client: AcumaticaClient,
+    baseline: BaselineFile,
+    record: dict[str, Any],
+    *,
+    dry_run: bool,
+) -> None:
+    """V53/B33: persist Role.Users via AssignUser, not mapped-detail PUT."""
+    if baseline.entity != "Role":
+        return
+    users = record.get("Users")
+    if not isinstance(users, list):
+        return
+    rolename = record.get("Rolename")
+    if not isinstance(rolename, str) or not rolename:
+        return
+    for row in users:
+        if not isinstance(row, dict) or row.get("delete") is True:
+            continue
+        username = row.get("Username")
+        if not isinstance(username, str) or not username:
+            continue
+        if dry_run:
+            output.data(f"  would invoke AssignUser [{rolename}/{username}]")
+            continue
+        client.invoke(
+            "Role",
+            "AssignUser",
+            {"Rolename": rolename},
+            {"Username": username},
+            baseline.endpoint,
+        )
+        output.data(f"  invoke AssignUser [{rolename}/{username}]")
 
 
 def _put(

@@ -12,7 +12,8 @@
   gh #35 bumps 1.7.0 -> 1.8.0 for User.Roles -> RolesByUser (UsersInRoles)
   and drops Selected (AllowedRoles was EPLoginTypeAllowsRole / EP202500);
   T228 bumps 1.8.0 -> 1.9.0 for Role.Users -> UsersByRole (SM201005
-  Users tab). User.Roles detail PUT never writes UsersInRoles (B31/B32).
+  Users tab; mapped-detail PUT is a no-op — B33) and 1.9.0 -> 1.10.0
+  for Role AssignUser action (PXDatabase UsersInRoles persist).
 
   package_zip() (bootstrap.py) prefers data-repo bootstrap/project.xml when
   present; otherwise this packaged template is the fallback so config init,
@@ -53,9 +54,10 @@
     PasswordNeverExpires + PasswordChangeOnNextLogin; Password write-only
     (extract/diff policy = V39/T147).
   - User detail Roles -> RolesByUser (GET/diff shape; PUT never
-    writes UsersInRoles — B31/B32). Persist = Role detail Users
-    -> UsersByRole.Username (SM201005 Users tab; row present =
-    assigned). Apply order Role then User then Role.Users
+    writes UsersInRoles — B31/B32/B33). Persist = Role action
+    AssignUser -> PXDatabase UsersInRoles (ApplicationName='/').
+    Role.Users -> UsersByRole is the mapped-detail fixture (silent
+    200). Apply order Role then User then Role.Users
     (V22 prefixes 90/91/92). Never AllowedRoles
     (EPLoginTypeAllowsRole / EP202500 allow-list; gh #35 / V53).
 
@@ -119,7 +121,7 @@
 -->
 <Customization level="" description="acu bootstrap: CustomizationPlugin enables features on publish; Bootstrap endpoint exposes full company surface (company + credit terms + financial currency + GL chain + module preferences + vendor class + statement cycle + warehouse + order type + cash account + role + user + membership + numbering sequence + segmented key)" product-version="26.101">
   <EntityEndpoint>
-    <Endpoint xmlns="http://www.acumatica.com/entity/maintenance/5.31" name="Bootstrap" version="1.9.0" systemContractVersion="4">
+    <Endpoint xmlns="http://www.acumatica.com/entity/maintenance/5.31" name="Bootstrap" version="1.10.0" systemContractVersion="4">
       <TopLevelEntity name="Company" screen="CS101500">
         <Fields>
           <Field name="AcctCD" type="StringValue" />
@@ -1039,6 +1041,18 @@
             <To object="UsersByRole" field="" />
           </Mapping>
         </Mappings>
+        <Actions>
+          <Action name="AssignUser" mappedTo="assignUser" isDefault="false">
+            <Fields>
+              <Field name="Username" type="StringValue" />
+            </Fields>
+            <Mappings>
+              <Mapping field="Username">
+                <To object="AssignUserParams" field="Username" />
+              </Mapping>
+            </Mappings>
+          </Action>
+        </Actions>
       </TopLevelEntity>
       <Detail name="RoleUser">
         <Fields>
