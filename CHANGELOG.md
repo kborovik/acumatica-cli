@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+### Changed
+
+- **`gmake release`:** re-runs `gmake check` on the promoted tree
+  before `git push`, so Unreleased-empty tests fail locally instead of
+  after the tag reaches GitHub.
+
 ## [v0.29.0] - 2026-09-06
 
 ### Added

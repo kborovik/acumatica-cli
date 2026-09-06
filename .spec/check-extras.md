@@ -144,7 +144,7 @@ for granular /sdd:check runs.
 
 ## §V.19 — release-pipeline recipe (extracted from SPEC.md §V.19)
 
-- sole path: `make release <part>` — `make check` first, then bump + CHANGELOG promote + commit + tag + push
+- sole path: `make release <part>` — `make check` first, then bump + CHANGELOG promote + commit + tag, `make check` again on the promoted tree, then push
 - never local `gh release create`
 - Keep-a-Changelog root `CHANGELOG.md`: user-facing work appends under `## Unreleased` (`### Added` / `### Changed` / `### Fixed`) during development
 - `make release` promote: move Unreleased body → `## [vX.Y.Z] - YYYY-MM-DD` (version = post-bump `uv version --short`); leave empty `## Unreleased` heading block; empty/no bullet Unreleased → hard fail (nothing to ship)
