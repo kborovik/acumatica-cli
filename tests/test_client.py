@@ -297,9 +297,9 @@ def test_url_resolves_symbolic_default(instance: Instance) -> None:
     )
     assert (
         client._url(  # pyright: ignore[reportPrivateUsage]
-            "Warehouse", "Bootstrap/1.7.0"
+            "Warehouse", "Bootstrap/1.8.0"
         )
-        == "/entity/Bootstrap/1.7.0/Warehouse"
+        == "/entity/Bootstrap/1.8.0/Warehouse"
     )
 
 
