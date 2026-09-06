@@ -297,9 +297,9 @@ def test_url_resolves_symbolic_default(instance: Instance) -> None:
     )
     assert (
         client._url(  # pyright: ignore[reportPrivateUsage]
-            "Warehouse", "Bootstrap/1.7.0"
+            "Warehouse", "Bootstrap/1.10.0"
         )
-        == "/entity/Bootstrap/1.7.0/Warehouse"
+        == "/entity/Bootstrap/1.10.0/Warehouse"
     )
 
 
@@ -456,7 +456,6 @@ def test_field_errors_under_entity_and_detail_rows() -> None:
                         "value": "SO Admin",
                         "error": "Error: Role not found.",
                     },
-                    "Selected": {"value": True},
                 }
             ],
         },

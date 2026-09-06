@@ -397,6 +397,10 @@ def apply(
     records in the same file. Returns ``(ok_count, error_messages)`` —
     never silent partial; caller exits 1 when any errors remain. Exit 2
     stays drift (``diff`` only).
+
+    Role.Users mapped-detail PUT is a no-op (V53/B33). After the Role PUT,
+    apply invokes contract action ``AssignUser`` per Username so persist
+    is PXDatabase UsersInRoles, not the mapped detail.
     """
     if isinstance(baseline, ActionFile):
         return _apply_action(client, baseline, dry_run)
@@ -406,20 +410,74 @@ def apply(
         label = ", ".join(str(record[k]) for k in baseline.keys)
         if dry_run:
             output.data(f"  would PUT {baseline.entity} [{label}]")
-            ok += 1
+            try:
+                _assign_role_users(client, baseline, record, dry_run=True)
+                ok += 1
+            except RuntimeError as err:
+                msg = f"{baseline.entity} [{label}]: {err}"
+                output.error(msg)
+                errors.append(msg)
             continue
         try:
             body = _put_body(client, baseline, record)
+            if baseline.entity == "Role":
+                body.pop("Users", None)
             _put(client, baseline.entity, body, baseline.endpoint)
             if baseline.entity == "Company":
                 client.refresh_after_company()
             output.data(f"  PUT {baseline.entity} [{label}]")
+            _assign_role_users(client, baseline, record, dry_run=False)
             ok += 1
         except RuntimeError as err:
             msg = f"{baseline.entity} [{label}]: {err}"
             output.error(msg)
             errors.append(msg)
     return ok, errors
+
+
+def _assign_role_users(
+    client: AcumaticaClient,
+    baseline: BaselineFile,
+    record: dict[str, Any],
+    *,
+    dry_run: bool,
+) -> None:
+    """V53/B33: persist Role.Users via AssignUser, not mapped-detail PUT.
+
+    Additive-only: ``delete: true`` merge rows are skipped. Mapped GET of
+    Users may be empty, so extra live members are not a persist delete.
+    Role PUT strips ``Users`` so additive-only does not depend on B33.
+    """
+    if baseline.entity != "Role":
+        return
+    users = record.get("Users")
+    if not isinstance(users, list):
+        return
+    rolename = record.get("Rolename")
+    if not isinstance(rolename, str) or not rolename:
+        return
+    to_assign: list[str] = []
+    for i, row in enumerate(users):
+        if isinstance(row, dict) and row.get("delete") is True:
+            continue
+        if not isinstance(row, dict):
+            raise RuntimeError(f"Users[{i}] is not a mapping")
+        username = row.get("Username")
+        if not isinstance(username, str) or not username:
+            raise RuntimeError(f"Users[{i}] missing Username")
+        to_assign.append(username)
+    for username in to_assign:
+        if dry_run:
+            output.data(f"  would invoke AssignUser [{rolename}/{username}]")
+            continue
+        client.invoke(
+            "Role",
+            "AssignUser",
+            {"Rolename": rolename},
+            {"Username": username},
+            baseline.endpoint,
+        )
+        output.data(f"  invoke AssignUser [{rolename}/{username}]")
 
 
 def _put(

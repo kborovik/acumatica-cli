@@ -8,7 +8,12 @@
   T204 bumps 1.4.0 -> 1.5.0 for SegmentedKey, gh #30 / V50;
   T207 bumps 1.5.0 -> 1.6.0 for SegmentedKey Detail view (B28);
   gh #34 bumps 1.6.0 -> 1.7.0 for Company DecPlQty + WeightUOM/VolumeUOM
-  (CS101500 commonsetup; kit BOM milligram-scale KG needs qty precision 3).
+  (CS101500 commonsetup; kit BOM milligram-scale KG needs qty precision 3);
+  gh #35 bumps 1.7.0 -> 1.8.0 for User.Roles -> RolesByUser (UsersInRoles)
+  and drops Selected (AllowedRoles was EPLoginTypeAllowsRole / EP202500);
+  T228 bumps 1.8.0 -> 1.9.0 for Role.Users -> UsersByRole (SM201005
+  Users tab; mapped-detail PUT is a no-op — B33) and 1.9.0 -> 1.10.0
+  for Role AssignUser action (PXDatabase UsersInRoles persist).
 
   package_zip() (bootstrap.py) prefers data-repo bootstrap/project.xml when
   present; otherwise this packaged template is the fallback so config init,
@@ -48,9 +53,13 @@
     Username; identity FirstName/LastName/Email + IsApproved +
     PasswordNeverExpires + PasswordChangeOnNextLogin; Password write-only
     (extract/diff policy = V39/T147).
-  - membership = User detail Roles -> AllowedRoles (UsersInRoles/Roles
-    projection): Rolename + Selected (assign when true). Apply order
-    Role then User (V22 prefixes; T148).
+  - User detail Roles -> RolesByUser (GET/diff shape; PUT never
+    writes UsersInRoles — B31/B32/B33). Persist = Role action
+    AssignUser -> PXDatabase UsersInRoles (ApplicationName='/').
+    Role.Users -> UsersByRole is the mapped-detail fixture (silent
+    200). Apply order Role then User then Role.Users
+    (V22 prefixes 90/91/92). Never AllowedRoles
+    (EPLoginTypeAllowsRole / EP202500 allow-list; gh #35 / V53).
 
   T150 NumberingSequence (gh #25) - Default endpoint has no numbering
   surface; CS201010 Numbering Sequences (NumberingMaint — NOT the
@@ -112,7 +121,7 @@
 -->
 <Customization level="" description="acu bootstrap: CustomizationPlugin enables features on publish; Bootstrap endpoint exposes full company surface (company + credit terms + financial currency + GL chain + module preferences + vendor class + statement cycle + warehouse + order type + cash account + role + user + membership + numbering sequence + segmented key)" product-version="26.101">
   <EntityEndpoint>
-    <Endpoint xmlns="http://www.acumatica.com/entity/maintenance/5.31" name="Bootstrap" version="1.7.0" systemContractVersion="4">
+    <Endpoint xmlns="http://www.acumatica.com/entity/maintenance/5.31" name="Bootstrap" version="1.10.0" systemContractVersion="4">
       <TopLevelEntity name="Company" screen="CS101500">
         <Fields>
           <Field name="AcctCD" type="StringValue" />
@@ -1019,6 +1028,7 @@
         <Fields>
           <Field name="Rolename" type="StringValue" />
           <Field name="Descr" type="StringValue" />
+          <Field name="Users" type="RoleUser[]" />
         </Fields>
         <Mappings>
           <Mapping field="Rolename">
@@ -1027,8 +1037,33 @@
           <Mapping field="Descr">
             <To object="Roles" field="Descr" />
           </Mapping>
+          <Mapping field="Users">
+            <To object="UsersByRole" field="" />
+          </Mapping>
         </Mappings>
+        <Actions>
+          <Action name="AssignUser" mappedTo="assignUser" isDefault="false">
+            <Fields>
+              <Field name="Username" type="StringValue" />
+            </Fields>
+            <Mappings>
+              <Mapping field="Username">
+                <To object="AssignUserParams" field="Username" />
+              </Mapping>
+            </Mappings>
+          </Action>
+        </Actions>
       </TopLevelEntity>
+      <Detail name="RoleUser">
+        <Fields>
+          <Field name="Username" type="StringValue" />
+        </Fields>
+        <Mappings>
+          <Mapping field="Username">
+            <To object="UsersByRole" field="Username" />
+          </Mapping>
+        </Mappings>
+      </Detail>
       <TopLevelEntity name="User" screen="SM201010">
         <Fields>
           <Field name="Username" type="StringValue" />
@@ -1067,21 +1102,17 @@
             <To object="UserList" field="Password" />
           </Mapping>
           <Mapping field="Roles">
-            <To object="AllowedRoles" field="" />
+            <To object="RolesByUser" field="" />
           </Mapping>
         </Mappings>
       </TopLevelEntity>
       <Detail name="UserRole">
         <Fields>
           <Field name="Rolename" type="StringValue" />
-          <Field name="Selected" type="BooleanValue" />
         </Fields>
         <Mappings>
           <Mapping field="Rolename">
-            <To object="AllowedRoles" field="Rolename" />
-          </Mapping>
-          <Mapping field="Selected">
-            <To object="AllowedRoles" field="Selected" />
+            <To object="RolesByUser" field="Rolename" />
           </Mapping>
         </Mappings>
       </Detail>

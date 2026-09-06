@@ -13,6 +13,14 @@
 
 - **docs/demo-seed.md:** Company CS101500 `commonsetup` `DecPlQty` on
   `91-company-packaging.yaml` after UOMs; kit BOM precision 3; B26 extract.
+- **User role membership persist (gh #35):** Mapped-detail PUT of
+  User.Roles / Role.Users returns 200 and leaves `UsersInRoles` empty
+  (B31/B32/B33). Bootstrap `1.10.0` adds Role `AssignUser`; apply invokes
+  it so PXDatabase writes membership. Republish with `acu bootstrap`
+  before apply. Drop `Selected` from data-repo User seeds (422 after the
+  remap). Docs replace the T189 membership-not-durable limit. Seed order
+  is `90-roles` then `91-users` then `92-role-users`. GET/diff of
+  membership may stay empty.
 
 ## [v0.28.0] - 2026-09-05
 

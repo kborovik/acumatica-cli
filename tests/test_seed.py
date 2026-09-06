@@ -68,14 +68,14 @@ def test_load_baseline_rejects_record_without_key(tmp_path: Path) -> None:
 
 
 def test_load_baseline_parses_endpoint_override(tmp_path: Path) -> None:
-    text = BASELINE + "endpoint: Bootstrap/1.7.0\n"
-    assert seed.load_baseline(_write(tmp_path, text)).endpoint == "Bootstrap/1.7.0"
+    text = BASELINE + "endpoint: Bootstrap/1.10.0\n"
+    assert seed.load_baseline(_write(tmp_path, text)).endpoint == "Bootstrap/1.10.0"
 
 
 LEDGER_LINK_YAML = """\
 entity: LedgerCompany
 key: [LedgerCD, OrganizationID]
-endpoint: Bootstrap/1.7.0
+endpoint: Bootstrap/1.10.0
 records:
   - LedgerCD: ACTUAL
     OrganizationID: PRODUCTS
@@ -127,7 +127,7 @@ def test_bootstrap_entities_parsed_from_packaged_template() -> None:
     # V2/T81: the ambiguous set comes from the active contract (packaged
     # full company fallback), never a hand-list - parity pinned so a
     # template edit surfaces offline.
-    assert seed.BOOTSTRAP_ENDPOINT == "Bootstrap/1.7.0"
+    assert seed.BOOTSTRAP_ENDPOINT == "Bootstrap/1.10.0"
     assert {
         "Company",
         "CreditTerms",
@@ -170,7 +170,7 @@ def test_load_baseline_rejects_bootstrap_entity_without_endpoint(
     """
     with pytest.raises(
         SystemExit,
-        match=r"endpoint: default.*Bootstrap/1\.7\.0.*'bootstrap' \| 'default'",
+        match=r"endpoint: default.*Bootstrap/1\.10\.0.*'bootstrap' \| 'default'",
     ):
         seed.load_baseline(_write(tmp_path, AMBIGUOUS_YAML))
 
@@ -179,7 +179,7 @@ def test_load_baseline_bootstrap_entity_explicit_endpoint_passes(
     tmp_path: Path,
 ) -> None:
     # V20: explicit endpoint: disambiguates - either target is legitimate
-    for endpoint in ("Bootstrap/1.7.0", "Default/25.200.001", "default"):
+    for endpoint in ("Bootstrap/1.10.0", "Default/25.200.001", "default"):
         text = AMBIGUOUS_YAML + f"endpoint: {endpoint}\n"
         assert seed.load_baseline(_write(tmp_path, text)).endpoint == endpoint
 
@@ -187,7 +187,7 @@ def test_load_baseline_bootstrap_entity_explicit_endpoint_passes(
 def test_load_baseline_resolves_symbolic_bootstrap(tmp_path: Path) -> None:
     """Symbolic endpoint: bootstrap resolves to the active package version."""
     text = AMBIGUOUS_YAML + "endpoint: bootstrap\n"
-    assert seed.load_baseline(_write(tmp_path, text)).endpoint == "Bootstrap/1.7.0"
+    assert seed.load_baseline(_write(tmp_path, text)).endpoint == "Bootstrap/1.10.0"
 
 
 def test_load_baseline_keeps_symbolic_default(tmp_path: Path) -> None:
@@ -252,19 +252,19 @@ def test_active_bootstrap_package_only(
     (tmp_path / ".env").write_text("ACU_BASE_URL=https://example.com\n")
     monkeypatch.chdir(tmp_path)
     name, entities = seed.active_bootstrap()
-    assert name == "Bootstrap/1.7.0"
+    assert name == "Bootstrap/1.10.0"
     assert entities == seed.BOOTSTRAP_ENTITIES
     text = (
         "entity: Company\nkey: AcctCD\nendpoint: bootstrap\n"
         "records:\n  - AcctCD: MAIN\n"
     )
-    assert seed.load_baseline(_write(tmp_path, text)).endpoint == "Bootstrap/1.7.0"
+    assert seed.load_baseline(_write(tmp_path, text)).endpoint == "Bootstrap/1.10.0"
 
 
 def test_apply_and_diff_target_endpoint_override(
     tmp_path: Path, instance: Instance
 ) -> None:
-    text = BASELINE + "endpoint: Bootstrap/1.7.0\n"
+    text = BASELINE + "endpoint: Bootstrap/1.10.0\n"
     baseline = seed.load_baseline(_write(tmp_path, text))
     recorder = Recorder({"/UnitsOfMeasure": _live({"UOM": "KG"})})
 
@@ -272,7 +272,7 @@ def test_apply_and_diff_target_endpoint_override(
     seed.diff(_client(instance, recorder), baseline)
 
     paths = {r.url.path for r in recorder.requests}
-    assert paths == {"/AcumaticaERP/entity/Bootstrap/1.7.0/UnitsOfMeasure"}
+    assert paths == {"/AcumaticaERP/entity/Bootstrap/1.10.0/UnitsOfMeasure"}
 
 
 def test_norm_folds_booleans_and_strips() -> None:
@@ -621,7 +621,7 @@ class EchoStore:
 COMPANY_YAML = """\
 entity: Company
 key: AcctCD
-endpoint: Bootstrap/1.7.0
+endpoint: Bootstrap/1.10.0
 records:
   - AcctCD: LAB5
     OrganizationName: Lab Five
@@ -644,11 +644,11 @@ def test_apply_company_relogins_once_per_session(
     assert methods_paths == [
         ("POST", "/AcumaticaERP/entity/auth/login"),
         ("GET", "/AcumaticaERP/Frames/Login.aspx"),
-        ("PUT", "/AcumaticaERP/entity/Bootstrap/1.7.0/Company"),
+        ("PUT", "/AcumaticaERP/entity/Bootstrap/1.10.0/Company"),
         ("POST", "/AcumaticaERP/entity/auth/logout"),
         ("POST", "/AcumaticaERP/entity/auth/login"),
         ("GET", "/AcumaticaERP/Frames/Login.aspx"),
-        ("PUT", "/AcumaticaERP/entity/Bootstrap/1.7.0/Company"),
+        ("PUT", "/AcumaticaERP/entity/Bootstrap/1.10.0/Company"),
         ("POST", "/AcumaticaERP/entity/auth/logout"),
     ]
 
@@ -671,7 +671,7 @@ def test_apply_retries_once_on_branch_empty(
     text = """\
 entity: INPreferences
 key: HoldEntry
-endpoint: Bootstrap/1.7.0
+endpoint: Bootstrap/1.10.0
 records:
   - HoldEntry: false
     TransitBranchID: LAB5
@@ -852,7 +852,17 @@ records:
     PasswordChangeOnNextLogin: false
     Roles:
       - Rolename: SO Admin
-        Selected: true
+""",
+    "membership": """\
+entity: Role
+key: Rolename
+endpoint: bootstrap
+detail_keys:
+  Users: Username
+records:
+  - Rolename: SO Admin
+    Users:
+      - Username: soadmin
 """,
 }
 
@@ -860,15 +870,19 @@ records:
 def test_apply_role_then_user_membership_virgin(
     tmp_path: Path, instance: Instance
 ) -> None:
-    """T148/V22: Role PUT then User PUT with membership; virgin no password."""
+    """T148/T227/T228/V22: Role then User then Role.Users + AssignUser."""
     role_path = tmp_path / "90-roles.yaml"
     role_path.write_text(ROLE_USER_YAML["role"])
     user_path = tmp_path / "91-users.yaml"
     user_path.write_text(ROLE_USER_YAML["user"])
+    membership_path = tmp_path / "92-role-users.yaml"
+    membership_path.write_text(ROLE_USER_YAML["membership"])
     role = seed.load_baseline(role_path)
     user = seed.load_baseline(user_path)
+    membership = seed.load_baseline(membership_path)
     assert isinstance(role, seed.BaselineFile)
     assert isinstance(user, seed.BaselineFile)
+    assert isinstance(membership, seed.BaselineFile)
     # empty Role/User lists → virgin creates
     recorder = Recorder(
         {
@@ -879,18 +893,106 @@ def test_apply_role_then_user_membership_virgin(
     client = _client(instance, recorder)
     seed.apply(client, role)
     seed.apply(client, user)
+    seed.apply(client, membership)
     puts = [r for r in recorder.requests if r.method == "PUT"]
-    assert len(puts) == 2
+    assert len(puts) == 3
     assert puts[0].url.path.endswith("/Role")
     role_body = json.loads(puts[0].content)
     assert role_body["Rolename"] == {"value": "SO Admin"}
+    assert "Users" not in role_body
     assert puts[1].url.path.endswith("/User")
     user_body = json.loads(puts[1].content)
     assert user_body["Username"] == {"value": "soadmin"}
     assert "Password" not in user_body
-    assert user_body["Roles"] == [
-        {"Rolename": {"value": "SO Admin"}, "Selected": {"value": True}}
+    assert user_body["Roles"] == [{"Rolename": {"value": "SO Admin"}}]
+    assert "Selected" not in user_body["Roles"][0]
+    assert puts[2].url.path.endswith("/Role")
+    membership_body = json.loads(puts[2].content)
+    assert membership_body["Rolename"] == {"value": "SO Admin"}
+    assert "Users" not in membership_body
+    assigns = [
+        r
+        for r in recorder.requests
+        if r.method == "POST" and r.url.path.endswith("/Role/AssignUser")
     ]
+    assert len(assigns) == 1
+    assign_body = json.loads(assigns[0].content)
+    assert assign_body == {
+        "entity": wrap({"Rolename": "SO Admin"}),
+        "parameters": wrap({"Username": "soadmin"}),
+    }
+
+
+def test_apply_role_users_warm_idempotent(tmp_path: Path, instance: Instance) -> None:
+    """T228: warm Role.Users re-apply keeps live id; AssignUser is additive-only."""
+    membership_path = tmp_path / "92-role-users.yaml"
+    membership_path.write_text(ROLE_USER_YAML["membership"])
+    membership = seed.load_baseline(membership_path)
+    live_role = {
+        "Rolename": {"value": "SO Admin"},
+        "Descr": {"value": "Sales order administration"},
+        "Users": [
+            {
+                "Username": {"value": "soadmin"},
+                "id": "guid-soadmin",
+            },
+            {
+                "Username": {"value": "admin"},
+                "id": "guid-admin",
+            },
+        ],
+    }
+    recorder = Recorder({"/Role": httpx.Response(200, json=[live_role])})
+    seed.apply(_client(instance, recorder), membership)
+    puts = [r for r in recorder.requests if r.method == "PUT"]
+    body = json.loads(puts[-1].content)
+    assert "Users" not in body
+    assigns = [
+        r
+        for r in recorder.requests
+        if r.method == "POST" and r.url.path.endswith("/Role/AssignUser")
+    ]
+    assert len(assigns) == 1
+    assign_body = json.loads(assigns[0].content)
+    assert assign_body["parameters"] == wrap({"Username": "soadmin"})
+    unassigns = [
+        r for r in recorder.requests if r.method == "POST" and "Unassign" in r.url.path
+    ]
+    assert unassigns == []
+
+
+def test_apply_role_users_missing_username_is_error(
+    tmp_path: Path, instance: Instance, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """V45/V53: a Users row without Username fails the Role record."""
+    path = tmp_path / "92-role-users.yaml"
+    path.write_text(
+        """\
+entity: Role
+key: Rolename
+endpoint: bootstrap
+detail_keys:
+  Users: Username
+records:
+  - Rolename: SO Admin
+    Users:
+      - Username: ""
+"""
+    )
+    membership = seed.load_baseline(path)
+    assert isinstance(membership, seed.BaselineFile)
+    recorder = Recorder({"/Role": httpx.Response(200, json=[])})
+    ok, errors = seed.apply(_client(instance, recorder), membership)
+    assert ok == 0
+    assert len(errors) == 1
+    assert "Users[0] missing Username" in errors[0]
+    assigns = [
+        r
+        for r in recorder.requests
+        if r.method == "POST" and r.url.path.endswith("/Role/AssignUser")
+    ]
+    assert assigns == []
+    capsys.readouterr()
 
 
 def test_apply_user_membership_warm_idempotent_no_password(
@@ -911,12 +1013,10 @@ def test_apply_user_membership_warm_idempotent_no_password(
         "Roles": [
             {
                 "Rolename": {"value": "SO Admin"},
-                "Selected": {"value": True},
                 "id": "guid-so-admin",
             },
             {
                 "Rolename": {"value": "Administrator"},
-                "Selected": {"value": False},
                 "id": "guid-admin",
             },
         ],
@@ -930,25 +1030,32 @@ def test_apply_user_membership_warm_idempotent_no_password(
     roles = body["Roles"]
     so = next(r for r in roles if r.get("Rolename", {}).get("value") == "SO Admin")
     assert so["id"] == "guid-so-admin"
-    assert so["Selected"] == {"value": True}
+    assert "Selected" not in so
     deletes = [r for r in roles if r.get("delete") is True]
     assert deletes == [{"id": "guid-admin", "delete": True}]
 
 
 def test_package_master_role_before_user_v22_order() -> None:
-    """T148/V22: package 90-roles sorts before 91-users (Role before User)."""
+    """T148/T228/V22: 90-roles then 91-users then 92-role-users."""
     root = Path(__file__).resolve().parents[1] / "src" / "acumatica_cli" / "templates"
     master = sorted((root / "config/master").glob("*.yaml"))
     names = [p.name for p in master]
     assert "90-roles.yaml" in names
     assert "91-users.yaml" in names
+    assert "92-role-users.yaml" in names
     assert names.index("90-roles.yaml") < names.index("91-users.yaml")
+    assert names.index("91-users.yaml") < names.index("92-role-users.yaml")
     # expand_files leaf-dir order matches alpha (V22 sole order within dir)
     from acumatica_cli.cli import expand_files
 
     expanded = expand_files((root / "config/master",))
     entities = [seed.load_baseline(p).entity for p in expanded]
     assert entities.index("Role") < entities.index("User")
+    membership = seed.load_baseline(root / "config/master/92-role-users.yaml")
+    assert isinstance(membership, seed.BaselineFile)
+    assert membership.entity == "Role"
+    assert membership.detail_keys == {"Users": "Username"}
+    assert membership.records[0]["Users"] == [{"Username": "soadmin"}]
 
 
 def test_diff_ignores_password_fields(tmp_path: Path, instance: Instance) -> None:
@@ -1181,7 +1288,7 @@ def test_package_company_apply_body_includes_decplqty_and_persist_uoms(
     assert body["DecPlQty"] == {"value": 3}
     assert body["WeightUOM"] == {"value": "KG"}
     assert body["VolumeUOM"] == {"value": "LITER"}
-    assert puts[0].url.path.endswith("/Bootstrap/1.7.0/Company")
+    assert puts[0].url.path.endswith("/Bootstrap/1.10.0/Company")
 
 
 def test_company_packaging_round_trip(instance: Instance) -> None:
@@ -1409,7 +1516,7 @@ def test_diff_multi_key_single_org_no_phantom_drift(
     text = """\
 entity: LedgerCompany
 key: [LedgerCD, OrganizationID]
-endpoint: Bootstrap/1.7.0
+endpoint: Bootstrap/1.10.0
 records:
   - LedgerCD: ACTUAL
     OrganizationID: COMPANY
@@ -1445,7 +1552,7 @@ NO_ENTITY_500 = httpx.Response(
 CURRENCY_YAML = """\
 entity: Currency
 key: CuryID
-endpoint: Bootstrap/1.7.0
+endpoint: Bootstrap/1.10.0
 records:
   - CuryID: EUR
     Description: Euro
@@ -1473,8 +1580,8 @@ def test_diff_falls_back_to_key_url_on_optimization_500(
     assert seed.diff(_client(instance, recorder), baseline) == []
     paths = [r.url.path for r in recorder.requests]
     assert [p.split("/entity/", 1)[1] for p in paths] == [
-        "Bootstrap/1.7.0/Currency",
-        "Bootstrap/1.7.0/Currency/EUR",
+        "Bootstrap/1.10.0/Currency",
+        "Bootstrap/1.10.0/Currency/EUR",
     ]
 
 
@@ -1504,7 +1611,7 @@ def test_diff_non_optimization_500_still_raises(
 ACTION_YAML = """\
 action: GenerateCalendar
 entity: MasterCalendar
-endpoint: Bootstrap/1.7.0
+endpoint: Bootstrap/1.10.0
 record:
   FinancialYear: 2026
 parameters:
@@ -1578,8 +1685,8 @@ def test_apply_action_invokes_on_204_never_following_location(
     assert [
         (r.method, r.url.path.split("/entity/", 1)[1]) for r in recorder.requests
     ] == [
-        ("GET", "Bootstrap/1.7.0/MasterCalendar"),
-        ("POST", "Bootstrap/1.7.0/MasterCalendar/GenerateCalendar"),
+        ("GET", "Bootstrap/1.10.0/MasterCalendar"),
+        ("POST", "Bootstrap/1.10.0/MasterCalendar/GenerateCalendar"),
     ]
     assert "invoke GenerateCalendar [MasterCalendar]" in capsys.readouterr().out
 
@@ -1608,7 +1715,7 @@ def test_apply_action_polls_202_location_to_completion(
     """202 = long-running: poll the Location status URL until it answers 204."""
     action = _action(tmp_path)
     status_path = (
-        "/AcumaticaERP/entity/Bootstrap/1.7.0/MasterCalendar"
+        "/AcumaticaERP/entity/Bootstrap/1.10.0/MasterCalendar"
         "/GenerateCalendar/status/abc"
     )
     polls: list[str] = []
@@ -1677,7 +1784,7 @@ def test_probe_routes_filter_and_defaults(tmp_path: Path, instance: Instance) ->
     seed.diff(_client(instance, recorder), action)
 
     (request,) = recorder.requests
-    assert request.url.path.endswith("/Bootstrap/1.7.0/MasterCalendar")
+    assert request.url.path.endswith("/Bootstrap/1.10.0/MasterCalendar")
     assert request.url.params["$filter"] == "FinancialYear eq '2026'"
 
 

@@ -342,6 +342,26 @@ def test_check_ignores_leftover_multi_cell_matrix(
     assert len(store) == 1
 
 
+def test_docs_user_role_membership_persist() -> None:
+    """T229/V12/V19/V53: docs name AssignUser persist; drop T189 limit + Selected."""
+    repo = Path(__file__).resolve().parents[1]
+    demo = (repo / "docs" / "demo-seed.md").read_text()
+    changelog = (repo / "CHANGELOG.md").read_text()
+    readme = (repo / "README.md").read_text()
+    templates = (repo / "src" / "acumatica_cli" / "templates" / "README.md").read_text()
+    assert "membership limit (T189)" not in demo
+    assert "Selected: true" not in demo
+    assert "AssignUser" in demo
+    assert "92-role-users.yaml" in demo
+    assert "UsersInRoles" in demo
+    assert "RolesByUser" in demo
+    unreleased = changelog.split("## [")[0]
+    assert "gh #35" in unreleased
+    assert "AssignUser" in unreleased
+    assert "92-role-users" in readme
+    assert "92-role-users" in templates
+
+
 def test_docs_env_sole_config() -> None:
     """T219/V12/V27: human-facing docs pin via .env, not matrix.yaml."""
     repo = Path(__file__).resolve().parents[1]
