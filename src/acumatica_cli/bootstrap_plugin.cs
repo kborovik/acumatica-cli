@@ -123,7 +123,7 @@ namespace AcuBootstrap
         public abstract class username : PX.Data.BQL.BqlString.Field<username> { }
     }
 
-    // SM201005 RoleAccess extension: contract action AssignUser (T228).
+    // Action lives on RoleAccess so Base.Roles.Current is the SM201005 header.
     public class AcuRoleAccessExt : PXGraphExtension<RoleAccess>
     {
         public static bool IsActive() => true;

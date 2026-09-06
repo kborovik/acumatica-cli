@@ -924,7 +924,7 @@ def test_apply_role_then_user_membership_virgin(
 
 
 def test_apply_role_users_warm_idempotent(tmp_path: Path, instance: Instance) -> None:
-    """T228/V4: warm Role.Users re-apply keeps live id; extra user row deleted."""
+    """T228: warm Role.Users re-apply keeps live id; AssignUser is additive-only."""
     membership_path = tmp_path / "92-role-users.yaml"
     membership_path.write_text(ROLE_USER_YAML["membership"])
     membership = seed.load_baseline(membership_path)
@@ -959,6 +959,10 @@ def test_apply_role_users_warm_idempotent(tmp_path: Path, instance: Instance) ->
     assert len(assigns) == 1
     assign_body = json.loads(assigns[0].content)
     assert assign_body["parameters"] == wrap({"Username": "soadmin"})
+    unassigns = [
+        r for r in recorder.requests if r.method == "POST" and "Unassign" in r.url.path
+    ]
+    assert unassigns == []
 
 
 def test_apply_user_membership_warm_idempotent_no_password(

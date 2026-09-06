@@ -435,7 +435,11 @@ def _assign_role_users(
     *,
     dry_run: bool,
 ) -> None:
-    """V53/B33: persist Role.Users via AssignUser, not mapped-detail PUT."""
+    """V53/B33: persist Role.Users via AssignUser, not mapped-detail PUT.
+
+    Additive-only: ``delete: true`` merge rows are skipped. Mapped GET of
+    Users may be empty, so extra live members are not a persist delete.
+    """
     if baseline.entity != "Role":
         return
     users = record.get("Users")
