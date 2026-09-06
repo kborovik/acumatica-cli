@@ -140,7 +140,7 @@ def test_load_contract_xml_rejects_data_repo_project_xml(tmp_path: Path) -> None
 def test_load_contract_xml_package_only(tmp_path: Path) -> None:
     # No data-repo project.xml → always packaged full company surface
     name, entities = bootstrap.parse_endpoint(bootstrap.load_contract_xml(tmp_path))
-    assert name == "Bootstrap/1.8.0"
+    assert name == "Bootstrap/1.9.0"
     assert "Company" in entities
     assert "OnlyInDataRepo" not in entities
 
@@ -167,11 +167,11 @@ def test_package_zip_carries_the_bootstrap_endpoint() -> None:
     Verified vs 26.101.0225 by live import round-trip: the <Endpoint> child
     is the XmlSerializer form of Model.Endpoint in the entity/maintenance/5.31
     namespace; no .endpoint file is involved. Packaged contract is the single
-    full company surface (Bootstrap/1.8.0 package SoT — V2/V21/T178).
+    full company surface (Bootstrap/1.9.0 package SoT — V2/V21/T178).
     """
     ns, endpoint, entities = _packaged_endpoint()
     assert endpoint.get("name") == "Bootstrap"
-    assert endpoint.get("version") == "1.8.0"
+    assert endpoint.get("version") == "1.9.0"
     # SystemContracts.V4 is the build's only IsCurrent implementation
     assert endpoint.get("systemContractVersion") == "4"
     company_fields = {
@@ -361,9 +361,14 @@ def test_package_zip_carries_the_bootstrap_endpoint() -> None:
             ("Action", "FromYear", "ToYear", "OrganizationID"),
             "Filter",
         ),
-        # T145/T225 Role/User (gh #24/#35): SM201005 Roles view; SM201010
-        # UserList + RolesByUser membership (UsersInRoles; empty To-field)
-        "Role": dict.fromkeys(("Rolename", "Descr"), "Roles"),
+        # T145/T225/T228 Role/User (gh #24/#35): SM201005 Roles + UsersByRole
+        # membership persist; SM201010 UserList + RolesByUser GET/diff shape
+        # (User.Roles PUT never writes UsersInRoles — B31/B32).
+        "Role": {
+            "Rolename": "Roles",
+            "Descr": "Roles",
+            "Users": ("UsersByRole", ""),
+        },
         "User": {
             "Username": "UserList",
             "FirstName": "UserList",
@@ -436,7 +441,7 @@ def test_user_roles_maps_to_roles_by_user() -> None:
     with empty UsersInRoles is a mapping miss (B31/B28 class).
     """
     ns, endpoint, entities = _packaged_endpoint()
-    assert endpoint.get("version") == "1.8.0"
+    assert endpoint.get("version") == "1.9.0"
     mappings = {
         m.get("field"): m.find(f"{ns}To")
         for m in entities["User"].findall(f"{ns}Mappings/{ns}Mapping")
@@ -457,6 +462,34 @@ def test_user_roles_maps_to_roles_by_user() -> None:
     assert role_maps["Rolename"].get("field") == "Rolename"
 
 
+def test_role_users_maps_to_users_by_role() -> None:
+    """T228/V53: Role.Users maps UsersByRole.Username (SM201005 Users tab).
+
+    User.Roles detail PUT never writes UsersInRoles (B31/B32). Persist is
+    Role.Users insert-row, not AllowedRoles/RoleList on AccessUsers.
+    """
+    ns, endpoint, entities = _packaged_endpoint()
+    assert endpoint.get("version") == "1.9.0"
+    mappings = {
+        m.get("field"): m.find(f"{ns}To")
+        for m in entities["Role"].findall(f"{ns}Mappings/{ns}Mapping")
+    }
+    assert mappings["Users"] is not None
+    assert mappings["Users"].get("object") == "UsersByRole"
+    assert mappings["Users"].get("field") == ""
+    details = {d.get("name"): d for d in endpoint.findall(f"{ns}Detail")}
+    role_user = details["RoleUser"]
+    fields = {f.get("name") for f in role_user.findall(f"{ns}Fields/{ns}Field")}
+    assert fields == {"Username"}
+    user_maps = {
+        m.get("field"): m.find(f"{ns}To")
+        for m in role_user.findall(f"{ns}Mappings/{ns}Mapping")
+    }
+    assert user_maps["Username"] is not None
+    assert user_maps["Username"].get("object") == "UsersByRole"
+    assert user_maps["Username"].get("field") == "Username"
+
+
 def test_segmented_key_maps_length_to_detail_view() -> None:
     """T207/B28: CS202000 aspx DataMember is Detail, not Details.
 
@@ -464,7 +497,7 @@ def test_segmented_key_maps_length_to_detail_view() -> None:
     DimensionID only, so the InventoryID mask stays 10 chars.
     """
     ns, endpoint, entities = _packaged_endpoint()
-    assert endpoint.get("version") == "1.8.0"
+    assert endpoint.get("version") == "1.9.0"
     entity = entities["SegmentedKey"]
     mappings = {
         m.get("field"): m.find(f"{ns}To")
@@ -482,7 +515,7 @@ def test_segmented_key_maps_length_to_detail_view() -> None:
 def test_package_prefs_field_depth_curated_not_full_dac() -> None:
     """T154/T155/V41: curated *Preferences deepen (gh #26) — not full DAC."""
     ns, endpoint, entities = _packaged_endpoint()
-    assert endpoint.get("version") == "1.8.0"
+    assert endpoint.get("version") == "1.9.0"
     gl_types = {
         f.get("name"): f.get("type")
         for f in entities["GLPreferences"].findall(f"{ns}Fields/{ns}Field")

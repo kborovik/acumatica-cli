@@ -6,7 +6,7 @@
 #   entity    contract entity name (the GET source and the emitted `entity:`)
 #   endpoint  omitted = the instance Default endpoint; the symbolic name
 #             `bootstrap` stays symbolic in emitted files and resolves to
-#             the packaged full company Bootstrap/1.8.0 at HTTP/load time
+#             the packaged full company Bootstrap/1.9.0 at HTTP/load time
 #             (package SoT - V20/V21/T178; data-repo project.xml forbidden)
 #   keys      key fields: the emitted `key:`, the record sort order, and
 #             the B9 fallback's $select projection; the tuple must
@@ -532,13 +532,14 @@ entities:
   - Active
   - StockComponents
 
-# config/master/ Role then User (V22 prefixes; T145/T146/T148). Bootstrap
-# only — Default has no Role/User surface. Membership = User detail Roles
-# (UserRole/RolesByUser.Rolename; no Selected). Package 90-roles = full
-# pre-build CompanyID=1 Roles dump (system + module roles; live 26.x);
-# 91-users demo soadmin. Password is write-only on apply (V39/T147):
-# include omits Password so extract never emits hashes (b64__Password
-# also out of include).
+# config/master/ Role then User then Role.Users (V22 prefixes 90/91/92;
+# T145/T146/T148/T228). Bootstrap only — Default has no Role/User surface.
+# Persist = Role detail Users (RoleUser/UsersByRole.Username; SM201005
+# Users tab). User detail Roles is GET/diff shape (PUT never writes
+# UsersInRoles — B31/B32). Package 90-roles = full pre-build CompanyID=1
+# Roles dump; 91-users demo soadmin identity; 92-role-users membership.
+# Password is write-only on apply (V39/T147): include omits Password so
+# extract never emits hashes (b64__Password also out of include).
 
 - entity: Role
   endpoint: bootstrap
@@ -561,6 +562,19 @@ entities:
   - PasswordNeverExpires
   - PasswordChangeOnNextLogin
   - Roles
+
+# Persist membership (T228/V53): Role.Users -> UsersByRole on SM201005.
+# Filter-split from 90-roles (Descr-only identity dump). User.Roles PUT
+# never writes UsersInRoles (B31/B32).
+- entity: Role
+  endpoint: bootstrap
+  keys: [Rolename]
+  file: config/master/92-role-users.yaml
+  filter: Rolename eq 'SO Admin'
+  detail_keys:
+    Users: Username
+  include:
+  - Users
 
 # config/setup/ - the GL action chain (T36/T37): financial-year setup,
 # then calendar generation, then period activation; numbered prefixes

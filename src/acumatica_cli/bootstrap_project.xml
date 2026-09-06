@@ -10,7 +10,9 @@
   gh #34 bumps 1.6.0 -> 1.7.0 for Company DecPlQty + WeightUOM/VolumeUOM
   (CS101500 commonsetup; kit BOM milligram-scale KG needs qty precision 3);
   gh #35 bumps 1.7.0 -> 1.8.0 for User.Roles -> RolesByUser (UsersInRoles)
-  and drops Selected (AllowedRoles was EPLoginTypeAllowsRole / EP202500).
+  and drops Selected (AllowedRoles was EPLoginTypeAllowsRole / EP202500);
+  T228 bumps 1.8.0 -> 1.9.0 for Role.Users -> UsersByRole (SM201005
+  Users tab). User.Roles detail PUT never writes UsersInRoles (B31/B32).
 
   package_zip() (bootstrap.py) prefers data-repo bootstrap/project.xml when
   present; otherwise this packaged template is the fallback so config init,
@@ -50,9 +52,11 @@
     Username; identity FirstName/LastName/Email + IsApproved +
     PasswordNeverExpires + PasswordChangeOnNextLogin; Password write-only
     (extract/diff policy = V39/T147).
-  - membership = User detail Roles -> RolesByUser (UsersInRoles):
-    Rolename (row present = assigned; no Selected). Apply order
-    Role then User (V22 prefixes; T148). Never AllowedRoles
+  - User detail Roles -> RolesByUser (GET/diff shape; PUT never
+    writes UsersInRoles — B31/B32). Persist = Role detail Users
+    -> UsersByRole.Username (SM201005 Users tab; row present =
+    assigned). Apply order Role then User then Role.Users
+    (V22 prefixes 90/91/92). Never AllowedRoles
     (EPLoginTypeAllowsRole / EP202500 allow-list; gh #35 / V53).
 
   T150 NumberingSequence (gh #25) - Default endpoint has no numbering
@@ -115,7 +119,7 @@
 -->
 <Customization level="" description="acu bootstrap: CustomizationPlugin enables features on publish; Bootstrap endpoint exposes full company surface (company + credit terms + financial currency + GL chain + module preferences + vendor class + statement cycle + warehouse + order type + cash account + role + user + membership + numbering sequence + segmented key)" product-version="26.101">
   <EntityEndpoint>
-    <Endpoint xmlns="http://www.acumatica.com/entity/maintenance/5.31" name="Bootstrap" version="1.8.0" systemContractVersion="4">
+    <Endpoint xmlns="http://www.acumatica.com/entity/maintenance/5.31" name="Bootstrap" version="1.9.0" systemContractVersion="4">
       <TopLevelEntity name="Company" screen="CS101500">
         <Fields>
           <Field name="AcctCD" type="StringValue" />
@@ -1022,6 +1026,7 @@
         <Fields>
           <Field name="Rolename" type="StringValue" />
           <Field name="Descr" type="StringValue" />
+          <Field name="Users" type="RoleUser[]" />
         </Fields>
         <Mappings>
           <Mapping field="Rolename">
@@ -1030,8 +1035,21 @@
           <Mapping field="Descr">
             <To object="Roles" field="Descr" />
           </Mapping>
+          <Mapping field="Users">
+            <To object="UsersByRole" field="" />
+          </Mapping>
         </Mappings>
       </TopLevelEntity>
+      <Detail name="RoleUser">
+        <Fields>
+          <Field name="Username" type="StringValue" />
+        </Fields>
+        <Mappings>
+          <Mapping field="Username">
+            <To object="UsersByRole" field="Username" />
+          </Mapping>
+        </Mappings>
+      </Detail>
       <TopLevelEntity name="User" screen="SM201010">
         <Fields>
           <Field name="Username" type="StringValue" />

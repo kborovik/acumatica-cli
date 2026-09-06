@@ -601,6 +601,9 @@ TABLES: dict[str, list[dict[str, Any]]] = {
         {
             "Rolename": "SO Admin",
             "Descr": "Sales order administration",
+            "Users": [
+                {"Username": "soadmin"},
+            ],
             "LastModifiedDateTime": "2026-07-11T00:00:00+00:00",
         }
     ],
@@ -700,6 +703,7 @@ def test_packaged_manifest_is_self_consistent() -> None:
     assert "config/master/85-kit-specifications.yaml" in files
     assert "config/master/90-roles.yaml" in files
     assert "config/master/91-users.yaml" in files
+    assert "config/master/92-role-users.yaml" in files
     assert len(manifest.entities) == _CATALOG_ENTITY_ROWS
     assert [(s.kind, s.file) for s in manifest.setup] == [
         ("financial-year", "config/setup/10-financial-year.yaml"),
@@ -1175,12 +1179,12 @@ def test_b9_fallback_selects_keys_then_key_urls(
         for r in server.requests
     ]
     assert currency_requests == [
-        ("Bootstrap/1.8.0/Currency", {"$filter": "IsFinancial eq true"}),
+        ("Bootstrap/1.9.0/Currency", {"$filter": "IsFinancial eq true"}),
         (
-            "Bootstrap/1.8.0/Currency",
+            "Bootstrap/1.9.0/Currency",
             {"$select": "CuryID", "$filter": "IsFinancial eq true"},
         ),
-        ("Bootstrap/1.8.0/Currency/EUR", {}),
+        ("Bootstrap/1.9.0/Currency/EUR", {}),
     ]
     text = extract._render(spec, records)  # pyright: ignore[reportPrivateUsage]
     assert "RealGainAcctID" in text
@@ -1612,11 +1616,12 @@ def test_catalog_prefs_field_depth_includes() -> None:
 
 
 def test_catalog_role_user_membership_rows() -> None:
-    """T146: Role then User catalog rows; membership via User detail_keys."""
+    """T146/T228: Role then User then Role.Users catalog rows."""
     manifest = extract.load_manifest()
     by_file = {s.file: s for s in manifest.entities}
     role = by_file["config/master/90-roles.yaml"]
     user = by_file["config/master/91-users.yaml"]
+    membership = by_file["config/master/92-role-users.yaml"]
     assert role.entity == "Role"
     assert role.keys == ["Rolename"]
     assert role.endpoint == "bootstrap"
@@ -1629,9 +1634,14 @@ def test_catalog_role_user_membership_rows() -> None:
     # V39: extract never seeds password material (include-only surface)
     assert "Password" not in user.include
     assert "b64__Password" not in user.include
-    # V22 apply order: Role file sorts before User
+    assert membership.entity == "Role"
+    assert membership.filter == "Rolename eq 'SO Admin'"
+    assert membership.detail_keys == {"Users": "Username"}
+    assert "Users" in membership.include
+    # V22 apply order: Role file sorts before User before Role.Users
     files = [s.file for s in manifest.entities]
     assert files.index(role.file) < files.index(user.file)
+    assert files.index(user.file) < files.index(membership.file)
 
 
 def test_package_numbering_sequence_template() -> None:
@@ -1703,6 +1713,13 @@ def test_package_role_user_templates_prebuild_roles() -> None:
     soadmin = users.records[0]
     assert "Password" not in soadmin
     assert soadmin["Roles"] == [{"Rolename": "SO Admin"}]
+    membership = seed.load_baseline(root / "config/master/92-role-users.yaml")
+    assert isinstance(membership, seed.BaselineFile)
+    assert membership.entity == "Role"
+    assert membership.detail_keys == {"Users": "Username"}
+    assert membership.records == [
+        {"Rolename": "SO Admin", "Users": [{"Username": "soadmin"}]}
+    ]
 
 
 def test_templates_do_not_claim_packaging_uoms() -> None:
