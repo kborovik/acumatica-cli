@@ -1703,7 +1703,7 @@ def test_package_role_user_templates_prebuild_roles() -> None:
     assert {r["Username"] for r in users.records} == {"soadmin"}
     soadmin = users.records[0]
     assert "Password" not in soadmin
-    assert soadmin["Roles"] == [{"Rolename": "SO Admin", "Selected": True}]
+    assert soadmin["Roles"] == [{"Rolename": "SO Admin"}]
 
 
 def test_templates_do_not_claim_packaging_uoms() -> None:

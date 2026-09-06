@@ -13,4 +13,3 @@ records:
   PasswordChangeOnNextLogin: false
   Roles:
   - Rolename: SO Admin
-    Selected: true
