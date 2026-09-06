@@ -205,7 +205,7 @@ T223|x|live/e2e GET DecPlQty after Company PUT; kit ComponentQty 0.012 round-tri
 T224|x|docs/demo-seed Company DecPlQty CS101500 commonsetup; kit BOM precision 3; persist UOMs vs B26 extract; CHANGELOG Unreleased (gh #34)|V12,V19,V52,T220,T221
 T225|x|remap User.Roles AllowedRoles→RolesByUser.Rolename; drop Selected; Bootstrap 1.7.0→1.8.0|V21,V53,I.data
 T226|x|package 91-users.yaml + catalog/comments drop Selected; seed Roles: [{Rolename}]|V53,I.data,T225
-T227|.|offline tests apply body RolesByUser mapping + no Selected; bootstrap field asserts|V13,V53,T225,T226
+T227|x|offline tests apply body RolesByUser mapping + no Selected; bootstrap field asserts|V13,V53,T225,T226
 T228|.|live/e2e: PUT User Roles inserts UsersInRoles (session CompanyID); republish+apply new user membership|V4,V13,V53,B31,T226
 T229|.|docs replace T189 membership-not-durable w/ RolesByUser path; CHANGELOG Unreleased (gh #35)|V12,V19,V53,T225,T226
 

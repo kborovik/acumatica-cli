@@ -617,8 +617,7 @@ TABLES: dict[str, list[dict[str, Any]]] = {
             "Password": "hash-must-not-extract",
             "b64__Password": "YmFk",
             "Roles": [
-                {"Rolename": "SO Admin", "Selected": True},
-                {"Rolename": "Administrator", "Selected": False},
+                {"Rolename": "SO Admin"},
             ],
             "LastModifiedDateTime": "2026-07-11T00:00:00+00:00",
         }

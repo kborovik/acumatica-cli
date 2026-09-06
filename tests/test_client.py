@@ -456,7 +456,6 @@ def test_field_errors_under_entity_and_detail_rows() -> None:
                         "value": "SO Admin",
                         "error": "Error: Role not found.",
                     },
-                    "Selected": {"value": True},
                 }
             ],
         },

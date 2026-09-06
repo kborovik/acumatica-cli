@@ -852,7 +852,6 @@ records:
     PasswordChangeOnNextLogin: false
     Roles:
       - Rolename: SO Admin
-        Selected: true
 """,
 }
 
@@ -860,7 +859,7 @@ records:
 def test_apply_role_then_user_membership_virgin(
     tmp_path: Path, instance: Instance
 ) -> None:
-    """T148/V22: Role PUT then User PUT with membership; virgin no password."""
+    """T148/T227/V22: Role PUT then User PUT with RolesByUser membership."""
     role_path = tmp_path / "90-roles.yaml"
     role_path.write_text(ROLE_USER_YAML["role"])
     user_path = tmp_path / "91-users.yaml"
@@ -888,9 +887,8 @@ def test_apply_role_then_user_membership_virgin(
     user_body = json.loads(puts[1].content)
     assert user_body["Username"] == {"value": "soadmin"}
     assert "Password" not in user_body
-    assert user_body["Roles"] == [
-        {"Rolename": {"value": "SO Admin"}, "Selected": {"value": True}}
-    ]
+    assert user_body["Roles"] == [{"Rolename": {"value": "SO Admin"}}]
+    assert "Selected" not in user_body["Roles"][0]
 
 
 def test_apply_user_membership_warm_idempotent_no_password(
@@ -911,12 +909,10 @@ def test_apply_user_membership_warm_idempotent_no_password(
         "Roles": [
             {
                 "Rolename": {"value": "SO Admin"},
-                "Selected": {"value": True},
                 "id": "guid-so-admin",
             },
             {
                 "Rolename": {"value": "Administrator"},
-                "Selected": {"value": False},
                 "id": "guid-admin",
             },
         ],
@@ -930,7 +926,7 @@ def test_apply_user_membership_warm_idempotent_no_password(
     roles = body["Roles"]
     so = next(r for r in roles if r.get("Rolename", {}).get("value") == "SO Admin")
     assert so["id"] == "guid-so-admin"
-    assert so["Selected"] == {"value": True}
+    assert "Selected" not in so
     deletes = [r for r in roles if r.get("delete") is True]
     assert deletes == [{"id": "guid-admin", "delete": True}]
 
