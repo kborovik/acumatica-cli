@@ -355,9 +355,9 @@ def test_docs_user_role_membership_persist() -> None:
     assert "92-role-users.yaml" in demo
     assert "UsersInRoles" in demo
     assert "RolesByUser" in demo
-    unreleased = changelog.split("## [")[0]
-    assert "gh #35" in unreleased
-    assert "AssignUser" in unreleased
+    # V19 promote empties Unreleased; persist notes live in the versioned section.
+    assert "gh #35" in changelog
+    assert "AssignUser" in changelog
     assert "92-role-users" in readme
     assert "92-role-users" in templates
 
