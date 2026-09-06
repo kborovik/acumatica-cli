@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## [v0.29.0] - 2026-09-06
+
 ### Added
 
 - **Company seed qty precision (gh #34):** `91-company-packaging.yaml`
