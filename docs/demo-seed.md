@@ -298,7 +298,7 @@ Cross-directory order is fixed: bootstrap, then baseline, then setup, then maste
 | ----- | ----------------------------- |
 | Features | `config/bootstrap/features.yaml` enables Inventory, DistributionModule, Warehouse, WarehouseLocation, KitAssemblies, SubAccount, … |
 | Segmented keys | `config/bootstrap/segmented-key.yaml` raises INVENTORY + BIZACCT Length 30 before master StockItem / Vendor / Customer — see [Segmented keys](#segmented-keys) |
-| Company | Org CD **LAB5** (single placeholder across ledger link, open periods, TransitBranchID, cash BranchID) |
+| Company | Org CD **LAB5**; `DecPlQty: 3` plus persist UOMs — see [Company quantity precision](#company-quantity-precision) |
 | COA / GL | Expanded accounts for inventory, in-transit, PO accrual, PPV/LCV, freight, discounts |
 | Setup calendar | Financial year, then master calendar, then open periods for LAB5 |
 | Numbering | `05-numbering-sequences.yaml` before any prefs that may set `*NumberingID` — see [Numbering sequences](#numbering-sequences) |
@@ -310,6 +310,36 @@ Cross-directory order is fixed: bootstrap, then baseline, then setup, then maste
 Feature closure: every feature-gated form used by a seed file must appear in `config/bootstrap/features.yaml`.
 
 Reference closure: every foreign key must resolve to a tenant-native row or an earlier-sorting seed file.
+
+## Company quantity precision
+
+Quantity decimal places live on CS101500 `CommonSetup.DecPlQty` (aspx DataMember `commonsetup`).
+Bootstrap Company maps `DecPlQty` (`ShortValue`) plus persist `WeightUOM` and `VolumeUOM`.
+
+Identity fields stay on `config/bootstrap/company.yaml`.
+Qty and UOMs ride `config/baseline/91-company-packaging.yaml` after `90-uoms.yaml` so KG and LITER exist before `CommonSetup_RowPersisting`.
+
+Package seed sets `DecPlQty: 3` so kit BOM quantities such as `0.012` KG store without rounding to `0.01`.
+The DAC default is 2.
+
+DistributionModule on requires `WeightUOM` and `VolumeUOM` on the same packaging Company PUT.
+Extract keeps those fields on the packaging file when GET returns them; StockItem still omits GET-omit UOMs (B26).
+
+Republish AcuBootstrap after a contract upgrade so the 1.7.0 maps are live.
+
+```yaml
+# config/baseline/91-company-packaging.yaml (shape)
+entity: Company
+key: AcctCD
+endpoint: bootstrap
+records:
+- AcctCD: LAB5
+  DecPlQty: 3
+  WeightUOM: KG
+  VolumeUOM: LITER
+```
+
+Unmapped `DecPlQty` PUT answers 200 and ignores the field (B30).
 
 ## IN control accounts (V51)
 
@@ -616,6 +646,7 @@ Screen IDs are operator notes only (not catalog fields).
 | `config/baseline/50-gl-preferences.yaml` | GLPreferences | bootstrap | GL102000 | catalog |
 | `config/baseline/60-ledger-company.yaml` | LedgerCompany | bootstrap | GL201500 | catalog |
 | `config/baseline/90-uoms.yaml` | UnitsOfMeasure | default | CS203500 | catalog |
+| `config/baseline/91-company-packaging.yaml` | Company (DecPlQty + persist UOMs) | bootstrap | CS101500 | catalog |
 | `config/setup/10-financial-year.yaml` | FinancialYearSettings / GeneratePeriods | bootstrap | GL101000 | setup synth |
 | `config/setup/20-master-calendar.yaml` | MasterCalendar / GenerateCalendar | bootstrap | GL201000 | setup synth |
 | `config/setup/30-open-periods.yaml` | ManagePeriods / ProcessAll | bootstrap | GL503000 | setup synth |

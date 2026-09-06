@@ -967,6 +967,7 @@ def test_config_init_scaffolds_data_repo(tmp_path: Path) -> None:
         "config/baseline/50-gl-preferences.yaml",
         "config/baseline/60-ledger-company.yaml",
         "config/baseline/90-uoms.yaml",
+        "config/baseline/91-company-packaging.yaml",
         "config/bootstrap/company.yaml",
         "config/bootstrap/credit-terms.yaml",
         "config/bootstrap/segmented-key.yaml",

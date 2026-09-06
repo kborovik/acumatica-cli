@@ -44,10 +44,9 @@ entities:
 
 # config/bootstrap/ - the virgin-tenant phase via the custom Bootstrap
 # endpoint: built-in endpoints cannot create the first organization (C).
-# Company packaging: DecPlQty + WeightUOM/VolumeUOM on CS101500 commonsetup
-# (gh #34). WeightUOM/VolumeUOM required to persist CommonSetup when
-# DistributionModule is on. B26 dropped unmapped packaging claims; mapped
-# fields that GET returns stay in include.
+# Company identity first (bootstrap). Packaging qty/UOMs are a second
+# Company PUT after 90-uoms.yaml (see that row). StockItem WeightUOM
+# /VolumeUOM stay GET-omit (B26).
 
 - entity: Company
   endpoint: bootstrap
@@ -58,9 +57,6 @@ entities:
   - OrganizationType
   - BaseCuryID
   - CountryID
-  - DecPlQty
-  - WeightUOM
-  - VolumeUOM
 
 - entity: CreditTerms
   endpoint: bootstrap
@@ -166,6 +162,20 @@ entities:
   include:
   - Description
   - L3Code
+
+# Company packaging (gh #34 / V52): second PUT after UOMs so KG/LITER
+# exist for CommonSetup_RowPersisting when DistributionModule is on.
+# Include-partition of the same live Company row (warehouse-phase idiom).
+# Mapped fields GET-return stay in include.
+
+- entity: Company
+  endpoint: bootstrap
+  keys: [AcctCD]
+  file: config/baseline/91-company-packaging.yaml
+  include:
+  - DecPlQty
+  - WeightUOM
+  - VolumeUOM
 
 # config/master/ - full packaged seed (T117). Multi-file Warehouse uses
 # include field-partition (same live warehouse row, three apply phases).

@@ -2,6 +2,18 @@
 
 ## Unreleased
 
+### Added
+
+- **Company seed qty precision (gh #34):** `91-company-packaging.yaml`
+  after `90-uoms.yaml` sets `DecPlQty: 3` plus persist `WeightUOM`/`VolumeUOM`
+  so CommonSetup writes when DistributionModule is on. Identity stays on
+  bootstrap `company.yaml`. StockItem still omits GET-omit UOMs (B26).
+
+### Changed
+
+- **docs/demo-seed.md:** Company CS101500 `commonsetup` `DecPlQty` on
+  `91-company-packaging.yaml` after UOMs; kit BOM precision 3; B26 extract.
+
 ## [v0.28.0] - 2026-09-05
 
 ### Added

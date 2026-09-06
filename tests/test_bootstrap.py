@@ -175,10 +175,13 @@ def test_package_zip_carries_the_bootstrap_endpoint() -> None:
     # SystemContracts.V4 is the build's only IsCurrent implementation
     assert endpoint.get("systemContractVersion") == "4"
     company_fields = {
-        f.get("name") for f in entities["Company"].findall(f"{ns}Fields/{ns}Field")
+        f.get("name"): f.get("type")
+        for f in entities["Company"].findall(f"{ns}Fields/{ns}Field")
     }
-    # gh #34: CS101500 commonsetup qty precision + persist UOMs
-    assert {"DecPlQty", "WeightUOM", "VolumeUOM"} <= company_fields
+    # gh #34 / V52: CS101500 commonsetup qty precision + persist UOMs
+    assert company_fields["DecPlQty"] == "ShortValue"
+    assert company_fields["WeightUOM"] == "StringValue"
+    assert company_fields["VolumeUOM"] == "StringValue"
     # T81 full company + T145 Role/User + T150 NumberingSequence + T204 SegmentedKey
     assert set(entities) == {
         "Company",

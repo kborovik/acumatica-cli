@@ -12,7 +12,7 @@ import httpx
 import pytest
 
 from acumatica_cli import seed
-from acumatica_cli.client import AcumaticaClient, wrap
+from acumatica_cli.client import AcumaticaClient, unwrap, wrap
 from acumatica_cli.config import Instance
 
 BASELINE = """\
@@ -562,6 +562,62 @@ def _session_client(instance: Instance, recorder: SessionRecorder) -> AcumaticaC
     return AcumaticaClient(instance, transport=httpx.MockTransport(recorder))
 
 
+class EchoStore:
+    """PUT-echo mock: store last wrapped body per entity; serve GET list/key-URL.
+
+    Auth paths match SessionRecorder so Company apply can relogin (V5).
+    """
+
+    def __init__(self, landed: str = "T1") -> None:
+        self.requests: list[httpx.Request] = []
+        self.store: dict[str, dict[str, Any]] = {}
+        self.landed = landed
+
+    def __call__(self, request: httpx.Request) -> httpx.Response:
+        self.requests.append(request)
+        path = request.url.path
+        if path.endswith("/auth/login") or path.endswith("/auth/logout"):
+            response = httpx.Response(204)
+        elif path.endswith("/Frames/Login.aspx"):
+            response = httpx.Response(
+                200,
+                text=(
+                    '<input name="ctl00$phUser$txtSingleCompany" type="hidden" '
+                    f'id="txtSingleCompany" value="{self.landed}" />'
+                ),
+            )
+        elif "/entity/" in path:
+            response = self._entity(request)
+        else:
+            response = httpx.Response(200, json={})
+        return response
+
+    def _entity(self, request: httpx.Request) -> httpx.Response:
+        _, rest = request.url.path.split("/entity/", 1)
+        parts = rest.split("/")
+        entity = parts[2] if len(parts) >= 3 else parts[-1]
+        keys = parts[3:] if len(parts) > 3 else []
+        if request.method == "PUT":
+            body = json.loads(request.content)
+            self.store[entity] = body
+            return httpx.Response(200, json=body)
+        stored = self.store.get(entity)
+        if request.method != "GET":
+            return httpx.Response(200, json={})
+        if stored is None and keys:
+            return httpx.Response(
+                500,
+                json={
+                    "exceptionType": (
+                        "PX.Api.ContractBased.NoEntitySatisfiesTheConditionException"
+                    ),
+                },
+            )
+        if stored is None:
+            return httpx.Response(200, json=[])
+        return httpx.Response(200, json=stored if keys else [stored])
+
+
 COMPANY_YAML = """\
 entity: Company
 key: AcctCD
@@ -1102,6 +1158,51 @@ def test_package_in_progress_transit_accounts_are_not_in_control() -> None:
     rec = prefs.records[0]
     assert rec["INProgressAcctID"] == "12300"
     assert rec["INTransitAcctID"] == "12400"
+
+
+def test_package_company_apply_body_includes_decplqty_and_persist_uoms(
+    instance: Instance,
+) -> None:
+    """T222/V52: packaging Company PUT carries DecPlQty 3 + persist UOMs."""
+    baseline = seed.load_baseline(
+        _package_template("config/baseline/91-company-packaging.yaml")
+    )
+    assert isinstance(baseline, seed.BaselineFile)
+    rec = baseline.records[0]
+    assert rec["DecPlQty"] == 3
+    assert rec["WeightUOM"] == "KG"
+    assert rec["VolumeUOM"] == "LITER"
+    recorder = SessionRecorder()
+    with _session_client(instance, recorder) as client:
+        seed.apply(client, baseline)
+    puts = [r for r in recorder.requests if r.method == "PUT"]
+    assert len(puts) == 1
+    body = json.loads(puts[0].content)
+    assert body["DecPlQty"] == {"value": 3}
+    assert body["WeightUOM"] == {"value": "KG"}
+    assert body["VolumeUOM"] == {"value": "LITER"}
+    assert puts[0].url.path.endswith("/Bootstrap/1.7.0/Company")
+
+
+def test_company_packaging_round_trip(instance: Instance) -> None:
+    """T222/V52: echo wrap/unwrap/diff keep DecPlQty 3 + persist UOMs.
+
+    Kit ComponentQty 0.012 rounding is live e2e (T223), not this echo.
+    """
+    store = EchoStore()
+    company = seed.load_baseline(
+        _package_template("config/baseline/91-company-packaging.yaml")
+    )
+    assert isinstance(company, seed.BaselineFile)
+    with AcumaticaClient(instance, transport=httpx.MockTransport(store)) as client:
+        seed.apply(client, company)
+        rec = client.get_record("Company", ["LAB5"], seed.BOOTSTRAP_ENDPOINT)
+        assert rec is not None
+        plain = unwrap(rec)
+        assert plain["DecPlQty"] == 3
+        assert plain["WeightUOM"] == "KG"
+        assert plain["VolumeUOM"] == "LITER"
+        assert seed.diff(client, company) == []
 
 
 def test_package_segmented_key_apply_body_widens_inventory_bizacct(
