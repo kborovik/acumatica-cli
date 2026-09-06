@@ -207,7 +207,7 @@ T225|x|remap User.Roles AllowedRoles→RolesByUser.Rolename; drop Selected; Boot
 T226|x|package 91-users.yaml + catalog/comments drop Selected; seed Roles: [{Rolename}]|V53,I.data,T225
 T227|x|offline tests apply body RolesByUser mapping + no Selected; bootstrap field asserts|V13,V53,T225,T226
 T228|x|wire UsersInRoles persist via RoleProvider or PXDatabase (not mapped detail PUT); live SQL proof session CompanyID|V4,V13,V53,B31,B32,B33,T226
-T229|.|docs replace T189 + RolesByUser-persist claim w/ actual persist path; CHANGELOG Unreleased (gh #35)|V12,V19,V53,T228
+T229|x|docs replace T189 + RolesByUser-persist claim w/ actual persist path; CHANGELOG Unreleased (gh #35)|V12,V19,V53,T228
 
 ## §B BUGS
 

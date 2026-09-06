@@ -13,6 +13,12 @@
 
 - **docs/demo-seed.md:** Company CS101500 `commonsetup` `DecPlQty` on
   `91-company-packaging.yaml` after UOMs; kit BOM precision 3; B26 extract.
+- **User role membership persist (gh #35):** Mapped-detail PUT of
+  User.Roles / Role.Users returns 200 and leaves `UsersInRoles` empty
+  (B31/B32/B33). Apply invokes Role `AssignUser` so PXDatabase writes
+  membership. Docs replace the T189 membership-not-durable limit. Seed
+  order is `90-roles` then `91-users` then `92-role-users`. No `Selected`.
+  GET/diff of membership may stay empty.
 
 ## [v0.28.0] - 2026-09-05
 

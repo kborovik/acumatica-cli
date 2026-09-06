@@ -227,7 +227,7 @@ inventory transport — inventory is always offline XML).
 | `CustomerClass` | CustomerClass | default | `ClassID`→`CustomerClassID` + AR/Sales FK |
 | `Vendor` | Vendor | default | identity; CD on `BAccount` (v1 no multi-table join) |
 | `Customer` | Customer | default | identity; CD on `BAccount` (v1 no multi-table join) |
-| `Roles` / `Users` / `UsersInRoles` | Role / User | bootstrap | membership detail |
+| `Roles` / `Users` / `UsersInRoles` | Role / User | bootstrap | membership via `AssignUser` |
 | `NumberingSequence` / `Numbering` | NumberingSequence | bootstrap | bounds only (V40) |
 | `Company` / `Ledger` / `TaxCategory` | (identity) | bootstrap or default | table name = entity; no map row required |
 
@@ -304,7 +304,7 @@ Cross-directory order is fixed: bootstrap, then baseline, then setup, then maste
 | Numbering | `05-numbering-sequences.yaml` before any prefs that may set `*NumberingID` — see [Numbering sequences](#numbering-sequences) |
 | Master prefs | Reason codes and IN prefs before warehouse; warehouse before item classes and stock items |
 | Parties | Vendor/customer classes before vendors/customers |
-| Roles / users | `90-roles.yaml` then `91-users.yaml` (Role before User; membership rides User detail) — see [Role, User, and password seed](#role-user-and-password-seed) |
+| Roles / users | `90-roles.yaml` then `91-users.yaml` then `92-role-users.yaml` (Role then User then Role.Users; persist `AssignUser`) — see [Role, User, and password seed](#role-user-and-password-seed) |
 | Scenario | Runs only after master apply; capital once-guard then additive buy/build/sell |
 
 Feature closure: every feature-gated form used by a seed file must appear in `config/bootstrap/features.yaml`.
@@ -358,53 +358,55 @@ Marking those two as IN control makes the INPreferences PUT return 500 on 26r1 a
 ## Role, User, and password seed
 
 Default contract has **no** Role or User surface.
-Both live on the **Bootstrap**
-endpoint only (`endpoint: bootstrap` leads to the active package version, currently
-`Bootstrap/1.4.0`).
+Both live on the **Bootstrap** endpoint only (`endpoint: bootstrap` leads to the active package version, currently `Bootstrap/1.10.0`).
 
 Screens: Role = SM201005, User = SM201010.
 
 ### Apply order (V22)
 
-Numbered prefixes under `config/master/` enforce **Role → User → membership**:
+Numbered prefixes under `config/master/` enforce **Role → User → Role.Users**:
 
 | File | Entity | Notes |
 | ---- | ------ | ----- |
 | `config/master/90-roles.yaml` | Role | key `Rolename`; fields `Rolename`, `Descr` |
-| `config/master/91-users.yaml` | User | key `Username`; identity fields + detail `Roles` |
+| `config/master/91-users.yaml` | User | key `Username`; identity fields; optional GET/diff detail `Roles` |
+| `config/master/92-role-users.yaml` | Role | key `Rolename`; detail `Users` (`detail_keys: { Users: Username }`) |
 
-Membership is **not** a separate seed file.
-It is the User detail list
-`Roles` (`detail_keys: { Roles: Rolename }`), each row `Rolename` +
-`Selected`.
+Membership is the Role detail list `Users`, each row `Username` only (no `Selected`).
+User detail `Roles` is GET/diff shape; a User PUT of that list does not write `UsersInRoles`.
 
-A role must exist (tenant-native or earlier Role seed) before a
-User PUT that selects it.
+A role must exist (tenant-native or earlier Role seed) before `AssignUser` names it.
+A user must exist before `92-role-users.yaml` names that `Username`.
 
-Package demo: full pre-build role dump in `90-roles.yaml` + demo user
-`soadmin` with `SO Admin` selected in `91-users.yaml`. Built-in system roles
-(Administrator, Customizer, …) are present as identity/header rows for
-reference closure; access-rights matrix beyond role header is out of scope.
+Package demo: full pre-build role dump in `90-roles.yaml`, demo user `soadmin` identity in `91-users.yaml`, and `SO Admin` to `soadmin` in `92-role-users.yaml`.
+Built-in system roles (Administrator, Customizer, …) stay as identity/header rows for reference closure; access-rights matrix beyond role header is out of scope.
 
-### User Roles membership limit (T189)
+### User role membership persist (V53)
 
-Live lab (Bootstrap contract, cold PUT): **User detail `Roles` membership is
-not durable** — a successful User PUT with `Roles: [{Rolename, Selected:
-true}]` still answers later GET with `Roles: []`. Identity fields (Username,
-names, flags) round-trip; membership does not.
+Mapped-detail PUT never writes `UsersInRoles`.
+`User.Roles` (`RolesByUser`) and `Role.Users` (`UsersByRole`) both return 200 and leave SQL empty (B31, B32, B33).
+
+T189 recorded empty GET as a docs limit.
+The write is a no-op on every mapped detail tried (AllowedRoles, RolesByUser, RoleList, UsersByRole).
+
+Apply persists membership by invoking Role action `AssignUser` after the Role PUT of `92-role-users.yaml`.
+The plugin inserts `UsersInRoles` via PXDatabase on the session tenant CompanyID.
+
+Persist is additive-only.
+Rows with `delete: true` are skipped; extra live members are not removed.
+
+SQL `UsersInRoles` on the session CompanyID is the proof.
+GET and `acu diff` of `User.Roles` may stay empty until a read path is confirmed.
 
 | Path | Practical rule |
 | ---- | -------------- |
-| **apply** | Identity seed is reliable. Membership rows may no-op on the server. |
-| **diff** | Expect possible permanent `Roles[…]: missing on tenant` when seed claims membership. |
-| **Data repos** | Prefer identity-only User seed (e.g. soadmin/apadmin/aradmin without `Roles`); assign roles in UI or accept drift until a contract fix. |
-| **Package template** | Still ships sparse `soadmin` + `SO Admin` membership as the offline contract shape (T148); not a live membership guarantee. |
+| **apply** | Role then User then Role.Users. Membership writes via `AssignUser`, not User.Roles PUT. |
+| **diff** | Identity User/Role fields round-trip. Membership GET may stay `[]`; that is not apply failure. |
+| **Data repos** | Seed identity on `91-users.yaml`. Seed membership on `92-role-users.yaml` (`Users: [{Username}]`). No `Selected`. |
+| **Package template** | `soadmin` identity in `91-users.yaml`; `SO Admin` to `soadmin` in `92-role-users.yaml`. |
 
 Not a password issue (V39).
-Not fixed by re-apply order.
-
-Track contract/screen
-gaps via V14 when re-verified on a new Bootstrap version.
+Not fixed by remapping `User.Roles` to `RolesByUser` alone.
 
 ### Password rule (V39)
 
@@ -432,7 +434,19 @@ records:
   # Password: optional; write-only on virgin create only
   Roles:
   - Rolename: SO Admin
-    Selected: true
+```
+
+```yaml
+# config/master/92-role-users.yaml (shape) — persist path
+entity: Role
+key: Rolename
+endpoint: bootstrap
+detail_keys:
+  Users: Username
+records:
+- Rolename: SO Admin
+  Users:
+  - Username: soadmin
 ```
 
 Authoring a first-login password: put `Password` on the User record for the
@@ -677,7 +691,8 @@ Screen IDs are operator notes only (not catalog fields).
 | `config/master/82-stock-items-kits.yaml` | StockItem | default | IN202500 | catalog |
 | `config/master/85-kit-specifications.yaml` | KitSpecification | default | IN209500 | catalog |
 | `config/master/90-roles.yaml` | Role | bootstrap | SM201005 | catalog |
-| `config/master/91-users.yaml` | User (+ Roles membership detail) | bootstrap | SM201010 | catalog |
+| `config/master/91-users.yaml` | User (identity; Roles GET/diff shape) | bootstrap | SM201010 | catalog |
+| `config/master/92-role-users.yaml` | Role (+ Users; persist `AssignUser`) | bootstrap | SM201005 | catalog |
 | `scenario/10-seed-capital.yaml` | JournalTransaction (once) | default | GL301000 | run only |
 | `scenario/20-buy.yaml` | PO / receipt / AP bill+pay | default | PO/IN/AP | run only |
 | `scenario/30-build.yaml` | KitAssembly | default | IN307000 | run only |

@@ -48,7 +48,7 @@ Bare `acu apply` / `acu diff` also prefer `config/` when those trees exist.
 | `config/bootstrap/` | Company, features, credit terms (Bootstrap contract is package SoT — never scaffolded) |
 | `config/baseline/` | GL foundation (COA, ledger, subaccounts, UOMs) |
 | `config/setup/` | Financial year, master calendar, open periods |
-| `config/master/` | Numbering (`05-numbering-sequences`) before module prefs; inventory, warehouse, items, vendors, customers; roles/users (`90-roles` then `91-users`) |
+| `config/master/` | Numbering (`05-numbering-sequences`) before module prefs; inventory, warehouse, items, vendors, customers; roles/users (`90-roles` then `91-users` then `92-role-users`) |
 | `scenario/10-seed-capital.yaml` | Once-class owner capital JE (skip-if-present when present); Period = `${current_period}` |
 | `scenario/20-buy.yaml` | Additive component PO → receipt → bill → AP pay |
 | `scenario/30-build.yaml` | Additive kit assembly |
