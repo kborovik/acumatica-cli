@@ -80,9 +80,13 @@ for granular /sdd:check runs.
 - `tenant` = control plane resource; verbs `list|create|delete|recycle`; `create` alone chains a data-plane bootstrap publish after the SSH create — §V.1 module split intact; `recycle` = site-wide app-pool restart only (no REST, no `--id`)
 - `bootstrap` = data plane verb: publish AcuBootstrap (`/CustomizationApi`); optional post-publish recycle when `ACU_SSH` set; `--export` local-only zip write (no REST, no SSH)
 - `config` = configuration ops: `init` local write, `show` local read, `check` live read-only preflight
-- `inventory` = offline dual-reader verb: SnapshotArtifact → `inventory/` summary+tables; no REST/SSH/password (V35/V37); never seed/apply/`config/` write
-- `reconcile` = offline dual-reader verb: inventory/ + optional config/ → `findings/` only; no REST/SSH/password (V35/V36); never writes `config/`
+- `survey` = existing-tenant dual-reader noun; verbs `extract|inventory|reconcile`; never L1 those verbs; never aliases (check/snapshot-alias class)
+- `survey extract` = REST seed reader: live GET → `config/` SEED_DIRS (V35); loads Instance
+- `survey inventory` = offline dual-reader verb: SnapshotArtifact → `inventory/` summary+tables; no REST/SSH/password (V35/V37); never seed/apply/`config/` write
+- `survey reconcile` = offline dual-reader verb: inventory/ + optional config/ → `findings/` only; no REST/SSH/password (V35/V36); never writes `config/`
 - `state` = data plane verb: capture derived state (balances/qty) → `state/`; views in `config/views/`; never seed/apply path (V32); hard-cut no `snapshot` alias
+- cmd: `.spec/scripts/check-extras.sh` — V15 row; scope `src/`; pattern `@cli.command\("(extract|inventory|reconcile)"\)`
+- surviving match (`V15|VIOLATE|file:line: …`, exit 1) → bail: `L1 extract/inventory/reconcile cmd per §V.15 — nest under survey`
 
 ## §V.17 — spec-state dependency recipe (extracted from SPEC.md §V.17)
 
@@ -135,7 +139,7 @@ for granular /sdd:check runs.
 - cmd: `.spec/scripts/check-extras.sh` — V27 row; scope `src/`; pattern `matrix\.yaml|--cell|load_matrix|DatasetMatrix|MATRIX_FILENAME`
 - exemptions: leftover/never/`no ``matrix.yaml``` comments (present leftover ignored)
 - surviving match (`V27|VIOLATE|file:line: …`, exit 1) → bail: `live matrix.yaml/--cell/load_matrix site per §V.27 — leftover ignored, never loaded`
-- allowlisted data-plane cmds: `apply`/`diff`/`run`/`extract`/`schema`/`bootstrap`/`state` + `config check` load `Instance` via `_resolve_instance`
+- allowlisted data-plane cmds: `apply`/`diff`/`run`/`survey extract`/`schema`/`bootstrap`/`state` + `config check` load `Instance` via `_resolve_instance`
 - `api_version`: `--api-version` flag ? → else `ACU_API_VERSION` env → else code default `25.200.001`
 - `base_url`: `--url` flag ? → else `ACU_BASE_URL` env → else hard error naming sources
 - never load `matrix.yaml` (present leftover ignored)
@@ -233,6 +237,7 @@ for granular /sdd:check runs.
 - `inventory/` + `findings/` never SEED_DIRS never `apply`/`diff` load
 - v1 artifact path writes `inventory/` + `findings/` only — never `config/` from artifact
 - `extract` REST-only
+- CLI cmds under `survey` (V15); never L1 extract/inventory/reconcile
 
 ## §V.38 — reconcile-normalize (extracted from SPEC.md §V.38)
 
@@ -246,7 +251,7 @@ for granular /sdd:check runs.
 
 ## §V.42 — inventory-map-coverage (extracted from SPEC.md §V.42)
 
-- dual-reader masters (catalog entity or demo seed claims) ! snapshot_map table→entity (+ aliases/resolves/enums as needed) so `acu reconcile` findings = real gaps not join-alias noise
+- dual-reader masters (catalog entity or demo seed claims) ! snapshot_map table→entity (+ aliases/resolves/enums as needed) so `acu survey reconcile` findings = real gaps not join-alias noise
 - intentional unmapped (txn/history/Notes/LoginTrace/ScreenPreferences/FeaturesSet-via-plugin) ! short docs table
 - demo-not-seeded Default master → explicit non-goal note ok
 - ! Bootstrap bump for map/catalog-only polish (gh #27)
