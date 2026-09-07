@@ -681,13 +681,16 @@ def test_apply_help_lists_examples_and_exit_codes(wired: Instance) -> None:
     assert "sole tenant writer" in result.output.lower()
 
 
-def test_check_help_distinguishes_config_check(wired: Instance) -> None:
-    result = CliRunner().invoke(cli.cli, ["check", "--help"])
+def test_root_check_command_is_gone(wired: Instance) -> None:
+    # T230/V47: no acu check verb; acu config check stays
+    result = CliRunner().invoke(cli.cli, ["check"])
 
-    assert result.exit_code == 0
-    assert "config check" in result.output
-    assert "delete" in result.output.lower()
-    assert "Examples" in result.output
+    assert result.exit_code != 0
+    assert "No such command" in result.output
+    assert "check" not in cli.cli.commands
+    config_help = CliRunner().invoke(cli.cli, ["config", "check", "--help"])
+    assert config_help.exit_code == 0
+    assert "preflight" in config_help.output.lower()
 
 
 def test_provision_cmd_is_gone(wired: Instance) -> None:
