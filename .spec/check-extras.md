@@ -142,6 +142,12 @@ for granular /sdd:check runs.
 - `config check` never matrix line; never erp-match
 - unknown `ACU_*` ignored except known keys incl `ACU_API_VERSION`
 
+## §V.47 — no-lifecycle-cmd gate (extracted from SPEC.md §V.47)
+
+- cmd: `.spec/scripts/check-extras.sh` — V47 row; scope `src/`; pattern `check_cmd|_run_lifecycle|_lifecycle_|_resolve_check_tenant`
+- surviving match (`V47|VIOLATE|file:line: …`, exit 1) → bail: `dropped lifecycle-check helper per §V.47 — cold rebuild is compose, never wrap cmd`
+- `acu config check` stays
+
 ## §V.19 — release-pipeline recipe (extracted from SPEC.md §V.19)
 
 - sole path: `make release <part>` — `make check` first, then bump + CHANGELOG promote + commit + tag, `make check` again on the promoted tree, then push
