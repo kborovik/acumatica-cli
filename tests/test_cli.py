@@ -964,6 +964,8 @@ def test_config_show_reflects_global_flag_overrides(
         [
             "--url",
             "http://edge.example/AcumaticaERP",
+            "--api-version",
+            "24.200.001",
             "--username",
             "auditor",
             "--password",
@@ -976,6 +978,7 @@ def test_config_show_reflects_global_flag_overrides(
     assert result.exit_code == 0
     assert "ACU_BASE_URL=http://edge.example/AcumaticaERP" in result.output
     assert "ACU_SSH=Administrator@acu.test" in result.output  # .env survives
+    assert "ACU_API_VERSION=24.200.001" in result.output
     assert "ACU_USER=auditor" in result.output
     assert "flag-secret" not in result.output
     assert not [
@@ -1823,6 +1826,14 @@ def test_global_host_flag_is_gone(wired: Instance) -> None:
     # T40: derivation retired, nothing for a global --host to re-run; the
     # flag survives only on config init as template substitution
     result = CliRunner().invoke(cli.cli, ["--host", "edge.example", "config", "show"])
+
+    assert result.exit_code != 0
+    assert "No such option" in result.output
+
+
+def test_cell_flag_is_gone(wired: Instance) -> None:
+    # T218/V27: --cell retired with matrix.yaml
+    result = CliRunner().invoke(cli.cli, ["--cell", "x", "config", "show"])
 
     assert result.exit_code != 0
     assert "No such option" in result.output

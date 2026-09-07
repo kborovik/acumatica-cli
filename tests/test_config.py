@@ -6,6 +6,7 @@ discovery), carrying where + secrets as ACU_* vars. Per key the first set
 value wins: flag, ACU_* var (process environment over .env), code default.
 """
 
+import importlib
 from pathlib import Path
 
 import pytest
@@ -87,6 +88,12 @@ def test_acu_api_version_dotenv_when_process_unset(data_root: Path) -> None:
     (data_root / ".env").write_text(MINIMAL_ENV + "ACU_API_VERSION=24.200.001\n")
     inst = load_instance()
     assert inst.api_version == "24.200.001"
+
+
+def test_matrix_module_is_gone() -> None:
+    # T218/V27: no matrix loader — package has no acumatica_cli.matrix
+    with pytest.raises(ModuleNotFoundError, match=r"acumatica_cli\.matrix"):
+        importlib.import_module("acumatica_cli.matrix")
 
 
 def test_leftover_matrix_yaml_is_ignored(data_root: Path) -> None:
