@@ -176,8 +176,12 @@ def test_makefile_release_promotes_changelog() -> None:
     assert "scripts/changelog promote" in text
     assert "CHANGELOG.md" in text
     assert "$(MAKE) check" in text
+    assert 'git tag "v$$version"' in text
+    assert "git push --tags" not in text
+    assert 'git push origin "v$$version"' in text
     assert text.index("scripts/changelog promote") < text.index("$(MAKE) check")
-    assert text.index("$(MAKE) check") < text.index("git push")
+    assert text.index("$(MAKE) check") < text.index("git tag")
+    assert text.index("git tag") < text.index("git push")
     # never local gh release create
     assert "gh release create" not in text
 

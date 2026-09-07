@@ -360,9 +360,9 @@ gmake release patch   # or minor | major
 2. Fail if `## Unreleased` has no bullets
 3. Bump `pyproject.toml` version (`major` | `minor` | `patch`)
 4. Promote Unreleased body to `## [vX.Y.Z] - YYYY-MM-DD`, leave an empty `## Unreleased`
-5. Commit `CHANGELOG.md` + `pyproject.toml` (+ lock if bumped) together, tag `vX.Y.Z`
-6. `gmake check` again on the promoted tree
-7. Push tag + branch — GitHub Actions publishes
+5. Commit `CHANGELOG.md` + `pyproject.toml` (+ lock if bumped) together
+6. `gmake check` again on the promoted tree — fail keeps the commit, creates no tag, pushes nothing
+7. Tag `vX.Y.Z` and push branch + that tag — GitHub Actions publishes
 
 GitHub Actions on tag `v*` re-runs CI, builds sdist+wheel, publishes to PyPI via OIDC trusted publishing, and creates a GitHub Release whose notes are the promoted CHANGELOG section for that tag (plus the artifacts).
 
