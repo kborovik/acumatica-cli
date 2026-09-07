@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# check-extras.sh - mechanical V1/V10/V18/V27/V49 drift greps (SPEC ST.19).
+# check-extras.sh - mechanical V1/V10/V18/V27/V47/V49 drift greps (SPEC ST.19).
 #
 # /sdd:check extras-hook contract: emit bare `id|verdict|evidence` rows
 # (no header, no prose) on stdout; the check run appends them verbatim.
@@ -83,6 +83,20 @@ if [ -n "$v27" ]; then
     fail=1
 else
     row V27 HOLD "src/ free of live matrix.yaml/--cell/load_matrix"
+fi
+
+# V47 no-lifecycle-cmd: src/ never ships dropped lifecycle-check helpers
+# (check_cmd, _run_lifecycle, _lifecycle_, _resolve_check_tenant).
+# `acu config check` stays (identifier config_check).
+v47_pat='check_cmd|_run_lifecycle|_lifecycle_|_resolve_check_tenant'
+v47=$(
+    grep -RHn --include='*.py' -E "$v47_pat" "$SRC" 2>/dev/null | head -1
+)
+if [ -n "$v47" ]; then
+    row V47 VIOLATE "$v47 dropped lifecycle-check helper"
+    fail=1
+else
+    row V47 HOLD "src/ free of dropped lifecycle-check helpers"
 fi
 
 # V49 md-prose-density: human-facing Markdown prose paragraphs <= 2

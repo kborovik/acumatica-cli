@@ -210,7 +210,7 @@ T229|x|docs replace T189 + RolesByUser-persist claim w/ actual persist path; CHA
 T230|x|drop `acu check` CLI + lifecycle helpers + offline tests; keep `config check`|V47,I.cmd,V13
 T231|x|sweep remaining lifecycle-check sites (scope: `check_cmd|_run_lifecycle|_lifecycle_|_resolve_check_tenant`)|V47,V13,V17,T230
 T232|x|README+templates+help+CHANGELOG Unreleased drop `acu check`; compose tenant create→apply→run→diff; suite green|V12,V19,V48,V47,T230
-T233|.|add extras-hook V47 (`check_cmd|_run_lifecycle|_lifecycle_|_resolve_check_tenant` in src/) + tests; suite green|V47,V13,T231
+T233|x|add extras-hook V47 (`check_cmd|_run_lifecycle|_lifecycle_|_resolve_check_tenant` in src/) + tests; suite green|V47,V13,T231
 
 ## §B BUGS
 

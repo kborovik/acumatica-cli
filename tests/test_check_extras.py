@@ -1,4 +1,4 @@
-""".spec/scripts/check-extras.sh: the mechanized V1/V10/V18/V27/V49 drift greps.
+""".spec/scripts/check-extras.sh: the mechanized V1/V10/V18/V27/V47/V49 drift greps.
 
 The hook resolves the repo root from its own location, so VIOLATE branches
 are pinned via a synthetic repo tree in tmp_path (script copied under
@@ -23,6 +23,12 @@ CLEAN_TENANT = (
 )
 CLEAN_CLIENT = "import httpx\n"
 CLEAN_MODELS = "from pydantic import BaseModel\n\nclass Model(BaseModel):\n    pass\n"
+
+# Concatenated so this file never carries the dropped identifiers (T231 sweep).
+CHECK_CMD = "check" + "_cmd"
+RUN_LIFECYCLE = "_run_" + "lifecycle"
+LIFECYCLE_PREFIX = "_life" + "cycle_"
+RESOLVE_CHECK_TENANT = "_resolve_check" + "_tenant"
 
 
 def make_repo(tmp_path: Path, **files: str) -> Path:
@@ -62,13 +68,13 @@ def rows(r: subprocess.CompletedProcess[str]) -> dict[str, tuple[str, str]]:
     return out
 
 
-def test_real_tree_emits_five_hold_rows() -> None:
+def test_real_tree_emits_six_hold_rows() -> None:
     r = run_hook()
     assert r.returncode == 0, r.stdout + r.stderr
     table = rows(r)
-    assert set(table) == {"V1", "V10", "V18", "V27", "V49"}
+    assert set(table) == {"V1", "V10", "V18", "V27", "V47", "V49"}
     assert all(verdict == "HOLD" for verdict, _ in table.values())
-    assert len(r.stdout.splitlines()) == 5  # no header, no prose
+    assert len(r.stdout.splitlines()) == 6  # no header, no prose
     r.stdout.encode("ascii")  # V9: the audit obeys the invariant it enforces
 
 
@@ -195,6 +201,54 @@ def test_v27_readme_matrix_yaml_violates(tmp_path: Path) -> None:
     verdict, evidence = rows(r)["V27"]
     assert verdict == "VIOLATE"
     assert "templates/README.md:1" in evidence
+
+
+def test_v47_dropped_verb_helper_violates(tmp_path: Path) -> None:
+    script = make_repo(tmp_path, **{"cli.py": f"def {CHECK_CMD}():\n    pass\n"})
+    r = run_hook(script)
+    assert r.returncode == 1
+    verdict, evidence = rows(r)["V47"]
+    assert verdict == "VIOLATE"
+    assert "cli.py:1" in evidence
+    assert rows(r)["V1"][0] == "HOLD"
+
+
+def test_v47_dropped_run_helper_violates(tmp_path: Path) -> None:
+    script = make_repo(tmp_path, **{"cli.py": f"def {RUN_LIFECYCLE}():\n    pass\n"})
+    r = run_hook(script)
+    assert r.returncode == 1
+    verdict, evidence = rows(r)["V47"]
+    assert verdict == "VIOLATE"
+    assert "cli.py:1" in evidence
+
+
+def test_v47_dropped_prefix_helper_violates(tmp_path: Path) -> None:
+    script = make_repo(
+        tmp_path, **{"cli.py": f"def {LIFECYCLE_PREFIX}tenant():\n    pass\n"}
+    )
+    r = run_hook(script)
+    assert r.returncode == 1
+    verdict, evidence = rows(r)["V47"]
+    assert verdict == "VIOLATE"
+    assert "cli.py:1" in evidence
+
+
+def test_v47_dropped_resolve_helper_violates(tmp_path: Path) -> None:
+    script = make_repo(
+        tmp_path, **{"cli.py": f"def {RESOLVE_CHECK_TENANT}():\n    pass\n"}
+    )
+    r = run_hook(script)
+    assert r.returncode == 1
+    verdict, evidence = rows(r)["V47"]
+    assert verdict == "VIOLATE"
+    assert "cli.py:1" in evidence
+
+
+def test_v47_config_check_holds(tmp_path: Path) -> None:
+    script = make_repo(tmp_path, **{"cli.py": "def config_check():\n    pass\n"})
+    r = run_hook(script)
+    assert r.returncode == 0, r.stdout + r.stderr
+    assert rows(r)["V47"][0] == "HOLD"
 
 
 def test_v49_three_sentence_prose_violates(tmp_path: Path) -> None:
