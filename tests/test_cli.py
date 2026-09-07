@@ -693,6 +693,27 @@ def test_root_check_command_is_gone(wired: Instance) -> None:
     assert "preflight" in config_help.output.lower()
 
 
+def test_dropped_check_helpers_absent() -> None:
+    # T231/V47/V17: dropped helpers stay gone; cold rebuild is compose, not a cmd
+    repo = Path(__file__).resolve().parents[1]
+    needles = (
+        "check" + "_cmd",
+        "_run_" + "lifecycle",
+        "_life" + "cycle_",
+        "_resolve_check" + "_tenant",
+    )
+    hits: list[str] = []
+    for root_name in ("src", "tests"):
+        for path in (repo / root_name).rglob("*"):
+            if not path.is_file() or path.suffix not in {".py", ".md", ".yaml", ".yml"}:
+                continue
+            text = path.read_text(encoding="utf-8", errors="replace")
+            for needle in needles:
+                if needle in text:
+                    hits.append(f"{path.relative_to(repo)}: {needle}")
+    assert hits == []
+
+
 def test_provision_cmd_is_gone(wired: Instance) -> None:
     # T45: tenant create chains the bootstrap publish itself; the separate
     # provision command must not exist

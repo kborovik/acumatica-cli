@@ -208,7 +208,7 @@ T227|x|offline tests apply body RolesByUser mapping + no Selected; bootstrap fie
 T228|x|wire UsersInRoles persist via RoleProvider or PXDatabase (not mapped detail PUT); live SQL proof session CompanyID|V4,V13,V53,B31,B32,B33,T226
 T229|x|docs replace T189 + RolesByUser-persist claim w/ actual persist path; CHANGELOG Unreleased (gh #35)|V12,V19,V53,T228
 T230|x|drop `acu check` CLI + lifecycle helpers + offline tests; keep `config check`|V47,I.cmd,V13
-T231|.|sweep remaining lifecycle-check sites (scope: `check_cmd|_run_lifecycle|_lifecycle_|_resolve_check_tenant`)|V47,V13,V17,T230
+T231|x|sweep remaining lifecycle-check sites (scope: `check_cmd|_run_lifecycle|_lifecycle_|_resolve_check_tenant`)|V47,V13,V17,T230
 T232|.|README+templates+help+CHANGELOG Unreleased drop `acu check`; compose tenant create→apply→run→diff; suite green|V12,V19,V48,V47,T230
 
 ## §B BUGS
