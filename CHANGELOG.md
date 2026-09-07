@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+### Removed
+
+- **`acu check` (V47):** dropped. Cold rebuild is `tenant create` then
+  `apply` then `run` then `diff`. `acu config check` stays as read-only
+  preflight.
+
 ### Changed
 
 - **`gmake release`:** re-runs `gmake check` on the promoted tree

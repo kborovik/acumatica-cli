@@ -55,7 +55,7 @@ COMMAND MAP (pick by intent)
   seed write   apply [--dry-run] [FILES...]              (sole mutator)
   seed check   diff [FILES...]                           (exit 2 on drift)
   txns         run [--dry-run] [FILES...]
-  cold CI      check [--tenant LOGIN]                    (!= config check)
+  cold rebuild tenant create then apply then run then diff (no wrap cmd)
   pull seed    extract [--only ENTITY]...                (inverse of apply)
   observe      state [--diff|--assert-unchanged]
   offline      inventory ARTIFACT | reconcile
@@ -66,7 +66,6 @@ EXIT CODES (common)
   0  success
   1  operational / parse / expectation failure
   2  seed drift (diff) or state moved (state --assert-unchanged)
-  check (lifecycle) never exits 2 — drift fails the run as exit 1
 
 \b
 DEFAULT PATHS (when FILES omitted)
@@ -674,8 +673,8 @@ def config_group() -> None:
       show           print resolved config as a complete .env (password redacted)
       check          read-only live preflight (REST + optional SSH)
 
-    Not the same as `acu check` (cold lifecycle rebuild). Start here on a
-    new machine: init → edit .env → config check → tenant create / bootstrap.
+    Start here on a new machine: init → edit .env → config check →
+    tenant create / bootstrap.
     """
 
 
@@ -721,7 +720,6 @@ def config_init(host: str | None, directory: Path | None) -> None:
     output.data("  5. acu run scenario/")
     output.data("  6. acu diff config/")
     output.data("  7. acu state")
-    output.data("  8. acu check              # cold lifecycle (SSH + tenant)")
 
 
 @config_group.command("show")
@@ -751,7 +749,7 @@ def config_check(ctx: click.Context) -> None:
     """Read-only preflight of the resolved target (ok/fail/warn/skip lines).
 
     Proves connectivity before apply/run. Writes nothing (no PUT, no tenant
-    CRUD). Not `acu check` (that is a destructive cold lifecycle rebuild).
+    CRUD).
 
     \b
     Probe order

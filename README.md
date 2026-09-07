@@ -27,7 +27,7 @@ YAML in git is the source of truth; the live tenant is the target. `apply` is th
 | Capture derived balances | `state` | Inquire trial-balance etc. into `state/` (not seed) |
 | Create and destroy tenants | `tenant` | SSH control plane: list / create / delete / recycle |
 | Publish the Bootstrap contract | `bootstrap` | REST publish of AcuBootstrap (or `--export` zip for the UI) |
-| Prove a cold rebuild | `check` | create, then apply, then run, then diff on a fresh tenant |
+| Prove a cold rebuild | `tenant create` then `apply` then `run` then `diff` | Compose on a fresh tenant. No wrap command. |
 | Snapshot a site offline | `inventory` | SM203520 XML ZIP or `ac.exe export xml` writes `inventory/` |
 | Cross-check snapshot vs seed | `reconcile` | `inventory/` plus optional `config/` writes `findings/` only |
 | Dump the contract schema | `schema` | OpenAPI `swagger.json` for the pinned endpoint |
@@ -58,7 +58,6 @@ acu --tenant DEV apply config/           # seed config/{bootstrap,baseline,setup
 acu --tenant DEV run scenario/           # once capital → buy → build → sell
 acu --tenant DEV diff config/            # prove zero drift (exit 2 on drift)
 acu --tenant DEV state                   # capture state/ trial-balance
-acu check --yes --tenant DEV             # cold lifecycle create→apply→run→diff (leave tenant)
 ```
 
 Bare `apply` / `diff` (no path args) also prefer `config/` when those trees exist.
@@ -97,7 +96,6 @@ acu [--tenant NAME] [--url URL] [--ssh USER@HOST] [--api-version V]
 ├── apply [--dry-run] [FILES...]      push YAML via REST (idempotent PUT upserts)
 ├── diff  [FILES...]                  drift check vs the live tenant (exit 2 on drift)
 ├── run   [--dry-run] [FILES...]      execute transaction scenario YAML (exit 1 on any miss)
-├── check [--yes] [--tenant L]        cold lifecycle create→apply→run→diff; leave tenant (V47)
 ├── state [--out DIR] [--diff] [--assert-unchanged] [--dry-run] [FILES...]
 │                                     capture derived state into state/ (not seed)
 ├── extract [--out DIR] [--only NAME]... [--force] [--dry-run]
@@ -267,7 +265,6 @@ Ad-hoc override: `acu --api-version 24.200.001 …` (version half only, never
 `base_url` resolves as `--url`, else `ACU_BASE_URL`, else a hard error naming sources.
 
 `acu config show` prints the resolved `.env` (password excluded; includes `ACU_API_VERSION`).
-`acu check` (lifecycle) uses the same resolved instance.
 
 ### Multi-host overlays (V44)
 
@@ -299,9 +296,6 @@ acu diff
 # explicit path args (no auto) — later path wins same keys
 acu apply config/ overlays/default-24.200.001/
 acu diff config/ overlays/default-24.200.001/
-
-# cold lifecycle vs the resolved .env instance (SSH + tenant required)
-acu check --yes --tenant LAB5
 ```
 
 Add a future half by creating `overlays/default-<new-half>/` with the
@@ -317,7 +311,7 @@ Worth knowing:
 - Without a `.env`, global flags plus the process environment supply the configuration.
 - When `ACU_SSH` is **absent**, acu defaults to `Administrator@` + the resolved base_url hostname.
   A **present blank** `ACU_SSH=` is the hosted opt-out.
-  Only `acu tenant` / `acu check` require a non-empty value post-default.
+  Only `acu tenant` requires a non-empty value post-default.
 - `acu config show` prints the resolved `.env` (password excluded).
 - Redirect it to turn resolved state into a working config: `acu config show > .env`.
 

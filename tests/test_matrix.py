@@ -194,6 +194,23 @@ def test_docs_user_role_membership_persist() -> None:
     assert "92-role-users" in templates
 
 
+def test_docs_drop_root_check() -> None:
+    """T232/V12/V19/V47: human-facing docs compose cold rebuild; no acu check verb."""
+    repo = Path(__file__).resolve().parents[1]
+    readme = (repo / "README.md").read_text()
+    templates = (repo / "src" / "acumatica_cli" / "templates" / "README.md").read_text()
+    changelog = (repo / "CHANGELOG.md").read_text()
+    assert "acu check --yes" not in readme
+    assert "check [--yes]" not in readme
+    assert "| `check` |" not in readme
+    assert "then `apply` then `run` then `diff`" in readme
+    assert "acu check --yes" not in templates
+    assert "tenant create" in templates
+    # V19 promote empties Unreleased; persist note lives in the versioned section.
+    assert "`acu check` (V47):** dropped" in changelog
+    assert "`tenant create` then" in changelog
+
+
 def test_docs_env_sole_config() -> None:
     """T219/V12/V27: human-facing docs pin via .env, not matrix.yaml."""
     repo = Path(__file__).resolve().parents[1]

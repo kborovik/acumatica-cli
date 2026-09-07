@@ -667,8 +667,11 @@ def test_root_help_is_agent_oriented(wired: Instance) -> None:
     # sole writer + drift contract
     assert "apply" in out
     assert "diff" in out
-    # disambiguate the two check commands
+    # V48/V47: config check stays; no root check verb; cold rebuild is compose
     assert "config check" in out
+    assert "tenant create" in out
+    assert "cold CI" not in out
+    assert "check [--tenant" not in out
     assert "-h, --help" in out or "--help" in out
 
 
@@ -1201,6 +1204,7 @@ def test_config_init_prints_next_step_cmds(tmp_path: Path) -> None:
     assert "acu apply config/" in result.output
     assert "acu run scenario/" in result.output
     assert "acu diff config/" in result.output
+    assert "acu check" not in result.output
 
 
 def test_config_init_no_flavor_option(tmp_path: Path) -> None:

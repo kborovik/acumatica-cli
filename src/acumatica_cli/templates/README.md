@@ -30,8 +30,7 @@ acu state
 # warm gate: once-capital only — additive buy/sell moves numeric observations
 acu run scenario/10-seed-capital.yaml && acu state --assert-unchanged
 
-# 7. Cold lifecycle (SSH + tenant)
-# acu check --yes
+# SSH cold rebuild: acu tenant create --login NAME, then apply, run, diff
 
 # Optional: re-seed from live (inverse of apply; always under config/)
 # acu extract --out . --force
