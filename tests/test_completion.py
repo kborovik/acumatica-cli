@@ -80,11 +80,23 @@ def test_completion_rejected_after_subcommand() -> None:
 def test_extract_only_completes_manifest_entity_names() -> None:
     # I.cmd: --only values come from the packaged seed catalog - package
     # data (V23), matching the catalog's entity spelling exactly
-    values = _completions(["extract", "--only"], "")
+    values = _completions(["survey", "extract", "--only"], "")
 
     assert "Company" in values
     assert "UnitsOfMeasure" in values
-    assert _completions(["extract", "--only"], "Led") == ["Ledger", "LedgerCompany"]
+    assert _completions(["survey", "extract", "--only"], "Led") == [
+        "Ledger",
+        "LedgerCompany",
+    ]
+
+
+def test_survey_verbs_complete_under_noun() -> None:
+    # T234/V15: extract|inventory|reconcile complete under survey, never L1
+    values = set(_completions(["survey"], ""))
+    assert {"extract", "inventory", "reconcile"} <= values
+    assert "extract" not in _completions([], "ext")
+    assert "inventory" not in _completions([], "inv")
+    assert "reconcile" not in _completions([], "rec")
 
 
 def test_apply_and_diff_path_args_complete_as_files() -> None:

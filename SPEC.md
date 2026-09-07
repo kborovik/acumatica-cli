@@ -211,7 +211,7 @@ T230|x|drop `acu check` CLI + lifecycle helpers + offline tests; keep `config ch
 T231|x|sweep remaining lifecycle-check sites (scope: `check_cmd|_run_lifecycle|_lifecycle_|_resolve_check_tenant`)|V47,V13,V17,T230
 T232|x|README+templates+help+CHANGELOG Unreleased drop `acu check`; compose tenant create→apply→run→diff; suite green|V12,V19,V48,V47,T230
 T233|x|add extras-hook V47 (`check_cmd|_run_lifecycle|_lifecycle_|_resolve_check_tenant` in src/) + tests; suite green|V47,V13,T231
-T234|.|click group `survey`; move extract/inventory/reconcile under it; drop L1 those cmds (no aliases); src help+error strings; offline tests help+invoke+completion|V15,I.cmd,V13
+T234|x|click group `survey`; move extract/inventory/reconcile under it; drop L1 those cmds (no aliases); src help+error strings; offline tests help+invoke+completion|V15,I.cmd,V13
 T235|.|sweep remaining `acu extract`/`acu inventory`/`acu reconcile` CLI invocations (scope: `README.md|docs/*.md|src/acumatica_cli/templates|CHANGELOG.md` Unreleased)|V15,V48,V19,V49,I.cmd,T234
 T236|.|extras-hook V15 never L1 `@cli.command("extract"|"inventory"|"reconcile")` (scope: `src/`; pattern `@cli.command\("(extract|inventory|reconcile)"\)`); tests; suite green|V15,V13,T234
 

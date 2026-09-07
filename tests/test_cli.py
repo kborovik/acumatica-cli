@@ -643,12 +643,13 @@ def test_tenant_create_help_lists_exact_dataset_names(wired: Instance) -> None:
 
 def test_extract_help_documents_config_hard_cut(wired: Instance) -> None:
     # T120/V12: extract is inverse of apply under config/ only (no root emit)
-    result = CliRunner().invoke(cli.cli, ["extract", "--help"])
+    result = CliRunner().invoke(cli.cli, ["survey", "extract", "--help"])
 
     assert result.exit_code == 0
     assert "inverse of apply" in result.output
     assert "config/" in result.output
     assert "seed_catalog.yaml" in result.output
+    assert "acu --tenant DEV survey extract" in result.output
 
 
 def test_root_help_is_agent_oriented(wired: Instance) -> None:
@@ -670,6 +671,9 @@ def test_root_help_is_agent_oriented(wired: Instance) -> None:
     # V48/V47: config check stays; no root check verb; cold rebuild is compose
     assert "config check" in out
     assert "tenant create" in out
+    assert "survey extract" in out
+    assert "survey inventory" in out
+    assert "survey reconcile" in out
     assert "cold CI" not in out
     assert "check [--tenant" not in out
     assert "-h, --help" in out or "--help" in out
@@ -694,6 +698,21 @@ def test_root_check_command_is_gone(wired: Instance) -> None:
     config_help = CliRunner().invoke(cli.cli, ["config", "check", "--help"])
     assert config_help.exit_code == 0
     assert "preflight" in config_help.output.lower()
+
+
+def test_survey_owns_extract_inventory_reconcile(wired: Instance) -> None:
+    # T234/V15: survey noun owns extract|inventory|reconcile; L1 gone, no aliases
+    for name in ("extract", "inventory", "reconcile"):
+        result = CliRunner().invoke(cli.cli, [name])
+        assert result.exit_code != 0
+        assert "No such command" in result.output
+        assert name not in cli.cli.commands
+    assert "survey" in cli.cli.commands
+    help_r = CliRunner().invoke(cli.cli, ["survey", "--help"])
+    assert help_r.exit_code == 0
+    for name in ("extract", "inventory", "reconcile"):
+        assert name in help_r.output
+        assert name in cli.survey_group.commands
 
 
 def test_dropped_check_helpers_absent() -> None:

@@ -6,7 +6,7 @@ seed under ``config/`` (bootstrap + baseline + setup + master, V34):
 1. Tenant A is configured from the scaffolded synthetic data repo (T63:
    packaged ``config init`` templates into a tmp dir — single org, no
    repo-root symlinks, no dataset tenants).
-2. ``acu extract --out a/`` dumps the full catalog off A (hard-cut
+2. ``acu survey extract --out a/`` dumps the full catalog off A (hard-cut)
    ``config/`` emit; T115).
 3. Tenant B is created fresh and configured from ``a/config`` alone.
 4. ``acu diff a/config`` on B is clean (V4, exit 0).
@@ -146,7 +146,7 @@ def test_extract_dumps_tenant_a(
     master_expected = {p for p in expected if p.startswith("config/master/")}
     assert master_expected, "catalog must include config/master/ rows (T117/T119)"
 
-    proc = acu("--tenant", LOGIN_A, "extract", "--out", str(dir_a))
+    proc = acu("--tenant", LOGIN_A, "survey", "extract", "--out", str(dir_a))
     assert proc.returncode == 0, _combined(proc)
     skips = [ln for ln in proc.stdout.splitlines() if ln.startswith("skip ")]
     assert not any("entity not in active Bootstrap contract" in ln for ln in skips), (
@@ -222,7 +222,7 @@ def test_reextract_is_byte_identical(
     filter-split files (Warehouse, StockItem) are in the set.
     """
     dir_a, dir_b = out_dirs
-    proc = acu("--tenant", LOGIN_B, "extract", "--out", str(dir_b))
+    proc = acu("--tenant", LOGIN_B, "survey", "extract", "--out", str(dir_b))
     assert proc.returncode == 0, _combined(proc)
     set_a, set_b = _yaml_set(dir_a), _yaml_set(dir_b)
     assert set_b == set_a

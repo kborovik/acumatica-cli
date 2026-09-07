@@ -362,7 +362,7 @@ def test_emit_dry_run_writes_nothing(tmp_path: Path) -> None:
 
 
 def test_inventory_help_documents_offline_path() -> None:
-    result = CliRunner().invoke(cli.cli, ["inventory", "--help"])
+    result = CliRunner().invoke(cli.cli, ["survey", "inventory", "--help"])
     assert result.exit_code == 0
     assert "offline" in result.output.lower() or "No REST" in result.output
     assert "--out" in result.output
@@ -386,7 +386,7 @@ def test_cli_inventory_folder_to_default_out(
     )
     monkeypatch.chdir(tmp_path)
     # No .env, no ACU_PASSWORD — must still succeed
-    result = CliRunner().invoke(cli.cli, ["inventory", str(folder)])
+    result = CliRunner().invoke(cli.cli, ["survey", "inventory", str(folder)])
     assert result.exit_code == 0, result.output
     assert (tmp_path / "inventory" / "summary.yaml").is_file()
     assert (tmp_path / "inventory" / "tables" / "Account.yaml").is_file()
@@ -399,7 +399,9 @@ def test_cli_inventory_folder_to_default_out(
 def test_cli_inventory_dry_run(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     folder = _write_folder(tmp_path, {"Account.xml": ACCOUNT_XML})
     monkeypatch.chdir(tmp_path)
-    result = CliRunner().invoke(cli.cli, ["inventory", "--dry-run", str(folder)])
+    result = CliRunner().invoke(
+        cli.cli, ["survey", "inventory", "--dry-run", str(folder)]
+    )
     assert result.exit_code == 0, result.output
     assert "would write" in result.output
     assert not (tmp_path / "inventory").exists()
@@ -414,7 +416,9 @@ def test_cli_inventory_custom_out_and_zip(tmp_path: Path) -> None:
         },
     )
     out = tmp_path / "out-inv"
-    result = CliRunner().invoke(cli.cli, ["inventory", "--out", str(out), str(zpath)])
+    result = CliRunner().invoke(
+        cli.cli, ["survey", "inventory", "--out", str(out), str(zpath)]
+    )
     assert result.exit_code == 0, result.output
     summary = yaml.safe_load((out / "summary.yaml").read_text(encoding="utf-8"))
     assert summary["erp"] == "26.101.0225"
@@ -439,13 +443,13 @@ def test_cli_inventory_ignores_leftover_matrix_yaml(
         encoding="utf-8",
     )
     monkeypatch.chdir(tmp_path)
-    result = CliRunner().invoke(cli.cli, ["inventory", str(zpath)])
+    result = CliRunner().invoke(cli.cli, ["survey", "inventory", str(zpath)])
     assert result.exit_code == 0, result.output
 
 
 def test_cli_inventory_rejects_adb(tmp_path: Path) -> None:
     adb = tmp_path / "tenant.adb"
     adb.write_bytes(b"\x00")
-    result = CliRunner().invoke(cli.cli, ["inventory", str(adb)])
+    result = CliRunner().invoke(cli.cli, ["survey", "inventory", str(adb)])
     assert result.exit_code == 1
     assert ".adb" in result.output

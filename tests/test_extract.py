@@ -2095,7 +2095,7 @@ def test_virgin_tenant_dry_run_walks_full_manifest_exit_0(
         cli, "AcumaticaClient", lambda inst, **kw: _client(inst, server)
     )
     result = CliRunner().invoke(
-        cli.cli, ["extract", "--out", str(tmp_path), "--dry-run"]
+        cli.cli, ["survey", "extract", "--out", str(tmp_path), "--dry-run"]
     )
     assert result.exit_code == 0, result.output
     # entity empty + setup-not-entered screens + financial-year empty
@@ -2141,7 +2141,7 @@ def test_extract_cmd_exits_1_when_any_row_failed(
     monkeypatch.setattr(
         cli, "AcumaticaClient", lambda inst, **kw: _client(inst, server)
     )
-    result = CliRunner().invoke(cli.cli, ["extract", "--out", str(tmp_path)])
+    result = CliRunner().invoke(cli.cli, ["survey", "extract", "--out", str(tmp_path)])
     assert result.exit_code == 1
     assert "x Subaccount: " in result.stderr
     assert "1 failed" in result.stderr
@@ -2168,7 +2168,16 @@ def test_extract_cmd_wires_flags_through(
     monkeypatch.setattr(cli.extract, "run", fake_run)
     result = CliRunner().invoke(
         cli.cli,
-        ["extract", "--out", str(tmp_path), "--only", "Ledger", "--force", "--dry-run"],
+        [
+            "survey",
+            "extract",
+            "--out",
+            str(tmp_path),
+            "--only",
+            "Ledger",
+            "--force",
+            "--dry-run",
+        ],
     )
     assert result.exit_code == 0, result.output
     assert calls == [
@@ -2193,6 +2202,6 @@ def test_extract_cmd_defaults_out_to_cwd(
     monkeypatch.setattr(
         cli.extract, "run", lambda client, out_dir, **kw: calls.append(out_dir)
     )
-    result = CliRunner().invoke(cli.cli, ["extract"])
+    result = CliRunner().invoke(cli.cli, ["survey", "extract"])
     assert result.exit_code == 0, result.output
     assert calls == [Path(".")]

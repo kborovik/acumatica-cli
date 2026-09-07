@@ -287,7 +287,7 @@ class FindingsBundle(Model):
 
 
 def load_inventory_tree(path: Path | str) -> InventoryTree:
-    """Load an ``inventory/`` tree written by ``acu inventory`` (I.data)."""
+    """Load an ``inventory/`` tree written by ``acu survey inventory`` (I.data)."""
     root = Path(path)
     if not root.is_dir():
         raise SystemExit(f"{root}: inventory directory not found")
@@ -295,7 +295,7 @@ def load_inventory_tree(path: Path | str) -> InventoryTree:
     if not summary_path.is_file():
         raise SystemExit(
             f"{root}: missing {inventory.SUMMARY_NAME} "
-            "(run `acu inventory` first, or pass --inventory DIR)"
+            "(run `acu survey inventory` first, or pass --inventory DIR)"
         )
     try:
         raw = yaml.safe_load(summary_path.read_text(encoding="utf-8"))

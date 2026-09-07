@@ -1,4 +1,4 @@
-"""acu reconcile — offline findings from inventory/ + optional config/ (T129/T130)."""
+"""Offline findings from inventory/ + optional config/ (T129/T130)."""
 
 from __future__ import annotations
 
@@ -1610,7 +1610,7 @@ def test_emit_dry_run(tmp_path: Path) -> None:
 
 
 def test_reconcile_help_documents_offline() -> None:
-    result = CliRunner().invoke(cli.cli, ["reconcile", "--help"])
+    result = CliRunner().invoke(cli.cli, ["survey", "reconcile", "--help"])
     assert result.exit_code == 0
     assert "offline" in result.output.lower() or "No REST" in result.output
     assert "--inventory" in result.output
@@ -1630,7 +1630,7 @@ def test_cli_reconcile_defaults(
     """Offline CLI: no password; inventory/ + optional config/ → findings/."""
     _inventory_tree(tmp_path, ACCOUNT_XML, ORPHAN_XML)
     monkeypatch.chdir(tmp_path)
-    result = CliRunner().invoke(cli.cli, ["reconcile"])
+    result = CliRunner().invoke(cli.cli, ["survey", "reconcile"])
     assert result.exit_code == 0, result.output
     assert (tmp_path / "findings" / "summary.yaml").is_file()
     assert (tmp_path / "findings" / "unmapped.yaml").is_file()
@@ -1649,7 +1649,7 @@ def test_cli_reconcile_with_config_deltas(
     _inventory_tree(tmp_path, ACCOUNT_XML)
     _write_config_account(tmp_path)
     monkeypatch.chdir(tmp_path)
-    result = CliRunner().invoke(cli.cli, ["reconcile"])
+    result = CliRunner().invoke(cli.cli, ["survey", "reconcile"])
     assert result.exit_code == 0, result.output
     deltas = yaml.safe_load(
         (tmp_path / "findings" / "deltas.yaml").read_text(encoding="utf-8")
@@ -1661,7 +1661,7 @@ def test_cli_reconcile_with_config_deltas(
 def test_cli_reconcile_dry_run(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     _inventory_tree(tmp_path, ACCOUNT_XML)
     monkeypatch.chdir(tmp_path)
-    result = CliRunner().invoke(cli.cli, ["reconcile", "--dry-run"])
+    result = CliRunner().invoke(cli.cli, ["survey", "reconcile", "--dry-run"])
     assert result.exit_code == 0, result.output
     assert "would write" in result.output
     assert not (tmp_path / "findings").exists()
@@ -1671,7 +1671,7 @@ def test_cli_reconcile_missing_inventory(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     monkeypatch.chdir(tmp_path)
-    result = CliRunner().invoke(cli.cli, ["reconcile"])
+    result = CliRunner().invoke(cli.cli, ["survey", "reconcile"])
     assert result.exit_code == 1
     assert "inventory" in result.output.lower() or "not found" in result.output
 
@@ -1683,6 +1683,7 @@ def test_cli_reconcile_custom_paths(tmp_path: Path) -> None:
     result = CliRunner().invoke(
         cli.cli,
         [
+            "survey",
             "reconcile",
             "--inventory",
             str(inv),

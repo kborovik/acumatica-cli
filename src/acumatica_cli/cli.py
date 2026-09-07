@@ -5,13 +5,13 @@ Configure Acumatica ERP from YAML in a git data repo. No UI wizards.
 \b
 MENTAL MODEL
   Data repo = directory with .env (walk-up from cwd). Holds:
-    config/{bootstrap,baseline,setup,master}/  seed YAML (apply/diff/extract)
+    config/{bootstrap,baseline,setup,master}/  seed YAML (apply/diff/survey extract)
     config/views/                              observer views (state)
     scenario/                                  transaction scripts (run)
     .env                                       secrets + where + API pin
     state/ inventory/ findings/ schemas/       command outputs (not seed)
   Two planes (do not mix):
-    REST data plane — apply diff run bootstrap extract state schema
+    REST data plane — apply diff run bootstrap survey extract state schema
       needs: base_url, tenant, password (SSH optional)
     SSH control plane — tenant list|create|delete|recycle
       needs: non-empty ACU_SSH (user@host)
@@ -56,9 +56,9 @@ COMMAND MAP (pick by intent)
   seed check   diff [FILES...]                           (exit 2 on drift)
   txns         run [--dry-run] [FILES...]
   cold rebuild tenant create then apply then run then diff (no wrap cmd)
-  pull seed    extract [--only ENTITY]...                (inverse of apply)
+  pull seed    survey extract [--only ENTITY]...         (inverse of apply)
   observe      state [--diff|--assert-unchanged]
-  offline      inventory ARTIFACT | reconcile
+  offline      survey inventory ARTIFACT | survey reconcile
   reference    schema
 
 \b
@@ -73,7 +73,7 @@ DEFAULT PATHS (when FILES omitted)
                 then overlays/default-<api>/ when present
   run         -> scenario/ (overlay same-basename wins)
   state       -> config/views/ -> writes state/
-  extract     -> always writes config/{bootstrap,baseline,setup,master}/
+  survey extract -> always writes config/{bootstrap,baseline,setup,master}/
 
 Run `acu <command> --help` for flags, examples, and prerequisites.
 See package README and docs/demo-seed.md for seed YAML shape.
@@ -1027,7 +1027,7 @@ def apply_cmd(inst: Instance, files: tuple[Path, ...], dry_run: bool) -> None:
       acu --tenant DEV apply --dry-run config/master/
       acu --tenant DEV apply config/baseline/20-accounts.yaml
 
-    Related: `diff` (drift) · `extract` (inverse pull) · `run` (txns).
+    Related: `diff` (drift) · `survey extract` (inverse pull) · `run` (txns).
     """
     total_ok = 0
     all_errors: list[str] = []
@@ -1106,7 +1106,7 @@ def diff_cmd(inst: Instance, files: tuple[Path, ...]) -> None:
       acu --tenant DEV diff config/
       acu --tenant DEV diff config/master/90-roles.yaml
 
-    Related: `apply` (fix) · `extract` (pull) · `state` (balances).
+    Related: `apply` (fix) · `survey extract` (pull) · `state` (balances).
     """
     paths = expand_files(files or default_apply_dirs(inst))
     drifts: list[str] = []
@@ -1189,7 +1189,27 @@ def _complete_only(
     ]
 
 
-@cli.command("extract")
+@cli.group("survey", context_settings=_HELP_CTX)
+def survey_group() -> None:
+    """Existing-tenant dual-reader (REST extract + offline inventory/reconcile).
+
+    Noun owns extract|inventory|reconcile. Never L1 those verbs. No aliases.
+
+    \b
+    Subcommands
+      extract [--only ENTITY]...   live GET -> config/ SEED_DIRS (REST)
+      inventory ARTIFACT           snapshot ZIP/folder -> inventory/ (offline)
+      reconcile                    inventory/ + optional config/ -> findings/ (offline)
+
+    \b
+    Examples
+      acu --tenant DEV survey extract
+      acu survey inventory ./export-xml/
+      acu survey reconcile
+    """
+
+
+@survey_group.command("extract")
 @click.option(
     "--out",
     "out_dir",
@@ -1230,11 +1250,11 @@ def extract_cmd(
 
     \b
     Examples
-      acu --tenant DEV extract
-      acu --tenant DEV extract --only Account --only Vendor
-      acu --tenant DEV extract --force --dry-run
+      acu --tenant DEV survey extract
+      acu --tenant DEV survey extract --only Account --only Vendor
+      acu --tenant DEV survey extract --force --dry-run
 
-    Related: `apply` · `diff` · `inventory` · `state`.
+    Related: `apply` · `diff` · `survey inventory` · `state`.
     """
     with AcumaticaClient(inst) as client:
         failed = extract.run(
@@ -1258,7 +1278,7 @@ def _exit_on_drift(inst: Instance, drifts: list[str], files: int) -> None:
     output.success(f"no drift on {inst.tenant} ({inst.base_url}, {files} file(s))")
 
 
-@cli.command("inventory")
+@survey_group.command("inventory")
 @click.argument(
     "artifact",
     type=click.Path(exists=True, path_type=Path),
@@ -1290,15 +1310,15 @@ def inventory_cmd(
     Existing files skip unless --force.
 
     Not extract (REST → config/ seed). Not state (balances). Never writes
-    config/ or state/. Feed inventory/ into `acu reconcile`.
+    config/ or state/. Feed inventory/ into `acu survey reconcile`.
 
     \b
     Exit  0 = clean · 1 = parse/format/version fail · never 2
 
     \b
     Examples
-      acu inventory ./export-xml/
-      acu inventory Settings.zip --out inventory/ --force
+      acu survey inventory ./export-xml/
+      acu survey inventory Settings.zip --out inventory/ --force
     """
     # V9 long single-op: artifact parse (ZIP/folder IR) via step; banner +
     # per-table write/skip emit stay multi-unit stdout after.
@@ -1312,13 +1332,13 @@ def inventory_cmd(
     inventory.emit(art, dest, force=force, dry_run=dry_run)
 
 
-@cli.command("reconcile")
+@survey_group.command("reconcile")
 @click.option(
     "--inventory",
     "inventory_dir",
     type=click.Path(file_okay=False, path_type=Path),
     default=None,
-    help="Inventory tree from `acu inventory` (default: inventory/)",
+    help="Inventory tree from `acu survey inventory` (default: inventory/)",
 )
 @click.option(
     "--config",
@@ -1361,8 +1381,8 @@ def reconcile_cmd(
 
     \b
     Examples
-      acu inventory export.zip && acu reconcile
-      acu reconcile --inventory inv/ --config config/ --out findings/
+      acu survey inventory export.zip && acu survey reconcile
+      acu survey reconcile --inventory inv/ --config config/ --out findings/
     """
     inv = (
         inventory_dir
@@ -1440,7 +1460,7 @@ def state_cmd(
       acu --tenant DEV state --assert-unchanged
       acu --tenant DEV state config/views/10-trial-balance.yaml
 
-    Related: `run` (moves balances) · `diff` (seed drift) · `extract`.
+    Related: `run` (moves balances) · `diff` (seed drift) · `survey extract`.
     """
     if not files:
         default = data_root() / "config" / "views"
