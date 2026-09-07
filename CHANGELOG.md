@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## [v0.31.0] - 2026-09-07
+
 ### Changed
 
 - **`survey` group (V15):** `extract`, `inventory`, and `reconcile` nest
