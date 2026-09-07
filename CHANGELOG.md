@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## [v0.30.0] - 2026-09-06
+
 ### Removed
 
 - **`acu check` (V47):** dropped. Cold rebuild is `tenant create` then
