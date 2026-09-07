@@ -49,11 +49,11 @@ Cross-link:
 [acumatica-gitops#2](https://github.com/kborovik/acumatica-gitops/issues/2).
 
 Legacy data repos may still use root `bootstrap/`…`master/`; init no longer scaffolds that layout.
-`acu extract` never writes that root layout — emit is hard-cut to `config/` only (see [Extract](#extract)).
+`acu survey extract` never writes that root layout — emit is hard-cut to `config/` only (see [Extract](#extract)).
 
 ## Extract
 
-`acu extract` is the **inverse of apply** for seed trees: read the live tenant, write seed YAML under `config/{bootstrap,baseline,setup,master}/` that `apply` / `diff` consume unchanged.
+`acu survey extract` is the **inverse of apply** for seed trees: read the live tenant, write seed YAML under `config/{bootstrap,baseline,setup,master}/` that `apply` / `diff` consume unchanged.
 
 | Concern | Rule |
 | ------- | ---- |
@@ -65,8 +65,8 @@ Legacy data repos may still use root `bootstrap/`…`master/`; init no longer sc
 | Not seed | `scenario/` and `config/views/` are never extract targets |
 
 ```sh
-acu extract --out . --force          # full catalog → config/**
-acu extract --only StockItem --force # catalog rows matching entity or file stem
+acu survey extract --out . --force          # full catalog → config/**
+acu survey extract --only StockItem --force # catalog rows matching entity or file stem
 acu apply config/ && acu diff config/  # round-trip: expect clean diff after apply
 ```
 
@@ -128,13 +128,13 @@ Sole tenant mutator remains `apply` (keyed PUT). Snapshot restore / `ac.exe impo
 
 ```sh
 # Live seed inverse (REST)
-acu --tenant DEV extract --out . --force
+acu --tenant DEV survey extract --out . --force
 
 # Offline full-table read (artifact from SM203520 Settings export XML or ac.exe)
-acu inventory ./tenant-export.xml.zip          # or a folder from: ac.exe export xml …
-acu inventory --dry-run ./company2-export/     # would-write only
-acu reconcile                                  # inventory/ + config/ → findings/
-acu reconcile --inventory inv/ --config config/ --out findings/
+acu survey inventory ./tenant-export.xml.zip          # or a folder from: ac.exe export xml …
+acu survey inventory --dry-run ./company2-export/     # would-write only
+acu survey reconcile                                  # inventory/ + config/ → findings/
+acu survey reconcile --inventory inv/ --config config/ --out findings/
 
 # Derived balances (REST observers; not inventory)
 acu --tenant DEV state

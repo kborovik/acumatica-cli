@@ -33,11 +33,11 @@ acu run scenario/10-seed-capital.yaml && acu state --assert-unchanged
 # SSH cold rebuild: acu tenant create --login NAME, then apply, run, diff
 
 # Optional: re-seed from live (inverse of apply; always under config/)
-# acu extract --out . --force
+# acu survey extract --out . --force
 ```
 
 Bare `acu apply` / `acu diff` also prefer `config/` when those trees exist.
-`acu extract` hard-cuts emit to `config/{bootstrap,baseline,setup,master}/` (never root SEED_DIRS).
+`acu survey extract` hard-cuts emit to `config/{bootstrap,baseline,setup,master}/` (never root SEED_DIRS).
 
 ## Layout
 

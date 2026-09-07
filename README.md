@@ -22,21 +22,21 @@ YAML in git is the source of truth; the live tenant is the target. `apply` is th
 | ------- | ------- | ------ |
 | Seed a tenant from YAML | `apply` | Idempotent PUT of `config/` into the live tenant |
 | Detect drift | `diff` | Compare seed YAML to live (exit 2 when they diverge) |
-| Pull live config into YAML | `extract` | Inverse of `apply` — GET into `config/{bootstrap,baseline,setup,master}/` |
+| Pull live config into YAML | `survey extract` | Inverse of `apply` — GET into `config/{bootstrap,baseline,setup,master}/` |
 | Run transaction scripts | `run` | Forward documents from `scenario/` (capital, buy, build, sell) |
 | Capture derived balances | `state` | Inquire trial-balance etc. into `state/` (not seed) |
 | Create and destroy tenants | `tenant` | SSH control plane: list / create / delete / recycle |
 | Publish the Bootstrap contract | `bootstrap` | REST publish of AcuBootstrap (or `--export` zip for the UI) |
 | Prove a cold rebuild | `tenant create` then `apply` then `run` then `diff` | Compose on a fresh tenant. No wrap command. |
-| Snapshot a site offline | `inventory` | SM203520 XML ZIP or `ac.exe export xml` writes `inventory/` |
-| Cross-check snapshot vs seed | `reconcile` | `inventory/` plus optional `config/` writes `findings/` only |
+| Snapshot a site offline | `survey inventory` | SM203520 XML ZIP or `ac.exe export xml` writes `inventory/` |
+| Cross-check snapshot vs seed | `survey reconcile` | `inventory/` plus optional `config/` writes `findings/` only |
 | Dump the contract schema | `schema` | OpenAPI `swagger.json` for the pinned endpoint |
 | Scaffold a data repo | `config init` | Full `config/`, `scenario/`, `.env` tree |
 | Preflight a target | `config check` | Discovery, secrets, REST, endpoints, SSH |
 
 Seed YAML covers features, company, credit terms, subaccounts, chart of accounts, ledger, UOMs, financial year / calendar / periods, numbering sequences, inventory and distribution masters, roles, and users.
 
-REST is the data plane (`apply`, `diff`, `run`, `extract`, `state`, `bootstrap`, `schema`).
+REST is the data plane (`apply`, `diff`, `run`, `survey extract`, `state`, `bootstrap`, `schema`).
 SSH is the control plane (`tenant *`).
 
 Hosted sites skip SSH.
@@ -98,11 +98,12 @@ acu [--tenant NAME] [--url URL] [--ssh USER@HOST] [--api-version V]
 ├── run   [--dry-run] [FILES...]      execute transaction scenario YAML (exit 1 on any miss)
 ├── state [--out DIR] [--diff] [--assert-unchanged] [--dry-run] [FILES...]
 │                                     capture derived state into state/ (not seed)
-├── extract [--out DIR] [--only NAME]... [--force] [--dry-run]
-│                                     inverse of apply into config/{bootstrap,baseline,setup,master}/
-├── inventory [--out DIR] [--force] [--dry-run] ARTIFACT
-│                                     offline snapshot artifact → inventory/ (not seed)
-├── reconcile [--inventory DIR] [--config DIR] [--out DIR] [--force] [--dry-run]
+├── survey                            existing-tenant dual-reader (never L1 extract/inventory/reconcile)
+│   ├── extract [--out DIR] [--only NAME]... [--force] [--dry-run]
+│   │                                 inverse of apply into config/{bootstrap,baseline,setup,master}/
+│   ├── inventory [--out DIR] [--force] [--dry-run] ARTIFACT
+│   │                                 offline snapshot artifact → inventory/ (not seed)
+│   └── reconcile [--inventory DIR] [--config DIR] [--out DIR] [--force] [--dry-run]
 │                                     inventory/ + optional config/ → findings/ only
 ├── schema [--out DIR]                dump the endpoint's OpenAPI schema (swagger.json)
 │
@@ -123,12 +124,12 @@ When you omit FILES:
 Scenario YAML may use `${current_period}` (host-local `MMyyyy`) on steps, expect params, and `once.present` params.
 `config/views` and `state` keep Period pinned — see [docs/demo-seed.md](docs/demo-seed.md#period-token-current_period-vs-pinned-views).
 
-`extract` always writes under `config/{bootstrap,baseline,setup,master}/` (catalog-driven; never root SEED_DIRS).
+`survey extract` always writes under `config/{bootstrap,baseline,setup,master}/` (catalog-driven; never root SEED_DIRS).
 
-`inventory` and `reconcile` are offline (no REST, SSH, or password).
-`inventory` turns an SM203520 Settings XML ZIP or `ac.exe export xml` folder into `inventory/`.
+`survey inventory` and `survey reconcile` are offline (no REST, SSH, or password).
+`survey inventory` turns an SM203520 Settings XML ZIP or `ac.exe export xml` folder into `inventory/`.
 
-`reconcile` compares `inventory/` to optional `config/` and writes `findings/` only.
+`survey reconcile` compares `inventory/` to optional `config/` and writes `findings/` only.
 It never writes seed.
 
 Optional `snapshot_map.yaml` (data-repo root, or package defaults) maps DAC tables to catalog entities.
@@ -150,9 +151,9 @@ Do not confuse them with each other or with `state`:
 
 | Command | Plane | Input | Writes | Role |
 | ------- | ----- | ----- | ------ | ---- |
-| `extract` | REST (live) | tenant via contract API | `config/{bootstrap,baseline,setup,master}/` | Inverse of `apply` — seed YAML |
-| `inventory` | Offline | SM203520 Settings XML ZIP or `ac.exe export xml` folder | `inventory/` (`summary.yaml` + `tables/`) | Full-table snapshot IR — not seed |
-| `reconcile` | Offline | `inventory/` + optional `config/` | `findings/` only | Cross-check gaps/deltas — never mutates seed or tenant |
+| `survey extract` | REST (live) | tenant via contract API | `config/{bootstrap,baseline,setup,master}/` | Inverse of `apply` — seed YAML |
+| `survey inventory` | Offline | SM203520 Settings XML ZIP or `ac.exe export xml` folder | `inventory/` (`summary.yaml` + `tables/`) | Full-table snapshot IR — not seed |
+| `survey reconcile` | Offline | `inventory/` + optional `config/` | `findings/` only | Cross-check gaps/deltas — never mutates seed or tenant |
 | `state` | REST (live) | `config/views/` | `state/` | Derived balances/totals — not seed, not inventory |
 | `apply` | REST (live) | seed YAML under `config/` | tenant | **Sole** tenant writer (keyed PUT) |
 
@@ -180,8 +181,8 @@ There is no `--flavor`.
 | `scenario/` | lifecycle txns for `acu run`: once capital, then buy, build, sell |
 | `config/views/` | observer views for `acu state` (`inquire:` / `entity:` / `gi:`; not SEED_DIRS) |
 | `state/` | committed derived-state observations (evidence, not seed; money/qty fixed-point) |
-| `inventory/` | engagement: offline snapshot tables from `acu inventory` (not seed; not SEED_DIRS) |
-| `findings/` | engagement: `acu reconcile` cross-check output (never apply path) |
+| `inventory/` | engagement: offline snapshot tables from `acu survey inventory` (not seed; not SEED_DIRS) |
+| `findings/` | engagement: `acu survey reconcile` cross-check output (never apply path) |
 | `.env` | secrets + where (`ACU_BASE_URL`) + pin (`ACU_API_VERSION`) |
 
 Legacy data repos may still keep root `bootstrap/`…`master/`; bare `apply`/`diff` prefer `config/` when present and never merge both trees.
@@ -190,7 +191,7 @@ Files in each directory apply alphabetically; the numbered prefixes (`10-`, `20-
 Commit seed YAML; keep `.env` out of git (scaffold `.gitignore` already lists it).
 
 Seed YAML is state: `apply` upserts it, `diff` proves it.
-`acu extract` is the inverse of `apply`: GET live tenant rows into seed YAML under `config/{bootstrap,baseline,setup,master}/` (hard-cut).
+`acu survey extract` is the inverse of `apply`: GET live tenant rows into seed YAML under `config/{bootstrap,baseline,setup,master}/` (hard-cut).
 
 Packaged `seed_catalog.yaml` is the sole extract registry (entity, endpoint, keys, file, strip/include, filter-split).
 The demo entity map in [docs/demo-seed.md](docs/demo-seed.md) mirrors those catalog paths.
@@ -202,7 +203,7 @@ Row failures continue (exit 1 only if any row failed).
 Drift stays with `diff`.
 
 ```sh
-acu --tenant DEV extract --out . --force   # refresh config/** from live tenant
+acu --tenant DEV survey extract --out . --force   # refresh config/** from live tenant
 git diff config/                           # review extract delta before commit
 acu --tenant DEV apply config/             # replay extracted seed
 acu --tenant DEV diff config/              # expect exit 0

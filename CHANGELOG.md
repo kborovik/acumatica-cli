@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+### Changed
+
+- **`survey` group (V15):** `extract`, `inventory`, and `reconcile` nest
+  under `acu survey`. The L1 verbs are gone (no aliases).
+
 ## [v0.30.0] - 2026-09-06
 
 ### Removed

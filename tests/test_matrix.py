@@ -1,6 +1,7 @@
 """V27: leftover matrix.yaml ignored; --cell gone; env pin is sole config."""
 
 import importlib
+import re
 from pathlib import Path
 from types import TracebackType
 
@@ -228,3 +229,52 @@ def test_docs_env_sole_config() -> None:
     assert "There is no `ACU_API_VERSION`" not in rest
     assert "matrix.yaml `default_api`" not in demo
     assert "matrix.yaml default_api" not in demo
+
+
+# L1 extract/inventory/reconcile after optional globals.
+# `acu survey extract` is not a hit.
+_L1_SURVEY_VERB = re.compile(
+    r"\bacu(?:\s+(?:--[a-z-]+(?:\s+\S+)?))*\s+(extract|inventory|reconcile)\b"
+)
+
+
+def _unreleased(changelog: str) -> str:
+    marker = "## Unreleased"
+    start = changelog.index(marker) + len(marker)
+    rest = changelog[start:]
+    nxt = rest.find("\n## ")
+    return rest if nxt < 0 else rest[:nxt]
+
+
+def test_docs_survey_group() -> None:
+    """T235/V15/V48/V19: docs nest extract/inventory/reconcile under survey."""
+    repo = Path(__file__).resolve().parents[1]
+    scoped = [repo / "README.md"]
+    scoped.extend(sorted((repo / "docs").glob("*.md")))
+    scoped.extend(
+        sorted((repo / "src" / "acumatica_cli" / "templates").rglob("README.md"))
+    )
+    hits: list[str] = []
+    for path in scoped:
+        text = path.read_text()
+        for m in _L1_SURVEY_VERB.finditer(text):
+            rel = path.relative_to(repo).as_posix()
+            line = text[: m.start()].count("\n") + 1
+            hits.append(f"{rel}:{line}: {m.group(0)}")
+    assert hits == [], "L1 extract/inventory/reconcile CLI:\n" + "\n".join(hits)
+
+    readme = (repo / "README.md").read_text()
+    assert re.search(r"^├── survey", readme, re.M)
+    assert "`survey extract`" in readme
+    assert "`survey inventory`" in readme
+    assert "`survey reconcile`" in readme
+    assert re.search(r"^├── extract", readme, re.M) is None
+    assert re.search(r"^├── inventory", readme, re.M) is None
+    assert re.search(r"^├── reconcile", readme, re.M) is None
+
+    unreleased = _unreleased((repo / "CHANGELOG.md").read_text())
+    assert "`acu survey`" in unreleased
+    assert "extract" in unreleased
+    assert "inventory" in unreleased
+    assert "reconcile" in unreleased
+    assert _L1_SURVEY_VERB.search(unreleased) is None

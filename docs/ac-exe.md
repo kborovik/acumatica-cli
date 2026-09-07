@@ -198,9 +198,9 @@ The schema header is version-coupled to the build.
 
 `import` is **unverified** (it mutates; test on a scratch tenant first).
 
-### Offline dual-reader: `acu inventory` consumes this folder
+### Offline dual-reader: `acu survey inventory` consumes this folder
 
-The `export xml` **folder** is a first-class input to `acu inventory`
+The `export xml` **folder** is a first-class input to `acu survey inventory`
 (V35/V37 dual-reader).
 The CLI normalizes it to one IR and writes
 `inventory/summary.yaml` + `inventory/tables/<Table>.yaml` — **not** seed
@@ -212,9 +212,9 @@ Example:
 
 ```sh
 # on the Windows box (or after scp of the folder):
-acu inventory "$env:TEMP\company2-export"
-acu inventory --dry-run ./company2-export
-acu reconcile   # optional: inventory/ + config/ → findings/ only
+acu survey inventory "$env:TEMP\company2-export"
+acu survey inventory --dry-run ./company2-export
+acu survey reconcile   # optional: inventory/ + config/ → findings/ only
 # Optional data-repo snapshot_map.yaml (or package defaults): table→entity,
 # key/field aliases, Account/Sub FK CD resolve — see docs/demo-seed.md
 ```
@@ -235,14 +235,14 @@ Options, in order of preference for this repo:
 
 1. **Reference data as code (primary)** — seed config through the REST API
    (see [rest-api.md](rest-api.md)); fully scriptable, diffable, no snapshot
-   needed for the baseline. Live inverse = `acu extract` → `config/**`.
+   needed for the baseline. Live inverse = `acu survey extract` → `config/**`.
 2. **Offline table dump for audit / gap analysis** — either:
    - **`ac.exe export xml` folder** (above) — preferred automation-friendly
-     artifact when you have SSH to the box; feed `acu inventory`.
+     artifact when you have SSH to the box; feed `acu survey inventory`.
    - **SM203520 Tenants screen → Settings export as XML ZIP** — UI path:
      export a snapshot in **XML** (not binary `.adb`). The zip carries
      `manifest.xml` plus per-table `*.xml` in the same table-XML shape as
-     `export xml`. `acu inventory path/to/settings.xml.zip` normalizes it
+     `export xml`. `acu survey inventory path/to/settings.xml.zip` normalizes it
      to the same IR. Restore/import of that snapshot remains UI-only and
      is **out of scope** for this CLI (never `ac.exe import`, never
      SM203520 restore).
@@ -252,7 +252,7 @@ Options, in order of preference for this repo:
    ([community thread](https://community.acumatica.com/develop-customizations-288/snapshot-automation-32047)).
    Do not treat restore as a GitOps building block.
 
-| Artifact | How obtained | `acu inventory` | Mutates tenant? |
+| Artifact | How obtained | `acu survey inventory` | Mutates tenant? |
 | -------- | ------------ | --------------- | --------------- |
 | `ac.exe export xml` folder | SSH / `ac.exe` on box | yes (folder path) | no (read-only export) |
 | SM203520 Settings **XML** ZIP | UI export XML | yes (zip path) | no when only exporting |
