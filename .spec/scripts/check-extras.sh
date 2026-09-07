@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# check-extras.sh - mechanical V1/V10/V18/V27/V47/V49 drift greps (SPEC ST.19).
+# check-extras.sh - mechanical V1/V10/V15/V18/V27/V47/V49 drift greps (SPEC ST.19).
 #
 # /sdd:check extras-hook contract: emit bare `id|verdict|evidence` rows
 # (no header, no prose) on stdout; the check run appends them verbatim.
@@ -83,6 +83,19 @@ if [ -n "$v27" ]; then
     fail=1
 else
     row V27 HOLD "src/ free of live matrix.yaml/--cell/load_matrix"
+fi
+
+# V15 cmd grammar: src/ never registers extract/inventory/reconcile as
+# L1 @cli.command — those verbs nest under the survey group.
+v15_pat='@cli\.command\("(extract|inventory|reconcile)"\)'
+v15=$(
+    grep -RHn --include='*.py' -E "$v15_pat" "$SRC" 2>/dev/null | head -1
+)
+if [ -n "$v15" ]; then
+    row V15 VIOLATE "$v15 L1 extract/inventory/reconcile cmd"
+    fail=1
+else
+    row V15 HOLD "src/ free of L1 extract/inventory/reconcile cmds"
 fi
 
 # V47 no-lifecycle-cmd: src/ never ships dropped lifecycle-check helpers

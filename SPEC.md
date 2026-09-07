@@ -213,7 +213,7 @@ T232|x|README+templates+help+CHANGELOG Unreleased drop `acu check`; compose tena
 T233|x|add extras-hook V47 (`check_cmd|_run_lifecycle|_lifecycle_|_resolve_check_tenant` in src/) + tests; suite green|V47,V13,T231
 T234|x|click group `survey`; move extract/inventory/reconcile under it; drop L1 those cmds (no aliases); src help+error strings; offline tests help+invoke+completion|V15,I.cmd,V13
 T235|x|sweep remaining `acu extract`/`acu inventory`/`acu reconcile` CLI invocations (scope: `README.md|docs/*.md|src/acumatica_cli/templates|CHANGELOG.md` Unreleased)|V15,V48,V19,V49,I.cmd,T234
-T236|.|extras-hook V15 never L1 `@cli.command("extract"|"inventory"|"reconcile")` (scope: `src/`; pattern `@cli.command\("(extract|inventory|reconcile)"\)`); tests; suite green|V15,V13,T234
+T236|x|extras-hook V15 never L1 `@cli.command("extract"|"inventory"|"reconcile")` (scope: `src/`; pattern `@cli.command\("(extract|inventory|reconcile)"\)`); tests; suite green|V15,V13,T234
 
 ## §B BUGS
 

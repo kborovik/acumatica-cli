@@ -15,12 +15,13 @@ for granular /sdd:check runs.
 - exemptions mechanized in-script (§T.18): `.py` COMMENT tokens + docstrings, `.cs` `//` lines, `.xml` `<!-- -->`
 - surviving match (`file:line: U+XXXX` on stdout, exit 1) → bail: `non-ASCII in output-reaching string per §V.9 — swap ASCII glyph or relocate to docstring/comment`
 
-## §V.1 + §V.10 + §V.18 + §V.47 + §V.49 — drift-grep hook (mechanized §T.19 / §T.203 / §T.233)
+## §V.1 + §V.10 + §V.15 + §V.18 + §V.47 + §V.49 — drift-grep hook (mechanized §T.19 / §T.203 / §T.233 / §T.236)
 
 - cmd: `.spec/scripts/check-extras.sh` — emits `id|verdict|evidence` rows
   per the /sdd:check extras-hook contract; exit 1 on any VIOLATE row
 - V1 VIOLATE → bail: `plane-split import per §V.1 — SSH stays in tenant.py, REST stays in client.py`
 - V10 VIOLATE → bail: `class subclasses BaseModel outside models.py per §V.10 — inherit models.Model`
+- V15 VIOLATE → bail: `L1 extract/inventory/reconcile cmd per §V.15 — nest under survey`
 - V18 VIOLATE → bail: `exit $LASTEXITCODE outside the _ssh choke point per §V.18 — strip call-site suffix / restore _ssh`
 - V47 VIOLATE → bail: `dropped lifecycle-check helper per §V.47 — cold rebuild is compose, never wrap cmd`
 - V49 VIOLATE → bail: `prose paragraph ≥3 sentences in human-facing Markdown per §V.49 — split the paragraph; lists/tables/fences exempt`

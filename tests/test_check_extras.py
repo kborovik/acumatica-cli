@@ -1,4 +1,4 @@
-""".spec/scripts/check-extras.sh: the mechanized V1/V10/V18/V27/V47/V49 drift greps.
+""".spec/scripts/check-extras.sh: the mechanized V1/V10/V15/V18/V27/V47/V49 drift greps.
 
 The hook resolves the repo root from its own location, so VIOLATE branches
 are pinned via a synthetic repo tree in tmp_path (script copied under
@@ -68,13 +68,13 @@ def rows(r: subprocess.CompletedProcess[str]) -> dict[str, tuple[str, str]]:
     return out
 
 
-def test_real_tree_emits_six_hold_rows() -> None:
+def test_real_tree_emits_seven_hold_rows() -> None:
     r = run_hook()
     assert r.returncode == 0, r.stdout + r.stderr
     table = rows(r)
-    assert set(table) == {"V1", "V10", "V18", "V27", "V47", "V49"}
+    assert set(table) == {"V1", "V10", "V15", "V18", "V27", "V47", "V49"}
     assert all(verdict == "HOLD" for verdict, _ in table.values())
-    assert len(r.stdout.splitlines()) == 6  # no header, no prose
+    assert len(r.stdout.splitlines()) == 7  # no header, no prose
     r.stdout.encode("ascii")  # V9: the audit obeys the invariant it enforces
 
 
@@ -201,6 +201,50 @@ def test_v27_readme_matrix_yaml_violates(tmp_path: Path) -> None:
     verdict, evidence = rows(r)["V27"]
     assert verdict == "VIOLATE"
     assert "templates/README.md:1" in evidence
+
+
+def test_v15_l1_extract_violates(tmp_path: Path) -> None:
+    script = make_repo(tmp_path, **{"cli.py": '@cli.command("extract")\n'})
+    r = run_hook(script)
+    assert r.returncode == 1
+    verdict, evidence = rows(r)["V15"]
+    assert verdict == "VIOLATE"
+    assert "cli.py:1" in evidence
+    assert rows(r)["V1"][0] == "HOLD"
+
+
+def test_v15_l1_inventory_violates(tmp_path: Path) -> None:
+    script = make_repo(tmp_path, **{"cli.py": '@cli.command("inventory")\n'})
+    r = run_hook(script)
+    assert r.returncode == 1
+    verdict, evidence = rows(r)["V15"]
+    assert verdict == "VIOLATE"
+    assert "cli.py:1" in evidence
+
+
+def test_v15_l1_reconcile_violates(tmp_path: Path) -> None:
+    script = make_repo(tmp_path, **{"cli.py": '@cli.command("reconcile")\n'})
+    r = run_hook(script)
+    assert r.returncode == 1
+    verdict, evidence = rows(r)["V15"]
+    assert verdict == "VIOLATE"
+    assert "cli.py:1" in evidence
+
+
+def test_v15_survey_nested_holds(tmp_path: Path) -> None:
+    script = make_repo(
+        tmp_path,
+        **{
+            "cli.py": (
+                '@survey_group.command("extract")\n'
+                '@survey_group.command("inventory")\n'
+                '@survey_group.command("reconcile")\n'
+            )
+        },
+    )
+    r = run_hook(script)
+    assert r.returncode == 0, r.stdout + r.stderr
+    assert rows(r)["V15"][0] == "HOLD"
 
 
 def test_v47_dropped_verb_helper_violates(tmp_path: Path) -> None:
