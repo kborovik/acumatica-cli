@@ -335,7 +335,7 @@ class AcumaticaClient:
 
     @staticmethod
     def _checked(r: httpx.Response) -> httpx.Response:
-        """Surface exceptionMessage + nested Field.error (V46), not status alone."""
+        """Surface exceptionMessage + innerException + Field.error (V46)."""
         if r.is_error:
             detail = ""
             try:
@@ -347,12 +347,13 @@ class AcumaticaClient:
                         or body.get("error")
                         or ""
                     )
-                    # nested contract-API validation often rides here
-                    if not detail and isinstance(body.get("innerException"), dict):
+                    if isinstance(body.get("innerException"), dict):
                         inner = body["innerException"]
-                        detail = (
+                        inner_msg = (
                             inner.get("exceptionMessage") or inner.get("message") or ""
                         )
+                        if inner_msg:
+                            detail = f"{detail}; {inner_msg}" if detail else inner_msg
                     field_errs = AcumaticaClient._field_errors(body)
                     if field_errs:
                         joined = "; ".join(field_errs)
