@@ -844,6 +844,44 @@ def test_shape_include_allow_list_keeps_keys() -> None:
     assert shaped == [{"UnitID": "HOUR", "Description": "Hour"}]
 
 
+def test_shape_hard_strips_contract_row_id() -> None:
+    """V54 unwrap keeps id; extract still drops it so seed is tenant-portable."""
+    live = [
+        wrap(
+            {
+                "id": "header-guid",
+                "delete": False,
+                "UnitID": "HOUR",
+                "Description": "Hour",
+                "Locations": [
+                    {
+                        "id": "row-guid",
+                        "LocationID": "MAIN",
+                        "delete": False,
+                    }
+                ],
+            }
+        )
+    ]
+    spec = _spec(include=["Description", "Locations"])
+    shaped = extract._shape(spec, live)  # pyright: ignore[reportPrivateUsage]
+    assert shaped == [
+        {
+            "UnitID": "HOUR",
+            "Description": "Hour",
+            "Locations": [{"LocationID": "MAIN"}],
+        }
+    ]
+    assert "id" not in shaped[0]
+    assert "delete" not in shaped[0]
+    shaped2 = extract._shape(  # pyright: ignore[reportPrivateUsage]
+        _spec(strip=["Noise"]), live
+    )
+    assert "id" not in shaped2[0]
+    assert "delete" not in shaped2[0]
+    assert shaped2[0]["Locations"] == [{"LocationID": "MAIN"}]
+
+
 def test_shape_hard_strips_password_fields() -> None:
     """V39/T147: Password + b64__Password never enter seed (even via include)."""
     live = [
@@ -1393,6 +1431,7 @@ def test_vendor_include_drops_large_default_surface(
     """
     # inject server surrogates into canned live state (expand path returns them)
     server.tables["Vendor"][0]["MainContact"] = {
+        "id": "contact-guid",
         "ContactID": 101399,
         "Address": {"Country": "US", "LastModifiedDateTime": "2026-07-27T00:00:00"},
     }

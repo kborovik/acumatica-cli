@@ -12,6 +12,11 @@ import httpx
 
 from .config import Instance
 
+# Contract control fields travel bare on wrap and stay on unwrap of
+# value-field rows (V54). Files-style rows that unwrap to only these
+# keys are elided so expanded `files` descriptors stay noise.
+_BARE_FIELDS = frozenset({"id", "delete"})
+
 
 def wrap(record: dict[str, Any]) -> dict[str, Any]:
     """Plain dict -> contract-API body: {"Field": {"value": ...}}.
@@ -33,31 +38,35 @@ def wrap(record: dict[str, Any]) -> dict[str, Any]:
             return wrap(v)
         return {"value": v}
 
-    return {k: v if k in ("id", "delete") else _value(v) for k, v in record.items()}
+    return {k: v if k in _BARE_FIELDS else _value(v) for k, v in record.items()}
 
 
 def unwrap(entity: dict[str, Any]) -> dict[str, Any]:
     """Contract-API entity -> plain dict (value fields + detail arrays).
 
-    Inverse of wrap (T60/T65): a list of dicts unwraps row by row; lists
-    that are empty or whose rows carry no value fields are elided (a
-    detail array the source never claimed must not surface, and expanded
-    `files` descriptors are plain dicts that would unwrap to noise). A
-    non-value dict is a linked entity — unwrapped recursively, kept only
-    when something survives, so bookkeeping dicts (custom, _links, note)
-    stay excluded exactly as before.
+    Inverse of wrap (T60/T65/V54): a list of dicts unwraps row by row;
+    lists that are empty or whose rows carry no value fields are elided
+    (a detail array the source never claimed must not surface, and
+    expanded `files` descriptors are plain dicts that would unwrap to
+    noise). A non-value dict is a linked entity — unwrapped recursively,
+    kept only when something survives, so bookkeeping dicts (custom,
+    _links, note) stay excluded exactly as before. `id` and `delete`
+    stay on records and on detail rows that also have value fields so a
+    later PUT updates the existing line (V54).
     """
     out: dict[str, Any] = {}
     for k, v in entity.items():
-        if isinstance(v, dict) and "value" in v:
+        if k in _BARE_FIELDS and not isinstance(v, (dict, list)):
+            out[k] = v
+        elif isinstance(v, dict) and "value" in v:
             out[k] = v["value"]
         elif isinstance(v, dict):
             nested = unwrap(v)
             if nested:
                 out[k] = nested
         elif isinstance(v, list) and v and all(isinstance(row, dict) for row in v):
-            rows = [unwrap(row) for row in v]
-            if any(rows):
+            rows = [row for row in (unwrap(r) for r in v) if set(row) - _BARE_FIELDS]
+            if rows:
                 out[k] = rows
     return out
 
@@ -326,7 +335,7 @@ class AcumaticaClient:
 
     @staticmethod
     def _checked(r: httpx.Response) -> httpx.Response:
-        """Surface exceptionMessage + nested Field.error (V46), not status alone."""
+        """Surface exceptionMessage + innerException + Field.error (V46)."""
         if r.is_error:
             detail = ""
             try:
@@ -338,12 +347,13 @@ class AcumaticaClient:
                         or body.get("error")
                         or ""
                     )
-                    # nested contract-API validation often rides here
-                    if not detail and isinstance(body.get("innerException"), dict):
+                    if isinstance(body.get("innerException"), dict):
                         inner = body["innerException"]
-                        detail = (
+                        inner_msg = (
                             inner.get("exceptionMessage") or inner.get("message") or ""
                         )
+                        if inner_msg:
+                            detail = f"{detail}; {inner_msg}" if detail else inner_msg
                     field_errs = AcumaticaClient._field_errors(body)
                     if field_errs:
                         joined = "; ".join(field_errs)

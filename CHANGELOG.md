@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+### Fixed
+
+- **unwrap row id (gh #38):** `unwrap` keeps `id` and `delete` on records
+  and on detail rows that also have value fields so a later PUT updates
+  the existing line (KitAssembly `StockComponents`). Files-style id-only
+  rows stay elided. Extract still strips them from seed (B11). `_checked`
+  appends `innerException.exceptionMessage` when present, not only when
+  the top message is empty.
+
 ## [v0.31.0] - 2026-09-07
 
 ### Changed
