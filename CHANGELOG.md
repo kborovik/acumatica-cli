@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## [v0.33.0] - 2026-09-08
+
 ### Changed
 
 - **local install:** `gmake install` only syncs `.venv`; it does not
