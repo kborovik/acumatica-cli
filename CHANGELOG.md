@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+### Fixed
+
+- **docs test after promote:** membership GET empty (gh #39) notes are
+  asserted in the versioned CHANGELOG section so post-promote
+  `gmake check` passes with empty Unreleased.
+
 ## [v0.33.0] - 2026-09-08
 
 ### Changed

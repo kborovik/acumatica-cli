@@ -41,10 +41,11 @@ def test_docs_user_role_membership_persist() -> None:
 def test_docs_membership_diff_empty() -> None:
     """T250/V12/V19/V57: Unreleased + demo-seed skip empty membership GET."""
     demo = (REPO / "docs" / "demo-seed.md").read_text()
-    unreleased = _unreleased((REPO / "CHANGELOG.md").read_text())
-    assert "gh #39" in unreleased
-    assert "acu diff` skips those details" in unreleased
-    assert "Users GET is empty" in unreleased
+    changelog = (REPO / "CHANGELOG.md").read_text()
+    # V19 promote empties Unreleased; persist notes live in the versioned section.
+    assert "gh #39" in changelog
+    assert "acu diff` skips those details" in changelog
+    assert "Users GET is empty" in changelog
     assert "read path is confirmed" not in demo
     assert "`acu diff` skips those details" in demo
     assert "Users GET is empty" in demo
