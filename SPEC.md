@@ -229,7 +229,7 @@ T244|x|LotSerialClass Auto-Incremental Segments.Value join `_DIFF_IGNORE_FIELDS`
 T245|x|offline tests: StartDate date vs datetime + different-day drift; Segments.Value GET-omit ! drift; field-not-returned still flags non-ignore fields|V13,V55,V56,T242,T244
 T246|x|docs/CHANGELOG Unreleased — datetime calendar-day + write-only GET-omit Value; no YAML ISO-hack (gh #40)|V12,V19,V55,V56,T242,T244
 T247|x|diff Role.Users / User.Roles: skip empty mapped GET or live-source compare; ! flag missing when UsersInRoles has session-company rows|V57,I.cmd,B37
-T248|.|offline tests: empty mapped Users/Roles ! drift after AssignUser-shaped seed; non-membership details still flag missing|V13,V57,T247
+T248|x|offline tests: empty mapped Users/Roles ! drift after AssignUser-shaped seed; non-membership details still flag missing|V13,V57,T247
 T249|.|live/e2e: after `92-role-users.yaml` AssignUser, `acu diff` exit 0 on Role.Users / User.Roles (SQL-proven UsersInRoles)|V4,V13,V57,B37,T247
 T250|.|docs/CHANGELOG Unreleased — membership GET empty ! diff fail; extract skip stands (gh #39)|V12,V19,V57,T247
 
