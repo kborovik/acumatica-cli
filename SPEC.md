@@ -225,7 +225,7 @@ T241|x|docs/CHANGELOG Unreleased — unwrap keeps row id; innerException append 
 T242|x|_norm calendar-day: date-only vs DateTimeValue same day ! drift; different day still|V55,I.cmd,B35
 T243|x|extract date-strip DateTimeValue seed emit (StartDate; BegFinYear synth already)|V55,I.cmd,T242
 T244|x|LotSerialClass Auto-Incremental Segments.Value join `_DIFF_IGNORE_FIELDS`; apply still PUT when present; extract strip if present|V56,I.cmd,B36
-T245|.|offline tests: StartDate date vs datetime + different-day drift; Segments.Value GET-omit ! drift; field-not-returned still flags non-ignore fields|V13,V55,V56,T242,T244
+T245|x|offline tests: StartDate date vs datetime + different-day drift; Segments.Value GET-omit ! drift; field-not-returned still flags non-ignore fields|V13,V55,V56,T242,T244
 T246|.|docs/CHANGELOG Unreleased — datetime calendar-day + write-only GET-omit Value; no YAML ISO-hack (gh #40)|V12,V19,V55,V56,T242,T244
 
 ## §B BUGS
