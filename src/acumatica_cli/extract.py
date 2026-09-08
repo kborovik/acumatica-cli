@@ -47,6 +47,7 @@ from .seed import (
     NUMBERING_RUNTIME_FIELDS,
     PASSWORD_FIELDS,
     _calendar_day,  # pyright: ignore[reportPrivateUsage]
+    _drop_path_ignored,  # pyright: ignore[reportPrivateUsage]
     active_bootstrap,
     resolve_endpoint,
 )
@@ -309,6 +310,13 @@ def _date_strip(value: Any) -> Any:
     return value
 
 
+def _strip_write_only_get_omit(entity: str, field: str, value: Any) -> Any:
+    """Drop path-qualified write-only GET-omit fields from detail rows (V56)."""
+    if not isinstance(value, list):
+        return value
+    return _drop_path_ignored(entity, field, value)
+
+
 def _kept_fields(spec: EntitySpec, record: dict[str, Any]) -> dict[str, Any]:
     """Apply include/strip + nested server-derived elision to one unwrapped row."""
     keep: dict[str, Any] = {}
@@ -329,6 +337,7 @@ def _kept_fields(spec: EntitySpec, record: dict[str, Any]) -> dict[str, Any]:
             continue
         # Nested ContactID / LastModifiedDateTime under expand (T65/T119).
         cleaned = _elide_server_derived(value)
+        cleaned = _strip_write_only_get_omit(spec.entity, field, cleaned)
         if cleaned is None or cleaned == "":
             continue
         if isinstance(cleaned, (dict, list)) and not cleaned:

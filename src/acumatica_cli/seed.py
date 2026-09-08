@@ -89,7 +89,34 @@ PASSWORD_FIELDS = frozenset({"Password", "b64__Password"})
 # PUTs them (re-apply must not reset live counters).
 NUMBERING_RUNTIME_FIELDS = frozenset({"LastNbr"})
 # Fields omitted from source↔live compare (V39 write-only + V40 runtime).
+# Field-name deny at every nesting level. Do not add bare ``Value`` here —
+# that would hide real drift on unrelated fields (V56).
 _DIFF_IGNORE_FIELDS = PASSWORD_FIELDS | NUMBERING_RUNTIME_FIELDS
+# Path-qualified write-only GET-omit (V56): (entity, detail, field).
+# Diff ignores; extract strips; apply still PUTs when present in YAML.
+_DIFF_IGNORE_PATHS = frozenset({("LotSerialClass", "Segments", "Value")})
+
+
+def _diff_ignored(entity: str, *path: str) -> bool:
+    """True when source↔live compare skips this field (V39/V40/V56)."""
+    if path and path[-1] in _DIFF_IGNORE_FIELDS:
+        return True
+    return (entity, *path) in _DIFF_IGNORE_PATHS
+
+
+def _drop_path_ignored(entity: str, field: str, rows: list[Any]) -> list[Any]:
+    """Strip path-qualified GET-omit fields from detail rows (V56)."""
+    drop = {
+        sub for (ent, det, sub) in _DIFF_IGNORE_PATHS if ent == entity and det == field
+    }
+    if not drop:
+        return rows
+    return [
+        {k: v for k, v in row.items() if k not in drop}
+        if isinstance(row, dict)
+        else row
+        for row in rows
+    ]
 
 
 def active_bootstrap(root: Path | None = None) -> tuple[str, frozenset[str]]:
@@ -652,13 +679,18 @@ def diff(client: AcumaticaClient, baseline: BaselineFile | ActionFile) -> list[s
             drifts.append(f"{label}: missing on tenant")
             continue
         actual = unwrap(live)
-        # V39/V40: never compare write-only password or runtime numbering counters
-        fields = {k: v for k, v in record.items() if k not in _DIFF_IGNORE_FIELDS}
+        # V39/V40/V56: never compare write-only, runtime, or GET-omit paths
+        fields = {
+            k: v for k, v in record.items() if not _diff_ignored(baseline.entity, k)
+        }
         for field, expected in fields.items():
             if isinstance(expected, list):
                 key = (baseline.detail_keys or {})[field]  # load-validated
-                live_rows = actual.get(field, [])
-                drifts.extend(_diff_details(label, field, key, expected, live_rows))
+                want_rows = _drop_path_ignored(baseline.entity, field, expected)
+                live_rows = _drop_path_ignored(
+                    baseline.entity, field, actual.get(field, [])
+                )
+                drifts.extend(_diff_details(label, field, key, want_rows, live_rows))
             elif isinstance(expected, dict):
                 drifts.extend(
                     _diff_nested(f"{label}.{field}", expected, actual.get(field))
