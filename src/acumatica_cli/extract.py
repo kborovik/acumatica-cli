@@ -263,14 +263,16 @@ def _fetch(client: AcumaticaClient, spec: EntitySpec) -> list[dict[str, Any]]:
 
 # Server-assigned / audit fields that must never enter seed (B11 class).
 # Applied recursively under linked entities and detail rows after expand
-# (T65/T119): MainContact.ContactID and AllowedCashAccounts.LastModified*
-# would otherwise permanent-red-diff after re-apply on a fresh tenant.
+# (T65/T119). `id`/`delete` stay in unwrap for run-capture PUT (V54);
+# extract still strips them so seed is tenant-portable.
 _SERVER_DERIVED = frozenset(
     {
         "ContactID",
         "CreatedDateTime",
         "LastModifiedDateTime",
         "NoteID",
+        "delete",
+        "id",
         "tstamp",
     }
 )

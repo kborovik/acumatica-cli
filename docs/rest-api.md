@@ -521,6 +521,8 @@ False; restarts the app) and read
   `unwrap` keeps them on value-field records and detail rows; files-style
   id-only rows stay elided so GET `$expand` row GUIDs round-trip onto a
   later PUT (V54).
+- Extract still strips `id`/`delete` from seed YAML so GUIDs stay off
+  the portable seed (B11).
 - `PUT /<Entity>` with the key fields present updates-or-creates — the
   idempotence primitive. Confirm per entity with a re-run diff.
 - `GET /<Entity>` with `$select`/`$filter`/`$expand` is the read side the
