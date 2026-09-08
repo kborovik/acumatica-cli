@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## [v0.32.0] - 2026-09-08
+
 ### Fixed
 
 - **unwrap row id (gh #38):** `unwrap` keeps `id` and `delete` on records
