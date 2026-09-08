@@ -27,14 +27,37 @@ def test_wrap_nests_values() -> None:
     }
 
 
-def test_unwrap_keeps_only_value_fields() -> None:
+def test_wrap_leaves_id_and_delete_bare() -> None:
+    """V54: wrap already sends id/delete bare (update vs insert handle)."""
+    assert wrap(
+        {
+            "id": "hdr",
+            "CurrencyID": "CAD",
+            "StockComponents": [{"id": "row", "delete": True, "ComponentID": "MB-CM4"}],
+        }
+    ) == {
+        "id": "hdr",
+        "CurrencyID": {"value": "CAD"},
+        "StockComponents": [
+            {"id": "row", "delete": True, "ComponentID": {"value": "MB-CM4"}}
+        ],
+    }
+
+
+def test_unwrap_keeps_id_and_delete_on_value_field_rows() -> None:
+    """V54: value-field records keep id/delete; empty files list stays elided."""
     entity = {
         "CurrencyID": {"value": "CAD"},
         "id": "some-guid",
+        "delete": False,
         "custom": {},
         "files": [],
     }
-    assert unwrap(entity) == {"CurrencyID": "CAD"}
+    assert unwrap(entity) == {
+        "CurrencyID": "CAD",
+        "id": "some-guid",
+        "delete": False,
+    }
 
 
 def test_wrap_detail_list_rows_wrap_the_list_does_not() -> None:
@@ -57,10 +80,10 @@ def test_wrap_detail_list_rows_wrap_the_list_does_not() -> None:
 
 
 def test_unwrap_inverts_detail_lists_and_elides_noise() -> None:
-    """T60: detail arrays unwrap row by row; valueless-row lists elide.
+    """T60/V54: detail rows keep id; files-style id-only rows elide.
 
     Expanded `files` descriptors are plain dicts (no value wrapping) and
-    must not surface as empty rows; empty lists stay elided.
+    must not surface as id-only rows; empty lists stay elided.
     """
     entity = {
         "KitInventoryID": {"value": "GW-EDGE"},
@@ -76,7 +99,9 @@ def test_unwrap_inverts_detail_lists_and_elides_noise() -> None:
     }
     assert unwrap(entity) == {
         "KitInventoryID": "GW-EDGE",
-        "StockComponents": [{"ComponentID": "MB-CM4", "ComponentQty": 1.0}],
+        "StockComponents": [
+            {"ComponentID": "MB-CM4", "ComponentQty": 1.0, "id": "row-guid"}
+        ],
     }
 
 

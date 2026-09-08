@@ -215,7 +215,7 @@ T233|x|add extras-hook V47 (`check_cmd|_run_lifecycle|_lifecycle_|_resolve_check
 T234|x|click group `survey`; move extract/inventory/reconcile under it; drop L1 those cmds (no aliases); src help+error strings; offline tests help+invoke+completion|V15,I.cmd,V13
 T235|x|sweep remaining `acu extract`/`acu inventory`/`acu reconcile` CLI invocations (scope: `README.md|docs/*.md|src/acumatica_cli/templates|CHANGELOG.md` Unreleased)|V15,V48,V19,V49,I.cmd,T234
 T236|x|extras-hook V15 never L1 `@cli.command("extract"|"inventory"|"reconcile")` (scope: `src/`; pattern `@cli.command\("(extract|inventory|reconcile)"\)`); tests; suite green|V15,V13,T234
-T237|.|unwrap keep `id`+`delete` on value-field rows (record + detail); elide files-style id-only; wrap already bare|V54,I.api
+T237|x|unwrap keep `id`+`delete` on value-field rows (record + detail); elide files-style id-only; wrap already bare|V54,I.api
 T238|.|`_checked` append innerException.exceptionMessage when present (not only when top empty)|V46,I.cmd
 T239|.|offline tests: unwrap id round-trip + files elide; 500 Operation failed + innerException Components text both in detail|V13,V46,V54,T237,T238
 T240|.|live/e2e: KitAssembly alloc PUT after GET capture of StockComponents[0].id updates existing line (no second Components row)|V4,V13,V54,B34,T237
