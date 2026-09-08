@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+### Changed
+
+- **local install:** `gmake install` only syncs `.venv`; it does not
+  replace the PyPI `acu` uv tool. Use `uv run acu` (version shows `+dev`).
+
 ### Fixed
 
 - **membership GET empty (gh #39):** mapped GET of Role.Users /

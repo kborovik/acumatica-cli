@@ -239,10 +239,10 @@ Or clone and install editable for development:
 ```sh
 git clone https://github.com/kborovik/acumatica-cli.git
 cd acumatica-cli
-gmake install    # editable install as a global uv tool
+gmake install    # uv sync; does not replace the PyPI tool
 ```
 
-Verify with `acu --version`.
+Verify with `uv run acu --version` (`+dev`).
 
 ## Configuration
 
@@ -333,7 +333,7 @@ Elsewhere plain `make` is fine when it is GNU Make.
 ```sh
 git clone https://github.com/kborovik/acumatica-cli.git
 cd acumatica-cli
-gmake install    # editable install as a global uv tool
+gmake install    # uv sync; does not replace the PyPI tool
 gmake check      # offline gate: ruff, basedpyright strict, pytest
 ```
 

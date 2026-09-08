@@ -43,11 +43,10 @@ It is not the GitOps soak.
 ## GitOps soak (from the data repo)
 
 Run from the GitOps tree so cwd walk-up finds `config/` and `.env`.
-Resolve this checkout with git, then put its `.venv/bin` first on `PATH`
-so `acu` is local, not PyPI.
+Set PATH to this CLI checkout's `.venv/bin` first, not the GitOps tree.
 
 ```sh
-PATH="$(git rev-parse --show-toplevel)/.venv/bin:$PATH"
+PATH="$HOME/github/acumatica-cli/.venv/bin:$PATH"
 cd ~/github/acu-gitops-qms
 
 acu --tenant ACUCLI config check
