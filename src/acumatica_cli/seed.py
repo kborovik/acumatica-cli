@@ -52,6 +52,7 @@ Default Currency = CM201000 list), so an ambiguous file is a hard error,
 never a silent Default-endpoint PUT.
 """
 
+import re
 from pathlib import Path
 from typing import Any
 
@@ -88,7 +89,34 @@ PASSWORD_FIELDS = frozenset({"Password", "b64__Password"})
 # PUTs them (re-apply must not reset live counters).
 NUMBERING_RUNTIME_FIELDS = frozenset({"LastNbr"})
 # Fields omitted from source↔live compare (V39 write-only + V40 runtime).
+# Field-name deny at every nesting level. Do not add bare ``Value`` here —
+# that would hide real drift on unrelated fields (V56).
 _DIFF_IGNORE_FIELDS = PASSWORD_FIELDS | NUMBERING_RUNTIME_FIELDS
+# Path-qualified write-only GET-omit (V56): (entity, detail, field).
+# Diff ignores; extract strips; apply still PUTs when present in YAML.
+_DIFF_IGNORE_PATHS = frozenset({("LotSerialClass", "Segments", "Value")})
+
+
+def _diff_ignored(entity: str, *path: str) -> bool:
+    """True when source↔live compare skips this field (V39/V40/V56)."""
+    if path and path[-1] in _DIFF_IGNORE_FIELDS:
+        return True
+    return (entity, *path) in _DIFF_IGNORE_PATHS
+
+
+def _drop_path_ignored(entity: str, field: str, rows: list[Any]) -> list[Any]:
+    """Strip path-qualified GET-omit fields from detail rows (V56)."""
+    drop = {
+        sub for (ent, det, sub) in _DIFF_IGNORE_PATHS if ent == entity and det == field
+    }
+    if not drop:
+        return rows
+    return [
+        {k: v for k, v in row.items() if k not in drop}
+        if isinstance(row, dict)
+        else row
+        for row in rows
+    ]
 
 
 def active_bootstrap(root: Path | None = None) -> tuple[str, frozenset[str]]:
@@ -251,18 +279,33 @@ def load_baseline(path: Path) -> BaselineFile | ActionFile:
     return parsed
 
 
+# ISO date or DateTimeValue: calendar-day prefix only (V55). Random strings
+# that merely contain T stay untouched.
+_ISO_CALENDAR_DAY = re.compile(r"(\d{4}-\d{2}-\d{2})(T.*)?")
+
+
+def _calendar_day(text: str) -> str | None:
+    """YYYY-MM-DD when ``text`` is ISO date/datetime; else None. No TZ convert."""
+    m = _ISO_CALENDAR_DAY.fullmatch(text)
+    return None if m is None else m.group(1)
+
+
 def _norm(value: Any) -> str:
-    """Comparable form: bools case-folded, numbers by value, rest stringified.
+    """Comparable form: bools case-folded, numbers by value, dates by day.
 
     Numbers compare by value, not spelling - a YAML `0` against the
     endpoint's `0.0` (DecimalValue fields come back as floats) is not
-    drift (T13).
+    drift (T13). Date-only ``YYYY-MM-DD`` matches a live DateTimeValue on
+    the same calendar day (strip ``T...offset``); a different day still
+    drifts (V55). No timezone conversion.
     """
     if isinstance(value, bool):
         return str(value).lower()
     if isinstance(value, int | float):
         return repr(float(value))
-    return str(value).strip()
+    text = str(value).strip()
+    day = _calendar_day(text)
+    return text if day is None else day
 
 
 def _filter_for(record: dict[str, Any], keys: list[str]) -> str:
@@ -636,13 +679,18 @@ def diff(client: AcumaticaClient, baseline: BaselineFile | ActionFile) -> list[s
             drifts.append(f"{label}: missing on tenant")
             continue
         actual = unwrap(live)
-        # V39/V40: never compare write-only password or runtime numbering counters
-        fields = {k: v for k, v in record.items() if k not in _DIFF_IGNORE_FIELDS}
+        # V39/V40/V56: never compare write-only, runtime, or GET-omit paths
+        fields = {
+            k: v for k, v in record.items() if not _diff_ignored(baseline.entity, k)
+        }
         for field, expected in fields.items():
             if isinstance(expected, list):
                 key = (baseline.detail_keys or {})[field]  # load-validated
-                live_rows = actual.get(field, [])
-                drifts.extend(_diff_details(label, field, key, expected, live_rows))
+                want_rows = _drop_path_ignored(baseline.entity, field, expected)
+                live_rows = _drop_path_ignored(
+                    baseline.entity, field, actual.get(field, [])
+                )
+                drifts.extend(_diff_details(label, field, key, want_rows, live_rows))
             elif isinstance(expected, dict):
                 drifts.extend(
                     _diff_nested(f"{label}.{field}", expected, actual.get(field))

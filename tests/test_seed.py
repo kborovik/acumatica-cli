@@ -283,6 +283,14 @@ def test_norm_folds_booleans_and_strips() -> None:
     assert norm(1) == norm(1.0)  # numbers compare by value (T13)
 
 
+def test_norm_calendar_day_matches_datetime_same_day() -> None:
+    """V55/T242: date-only matches DateTimeValue on the same calendar day."""
+    norm = seed._norm  # pyright: ignore[reportPrivateUsage]
+    assert norm("1900-01-01") == norm("1900-01-01T00:00:00-05:00") == "1900-01-01"
+    assert norm("1900-01-01") != norm("1900-01-02T00:00:00-05:00")
+    assert norm("not-a-T-date") == "not-a-T-date"
+
+
 def test_filter_for_joins_keys() -> None:
     record = {"UOM": "KG", "ToUOM": "G"}
     filter_for = seed._filter_for  # pyright: ignore[reportPrivateUsage]
@@ -1222,6 +1230,105 @@ def test_diff_still_flags_numbering_bounds_drift(
     drifts = seed.diff(_client(instance, recorder), baseline)
     assert drifts == ["NumberingSequence [BATCH].EndNbr: source='999999' live='500000'"]
     assert not any("LastNbr" in d for d in drifts)
+
+
+def _numbering_live(start_date: str) -> dict[str, Any]:
+    return {
+        "NumberingID": "BATCH",
+        "StartNbr": "000000",
+        "EndNbr": "999999",
+        "WarnNbr": "999990",
+        "NbrStep": 1,
+        "StartDate": start_date,
+    }
+
+
+def test_diff_startdate_date_only_matches_live_datetime(
+    tmp_path: Path, instance: Instance
+) -> None:
+    """V55/T242: source date-only vs live DateTimeValue same day is not drift."""
+    baseline = seed.load_baseline(_write(tmp_path, NUMBERING_BOUNDS_YAML))
+    recorder = Recorder(
+        {"/NumberingSequence": _live(_numbering_live("1900-01-01T00:00:00-05:00"))}
+    )
+    assert seed.diff(_client(instance, recorder), baseline) == []
+
+
+def test_diff_startdate_different_day_is_drift(
+    tmp_path: Path, instance: Instance
+) -> None:
+    """V55/T242: a different calendar day is still drift."""
+    baseline = seed.load_baseline(_write(tmp_path, NUMBERING_BOUNDS_YAML))
+    recorder = Recorder(
+        {"/NumberingSequence": _live(_numbering_live("1900-01-02T00:00:00-05:00"))}
+    )
+    drifts = seed.diff(_client(instance, recorder), baseline)
+    assert drifts == [
+        "NumberingSequence [BATCH].StartDate: "
+        "source='1900-01-01' live='1900-01-02T00:00:00-05:00'"
+    ]
+
+
+LOT_SERIAL_YAML = """\
+entity: LotSerialClass
+key: ClassID
+detail_keys: { Segments: SegmentID }
+records:
+  - ClassID: LOTRAW
+    Description: Raw lots
+    Segments:
+      - SegmentID: 1
+        Value: '000001'
+"""
+
+
+def test_diff_ignores_lotserial_segments_value_get_omit(
+    tmp_path: Path, instance: Instance
+) -> None:
+    """V56/T244: Auto-Incremental Segments.Value GET-omit is not drift."""
+    baseline = seed.load_baseline(_write(tmp_path, LOT_SERIAL_YAML))
+    recorder = Recorder(
+        {
+            "/LotSerialClass": _live(
+                {
+                    "ClassID": "LOTRAW",
+                    "Description": "Raw lots",
+                    "Segments": [{"SegmentID": 1}],
+                }
+            )
+        }
+    )
+    assert seed.diff(_client(instance, recorder), baseline) == []
+
+
+def test_diff_lotserial_still_flags_non_ignored_get_omit(
+    tmp_path: Path, instance: Instance
+) -> None:
+    """V56/T244: other GET-omit fields still flag not-returned (V50 stands)."""
+    baseline = seed.load_baseline(_write(tmp_path, LOT_SERIAL_YAML))
+    recorder = Recorder(
+        {
+            "/LotSerialClass": _live(
+                {"ClassID": "LOTRAW", "Segments": [{"SegmentID": 1}]}
+            )
+        }
+    )
+    drifts = seed.diff(_client(instance, recorder), baseline)
+    assert drifts == ["LotSerialClass [LOTRAW].Description: not returned by endpoint"]
+    assert not any("Value" in d for d in drifts)
+
+
+def test_apply_puts_lotserial_segments_value(
+    tmp_path: Path, instance: Instance
+) -> None:
+    """V56/T244: apply still PUTs Value when present (unlike LastNbr)."""
+    baseline = seed.load_baseline(_write(tmp_path, LOT_SERIAL_YAML))
+    recorder = Recorder({"/LotSerialClass": httpx.Response(200, json=[])})
+    seed.apply(_client(instance, recorder), baseline)
+    puts = [r for r in recorder.requests if r.method == "PUT"]
+    body = json.loads(puts[-1].content)
+    assert body["Segments"][0]["Value"] == {"value": "000001"}
+    assert body["ClassID"] == {"value": "LOTRAW"}
 
 
 def _package_template(rel: str) -> Path:

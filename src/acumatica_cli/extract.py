@@ -46,6 +46,8 @@ from .models import Model, validation_summary
 from .seed import (
     NUMBERING_RUNTIME_FIELDS,
     PASSWORD_FIELDS,
+    _calendar_day,  # pyright: ignore[reportPrivateUsage]
+    _drop_path_ignored,  # pyright: ignore[reportPrivateUsage]
     active_bootstrap,
     resolve_endpoint,
 )
@@ -295,6 +297,26 @@ def _elide_server_derived(value: Any) -> Any:
     return value
 
 
+def _date_strip(value: Any) -> Any:
+    """DateTimeValue seed emit: keep YYYY-MM-DD prefix only (V55)."""
+    if isinstance(value, dict):
+        return {k: _date_strip(v) for k, v in value.items()}
+    if isinstance(value, list):
+        return [_date_strip(v) for v in value]
+    if isinstance(value, str):
+        day = _calendar_day(value)
+        if day is not None:
+            return day
+    return value
+
+
+def _strip_write_only_get_omit(entity: str, field: str, value: Any) -> Any:
+    """Drop path-qualified write-only GET-omit fields from detail rows (V56)."""
+    if not isinstance(value, list):
+        return value
+    return _drop_path_ignored(entity, field, value)
+
+
 def _kept_fields(spec: EntitySpec, record: dict[str, Any]) -> dict[str, Any]:
     """Apply include/strip + nested server-derived elision to one unwrapped row."""
     keep: dict[str, Any] = {}
@@ -315,6 +337,7 @@ def _kept_fields(spec: EntitySpec, record: dict[str, Any]) -> dict[str, Any]:
             continue
         # Nested ContactID / LastModifiedDateTime under expand (T65/T119).
         cleaned = _elide_server_derived(value)
+        cleaned = _strip_write_only_get_omit(spec.entity, field, cleaned)
         if cleaned is None or cleaned == "":
             continue
         if isinstance(cleaned, (dict, list)) and not cleaned:
@@ -322,7 +345,7 @@ def _kept_fields(spec: EntitySpec, record: dict[str, Any]) -> dict[str, Any]:
         keep[field] = cleaned
     ordered = {k: keep[k] for k in spec.keys if k in keep}
     ordered |= {k: keep[k] for k in sorted(keep.keys() - set(spec.keys))}
-    return ordered
+    return _date_strip(ordered)
 
 
 def _shape(spec: EntitySpec, live: list[dict[str, Any]]) -> list[dict[str, Any]]:

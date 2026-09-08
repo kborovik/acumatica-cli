@@ -1747,6 +1747,42 @@ def test_package_numbering_sequence_template() -> None:
     )
 
 
+def test_extract_startdate_is_date_only(
+    instance: Instance, server: FakeServer, tmp_path: Path
+) -> None:
+    """V55/T243: NumberingSequence StartDate emit is YYYY-MM-DD, not DateTime."""
+    _run(instance, server, tmp_path, only=frozenset({"NumberingSequence"}))
+    target = tmp_path / "config" / "master" / "05-numbering-sequences.yaml"
+    doc = yaml.safe_load(target.read_text())
+    (rec,) = doc["records"]
+    assert rec["StartDate"] == "1900-01-01"
+    assert TABLES["NumberingSequence"][0]["StartDate"] == "1900-01-01T00:00:00+00:00"
+
+
+def test_extract_strips_lotserial_segments_value() -> None:
+    """V56/T244: extract hard-strips Segments.Value on LotSerialClass if present."""
+    spec = extract.EntitySpec(
+        entity="LotSerialClass",
+        keys=["ClassID"],
+        file="config/master/lot-serial-class.yaml",
+        detail_keys={"Segments": "SegmentID"},
+        include=["Description", "Segments"],
+    )
+    live = [
+        wrap(
+            {
+                "ClassID": "LOTRAW",
+                "Description": "Raw lots",
+                "Segments": [{"SegmentID": 1, "Value": "000001"}],
+            }
+        )
+    ]
+    shaped = extract._shape(spec, live)  # pyright: ignore[reportPrivateUsage]
+    assert shaped[0]["ClassID"] == "LOTRAW"
+    assert "Value" not in shaped[0]["Segments"][0]
+    assert shaped[0]["Segments"][0]["SegmentID"] == 1
+
+
 def test_package_role_user_templates_prebuild_roles() -> None:
     """T146: package roles = full pre-build set; soadmin membership on SO Admin."""
     root = Path(__file__).resolve().parents[1] / "src" / "acumatica_cli" / "templates"

@@ -520,6 +520,9 @@ Do not author `LastNbr` in seed. Scenario documents that advance counters are
 out of scope for apply; warm re-apply of bounds must leave live `LastNbr`
 alone.
 
+Author `StartDate` as date-only (`YYYY-MM-DD`). Live DateTimeValue on the
+same calendar day is not drift; a different day still is.
+
 ## Segmented keys
 
 Default contract has **no** Segmented Keys surface.
@@ -642,6 +645,10 @@ Demo does **not** seed lot/serial classes and does **not** claim
 When a data repo later seeds lot/serial classes, add a catalog row + numbered
 master template **before** any IN prefs FK claim, map `INLotSerClass` →
 `LotSerialClass`, and re-check V34 completeness.
+
+Auto-Incremental `Segments.Value` is write-only GET-omit. Apply PUTs it when
+present; `acu diff` does not treat a missing live `Value` as
+`not returned by endpoint`.
 
 ## Entity map
 
