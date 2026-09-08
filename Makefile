@@ -72,9 +72,9 @@ uv.lock: pyproject.toml
 # Install
 ###############################################################################
 
-install: .venv ## Install acu globally as an editable uv tool
-	$(call header,Installing acu via uv tool)
-	uv tool install --editable .
+install: .venv ## Sync local .venv (`uv run acu`); does not replace the PyPI uv tool
+	$(call header,Local acu is .venv/bin/acu)
+	uv run acu --version
 
 ###############################################################################
 # Release

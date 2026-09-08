@@ -23,10 +23,17 @@ Do not run `gmake rebuild` there (it uses `.env` `ACU_TENANT`).
 
 Pass `--tenant ACUCLI` on every live command (flag wins over the GitOps `.env`).
 
-## Install this checkout
+## Local CLI
+
+Global `acu` is the PyPI release. Do not `uv tool install --editable .`
+(that replaces it).
+
+This checkout is `.venv/bin/acu` (editable; `--version` shows `+dev`).
+`gmake install` only syncs `.venv`.
 
 ```sh
-gmake install    # editable uv tool; then `acu --version` shows +dev
+gmake install              # uv sync; does not touch the PyPI tool
+uv run acu --version       # 0.x.y+dev (<this checkout>)
 ```
 
 Offline unit tests stay here: `gmake check`.
@@ -36,8 +43,11 @@ It is not the GitOps soak.
 ## GitOps soak (from the data repo)
 
 Run from the GitOps tree so cwd walk-up finds `config/` and `.env`.
+Resolve this checkout with git, then put its `.venv/bin` first on `PATH`
+so `acu` is local, not PyPI.
 
 ```sh
+PATH="$(git rev-parse --show-toplevel)/.venv/bin:$PATH"
 cd ~/github/acu-gitops-qms
 
 acu --tenant ACUCLI config check
