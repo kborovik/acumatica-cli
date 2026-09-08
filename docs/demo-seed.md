@@ -369,11 +369,11 @@ Numbered prefixes under `config/master/` enforce **Role → User → Role.Users*
 | File | Entity | Notes |
 | ---- | ------ | ----- |
 | `config/master/90-roles.yaml` | Role | key `Rolename`; fields `Rolename`, `Descr` |
-| `config/master/91-users.yaml` | User | key `Username`; identity fields; optional GET/diff detail `Roles` |
+| `config/master/91-users.yaml` | User | key `Username`; identity fields; optional GET/extract detail `Roles` (diff skips) |
 | `config/master/92-role-users.yaml` | Role | key `Rolename`; detail `Users` (`detail_keys: { Users: Username }`) |
 
 Membership is the Role detail list `Users`, each row `Username` only (no `Selected`).
-User detail `Roles` is GET/diff shape; a User PUT of that list does not write `UsersInRoles`.
+User detail `Roles` is GET/extract shape; a User PUT of that list does not write `UsersInRoles`.
 
 A role must exist (tenant-native or earlier Role seed) before `AssignUser` names it.
 A user must exist before `92-role-users.yaml` names that `Username`.
@@ -396,7 +396,11 @@ Persist is additive-only.
 Rows with `delete: true` are skipped; extra live members are not removed.
 
 SQL `UsersInRoles` on the session CompanyID is the proof.
-GET and `acu diff` of `User.Roles` may stay empty until a read path is confirmed.
+
+Mapped GET of `Role.Users` / `User.Roles` may stay `[]` after AssignUser.
+`acu diff` skips those details so empty GET is not missing-on-tenant.
+
+Extract still skips identity-only `92-role-users.yaml` when Users GET is empty.
 
 Republish AcuBootstrap after upgrade so Bootstrap 1.10.0 (`AssignUser`) is live.
 User seeds that still send `Selected` will 422.
@@ -404,7 +408,7 @@ User seeds that still send `Selected` will 422.
 | Path | Practical rule |
 | ---- | -------------- |
 | **apply** | Role then User then Role.Users. Membership writes via `AssignUser`, not User.Roles PUT. |
-| **diff** | Identity User/Role fields round-trip. Membership GET may stay `[]`; that is not apply failure. |
+| **diff** | Identity User/Role fields round-trip. Diff skips `Users` / `Roles` details (V57); empty mapped GET is not exit 2. |
 | **Data repos** | Seed identity on `91-users.yaml`. Seed membership on `92-role-users.yaml` (`Users: [{Username}]`). No `Selected`. |
 | **Package template** | `soadmin` identity in `91-users.yaml`; `SO Admin` to `soadmin` in `92-role-users.yaml`. |
 
@@ -701,7 +705,7 @@ Screen IDs are operator notes only (not catalog fields).
 | `config/master/82-stock-items-kits.yaml` | StockItem | default | IN202500 | catalog |
 | `config/master/85-kit-specifications.yaml` | KitSpecification | default | IN209500 | catalog |
 | `config/master/90-roles.yaml` | Role | bootstrap | SM201005 | catalog |
-| `config/master/91-users.yaml` | User (identity; Roles GET/diff shape) | bootstrap | SM201010 | catalog |
+| `config/master/91-users.yaml` | User (identity; Roles GET/extract; diff skips) | bootstrap | SM201010 | catalog |
 | `config/master/92-role-users.yaml` | Role (+ Users; persist `AssignUser`) | bootstrap | SM201005 | catalog |
 | `scenario/10-seed-capital.yaml` | JournalTransaction (once) | default | GL301000 | run only |
 | `scenario/20-buy.yaml` | PO / receipt / AP bill+pay | default | PO/IN/AP | run only |
