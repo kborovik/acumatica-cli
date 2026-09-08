@@ -105,6 +105,41 @@ def test_unwrap_inverts_detail_lists_and_elides_noise() -> None:
     }
 
 
+def test_unwrap_wrap_round_trips_row_id() -> None:
+    """V54: GET unwrap then PUT wrap keeps detail-row id bare; files stay elided."""
+    entity = {
+        "KitInventoryID": {"value": "GW-EDGE"},
+        "id": "hdr-guid",
+        "StockComponents": [
+            {
+                "ComponentID": {"value": "MB-CM4"},
+                "ComponentQty": {"value": 1.0},
+                "id": "row-guid",
+            }
+        ],
+        "files": [{"id": "f", "filename": "a.txt"}],
+    }
+    plain = unwrap(entity)
+    assert plain == {
+        "KitInventoryID": "GW-EDGE",
+        "id": "hdr-guid",
+        "StockComponents": [
+            {"ComponentID": "MB-CM4", "ComponentQty": 1.0, "id": "row-guid"}
+        ],
+    }
+    assert wrap(plain) == {
+        "KitInventoryID": {"value": "GW-EDGE"},
+        "id": "hdr-guid",
+        "StockComponents": [
+            {
+                "ComponentID": {"value": "MB-CM4"},
+                "ComponentQty": {"value": 1.0},
+                "id": "row-guid",
+            }
+        ],
+    }
+
+
 def _response(status: int, body: Any = None) -> httpx.Response:
     request = httpx.Request("PUT", "http://acu.test/AcumaticaERP/entity/x")
     if body is None:
@@ -123,6 +158,22 @@ def test_checked_surfaces_exception_message() -> None:
         AcumaticaClient._checked(r)  # pyright: ignore[reportPrivateUsage]
     with pytest.raises(RuntimeError, match="PXSetupNotEntered"):
         AcumaticaClient._checked(r)  # pyright: ignore[reportPrivateUsage]
+
+
+def test_checked_appends_inner_exception_when_top_present() -> None:
+    """V46: innerException.exceptionMessage appends even when top message is set."""
+    r = _response(
+        500,
+        body={
+            "exceptionMessage": "Operation failed",
+            "innerException": {
+                "exceptionMessage": "The system failed to commit the Components row."
+            },
+        },
+    )
+    with pytest.raises(RuntimeError, match="Operation failed") as ei:
+        AcumaticaClient._checked(r)  # pyright: ignore[reportPrivateUsage]
+    assert "The system failed to commit the Components row." in str(ei.value)
 
 
 def test_checked_tolerates_non_json_error_body() -> None:

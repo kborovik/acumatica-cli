@@ -217,7 +217,7 @@ T235|x|sweep remaining `acu extract`/`acu inventory`/`acu reconcile` CLI invocat
 T236|x|extras-hook V15 never L1 `@cli.command("extract"|"inventory"|"reconcile")` (scope: `src/`; pattern `@cli.command\("(extract|inventory|reconcile)"\)`); tests; suite green|V15,V13,T234
 T237|x|unwrap keep `id`+`delete` on value-field rows (record + detail); elide files-style id-only; wrap already bare|V54,I.api
 T238|x|`_checked` append innerException.exceptionMessage when present (not only when top empty)|V46,I.cmd
-T239|.|offline tests: unwrap id round-trip + files elide; 500 Operation failed + innerException Components text both in detail|V13,V46,V54,T237,T238
+T239|x|offline tests: unwrap id round-trip + files elide; 500 Operation failed + innerException Components text both in detail|V13,V46,V54,T237,T238
 T240|.|live/e2e: KitAssembly alloc PUT after GET capture of StockComponents[0].id updates existing line (no second Components row)|V4,V13,V54,B34,T237
 T241|.|docs/CHANGELOG Unreleased — unwrap keeps row id; innerException append (gh #38)|V12,V19,V54,T237,T238
 
