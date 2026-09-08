@@ -105,6 +105,8 @@ V51: in-prefs-control-account — INPreferences `INProgressAcctID`/`INTransitAcc
 V52: company-qty-precision — Company CS101500 maps `DecPlQty` (`ShortValue`) + `WeightUOM`/`VolumeUOM` to view `commonsetup` (aspx DataMember; graph `Commonsetup`); unmapped PUT 200 ignores (B28 class); GET ! return mapped fields so extract/diff round-trip; package seed `DecPlQty: 3` (kit BOM milligram-scale KG; DAC default 2); DistributionModule on → PUT ! send WeightUOM+VolumeUOM (`CommonSetup_RowPersisting`) even when extract strips GET-omit siblings (B26 StockItem class); contract shape change ! version bump (V21) (closes §B.30) (gh #34)
 V53: user-role-membership — SM201010 User.Roles and SM201005 Role.Users contract-detail PUT never write UsersInRoles (silent 200) on AllowedRoles, RolesByUser, RoleList, and UsersByRole; persist path ! mapped contract detail; prove via SQL UsersInRoles (session CompanyID); GET/diff membership ?; UserRole ! Selected; never AllowedRoles (EPLoginTypeAllowsRole) (closes §B.31, §B.32, §B.33) (gh #35)
 V54: unwrap-row-id — unwrap keeps `id` + `delete` on records and detail rows that also have value fields (wrap already leaves them bare); files-style descriptors that unwrap to only `id` stay elided; GET `$expand` detail `id` ! round-trip onto later PUT so contract updates existing line — missing id → insert + 500 Components commit (KitAssembly StockComponents class) (closes §B.34) (gh #38)
+V55: datetime-calendar-day — `_norm` date-only `YYYY-MM-DD` matches live DateTimeValue same calendar day (strip `T…offset`); different day still drift; extract date-strips DateTimeValue seed emit (BegFinYear synth class) (closes §B.35) (gh #40)
+V56: write-only-get-omit — apply-needed field GET never returns ! diff-ignore (join `_DIFF_IGNORE_FIELDS`) not `not returned by endpoint`; ! general GET-omit=ok (mapping-miss per §V.50 stands); LotSerialClass Auto-Incremental `Segments.Value` first (closes §B.36) (gh #40)
 
 ## §T TASKS
 
@@ -220,6 +222,11 @@ T238|x|`_checked` append innerException.exceptionMessage when present (not only 
 T239|x|offline tests: unwrap id round-trip + files elide; 500 Operation failed + innerException Components text both in detail|V13,V46,V54,T237,T238
 T240|x|live/e2e: KitAssembly alloc PUT after GET capture of StockComponents[0].id updates existing line (no second Components row)|V4,V13,V54,B34,T237
 T241|x|docs/CHANGELOG Unreleased — unwrap keeps row id; innerException append (gh #38)|V12,V19,V54,T237,T238
+T242|.|_norm calendar-day: date-only vs DateTimeValue same day ! drift; different day still|V55,I.cmd,B35
+T243|.|extract date-strip DateTimeValue seed emit (StartDate; BegFinYear synth already)|V55,I.cmd,T242
+T244|.|LotSerialClass Auto-Incremental Segments.Value join `_DIFF_IGNORE_FIELDS`; apply still PUT when present; extract strip if present|V56,I.cmd,B36
+T245|.|offline tests: StartDate date vs datetime + different-day drift; Segments.Value GET-omit ! drift; field-not-returned still flags non-ignore fields|V13,V55,V56,T242,T244
+T246|.|docs/CHANGELOG Unreleased — datetime calendar-day + write-only GET-omit Value; no YAML ISO-hack (gh #40)|V12,V19,V55,V56,T242,T244
 
 ## §B BUGS
 
@@ -252,3 +259,5 @@ B31|2026-09-05|User.Roles maps AllowedRoles (EPLoginTypeAllowsRole) not RolesByU
 B32|2026-09-05|User.Roles PUT 200 no-op on RolesByUser and RoleList; UsersInRoles empty — persist not mapped detail on SM201010 AccessUsers|V53
 B33|2026-09-06|Role.Users maps UsersByRole; PUT 200 no-op; UsersInRoles empty (B32 class, SM201005)|V53
 B34|2026-09-08|unwrap drops detail-row id → KitAssembly StockComponents PUT inserts + 500 Components commit; GET id PUT succeeds; 500 innerException dropped when top exceptionMessage present (gh #38)|V54,V46
+B35|2026-09-08|_norm string-compares date-only vs live DateTimeValue same calendar day (gh #40)|V55
+B36|2026-09-08|LotSerialClass Auto-Incremental Segments.Value GET-omit → not-returned drift after apply (B11 class; gh #40)|V56
