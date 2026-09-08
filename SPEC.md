@@ -223,7 +223,7 @@ T239|x|offline tests: unwrap id round-trip + files elide; 500 Operation failed +
 T240|x|live/e2e: KitAssembly alloc PUT after GET capture of StockComponents[0].id updates existing line (no second Components row)|V4,V13,V54,B34,T237
 T241|x|docs/CHANGELOG Unreleased — unwrap keeps row id; innerException append (gh #38)|V12,V19,V54,T237,T238
 T242|x|_norm calendar-day: date-only vs DateTimeValue same day ! drift; different day still|V55,I.cmd,B35
-T243|.|extract date-strip DateTimeValue seed emit (StartDate; BegFinYear synth already)|V55,I.cmd,T242
+T243|x|extract date-strip DateTimeValue seed emit (StartDate; BegFinYear synth already)|V55,I.cmd,T242
 T244|.|LotSerialClass Auto-Incremental Segments.Value join `_DIFF_IGNORE_FIELDS`; apply still PUT when present; extract strip if present|V56,I.cmd,B36
 T245|.|offline tests: StartDate date vs datetime + different-day drift; Segments.Value GET-omit ! drift; field-not-returned still flags non-ignore fields|V13,V55,V56,T242,T244
 T246|.|docs/CHANGELOG Unreleased — datetime calendar-day + write-only GET-omit Value; no YAML ISO-hack (gh #40)|V12,V19,V55,V56,T242,T244
