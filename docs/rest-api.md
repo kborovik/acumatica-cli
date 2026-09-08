@@ -146,10 +146,13 @@ See README "Multi-host overlays" and
 ### HTTP error detail (V46)
 
 PUT and action POST failures raise `RuntimeError` with status plus
-`exceptionMessage` **and** nested field errors (`Field: {value, error}` under
-the body or `entity`, including detail rows). Status-only or top-level
-message alone is insufficient when field errors are present — operators
-should not need curl to see which field the contract rejected.
+`exceptionMessage`, nested field errors (`Field: {value, error}` under
+the body or `entity`, including detail rows), and
+`innerException.exceptionMessage` when that inner text is present
+(appended, not only when the top message is empty).
+Status-only or top-level message alone is insufficient — operators
+should not need curl to see which field or inner row the contract
+rejected.
 
 ### Live ERP build probe
 
@@ -514,6 +517,10 @@ False; restarts the app) and read
 - Target the versioned path (`Default/25.200.001`), never an unversioned
   alias — deterministic contract per instance build.
 - Field values go wrapped: `{"AccountCD": {"value": "10100"}}`.
+- Contract `id` and `delete` travel bare (never `{value}`).
+  `unwrap` keeps them on value-field records and detail rows; files-style
+  id-only rows stay elided so GET `$expand` row GUIDs round-trip onto a
+  later PUT (V54).
 - `PUT /<Entity>` with the key fields present updates-or-creates — the
   idempotence primitive. Confirm per entity with a re-run diff.
 - `GET /<Entity>` with `$select`/`$filter`/`$expand` is the read side the
