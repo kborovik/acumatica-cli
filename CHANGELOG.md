@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## [v0.33.1] - 2026-09-08
+
 ### Fixed
 
 - **docs test after promote:** membership GET empty (gh #39) notes are
