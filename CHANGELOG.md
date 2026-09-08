@@ -10,6 +10,13 @@
   rows stay elided. Extract still strips them from seed (B11). `_checked`
   appends `innerException.exceptionMessage` when present, not only when
   the top message is empty.
+- **datetime calendar-day + write-only GET-omit Value (gh #40):** `_norm`
+  treats date-only `YYYY-MM-DD` and a live DateTimeValue on the same
+  calendar day as equal, so NumberingSequence `StartDate` needs no YAML
+  ISO-hack. A different day still drifts. LotSerialClass Auto-Incremental
+  `Segments.Value` is write-only GET-omit: apply still PUTs it; diff does
+  not flag a missing live `Value`; extract strips it if present. Other
+  GET-omit fields still flag `not returned by endpoint`.
 
 ## [v0.31.0] - 2026-09-07
 
