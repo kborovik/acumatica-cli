@@ -38,6 +38,20 @@ def test_docs_user_role_membership_persist() -> None:
     assert "92-role-users" in templates
 
 
+def test_docs_membership_diff_empty() -> None:
+    """T250/V12/V19/V57: Unreleased + demo-seed skip empty membership GET."""
+    demo = (REPO / "docs" / "demo-seed.md").read_text()
+    unreleased = _unreleased((REPO / "CHANGELOG.md").read_text())
+    assert "gh #39" in unreleased
+    assert "acu diff` skips those details" in unreleased
+    assert "Users GET is empty" in unreleased
+    assert "read path is confirmed" not in demo
+    assert "`acu diff` skips those details" in demo
+    assert "Users GET is empty" in demo
+    assert "GET/diff detail `Roles`" not in demo
+    assert "Roles GET/diff shape" not in demo
+
+
 def test_docs_drop_root_check() -> None:
     """T232/V12/V19/V47: human-facing docs compose cold rebuild; no acu check verb."""
     readme = (REPO / "README.md").read_text()

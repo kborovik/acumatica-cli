@@ -535,9 +535,10 @@ entities:
 # config/master/ Role then User then Role.Users (V22 prefixes 90/91/92;
 # T145/T146/T148/T228). Bootstrap only — Default has no Role/User surface.
 # Persist = Role action AssignUser (PXDatabase UsersInRoles; T228/B33).
-# User detail Roles is GET/diff shape (PUT never writes UsersInRoles —
-# B31/B32/B33). Package 90-roles = full pre-build CompanyID=1
-# Roles dump; 91-users demo soadmin identity; 92-role-users membership.
+# User detail Roles = GET/extract; diff skips Users/Roles (V57).
+# PUT never writes UsersInRoles (B31/B32/B33).
+# Package 90-roles = full pre-build CompanyID=1 Roles dump;
+# 91-users demo soadmin identity; 92-role-users membership.
 # Password is write-only on apply (V39/T147): include omits Password so
 # extract never emits hashes (b64__Password also out of include).
 

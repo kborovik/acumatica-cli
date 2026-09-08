@@ -95,11 +95,17 @@ _DIFF_IGNORE_FIELDS = PASSWORD_FIELDS | NUMBERING_RUNTIME_FIELDS
 # Path-qualified write-only GET-omit (V56): (entity, detail, field).
 # Diff ignores; extract strips; apply still PUTs when present in YAML.
 _DIFF_IGNORE_PATHS = frozenset({("LotSerialClass", "Segments", "Value")})
+# Whole-detail skip (V57/B37): mapped GET Role.Users / User.Roles may be
+# empty while UsersInRoles has session-company rows. Extra live members
+# are not drift (AssignUser is additive-only).
+_DIFF_SKIP_DETAILS = frozenset({("Role", "Users"), ("User", "Roles")})
 
 
 def _diff_ignored(entity: str, *path: str) -> bool:
-    """True when source↔live compare skips this field (V39/V40/V56)."""
+    """True when source↔live compare skips this field (V39/V40/V56/V57)."""
     if path and path[-1] in _DIFF_IGNORE_FIELDS:
+        return True
+    if len(path) == 1 and (entity, path[0]) in _DIFF_SKIP_DETAILS:
         return True
     return (entity, *path) in _DIFF_IGNORE_PATHS
 
@@ -679,7 +685,8 @@ def diff(client: AcumaticaClient, baseline: BaselineFile | ActionFile) -> list[s
             drifts.append(f"{label}: missing on tenant")
             continue
         actual = unwrap(live)
-        # V39/V40/V56: never compare write-only, runtime, or GET-omit paths
+        # V39/V40/V56/V57: never compare write-only, runtime, GET-omit,
+        # or membership details whose mapped GET may stay empty.
         fields = {
             k: v for k, v in record.items() if not _diff_ignored(baseline.entity, k)
         }

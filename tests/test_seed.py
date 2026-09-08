@@ -1003,6 +1003,89 @@ records:
     capsys.readouterr()
 
 
+def test_diff_ignores_empty_mapped_role_users(
+    tmp_path: Path, instance: Instance
+) -> None:
+    """V57/T248: empty Role.Users GET is not missing-on-tenant."""
+    baseline = seed.load_baseline(_write(tmp_path, ROLE_USER_YAML["membership"]))
+    empty = Recorder({"/Role": _live({"Rolename": "SO Admin", "Users": []})})
+    omitted = Recorder({"/Role": _live({"Rolename": "SO Admin"})})
+    extra = Recorder(
+        {
+            "/Role": _live(
+                {
+                    "Rolename": "SO Admin",
+                    "Users": [{"Username": "soadmin"}, {"Username": "admin"}],
+                }
+            )
+        }
+    )
+    assert seed.diff(_client(instance, empty), baseline) == []
+    assert seed.diff(_client(instance, omitted), baseline) == []
+    assert seed.diff(_client(instance, extra), baseline) == []
+
+
+def test_diff_ignores_empty_mapped_user_roles(
+    tmp_path: Path, instance: Instance
+) -> None:
+    """V57/T248: empty User.Roles GET is not missing-on-tenant."""
+    baseline = seed.load_baseline(_write(tmp_path, ROLE_USER_YAML["user"]))
+    identity = {
+        "Username": "soadmin",
+        "FirstName": "SO",
+        "LastName": "Admin",
+        "Email": "soadmin@example.com",
+        "IsApproved": True,
+        "PasswordNeverExpires": True,
+        "PasswordChangeOnNextLogin": False,
+    }
+    empty = Recorder({"/User": _live({**identity, "Roles": []})})
+    omitted = Recorder({"/User": _live(identity)})
+    extra = Recorder(
+        {
+            "/User": _live(
+                {
+                    **identity,
+                    "Roles": [
+                        {"Rolename": "SO Admin"},
+                        {"Rolename": "Administrator"},
+                    ],
+                }
+            )
+        }
+    )
+    assert seed.diff(_client(instance, empty), baseline) == []
+    assert seed.diff(_client(instance, omitted), baseline) == []
+    assert seed.diff(_client(instance, extra), baseline) == []
+
+
+def test_diff_still_flags_non_membership_detail_missing(
+    tmp_path: Path, instance: Instance
+) -> None:
+    """V57/T248: skip Users/Roles does not skip other details or Role fields."""
+    membership = ROLE_USER_YAML["membership"].replace(
+        "  - Rolename: SO Admin\n    Users:",
+        "  - Rolename: SO Admin\n    Descr: Sales order administration\n    Users:",
+    )
+    role = seed.load_baseline(_write(tmp_path, membership))
+    role_live = Recorder({"/Role": _live({"Rolename": "SO Admin", "Users": []})})
+    role_drifts = seed.diff(_client(instance, role_live), role)
+    assert role_drifts == ["Role [SO Admin].Descr: not returned by endpoint"]
+    assert not any("Users" in d for d in role_drifts)
+
+    kit = seed.load_baseline(_write(tmp_path, KIT_YAML))
+    kit_live = Recorder({"/KitSpecification": _kit_live()})
+    kit_drifts = seed.diff(_client(instance, kit_live), kit)
+    assert (
+        "KitSpecification [GW-EDGE, V1].StockComponents[MB-CM4]: "
+        "missing on tenant" in kit_drifts
+    )
+    assert (
+        "KitSpecification [GW-EDGE, V1].StockComponents[PSU-12V]: "
+        "missing on tenant" in kit_drifts
+    )
+
+
 def test_apply_user_membership_warm_idempotent_no_password(
     tmp_path: Path, instance: Instance
 ) -> None:

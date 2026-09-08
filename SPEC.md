@@ -103,10 +103,11 @@ V49: md-prose-density — human-facing Markdown (`README.md`, `docs/*.md`, packa
 V50: segmented-key-seed — SegmentedKey seed ! update existing `DimensionID` only (never insert new); package seeds `INVENTORY` + `BIZACCT` one alphanumeric segment `Length` 30 (DAC max); `ACCOUNT` + `INSITE` stay `Length` 10 (`SiteCD` NVarChar(10)); never shrink `Length` after data exists; key-URL GET after PUT ! return `SegmentID` + `Length`; PUT `Length` ! persist so live InventoryID mask accepts 30; silent HTTP 200 w/ omitted detail fields = mapping miss (closes §B.28) (gh #30)
 V51: in-prefs-control-account — INPreferences `INProgressAcctID`/`INTransitAcctID` ! accounts w/ `ControlAccountModule: IN`; package 12300/12400 drop it; 12100/12200 keep IN control (posting-class InvtAcctID); else 26r1 PUT 500 + IN Setup cascade (closes §B.29) (gh #32)
 V52: company-qty-precision — Company CS101500 maps `DecPlQty` (`ShortValue`) + `WeightUOM`/`VolumeUOM` to view `commonsetup` (aspx DataMember; graph `Commonsetup`); unmapped PUT 200 ignores (B28 class); GET ! return mapped fields so extract/diff round-trip; package seed `DecPlQty: 3` (kit BOM milligram-scale KG; DAC default 2); DistributionModule on → PUT ! send WeightUOM+VolumeUOM (`CommonSetup_RowPersisting`) even when extract strips GET-omit siblings (B26 StockItem class); contract shape change ! version bump (V21) (closes §B.30) (gh #34)
-V53: user-role-membership — SM201010 User.Roles and SM201005 Role.Users contract-detail PUT never write UsersInRoles (silent 200) on AllowedRoles, RolesByUser, RoleList, and UsersByRole; persist path ! mapped contract detail; prove via SQL UsersInRoles (session CompanyID); GET/diff membership ?; UserRole ! Selected; never AllowedRoles (EPLoginTypeAllowsRole) (closes §B.31, §B.32, §B.33) (gh #35)
+V53: user-role-membership — SM201010 User.Roles and SM201005 Role.Users contract-detail PUT never write UsersInRoles (silent 200) on AllowedRoles, RolesByUser, RoleList, and UsersByRole; persist path ! mapped contract detail; prove via SQL UsersInRoles (session CompanyID); GET/diff membership per membership-diff-empty invariant; UserRole ! Selected; never AllowedRoles (EPLoginTypeAllowsRole) (closes §B.31, §B.32, §B.33) (gh #35)
 V54: unwrap-row-id — unwrap keeps `id` + `delete` on records and detail rows that also have value fields (wrap already leaves them bare); files-style descriptors that unwrap to only `id` stay elided; GET `$expand` detail `id` ! round-trip onto later PUT so contract updates existing line — missing id → insert + 500 Components commit (KitAssembly StockComponents class) (closes §B.34) (gh #38)
 V55: datetime-calendar-day — `_norm` date-only `YYYY-MM-DD` matches live DateTimeValue same calendar day (strip `T…offset`); different day still drift; extract date-strips DateTimeValue seed emit (BegFinYear synth class) (closes §B.35) (gh #40)
 V56: write-only-get-omit — apply-needed field GET never returns ! diff-ignore (join `_DIFF_IGNORE_FIELDS`) not `not returned by endpoint`; ! general GET-omit=ok (mapping-miss per §V.50 stands); LotSerialClass Auto-Incremental `Segments.Value` first (closes §B.36) (gh #40)
+V57: membership-diff-empty — mapped GET Role.Users / User.Roles ? empty while UsersInRoles has session-company rows; diff ! flag Role.Users / User.Roles missing; skip those details in diff or read live source that returns rows; AssignUser apply + SQL-proven membership → `acu diff` exit 0 on Role.Users / User.Roles (closes §B.37) (gh #39)
 
 ## §T TASKS
 
@@ -227,6 +228,10 @@ T243|x|extract date-strip DateTimeValue seed emit (StartDate; BegFinYear synth a
 T244|x|LotSerialClass Auto-Incremental Segments.Value join `_DIFF_IGNORE_FIELDS`; apply still PUT when present; extract strip if present|V56,I.cmd,B36
 T245|x|offline tests: StartDate date vs datetime + different-day drift; Segments.Value GET-omit ! drift; field-not-returned still flags non-ignore fields|V13,V55,V56,T242,T244
 T246|x|docs/CHANGELOG Unreleased — datetime calendar-day + write-only GET-omit Value; no YAML ISO-hack (gh #40)|V12,V19,V55,V56,T242,T244
+T247|x|diff Role.Users / User.Roles: skip empty mapped GET or live-source compare; ! flag missing when UsersInRoles has session-company rows|V57,I.cmd,B37
+T248|x|offline tests: empty mapped Users/Roles ! drift after AssignUser-shaped seed; non-membership details still flag missing|V13,V57,T247
+T249|x|live/e2e: after `92-role-users.yaml` AssignUser, `acu diff` exit 0 on Role.Users / User.Roles (SQL-proven UsersInRoles)|V4,V13,V57,B37,T247
+T250|x|docs/CHANGELOG Unreleased — membership GET empty ! diff fail; extract skip stands (gh #39)|V12,V19,V57,T247
 
 ## §B BUGS
 
@@ -261,3 +266,4 @@ B33|2026-09-06|Role.Users maps UsersByRole; PUT 200 no-op; UsersInRoles empty (B
 B34|2026-09-08|unwrap drops detail-row id → KitAssembly StockComponents PUT inserts + 500 Components commit; GET id PUT succeeds; 500 innerException dropped when top exceptionMessage present (gh #38)|V54,V46
 B35|2026-09-08|_norm string-compares date-only vs live DateTimeValue same calendar day (gh #40)|V55
 B36|2026-09-08|LotSerialClass Auto-Incremental Segments.Value GET-omit → not-returned drift after apply (B11 class; gh #40)|V56
+B37|2026-09-08|mapped GET Role.Users / User.Roles returns [] after AssignUser; UsersInRoles has rows; diff flags missing + exit 2 (gh #39)|V57

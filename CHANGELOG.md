@@ -2,6 +2,20 @@
 
 ## Unreleased
 
+### Changed
+
+- **local install:** `gmake install` only syncs `.venv`; it does not
+  replace the PyPI `acu` uv tool. Use `uv run acu` (version shows `+dev`).
+
+### Fixed
+
+- **membership GET empty (gh #39):** mapped GET of Role.Users /
+  User.Roles may stay `[]` after AssignUser while UsersInRoles has
+  session-company rows. `acu diff` skips those details so empty GET
+  is not missing-on-tenant (exit 2). Extract still skips identity-only
+  `92-role-users.yaml` when Users GET is empty. Other details and
+  identity User/Role fields still flag missing.
+
 ## [v0.32.0] - 2026-09-08
 
 ### Fixed

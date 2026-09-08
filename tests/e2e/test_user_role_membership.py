@@ -3,7 +3,7 @@
 Mapped-detail PUT (User.Roles / Role.Users) never writes UsersInRoles
 (silent 200). Persist is Role action AssignUser -> PXDatabase UsersInRoles.
 SQL UsersInRoles on the session tenant CompanyID is the proof.
-GET/diff of User.Roles may stay empty until the read path is confirmed.
+Diff skips Role.Users / User.Roles (V57): empty mapped GET is not exit 2.
 """
 
 import subprocess
@@ -167,3 +167,36 @@ def test_republish_apply_assigns_new_user_membership(
 
     dump = _users_in_roles(tenant_manager, scratch_tenant.company_id, "soadmin")
     assert _has_role(dump, "SO Admin"), dump
+
+
+def test_diff_membership_clean_after_assignuser(
+    acu: RunAcu,
+    tenant_manager: TenantManager,
+    scratch_tenant: ScratchTenant,
+) -> None:
+    """T249/V57/B37: after 92-role-users AssignUser, acu diff exit 0."""
+    proc = acu(
+        "--tenant",
+        scratch_tenant.login,
+        "apply",
+        "config/master/90-roles.yaml",
+        "config/master/91-users.yaml",
+        "config/master/92-role-users.yaml",
+    )
+    assert proc.returncode == 0, _combined(proc)
+
+    dump = _users_in_roles(tenant_manager, scratch_tenant.company_id, "soadmin")
+    assert _has_role(dump, "SO Admin"), dump
+
+    proc = acu(
+        "--tenant",
+        scratch_tenant.login,
+        "diff",
+        "config/master/90-roles.yaml",
+        "config/master/91-users.yaml",
+        "config/master/92-role-users.yaml",
+    )
+    assert proc.returncode == 0, _combined(proc)
+    out = _combined(proc)
+    assert "Users[" not in out
+    assert ".Roles[" not in out
