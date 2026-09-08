@@ -52,6 +52,7 @@ Default Currency = CM201000 list), so an ambiguous file is a hard error,
 never a silent Default-endpoint PUT.
 """
 
+import re
 from pathlib import Path
 from typing import Any
 
@@ -251,18 +252,33 @@ def load_baseline(path: Path) -> BaselineFile | ActionFile:
     return parsed
 
 
+# ISO date or DateTimeValue: calendar-day prefix only (V55). Random strings
+# that merely contain T stay untouched.
+_ISO_CALENDAR_DAY = re.compile(r"(\d{4}-\d{2}-\d{2})(T.*)?")
+
+
+def _calendar_day(text: str) -> str | None:
+    """YYYY-MM-DD when ``text`` is ISO date/datetime; else None. No TZ convert."""
+    m = _ISO_CALENDAR_DAY.fullmatch(text)
+    return None if m is None else m.group(1)
+
+
 def _norm(value: Any) -> str:
-    """Comparable form: bools case-folded, numbers by value, rest stringified.
+    """Comparable form: bools case-folded, numbers by value, dates by day.
 
     Numbers compare by value, not spelling - a YAML `0` against the
     endpoint's `0.0` (DecimalValue fields come back as floats) is not
-    drift (T13).
+    drift (T13). Date-only ``YYYY-MM-DD`` matches a live DateTimeValue on
+    the same calendar day (strip ``T...offset``); a different day still
+    drifts (V55). No timezone conversion.
     """
     if isinstance(value, bool):
         return str(value).lower()
     if isinstance(value, int | float):
         return repr(float(value))
-    return str(value).strip()
+    text = str(value).strip()
+    day = _calendar_day(text)
+    return text if day is None else day
 
 
 def _filter_for(record: dict[str, Any], keys: list[str]) -> str:
