@@ -525,6 +525,32 @@ def test_plugin_source_assigns_users_in_roles() -> None:
     assert "LastModifiedDateTime" in update_block
 
 
+def test_numbering_newsymbol_maps_to_header() -> None:
+    """T251/T253/V58: CS201010 NewSymbol maps Header, not Sequence.
+
+    Unmapped PUT drops NewSymbol and insert 422s (B38). Sequence map is
+    T159-class (every PUT 422 on NewSymbol mask). UserNumbering is the OR
+    alternative, not a required pair.
+    """
+    ns, endpoint, entities = _packaged_endpoint()
+    assert endpoint.get("version") == "1.11.0"
+    entity = entities["NumberingSequence"]
+    fields = {
+        f.get("name"): f.get("type") for f in entity.findall(f"{ns}Fields/{ns}Field")
+    }
+    assert fields["NewSymbol"] == "StringValue"
+    assert "UserNumbering" not in fields
+    mappings = {
+        m.get("field"): m.find(f"{ns}To")
+        for m in entity.findall(f"{ns}Mappings/{ns}Mapping")
+    }
+    assert mappings["NewSymbol"] is not None
+    assert mappings["NewSymbol"].get("object") == "Header"
+    assert mappings["NewSymbol"].get("field") == "NewSymbol"
+    assert mappings["StartNbr"] is not None
+    assert mappings["StartNbr"].get("object") == "Sequence"
+
+
 def test_segmented_key_maps_length_to_detail_view() -> None:
     """T207/B28: CS202000 aspx DataMember is Detail, not Details.
 

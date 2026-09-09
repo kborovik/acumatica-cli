@@ -1216,6 +1216,42 @@ records:
     LastNbr: '000025'
 """
 
+NUMBERING_WITH_NEWSYMBOL_YAML = """\
+entity: NumberingSequence
+key: NumberingID
+endpoint: bootstrap
+records:
+  - NumberingID: BATCH
+    NewSymbol: '<NEW>'
+    StartNbr: '000000'
+    EndNbr: '999999'
+    WarnNbr: '999990'
+    NbrStep: 1
+    StartDate: '1900-01-01'
+"""
+
+NUMBERING_INSERT_AND_REAPPLY_YAML = """\
+entity: NumberingSequence
+key: NumberingID
+endpoint: bootstrap
+records:
+  - NumberingID: T254NS
+    NewSymbol: '<NEW>'
+    StartNbr: '000000'
+    EndNbr: '999999'
+    WarnNbr: '999990'
+    NbrStep: 1
+    StartDate: '1900-01-01'
+  - NumberingID: BATCH
+    NewSymbol: '<NEW>'
+    StartNbr: '000000'
+    EndNbr: '999999'
+    WarnNbr: '999990'
+    NbrStep: 1
+    StartDate: '1900-01-01'
+    LastNbr: '000025'
+"""
+
 
 def test_apply_bounds_without_lastnbr(tmp_path: Path, instance: Instance) -> None:
     """V40/T152: apply of bounds-only seed never requires LastNbr."""
@@ -1350,6 +1386,83 @@ def test_diff_startdate_different_day_is_drift(
         "NumberingSequence [BATCH].StartDate: "
         "source='1900-01-01' live='1900-01-02T00:00:00-05:00'"
     ]
+
+
+def test_apply_puts_newsymbol_and_strips_lastnbr(
+    tmp_path: Path, instance: Instance
+) -> None:
+    """V40/V58/T253: apply PUTs NewSymbol; LastNbr never rides the body."""
+    baseline = seed.load_baseline(_write(tmp_path, NUMBERING_INSERT_AND_REAPPLY_YAML))
+    recorder = Recorder({"/NumberingSequence": httpx.Response(200, json=[])})
+    seed.apply(_client(instance, recorder), baseline)
+    puts = [r for r in recorder.requests if r.method == "PUT"]
+    bodies = [json.loads(p.content) for p in puts]
+    by_id = {b["NumberingID"]["value"]: b for b in bodies}
+    assert set(by_id) == {"T254NS", "BATCH"}
+    for body in by_id.values():
+        assert body["NewSymbol"] == {"value": "<NEW>"}
+        assert "LastNbr" not in body
+        assert body["StartNbr"] == {"value": "000000"}
+
+
+def test_apply_package_numbering_puts_newsymbol(instance: Instance) -> None:
+    """V58/T253: package BATCH re-apply body includes NewSymbol: <NEW>."""
+    baseline = seed.load_baseline(
+        _package_template("config/master/05-numbering-sequences.yaml")
+    )
+    assert isinstance(baseline, seed.BaselineFile)
+    recorder = Recorder({"/NumberingSequence": httpx.Response(200, json=[])})
+    seed.apply(_client(instance, recorder), baseline)
+    puts = [r for r in recorder.requests if r.method == "PUT"]
+    bodies = [json.loads(p.content) for p in puts]
+    batch = next(b for b in bodies if b["NumberingID"]["value"] == "BATCH")
+    assert batch["NewSymbol"] == {"value": "<NEW>"}
+    assert "LastNbr" not in batch
+
+
+def test_diff_ignores_newsymbol_get_omit(tmp_path: Path, instance: Instance) -> None:
+    """V56/V58/T253: seed NewSymbol vs GET-omit is not not-returned drift."""
+    baseline = seed.load_baseline(_write(tmp_path, NUMBERING_WITH_NEWSYMBOL_YAML))
+    recorder = Recorder(
+        {
+            "/NumberingSequence": _live(
+                {
+                    "NumberingID": "BATCH",
+                    "StartNbr": "000000",
+                    "EndNbr": "999999",
+                    "WarnNbr": "999990",
+                    "NbrStep": 1,
+                    "StartDate": "1900-01-01",
+                    "LastNbr": "000042",
+                }
+            )
+        }
+    )
+    assert seed.diff(_client(instance, recorder), baseline) == []
+
+
+def test_diff_newsymbol_omit_still_flags_bounds_not_returned(
+    tmp_path: Path, instance: Instance
+) -> None:
+    """V56/T253: other GET-omit fields still flag not-returned (V50 stands)."""
+    baseline = seed.load_baseline(_write(tmp_path, NUMBERING_WITH_NEWSYMBOL_YAML))
+    recorder = Recorder(
+        {
+            "/NumberingSequence": _live(
+                {
+                    "NumberingID": "BATCH",
+                    "EndNbr": "999999",
+                    "WarnNbr": "999990",
+                    "NbrStep": 1,
+                    "StartDate": "1900-01-01",
+                }
+            )
+        }
+    )
+    drifts = seed.diff(_client(instance, recorder), baseline)
+    assert drifts == ["NumberingSequence [BATCH].StartNbr: not returned by endpoint"]
+    assert not any("NewSymbol" in d for d in drifts)
+    assert not any("LastNbr" in d for d in drifts)
 
 
 LOT_SERIAL_YAML = """\

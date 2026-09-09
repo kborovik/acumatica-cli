@@ -941,6 +941,62 @@ def test_shape_hard_strips_lastnbr_runtime_fields() -> None:
     assert shaped2[0]["StartNbr"] == "000000"
 
 
+def test_shape_emits_newsymbol_when_get_returns() -> None:
+    """V58/T253: NewSymbol is seed — extract emits if GET returns (not LastNbr)."""
+    spec = extract.EntitySpec(
+        entity="NumberingSequence",
+        keys=["NumberingID"],
+        file="config/master/05-numbering-sequences.yaml",
+        include=["Descr", "NewSymbol", "StartNbr", "EndNbr", "LastNbr"],
+    )
+    live = [
+        wrap(
+            {
+                "NumberingID": "BATCH",
+                "Descr": "GL batches",
+                "NewSymbol": "<NEW>",
+                "StartNbr": "000000",
+                "EndNbr": "999999",
+                "LastNbr": "000025",
+            }
+        )
+    ]
+    shaped = extract._shape(spec, live)  # pyright: ignore[reportPrivateUsage]
+    assert shaped == [
+        {
+            "NumberingID": "BATCH",
+            "Descr": "GL batches",
+            "EndNbr": "999999",
+            "NewSymbol": "<NEW>",
+            "StartNbr": "000000",
+        }
+    ]
+    assert "LastNbr" not in shaped[0]
+
+
+def test_shape_omits_newsymbol_when_get_omits() -> None:
+    """V58/T253: GET-omit NewSymbol is absent from extract, not LastNbr-stripped."""
+    spec = extract.EntitySpec(
+        entity="NumberingSequence",
+        keys=["NumberingID"],
+        file="config/master/05-numbering-sequences.yaml",
+        include=["Descr", "NewSymbol", "StartNbr", "EndNbr"],
+    )
+    live = [
+        wrap(
+            {
+                "NumberingID": "BATCH",
+                "Descr": "GL batches",
+                "StartNbr": "000000",
+                "EndNbr": "999999",
+            }
+        )
+    ]
+    shaped = extract._shape(spec, live)  # pyright: ignore[reportPrivateUsage]
+    assert "NewSymbol" not in shaped[0]
+    assert shaped[0]["StartNbr"] == "000000"
+
+
 def test_shape_missing_key_field_is_a_hard_error() -> None:
     with pytest.raises(RuntimeError, match="missing key field"):
         extract._shape(  # pyright: ignore[reportPrivateUsage]

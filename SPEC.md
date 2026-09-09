@@ -235,7 +235,7 @@ T249|x|live/e2e: after `92-role-users.yaml` AssignUser, `acu diff` exit 0 on Rol
 T250|x|docs/CHANGELOG Unreleased — membership GET empty ! diff fail; extract skip stands (gh #39)|V12,V19,V57,T247
 T251|x|bootstrap contract NumberingSequence map Header NewSymbol (+ UserNumbering if screen requires pair); version bump 1.10.0→1.11.0|V21,V58,I.data,B38
 T252|x|seed_catalog include NewSymbol; package seed `NewSymbol: <NEW>`; extract emit when GET returns (not LastNbr strip); apply insert new NumberingID + re-apply existing|V34,V40,V56,V58,I.data,I.cmd,T251
-T253|.|offline tests: contract field+mapping; apply body includes NewSymbol; extract/diff LastNbr strip stands; NewSymbol GET-omit ! not-returned drift; existing numbering tests green|V13,V40,V56,V58,T251,T252
+T253|x|offline tests: contract field+mapping; apply body includes NewSymbol; extract/diff LastNbr strip stands; NewSymbol GET-omit ! not-returned drift; existing numbering tests green|V13,V40,V56,V58,T251,T252
 T254|.|live/e2e: insert new NumberingID (QORD-class) w/ NewSymbol; re-apply existing BATCH; no 422|V4,V13,V58,B38,T252
 T255|.|docs/demo-seed + CHANGELOG Unreleased — NumberingSequence NewSymbol insert (gh #44)|V12,V19,V58,T251,T252
 
