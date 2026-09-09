@@ -10,6 +10,11 @@
   stays runtime (extract strips, diff ignores, apply never PUTs).
   `NewSymbol` is seed; mapped GET returns it. GET-omit is `not returned by endpoint`
   drift.
+- **extract open-periods Company GET:** `30-open-periods.yaml` synthesis
+  `$select`s `AcctCD` so the Company list GET does not 500 on
+  `DecPlQty`/`WeightUOM`/`VolumeUOM` (CS101500 `commonsetup` BQL delegate).
+  Unprojected list GET left extract exit 1 and a replayed tenant with
+  inactive periods.
 
 ## [v0.33.1] - 2026-09-08
 

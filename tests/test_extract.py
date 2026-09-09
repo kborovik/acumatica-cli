@@ -654,7 +654,10 @@ KEYS["Warehouse"] = ["WarehouseID"]  # Default last; bootstrap rows also set Sit
 # Empty tables for every catalog entity without canned live state → skip clean
 for row in extract.load_manifest().entities:
     TABLES.setdefault(row.entity, [])
-DELEGATE_VIEW = frozenset({"Currency"})
+# Currency = original B9 fixture (CuryRecords). Company = live V52
+# commonsetup DecPlQty/WeightUOM/VolumeUOM (BQL delegate); open-periods
+# synth and Company entity extract must survive the unprojected 500.
+DELEGATE_VIEW = frozenset({"Currency", "Company"})
 
 # Catalog row counts (V34 path set): entity + setup (+ features outside catalog).
 _CATALOG_ENTITY_ROWS = len(extract.load_manifest().entities)
@@ -1978,8 +1981,16 @@ def test_synthesized_master_calendar_spans_year_range(
 def test_synthesized_open_periods_sources_company_org(
     instance: Instance, server: FakeServer, tmp_path: Path
 ) -> None:
-    """OrganizationID = the extracted Company AcctCD (V22 in-set closure)."""
+    """OrganizationID = the extracted Company AcctCD (V22 in-set closure).
+
+    Company is in DELEGATE_VIEW (V52 commonsetup). The synth $selects
+    AcctCD so the unprojected list GET 500 never fires (B9).
+    """
     _run(instance, server, tmp_path, only=frozenset({"open-periods"}))
+    company_lists = [
+        dict(r.url.params) for r in server.requests if r.url.path.endswith("/Company")
+    ]
+    assert any(p.get("$select") == "AcctCD" for p in company_lists)
     doc = yaml.safe_load(
         (tmp_path / "config" / "setup" / "30-open-periods.yaml").read_text()
     )

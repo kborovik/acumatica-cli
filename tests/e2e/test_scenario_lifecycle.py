@@ -14,12 +14,15 @@ import subprocess
 import sys
 import threading
 from collections.abc import Callable, Iterator
+from datetime import date
 from pathlib import Path
 from typing import IO, NamedTuple
 
 import pytest
+import yaml
 
 from acumatica_cli.config import scaffold
+from acumatica_cli.run import period_mmYYYY
 from acumatica_cli.tenant import TenantManager
 
 pytestmark = pytest.mark.e2e
@@ -197,7 +200,13 @@ def test_scenario_state_write(
     """
     import re
 
-    import yaml
+    # Package TB view pins Period 072026 for mock alignment (V33/V43).
+    # Scenario posts to ${current_period}; rewrite the scaffold view so
+    # state/ captures the month the JE actually landed.
+    view_path = scenario_repo / "config" / "views" / "10-trial-balance.yaml"
+    view = yaml.safe_load(view_path.read_text())
+    view["source"]["params"]["Period"] = period_mmYYYY(date.today())
+    view_path.write_text(yaml.safe_dump(view, sort_keys=False))
 
     proc = scenario_acu("--tenant", scenario_tenant.login, "state")
     assert proc.returncode == 0, _combined(proc)
