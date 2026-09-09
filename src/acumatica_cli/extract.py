@@ -328,6 +328,7 @@ def _kept_fields(spec: EntitySpec, record: dict[str, Any]) -> dict[str, Any]:
             continue
         # V39/V40: password hashes + numbering runtime counters never enter
         # seed (hard strip, even if catalog include mistakenly listed them).
+        # NewSymbol is seed (V58): emit when GET returns; do not LastNbr-strip.
         if field in PASSWORD_FIELDS or field in NUMBERING_RUNTIME_FIELDS:
             continue
         if spec.include:

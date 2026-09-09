@@ -1580,7 +1580,7 @@ def test_extract_force_round_trips_segmented_key_lengths(
 
 
 def test_catalog_numbering_sequence_row() -> None:
-    """T151: NumberingSequence catalog bounds-only; V22 before prefs."""
+    """T151/T252: NumberingSequence catalog bounds + NewSymbol; V22 before prefs."""
     manifest = extract.load_manifest()
     by_file = {s.file: s for s in manifest.entities}
     num = by_file["config/master/05-numbering-sequences.yaml"]
@@ -1589,6 +1589,7 @@ def test_catalog_numbering_sequence_row() -> None:
     assert num.endpoint == "bootstrap"
     assert set(num.include) == {
         "Descr",
+        "NewSymbol",
         "StartNbr",
         "EndNbr",
         "WarnNbr",
@@ -1597,6 +1598,8 @@ def test_catalog_numbering_sequence_row() -> None:
     }
     # V40: LastNbr is runtime — not in include (T152 hardens strip/diff)
     assert "LastNbr" not in num.include
+    # V58: NewSymbol is seed (insert-required), not LastNbr-class runtime
+    assert "NewSymbol" in num.include
     files = [s.file for s in manifest.entities]
     # V22: within master/, numbering sorts before prefs that may *NumberingID.
     # Umbrella SEED_DIRS order is bootstrap→baseline→setup→master, so
@@ -1706,7 +1709,7 @@ def test_catalog_role_user_membership_rows() -> None:
 
 
 def test_package_numbering_sequence_template() -> None:
-    """T151: package numbering = LAB5-class module sequences; bounds only."""
+    """T151/T252: package numbering = LAB5-class sequences; bounds + NewSymbol."""
     root = Path(__file__).resolve().parents[1] / "src" / "acumatica_cli" / "templates"
     path = root / "config/master/05-numbering-sequences.yaml"
     numbering = seed.load_baseline(path)
@@ -1733,6 +1736,7 @@ def test_package_numbering_sequence_template() -> None:
     assert set(ids) == expected
     for rec in numbering.records:
         assert "LastNbr" not in rec
+        assert rec["NewSymbol"] == "<NEW>"
         assert rec["StartNbr"] == "000000"
         assert rec["EndNbr"] == "999999"
         assert rec["WarnNbr"] == "999990"

@@ -3,78 +3,91 @@ key: NumberingID
 endpoint: bootstrap
 records:
 - NumberingID: APBILL
+  NewSymbol: '<NEW>'
   StartNbr: '000000'
   EndNbr: '999999'
   WarnNbr: '999990'
   NbrStep: 1
   StartDate: '1900-01-01'
 - NumberingID: APPAYMENT
+  NewSymbol: '<NEW>'
   StartNbr: '000000'
   EndNbr: '999999'
   WarnNbr: '999990'
   NbrStep: 1
   StartDate: '1900-01-01'
 - NumberingID: ARINVOICE
+  NewSymbol: '<NEW>'
   StartNbr: '000000'
   EndNbr: '999999'
   WarnNbr: '999990'
   NbrStep: 1
   StartDate: '1900-01-01'
 - NumberingID: ARPAYMENT
+  NewSymbol: '<NEW>'
   StartNbr: '000000'
   EndNbr: '999999'
   WarnNbr: '999990'
   NbrStep: 1
   StartDate: '1900-01-01'
 - NumberingID: BATCH
+  NewSymbol: '<NEW>'
   StartNbr: '000000'
   EndNbr: '999999'
   WarnNbr: '999990'
   NbrStep: 1
   StartDate: '1900-01-01'
 - NumberingID: INADJUST
+  NewSymbol: '<NEW>'
   StartNbr: '000000'
   EndNbr: '999999'
   WarnNbr: '999990'
   NbrStep: 1
   StartDate: '1900-01-01'
 - NumberingID: INISSUE
+  NewSymbol: '<NEW>'
   StartNbr: '000000'
   EndNbr: '999999'
   WarnNbr: '999990'
   NbrStep: 1
   StartDate: '1900-01-01'
 - NumberingID: INKITASSY
+  NewSymbol: '<NEW>'
   StartNbr: '000000'
   EndNbr: '999999'
   WarnNbr: '999990'
   NbrStep: 1
   StartDate: '1900-01-01'
 - NumberingID: INRECEIPT
+  NewSymbol: '<NEW>'
   StartNbr: '000000'
   EndNbr: '999999'
   WarnNbr: '999990'
   NbrStep: 1
   StartDate: '1900-01-01'
 - NumberingID: POORDER
+  NewSymbol: '<NEW>'
   StartNbr: '000000'
   EndNbr: '999999'
   WarnNbr: '999990'
   NbrStep: 1
   StartDate: '1900-01-01'
 - NumberingID: PORECEIPT
+  NewSymbol: '<NEW>'
   StartNbr: '000000'
   EndNbr: '999999'
   WarnNbr: '999990'
   NbrStep: 1
   StartDate: '1900-01-01'
 - NumberingID: SOORDER
+  NewSymbol: '<NEW>'
   StartNbr: '000000'
   EndNbr: '999999'
   WarnNbr: '999990'
   NbrStep: 1
   StartDate: '1900-01-01'
 - NumberingID: SOSHIPMENT
+  NewSymbol: '<NEW>'
   StartNbr: '000000'
   EndNbr: '999999'
   WarnNbr: '999990'
