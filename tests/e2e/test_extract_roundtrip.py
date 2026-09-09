@@ -33,11 +33,9 @@ recycles (V5).
 """
 
 import difflib
-import subprocess
 import time
-from collections.abc import Callable, Iterator
+from collections.abc import Iterator
 from pathlib import Path
-from typing import NamedTuple
 
 import pytest
 
@@ -46,39 +44,26 @@ from acumatica_cli.config import Instance
 from acumatica_cli.extract import FEATURES_FILE, load_manifest
 from acumatica_cli.seed import load_baseline
 from acumatica_cli.tenant import TenantManager
+from tests.e2e.conftest import (
+    DeleteTenant,
+    RunAcu,
+    ScratchPair,
+    bracket_pair,
+    joined_output,
+)
 
 pytestmark = pytest.mark.e2e
 
 LOGIN_A = "E2EA"
 LOGIN_B = "E2EB"
 
-RunAcu = Callable[..., subprocess.CompletedProcess[str]]
-DeleteTenant = Callable[[str], None]
-
-
-class ScratchPair(NamedTuple):
-    """The two disposable tenant slots the round-trip runs against."""
-
-    id_a: int
-    id_b: int
-
 
 @pytest.fixture(scope="session")
 def scratch_pair(
     tenant_manager: TenantManager, delete_tenant: DeleteTenant
 ) -> Iterator[ScratchPair]:
-    """Bracket the session with two clean scratch-tenant slots.
-
-    Setup clears leftovers from a crashed run and reserves the next two
-    free CompanyIDs (A is created before B, so B's slot is free when its
-    create runs); teardown always deletes both and recycles (V5).
-    """
-    for login in (LOGIN_A, LOGIN_B):
-        delete_tenant(login)
-    base = max(t.company_id for t in tenant_manager.list())
-    yield ScratchPair(id_a=base + 1, id_b=base + 2)
-    for login in (LOGIN_A, LOGIN_B):
-        delete_tenant(login)
+    """Bracket the session with two clean scratch-tenant slots."""
+    yield from bracket_pair(LOGIN_A, LOGIN_B, tenant_manager, delete_tenant)
 
 
 @pytest.fixture(scope="session")
@@ -86,11 +71,6 @@ def out_dirs(tmp_path_factory: pytest.TempPathFactory) -> tuple[Path, Path]:
     """a/ and b/: the two extract destinations the byte-compare spans."""
     root = tmp_path_factory.mktemp("roundtrip")
     return root / "a", root / "b"
-
-
-def _combined(proc: subprocess.CompletedProcess[str]) -> str:
-    """Stdout plus stderr - status lines (success/error) go to stderr."""
-    return proc.stdout + proc.stderr
 
 
 def _yaml_set(root: Path) -> set[str]:
@@ -111,9 +91,9 @@ def _catalog_expected() -> set[str]:
 def test_tenant_a_bootstraps(acu: RunAcu, scratch_pair: ScratchPair) -> None:
     """Tenant A: created from the data repo, bootstrap chained at birth."""
     proc = acu("tenant", "create", "--id", str(scratch_pair.id_a), "--login", LOGIN_A)
-    assert proc.returncode == 0, _combined(proc)
-    assert f"tenant {LOGIN_A} is ready" in _combined(proc)
-    assert "AcuBootstrap published" in _combined(proc)
+    assert proc.returncode == 0, joined_output(proc)
+    assert f"tenant {LOGIN_A} is ready" in joined_output(proc)
+    assert "AcuBootstrap published" in joined_output(proc)
 
 
 def test_apply_configures_tenant_a(acu: RunAcu, scratch_pair: ScratchPair) -> None:
@@ -123,8 +103,8 @@ def test_apply_configures_tenant_a(acu: RunAcu, scratch_pair: ScratchPair) -> No
     meaningful when A carries the whole packaged surface.
     """
     proc = acu("--tenant", LOGIN_A, "apply")
-    assert proc.returncode == 0, _combined(proc)
-    combined = _combined(proc)
+    assert proc.returncode == 0, joined_output(proc)
+    combined = joined_output(proc)
     # umbrella / default_seed_dirs order: bootstrap → baseline → setup → master
     assert "config/master/" in combined or "master/" in combined, combined
 
@@ -147,10 +127,10 @@ def test_extract_dumps_tenant_a(
     assert master_expected, "catalog must include config/master/ rows (T117/T119)"
 
     proc = acu("--tenant", LOGIN_A, "survey", "extract", "--out", str(dir_a))
-    assert proc.returncode == 0, _combined(proc)
+    assert proc.returncode == 0, joined_output(proc)
     skips = [ln for ln in proc.stdout.splitlines() if ln.startswith("skip ")]
     assert not any("entity not in active Bootstrap contract" in ln for ln in skips), (
-        _combined(proc)
+        joined_output(proc)
     )
     # master is non-optional after full apply (T119)
     master_skips = [
@@ -160,11 +140,11 @@ def test_extract_dumps_tenant_a(
         "full apply left master empty — extract inverse incomplete:\n"
         + "\n".join(master_skips)
         + "\n"
-        + _combined(proc)
+        + joined_output(proc)
     )
     # allow clean (no records)/(exists) skips only for non-master rows
     for ln in skips:
-        assert "(no records)" in ln or "(exists)" in ln, _combined(proc)
+        assert "(no records)" in ln or "(exists)" in ln, joined_output(proc)
         for rel in list(expected):
             if rel in ln:
                 expected.discard(rel)
@@ -182,8 +162,8 @@ def test_extract_dumps_tenant_a(
 def test_tenant_b_bootstraps(acu: RunAcu, scratch_pair: ScratchPair) -> None:
     """Tenant B: the fresh replay target, bootstrap chained at birth."""
     proc = acu("tenant", "create", "--id", str(scratch_pair.id_b), "--login", LOGIN_B)
-    assert proc.returncode == 0, _combined(proc)
-    assert f"tenant {LOGIN_B} is ready" in _combined(proc)
+    assert proc.returncode == 0, joined_output(proc)
+    assert f"tenant {LOGIN_B} is ready" in joined_output(proc)
 
 
 def test_replay_extract_onto_tenant_b(
@@ -192,8 +172,8 @@ def test_replay_extract_onto_tenant_b(
     """B is configured from a/ alone, umbrella expand of config/ (V30)."""
     dir_a, _ = out_dirs
     proc = acu("--tenant", LOGIN_B, "apply", str(dir_a / "config"))
-    assert proc.returncode == 0, _combined(proc)
-    combined = _combined(proc)
+    assert proc.returncode == 0, joined_output(proc)
+    combined = joined_output(proc)
     assert "config/master/" in combined or "master/" in combined, combined
 
 
@@ -206,8 +186,8 @@ def test_diff_over_extract_is_clean_on_b(
     """
     dir_a, _ = out_dirs
     proc = acu("--tenant", LOGIN_B, "diff", str(dir_a / "config"))
-    assert proc.returncode == 0, _combined(proc)
-    assert "no drift" in _combined(proc)
+    assert proc.returncode == 0, joined_output(proc)
+    assert "no drift" in joined_output(proc)
 
 
 def test_reextract_is_byte_identical(
@@ -223,7 +203,7 @@ def test_reextract_is_byte_identical(
     """
     dir_a, dir_b = out_dirs
     proc = acu("--tenant", LOGIN_B, "survey", "extract", "--out", str(dir_b))
-    assert proc.returncode == 0, _combined(proc)
+    assert proc.returncode == 0, joined_output(proc)
     set_a, set_b = _yaml_set(dir_a), _yaml_set(dir_b)
     assert set_b == set_a
     master = {p for p in set_a if p.startswith("config/master/")}

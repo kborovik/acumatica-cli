@@ -373,16 +373,19 @@ GitHub Actions on tag `v*` re-runs CI, builds sdist+wheel, publishes to PyPI via
 Configuration is one file: a decrypted `.env` at the repo root names the instance — `ACU_BASE_URL`, `ACU_TENANT`, `ACU_PASSWORD` (and optional `ACU_SSH`; omitted defaults to `Administrator@` + base-url host).
 `gmake e2e` refuses to start without it.
 
-The tier is self-contained.
+The tier is three pipeline files: provision (apply/diff), scenario (run/state), and extract round-trip.
+Per-bug contract probes fold onto those tenants.
+
 Each run scaffolds a synthetic single-org company from the packaged `acu config init` templates into a temporary directory, copies the real `.env` into it, and runs the installed `acu` binary from there — no data repo, no pre-existing fixtures on the instance.
 
 Scratch tenants (`E2E`, `E2EA`, `E2EB`, `E2ESCEN`) are created on the way in and always deleted on the way out, so nothing persists.
 The packaged full `config init` seed (under `config/`) is the only scaffold.
 
 ```sh
-gmake e2e                                # whole tier, about 20 minutes
-gmake e2e FILE=test_provision_lifecycle  # apply/diff focus
-gmake e2e FILE=test_scenario_lifecycle   # scenario + state focus
+gmake e2e                                # whole tier, three files
+gmake e2e FILE=test_provision_lifecycle  # apply/diff + folded probes
+gmake e2e FILE=test_scenario_lifecycle   # scenario + state + kit alloc
+gmake e2e FILE=test_extract_roundtrip    # extract inverse
 ```
 
 ## License

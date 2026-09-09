@@ -238,7 +238,7 @@ T252|x|seed_catalog include NewSymbol; package seed `NewSymbol: <NEW>`; extract 
 T253|x|offline tests: contract field+mapping; apply body includes NewSymbol; extract/diff LastNbr strip stands; NewSymbol GET-omit ! not-returned drift; existing numbering tests green|V13,V40,V56,V58,T251,T252
 T254|x|live/e2e: insert new NumberingID (QORD-class) w/ NewSymbol; re-apply existing BATCH; no 422|V4,V13,V58,B38,T252
 T255|x|docs/demo-seed + CHANGELOG Unreleased — NumberingSequence NewSymbol insert (gh #44)|V12,V19,V58,T251,T252
-T256|.|e2e: 3 pipeline files (provision, scenario, extract); fold qty/kit-alloc/numbering/segmented-key/roles onto those tenants; shared conftest `bracket_tenant` + `joined_output`; drop per-bug files|V4,V13
+T256|x|e2e: 3 pipeline files (provision, scenario, extract); fold qty/kit-alloc/numbering/segmented-key/roles onto those tenants; shared conftest `bracket_tenant` + `joined_output`; drop per-bug files|V4,V13
 
 ## §B BUGS
 

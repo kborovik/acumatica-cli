@@ -19,6 +19,19 @@ def _unreleased(changelog: str) -> str:
     return rest if nxt < 0 else rest[:nxt]
 
 
+def test_e2e_pipeline_files_only() -> None:
+    """T256: live e2e is three pipeline files; per-bug probes fold onto them."""
+    names = sorted(p.name for p in (REPO / "tests" / "e2e").glob("test_*.py"))
+    assert names == [
+        "test_extract_roundtrip.py",
+        "test_provision_lifecycle.py",
+        "test_scenario_lifecycle.py",
+    ]
+    readme = (REPO / "README.md").read_text()
+    assert "three pipeline files" in readme
+    assert "test_extract_roundtrip" in readme
+
+
 def test_docs_user_role_membership_persist() -> None:
     """T229/V12/V19/V53: docs name AssignUser persist; drop T189 limit + Selected."""
     demo = (REPO / "docs" / "demo-seed.md").read_text()
