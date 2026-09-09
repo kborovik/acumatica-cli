@@ -511,7 +511,7 @@ desired config:
 | ---- | -------- |
 | **apply** | PUT bounds + `NewSymbol`. `LastNbr` is never sent — even if hand-authored seed includes it — so re-apply does not reset live counters. |
 | **extract** | Always strips `LastNbr` (hard strip even if include mistakenly lists it). Emits `NewSymbol` when GET returns it. |
-| **diff** | Ignores `LastNbr`. `NewSymbol` GET-omit is not `not returned by endpoint` drift. |
+| **diff** | Ignores `LastNbr`. `NewSymbol` is compared; GET-omit is `not returned by endpoint` drift. |
 
 ```yaml
 # config/master/05-numbering-sequences.yaml (shape)

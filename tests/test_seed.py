@@ -1420,8 +1420,8 @@ def test_apply_package_numbering_puts_newsymbol(instance: Instance) -> None:
     assert "LastNbr" not in batch
 
 
-def test_diff_ignores_newsymbol_get_omit(tmp_path: Path, instance: Instance) -> None:
-    """V56/V58/T253: seed NewSymbol vs GET-omit is not not-returned drift."""
+def test_diff_flags_newsymbol_get_omit(tmp_path: Path, instance: Instance) -> None:
+    """V58: mapped GET returns NewSymbol; omit is not-returned drift."""
     baseline = seed.load_baseline(_write(tmp_path, NUMBERING_WITH_NEWSYMBOL_YAML))
     recorder = Recorder(
         {
@@ -1438,7 +1438,54 @@ def test_diff_ignores_newsymbol_get_omit(tmp_path: Path, instance: Instance) -> 
             )
         }
     )
+    drifts = seed.diff(_client(instance, recorder), baseline)
+    assert drifts == ["NumberingSequence [BATCH].NewSymbol: not returned by endpoint"]
+    assert not any("LastNbr" in d for d in drifts)
+
+
+def test_diff_newsymbol_match_no_drift(tmp_path: Path, instance: Instance) -> None:
+    """V58: seed NewSymbol vs matching mapped GET is not drift."""
+    baseline = seed.load_baseline(_write(tmp_path, NUMBERING_WITH_NEWSYMBOL_YAML))
+    recorder = Recorder(
+        {
+            "/NumberingSequence": _live(
+                {
+                    "NumberingID": "BATCH",
+                    "NewSymbol": "<NEW>",
+                    "StartNbr": "000000",
+                    "EndNbr": "999999",
+                    "WarnNbr": "999990",
+                    "NbrStep": 1,
+                    "StartDate": "1900-01-01",
+                    "LastNbr": "000042",
+                }
+            )
+        }
+    )
     assert seed.diff(_client(instance, recorder), baseline) == []
+
+
+def test_diff_flags_newsymbol_value_drift(tmp_path: Path, instance: Instance) -> None:
+    """V58: NewSymbol value mismatch is drift (mapped GET returns it)."""
+    baseline = seed.load_baseline(_write(tmp_path, NUMBERING_WITH_NEWSYMBOL_YAML))
+    recorder = Recorder(
+        {
+            "/NumberingSequence": _live(
+                {
+                    "NumberingID": "BATCH",
+                    "NewSymbol": "OTHER",
+                    "StartNbr": "000000",
+                    "EndNbr": "999999",
+                    "WarnNbr": "999990",
+                    "NbrStep": 1,
+                    "StartDate": "1900-01-01",
+                }
+            )
+        }
+    )
+    assert seed.diff(_client(instance, recorder), baseline) == [
+        "NumberingSequence [BATCH].NewSymbol: source='<NEW>' live='OTHER'"
+    ]
 
 
 def test_diff_newsymbol_omit_still_flags_bounds_not_returned(
@@ -1460,8 +1507,8 @@ def test_diff_newsymbol_omit_still_flags_bounds_not_returned(
         }
     )
     drifts = seed.diff(_client(instance, recorder), baseline)
-    assert drifts == ["NumberingSequence [BATCH].StartNbr: not returned by endpoint"]
-    assert not any("NewSymbol" in d for d in drifts)
+    assert "NumberingSequence [BATCH].StartNbr: not returned by endpoint" in drifts
+    assert "NumberingSequence [BATCH].NewSymbol: not returned by endpoint" in drifts
     assert not any("LastNbr" in d for d in drifts)
 
 

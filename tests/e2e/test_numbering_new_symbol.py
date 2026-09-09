@@ -107,6 +107,7 @@ def test_insert_newsymbol_and_reapply_batch(
         assert plain["Descr"] == "CLI e2e throwaway numbering"
         assert plain["StartNbr"] == "000000"
         assert plain["EndNbr"] == "999999"
+        assert plain["NewSymbol"] == "<NEW>"
 
     proc = acu(
         "--tenant",

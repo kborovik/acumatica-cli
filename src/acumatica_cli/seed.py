@@ -86,16 +86,12 @@ PASSWORD_FIELDS = frozenset({"Password", "b64__Password"})
 # NumberingSequence runtime counters (V40/gh #25): LastNbr (+ advanced
 # counter if ever exposed) = issued progress, not desired config. Extract
 # hard-strips; diff never compares; apply never PUTs them (re-apply must
-# not reset live counters). NewSymbol is seed (V58), not this class.
+# not reset live counters).
 NUMBERING_RUNTIME_FIELDS = frozenset({"LastNbr"})
 # Fields omitted from source↔live compare (V39 write-only + V40 runtime +
-# V56/V58 GET-omit). Field-name deny at every nesting level. Do not add
+# V56 GET-omit). Field-name deny at every nesting level. Do not add
 # bare ``Value`` here — that would hide real drift on unrelated fields (V56).
-# NewSymbol is insert-required seed; GET omits it. Apply still PUTs;
-# extract emits if GET returns (not LastNbr strip).
-_DIFF_IGNORE_FIELDS = (
-    PASSWORD_FIELDS | NUMBERING_RUNTIME_FIELDS | frozenset({"NewSymbol"})
-)
+_DIFF_IGNORE_FIELDS = PASSWORD_FIELDS | NUMBERING_RUNTIME_FIELDS
 # Path-qualified write-only GET-omit (V56): (entity, detail, field).
 # Diff ignores; extract strips; apply still PUTs when present in YAML.
 _DIFF_IGNORE_PATHS = frozenset({("LotSerialClass", "Segments", "Value")})
@@ -106,7 +102,7 @@ _DIFF_SKIP_DETAILS = frozenset({("Role", "Users"), ("User", "Roles")})
 
 
 def _diff_ignored(entity: str, *path: str) -> bool:
-    """True when source↔live compare skips this field (V39/V40/V56/V57/V58)."""
+    """True when source↔live compare skips this field (V39/V40/V56/V57)."""
     if path and path[-1] in _DIFF_IGNORE_FIELDS:
         return True
     if len(path) == 1 and (entity, path[0]) in _DIFF_SKIP_DETAILS:
