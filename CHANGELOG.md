@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+### Fixed
+
+- **NumberingSequence NewSymbol insert (gh #44):** Bootstrap `1.11.0` maps
+  Header `NewSymbol`. Insert of a new NumberingID with `NewSymbol: <NEW>`
+  no longer 422s. Re-apply of existing sequences still succeeds. `LastNbr`
+  stays runtime (extract strips, diff ignores, apply never PUTs).
+  `NewSymbol` is seed; GET-omit is not `not returned by endpoint` drift.
+
 ## [v0.33.1] - 2026-09-08
 
 ### Fixed

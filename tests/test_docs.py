@@ -38,6 +38,21 @@ def test_docs_user_role_membership_persist() -> None:
     assert "92-role-users" in templates
 
 
+def test_docs_numbering_newsymbol_insert() -> None:
+    """T255/V12/V19/V58: Unreleased + demo-seed NumberingSequence NewSymbol."""
+    demo = (REPO / "docs" / "demo-seed.md").read_text()
+    changelog = (REPO / "CHANGELOG.md").read_text()
+    unreleased = _unreleased(changelog)
+    assert "gh #44" in unreleased
+    assert "NewSymbol" in unreleased
+    assert "Bootstrap `1.11.0`" in unreleased
+    assert "not returned by endpoint" in unreleased
+    assert "NewSymbol: '<NEW>'" in demo
+    assert "LastNbr" in demo
+    assert "not returned by endpoint" in demo
+    assert "Bootstrap/1.11.0" in demo
+
+
 def test_docs_membership_diff_empty() -> None:
     """T250/V12/V19/V57: Unreleased + demo-seed skip empty membership GET."""
     demo = (REPO / "docs" / "demo-seed.md").read_text()

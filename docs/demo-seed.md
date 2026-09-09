@@ -228,7 +228,7 @@ inventory transport — inventory is always offline XML).
 | `Vendor` | Vendor | default | identity; CD on `BAccount` (v1 no multi-table join) |
 | `Customer` | Customer | default | identity; CD on `BAccount` (v1 no multi-table join) |
 | `Roles` / `Users` / `UsersInRoles` | Role / User | bootstrap | membership via `AssignUser` |
-| `NumberingSequence` / `Numbering` | NumberingSequence | bootstrap | bounds only (V40) |
+| `NumberingSequence` / `Numbering` | NumberingSequence | bootstrap | bounds + NewSymbol (V40/V58) |
 | `Company` / `Ledger` / `TaxCategory` | (identity) | bootstrap or default | table name = entity; no map row required |
 
 #### Intentionally unmapped (findings noise, not CaC gaps)
@@ -358,7 +358,7 @@ Marking those two as IN control makes the INPreferences PUT return 500 on 26r1 a
 ## Role, User, and password seed
 
 Default contract has **no** Role or User surface.
-Both live on the **Bootstrap** endpoint only (`endpoint: bootstrap` leads to the active package version, currently `Bootstrap/1.10.0`).
+Both live on the **Bootstrap** endpoint only (`endpoint: bootstrap` leads to the active package version, currently `Bootstrap/1.11.0`).
 
 Screens: Role = SM201005, User = SM201010.
 
@@ -402,7 +402,7 @@ Mapped GET of `Role.Users` / `User.Roles` may stay `[]` after AssignUser.
 
 Extract still skips identity-only `92-role-users.yaml` when Users GET is empty.
 
-Republish AcuBootstrap after upgrade so Bootstrap 1.10.0 (`AssignUser`) is live.
+Republish AcuBootstrap after upgrade so Bootstrap 1.11.0 (`AssignUser` + NumberingSequence `NewSymbol`) is live.
 User seeds that still send `Selected` will 422.
 
 | Path | Practical rule |
@@ -468,9 +468,13 @@ Never commit password hashes from SM203520 / inventory dumps.
 Default contract has **no** Numbering Sequences surface.
 Sequences live on the
 **Bootstrap** endpoint only (`endpoint: bootstrap` leads to the active package version,
-currently `Bootstrap/1.4.0`).
+currently `Bootstrap/1.11.0`).
 
 Screen: CS201010 (Numbering Sequences).
+
+Header view `Header` (DAC `Numbering`) holds `NumberingID`, `Descr`, and
+`NewSymbol` (New Number Symbol).
+Detail view `Sequence` holds bounds.
 
 ### Apply order (V22)
 
@@ -480,30 +484,34 @@ setup and kin):
 
 | File | Entity | Notes |
 | ---- | ------ | ----- |
-| `config/master/05-numbering-sequences.yaml` | NumberingSequence | key `NumberingID`; bounds only |
+| `config/master/05-numbering-sequences.yaml` | NumberingSequence | key `NumberingID`; bounds + `NewSymbol` |
 | later `20-in-preferences.yaml`, `56-so-preferences.yaml`, … | module prefs | may point `*NumberingID` at a sequence id |
 
 Package demo pins LAB5-class module sequences (`APBILL`, `APPAYMENT`,
 `ARINVOICE`, `ARPAYMENT`, `BATCH`, `INADJUST`, `INISSUE`, `INKITASSY`,
-`INRECEIPT`, `POORDER`, `PORECEIPT`, `SOORDER`, `SOSHIPMENT`) as bounds-only
-rows. A custom sequence id used by a prefs seed must exist (tenant-native or
-earlier NumberingSequence seed) before that prefs PUT.
+`INRECEIPT`, `POORDER`, `PORECEIPT`, `SOORDER`, `SOSHIPMENT`) as bounds +
+`NewSymbol: <NEW>` rows. A custom sequence id used by a prefs seed must exist
+(tenant-native or earlier NumberingSequence seed) before that prefs PUT.
 
-### Bounds vs runtime (V40)
+Insert of a new NumberingID needs Header `NewSymbol: <NEW>` (auto-numbering)
+and `Descr`. Re-apply of an existing id still succeeds (gh #44 / V58).
 
-Seed is **bounds only**. Issued progress is runtime state and never desired
-config:
+### Bounds vs runtime (V40 / V58)
+
+Seed is **bounds + NewSymbol**. Issued progress is runtime state and never
+desired config:
 
 | Field class | Fields | Seed? |
 | ----------- | ------ | ----- |
 | Identity + bounds | `NumberingID`, `StartNbr`, `EndNbr`, `WarnNbr`, `NbrStep`, `StartDate`?, `Descr`? | yes |
+| Insert-required seed | `NewSymbol` (auto-numbering `<NEW>`) | yes |
 | Runtime counter | `LastNbr` (+ advanced counter if ever exposed) | **never** |
 
 | Path | Behavior |
 | ---- | -------- |
-| **apply** | PUT bounds only. `LastNbr` is never sent — even if hand-authored seed includes it — so re-apply does not reset live counters. |
-| **extract** | Always strips `LastNbr` (catalog include is bounds-only; hard strip even if include mistakenly lists it). |
-| **diff** | Ignores `LastNbr` — seed bounds vs live counter is never drift. |
+| **apply** | PUT bounds + `NewSymbol`. `LastNbr` is never sent — even if hand-authored seed includes it — so re-apply does not reset live counters. |
+| **extract** | Always strips `LastNbr` (hard strip even if include mistakenly lists it). Emits `NewSymbol` when GET returns it. |
+| **diff** | Ignores `LastNbr`. `NewSymbol` GET-omit is not `not returned by endpoint` drift. |
 
 ```yaml
 # config/master/05-numbering-sequences.yaml (shape)
@@ -512,6 +520,7 @@ key: NumberingID
 endpoint: bootstrap
 records:
 - NumberingID: BATCH
+  NewSymbol: '<NEW>'
   StartNbr: '000000'
   EndNbr: '999999'
   WarnNbr: '999990'
@@ -530,7 +539,7 @@ same calendar day is not drift; a different day still is.
 ## Segmented keys
 
 Default contract has **no** Segmented Keys surface.
-Keys live on the **Bootstrap** endpoint only (`endpoint: bootstrap` leads to the active package version, currently `Bootstrap/1.10.0`).
+Keys live on the **Bootstrap** endpoint only (`endpoint: bootstrap` leads to the active package version, currently `Bootstrap/1.11.0`).
 
 Screen: CS202000 (`DimensionMaint`).
 Header view `Header` (DAC `Dimension`), key `DimensionID`; detail view `Detail` (DAC `Segment`) fields `SegmentID` + `Length`.
