@@ -90,7 +90,7 @@ V36: seed authority — v1 writers into `config/` = REST extract + human only; w
 V37: tenant-snapshot artifact — accept SM203520 XML ZIP (`manifest.xml` + `*.xml`) or `ac.exe export xml` table-XML folder; both normalize one IR → inventory/; binary `.adb` fail-closed named error; never matrix `erp` match; format tag "XML dump" ? for ingress only — never identity side name (table owns identity)
 V38: reconcile-normalize — pad-trim both sides; snapshot_map aliases + FK CD↔ID + enum label→code; never silent promote config/ (V36); full audit recipe → `.spec/check-extras.md` §V.38
 V39: password-seed — User seed Password write-only @ apply when present in YAML; extract strips `Password` + `b64__Password` (never seed hashes); diff ignores password fields
-V40: numbering-runtime — NumberingSequence seed ! bounds only (`NumberingID`, `StartNbr`, `EndNbr`, `WarnNbr`, `NbrStep` + StartDate? if screen requires); `LastNbr` (+ advanced counter) = runtime state — extract strips; diff ignores; apply never requires; ! reset live counters every apply (gh #25)
+V40: numbering-runtime — NumberingSequence seed ! bounds + NewSymbol (`NumberingID`, `StartNbr`, `EndNbr`, `WarnNbr`, `NbrStep` + StartDate? if screen requires; NewSymbol insert-required per numbering-new-symbol invariant); `LastNbr` (+ advanced counter) = runtime state — extract strips; diff ignores; apply never requires; ! reset live counters every apply (gh #25)
 V41: prefs-field-depth — Bootstrap *Preferences field lists ! curated subset (demo seed need or ERP-default rebuild risk); ! full DAC mirror; each field ! seed/catalog reason; server-derived/runtime ! seed (B11 class); contract shape change ! version bump (V21) (gh #26)
 V42: inventory-map-coverage — dual-reader masters ! snapshot_map table→entity so findings = real gaps; intentional unmapped ! docs table; full audit recipe → `.spec/check-extras.md` §V.42
 V43: period-token — `acu run` `${current_period}` → host-local `MMyyyy` @ process start every `${var}` site; views/state ! expand; full audit recipe → `.spec/check-extras.md` §V.43
@@ -108,6 +108,7 @@ V54: unwrap-row-id — unwrap keeps `id` + `delete` on records and detail rows t
 V55: datetime-calendar-day — `_norm` date-only `YYYY-MM-DD` matches live DateTimeValue same calendar day (strip `T…offset`); different day still drift; extract date-strips DateTimeValue seed emit (BegFinYear synth class) (closes §B.35) (gh #40)
 V56: write-only-get-omit — apply-needed field GET never returns ! diff-ignore (join `_DIFF_IGNORE_FIELDS`) not `not returned by endpoint`; ! general GET-omit=ok (mapping-miss per §V.50 stands); LotSerialClass Auto-Incremental `Segments.Value` first (closes §B.36) (gh #40)
 V57: membership-diff-empty — mapped GET Role.Users / User.Roles ? empty while UsersInRoles has session-company rows; diff ! flag Role.Users / User.Roles missing; skip those details in diff or read live source that returns rows; AssignUser apply + SQL-proven membership → `acu diff` exit 0 on Role.Users / User.Roles (closes §B.37) (gh #39)
+V58: numbering-new-symbol — NumberingSequence insert ! Header NewSymbol (or UserNumbering if screen requires pair); Bootstrap contract maps it; apply PUT new NumberingID w/ `NewSymbol: <NEW>` ! 422; re-apply existing id succeeds (no NewSymbol mask 422 on update); GET omits NewSymbol → seed write-only not runtime (LastNbr strip per numbering-runtime invariant; GET-omit per write-only-get-omit invariant) (closes §B.38) (gh #44)
 
 ## §T TASKS
 
@@ -232,6 +233,11 @@ T247|x|diff Role.Users / User.Roles: skip empty mapped GET or live-source compar
 T248|x|offline tests: empty mapped Users/Roles ! drift after AssignUser-shaped seed; non-membership details still flag missing|V13,V57,T247
 T249|x|live/e2e: after `92-role-users.yaml` AssignUser, `acu diff` exit 0 on Role.Users / User.Roles (SQL-proven UsersInRoles)|V4,V13,V57,B37,T247
 T250|x|docs/CHANGELOG Unreleased — membership GET empty ! diff fail; extract skip stands (gh #39)|V12,V19,V57,T247
+T251|.|bootstrap contract NumberingSequence map Header NewSymbol (+ UserNumbering if screen requires pair); version bump 1.10.0→1.11.0|V21,V58,I.data,B38
+T252|.|seed_catalog include NewSymbol; package seed `NewSymbol: <NEW>`; extract emit when GET returns (not LastNbr strip); apply insert new NumberingID + re-apply existing|V34,V40,V56,V58,I.data,I.cmd,T251
+T253|.|offline tests: contract field+mapping; apply body includes NewSymbol; extract/diff LastNbr strip stands; NewSymbol GET-omit ! not-returned drift; existing numbering tests green|V13,V40,V56,V58,T251,T252
+T254|.|live/e2e: insert new NumberingID (QORD-class) w/ NewSymbol; re-apply existing BATCH; no 422|V4,V13,V58,B38,T252
+T255|.|docs/demo-seed + CHANGELOG Unreleased — NumberingSequence NewSymbol insert (gh #44)|V12,V19,V58,T251,T252
 
 ## §B BUGS
 
@@ -267,3 +273,4 @@ B34|2026-09-08|unwrap drops detail-row id → KitAssembly StockComponents PUT in
 B35|2026-09-08|_norm string-compares date-only vs live DateTimeValue same calendar day (gh #40)|V55
 B36|2026-09-08|LotSerialClass Auto-Incremental Segments.Value GET-omit → not-returned drift after apply (B11 class; gh #40)|V56
 B37|2026-09-08|mapped GET Role.Users / User.Roles returns [] after AssignUser; UsersInRoles has rows; diff flags missing + exit 2 (gh #39)|V57
+B38|2026-09-09|NumberingSequence insert 422: contract maps bounds only; CS201010 requires NewSymbol or UserNumbering; PUT drops unmapped NewSymbol (gh #44)|V58
