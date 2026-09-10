@@ -18,9 +18,9 @@
   (CS201010 insert requires New Number Symbol or Manual Numbering;
   gh #44 / V58).
 
-  package_zip() (bootstrap.py) prefers data-repo bootstrap/project.xml when
-  present; otherwise this packaged template is the fallback so config init,
-  offline tests, and package-only installs still bootstrap the full surface.
+  package_zip() always loads this packaged contract. Data-repo
+  config/bootstrap/project.xml or bootstrap/project.xml is forbidden (V21);
+  present -> hard error naming package SoT.
 
   package_zip() injects a
   <Graph ClassName="AcuBootstrapPlugin" FileType="NewFile" Source="..."/>

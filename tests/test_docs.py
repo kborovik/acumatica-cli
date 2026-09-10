@@ -82,6 +82,9 @@ def test_cli_test_seed_trees_present() -> None:
         "test_provision_lifecycle.py",
         "test_scenario_lifecycle.py",
     ]
+    numbering = (config / "master" / "05-numbering-sequences.yaml").read_text()
+    assert "NewSymbol: '<NEW>'" in numbering
+    assert numbering.count("NumberingID:") == numbering.count("NewSymbol:")
 
 
 def test_e2e_pipeline_files_only() -> None:
