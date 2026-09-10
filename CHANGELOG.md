@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## [v0.34.0] - 2026-09-10
+
 ### Removed
 
 - **docs/ tree:** dropped. Live verify is `.env` plus `acu schema`. README
