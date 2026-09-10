@@ -19,6 +19,35 @@ def _unreleased(changelog: str) -> str:
     return rest if nxt < 0 else rest[:nxt]
 
 
+def test_no_retired_host_literals() -> None:
+    """T261/V12/V27: live instance from .env; no host/sibling literals."""
+    bits = (
+        "acu" + "-dev1",
+        "vm" + ".internal",
+        "acumatica" + "-infra",
+        "acumatica" + "-blog",
+        "acumatica" + "-devops",
+    )
+    pat = re.compile("|".join(re.escape(b) for b in bits))
+    hits: list[str] = []
+    roots = [REPO / "README.md", REPO / "src", REPO / "tests"]
+    files: list[Path] = []
+    for root in roots:
+        if root.is_file():
+            files.append(root)
+        else:
+            files.extend(p for p in root.rglob("*") if p.is_file())
+    for path in files:
+        if path.suffix not in {".py", ".cs", ".md", ".yaml", ".yml"}:
+            continue
+        text = path.read_text()
+        for i, line in enumerate(text.splitlines(), 1):
+            if pat.search(line):
+                rel = path.relative_to(REPO).as_posix()
+                hits.append(f"{rel}:{i}: {line.strip()}")
+    assert hits == [], "retired host/sibling literals:\n" + "\n".join(hits)
+
+
 def test_docs_cli_test_seed_soak() -> None:
     """T258/V12/V2: soak from this checkout; never CNBN; e2e still templates."""
     agents = (REPO / "AGENTS.md").read_text()

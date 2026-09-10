@@ -98,7 +98,7 @@ class TenantManager:
         The tenant map loads at app start; without this, tenants created or
         deleted by CompanyConfig stay invisible to the sign-in page and REST
         routing silently falls back to the default tenant.
-        The pool is named after the instance (how acumatica-infra builds it).
+        The pool is named after the instance.
         """
         self._ssh(
             "Import-Module WebAdministration; "

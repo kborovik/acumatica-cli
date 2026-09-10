@@ -244,7 +244,7 @@ T257|x|copy sibling GitOps `config/{bootstrap,baseline,setup,master,views}` + `s
 T258|x|AGENTS.md + README: ACUCLI soak from this checkout `--tenant ACUCLI`; never CNBN; never sibling `cd` for CLI soak; e2e still packaged templates|V2,V12
 T259|x|offline test: repo-root seed trees present; no `config/qms/`; e2e still 3 pipeline files|V2,V13
 T260|x|drop `docs/` tree; sweep remaining `docs/` cites (scope: `docs/`)|V12,V49
-T261|.|sweep host + retired-sibling literals (scope: `acu-dev1|vm\.internal|acumatica-infra|acumatica-blog|acumatica-devops`); live instance from `.env` only|V12,V27
+T261|x|sweep host + retired-sibling literals (scope: `acu-dev1|vm\.internal|acumatica-infra|acumatica-blog|acumatica-devops`); live instance from `.env` only|V12,V27
 T262|.|extras-hook V49 + check-md-prose drop `docs/*.md` glob; README/help/CHANGELOG Unreleased no `docs/` links; suite green|V49,V12,V19
 
 ## §B BUGS

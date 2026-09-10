@@ -250,7 +250,7 @@ Secrets, REST where, and the Default contract pin live in one `.env` file (`ACU_
 Leftover `matrix.yaml` is ignored and never loaded.
 
 ```sh
-ACU_BASE_URL=http://acu-dev1.vm.internal/AcumaticaERP   # REST where (required)
+ACU_BASE_URL=http://erp.example.com/AcumaticaERP        # REST where (required)
 ACU_API_VERSION=25.200.001                              # Default contract half
 ACU_TENANT=LAB5                                         # sign-in name of the tenant API sessions use
 # ACU_SSH omitted → defaults to Administrator@ + resolved base_url host
