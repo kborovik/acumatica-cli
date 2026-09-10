@@ -1,27 +1,25 @@
 # AGENTS.md
 
-This repository is the `acu` CLI (`acumatica-cli`). It has no GitOps seed.
-Do not `acu apply` / `diff` / `run` from here.
+This repository is the `acu` CLI (`acumatica-cli`) plus the CLI test seed
+(`config/` SEED_DIRS + `config/views/` + `scenario/` at repo root).
 
-Live CLI tests use tenant login `ACUCLI` and sibling GitOps repo
-`~/github/acu-gitops-qms` as the YAML source.
-
-Never print `.env` secrets.
+Product GitOps (QMS) stays in the sibling data repo. Never print `.env` secrets.
 
 ## Live test target
 
 | | |
 | --- | --- |
 | Tenant login | `ACUCLI` (`ACU_TENANT=ACUCLI`) |
-| GitOps source | `~/github/acu-gitops-qms` |
+| CLI test seed | this checkout `config/` + `scenario/` |
 | Instance | this repo's `.env` (`ACU_BASE_URL`) |
 
-The GitOps repo `.env` names tenant `CNBN`. That is the QMS product tenant.
+The sibling GitOps `.env` names tenant `CNBN`. That is the QMS product tenant.
 Do not apply, delete, or rebuild `CNBN` while testing this CLI.
 Do not change `~/github/acu-gitops-qms/.env`.
 Do not run `gmake rebuild` there (it uses `.env` `ACU_TENANT`).
+Do not `cd` the sibling for CLI soak.
 
-Pass `--tenant ACUCLI` on every live command (flag wins over the GitOps `.env`).
+Pass `--tenant ACUCLI` on every live command (flag wins over `.env` `ACU_TENANT`).
 
 ## Local CLI
 
@@ -38,30 +36,28 @@ uv run acu --version       # 0.x.y+dev (<this checkout>)
 
 Offline unit tests stay here: `gmake check`.
 `gmake e2e` is a separate path: scratch tenants from packaged `config init` templates.
-It is not the GitOps soak.
+It is not the CLI test-seed soak.
 
-## GitOps soak (from the data repo)
+## CLI test-seed soak (this checkout)
 
-Run from the GitOps tree so cwd walk-up finds `config/` and `.env`.
-Set PATH to this CLI checkout's `.venv/bin` first, not the GitOps tree.
+Run from this tree so cwd walk-up finds `config/` and `.env`.
+Use this checkout's `.venv/bin/acu`.
 
 ```sh
-PATH="$HOME/github/acumatica-cli/.venv/bin:$PATH"
-cd ~/github/acu-gitops-qms
-
-acu --tenant ACUCLI config check
-acu --tenant ACUCLI tenant list
+gmake install
+uv run acu --tenant ACUCLI config check
+uv run acu --tenant ACUCLI tenant list
 
 # cold rebuild of the CLI test tenant only
-acu --tenant ACUCLI tenant delete --login ACUCLI --yes
-acu --tenant ACUCLI tenant create --login ACUCLI
-acu --tenant ACUCLI apply
-acu --tenant ACUCLI run
-acu --tenant ACUCLI diff
-acu --tenant ACUCLI state
+uv run acu --tenant ACUCLI tenant delete --login ACUCLI --yes
+uv run acu --tenant ACUCLI tenant create --login ACUCLI
+uv run acu --tenant ACUCLI apply
+uv run acu --tenant ACUCLI run
+uv run acu --tenant ACUCLI diff
+uv run acu --tenant ACUCLI state
 ```
 
-`config/qms/` needs Lab5.QMS published. Skip it unless the change under test is QMS apply.
+This seed has no `config/qms/`. QMS apply stays in the sibling GitOps repo.
 
 ## Related repos
 

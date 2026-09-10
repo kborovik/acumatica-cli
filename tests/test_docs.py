@@ -19,6 +19,23 @@ def _unreleased(changelog: str) -> str:
     return rest if nxt < 0 else rest[:nxt]
 
 
+def test_docs_cli_test_seed_soak() -> None:
+    """T258/V12/V2: soak from this checkout; never CNBN; e2e still templates."""
+    agents = (REPO / "AGENTS.md").read_text()
+    readme = (REPO / "README.md").read_text()
+    assert "has no GitOps seed" not in agents
+    assert "Do not `acu apply`" not in agents
+    assert "cd ~/github/acu-gitops-qms" not in agents
+    assert "--tenant ACUCLI" in agents
+    assert "Do not apply, delete, or rebuild `CNBN`" in agents
+    assert "Do not `cd` the sibling for CLI soak" in agents
+    assert "packaged `config init` templates" in agents
+    assert "--tenant ACUCLI" in readme
+    assert "Never use tenant `CNBN`" in readme
+    assert "Never `cd` the sibling GitOps repo for CLI soak" in readme
+    assert "packaged `config init` templates" in readme
+
+
 def test_e2e_pipeline_files_only() -> None:
     """T256: live e2e is three pipeline files; per-bug probes fold onto them."""
     names = sorted(p.name for p in (REPO / "tests" / "e2e").glob("test_*.py"))

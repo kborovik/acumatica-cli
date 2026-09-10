@@ -388,6 +388,23 @@ gmake e2e FILE=test_scenario_lifecycle   # scenario + state + kit alloc
 gmake e2e FILE=test_extract_roundtrip    # extract inverse
 ```
 
+### CLI test-seed soak
+
+This checkout carries a CLI test seed at repo-root `config/` and `scenario/` (no `config/qms/`).
+Soak the live CLI tenant from here with `--tenant ACUCLI`.
+
+Never use tenant `CNBN`. Never `cd` the sibling GitOps repo for CLI soak.
+
+`gmake e2e` still scaffolds from packaged `config init` templates into a tmp dir.
+That path is not the soak.
+
+```sh
+uv run acu --tenant ACUCLI apply
+uv run acu --tenant ACUCLI run
+uv run acu --tenant ACUCLI diff
+uv run acu --tenant ACUCLI state
+```
+
 ## License
 
 This project is licensed under the PolyForm Noncommercial License 1.0.0.
