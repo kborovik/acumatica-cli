@@ -36,6 +36,25 @@ def test_docs_cli_test_seed_soak() -> None:
     assert "packaged `config init` templates" in readme
 
 
+def test_cli_test_seed_trees_present() -> None:
+    """T259/V2/V13: repo-root seed trees; no config/qms; e2e still 3 files."""
+    config = REPO / "config"
+    for name in ("bootstrap", "baseline", "setup", "master", "views"):
+        d = config / name
+        assert d.is_dir(), d
+        assert list(d.glob("*.yaml")), d
+    assert not (config / "qms").exists()
+    scenario = REPO / "scenario"
+    assert scenario.is_dir()
+    assert list(scenario.glob("*.yaml"))
+    names = sorted(p.name for p in (REPO / "tests" / "e2e").glob("test_*.py"))
+    assert names == [
+        "test_extract_roundtrip.py",
+        "test_provision_lifecycle.py",
+        "test_scenario_lifecycle.py",
+    ]
+
+
 def test_e2e_pipeline_files_only() -> None:
     """T256: live e2e is three pipeline files; per-bug probes fold onto them."""
     names = sorted(p.name for p in (REPO / "tests" / "e2e").glob("test_*.py"))

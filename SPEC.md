@@ -242,7 +242,7 @@ T255|x|docs/demo-seed + CHANGELOG Unreleased — NumberingSequence NewSymbol ins
 T256|x|e2e: 3 pipeline files (provision, scenario, extract); fold qty/kit-alloc/numbering/segmented-key/roles onto those tenants; shared conftest `bracket_tenant` + `joined_output`; drop per-bug files|V4,V13
 T257|x|copy sibling GitOps `config/{bootstrap,baseline,setup,master,views}` + `scenario/` → repo root (exclude `qms/`, live `.env`, `state/`, customization, Makefile, schemas)|V2,I.data
 T258|x|AGENTS.md + README: ACUCLI soak from this checkout `--tenant ACUCLI`; never CNBN; never sibling `cd` for CLI soak; e2e still packaged templates|V2,V12
-T259|.|offline test: repo-root seed trees present; no `config/qms/`; e2e still 3 pipeline files|V2,V13
+T259|x|offline test: repo-root seed trees present; no `config/qms/`; e2e still 3 pipeline files|V2,V13
 
 ## §B BUGS
 
