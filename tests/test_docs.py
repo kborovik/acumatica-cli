@@ -116,7 +116,9 @@ def test_readme_help_unreleased_no_docs_links() -> None:
             if pat.search(line):
                 hits.append(f"{label}:{i}: {line.strip()}")
     assert hits == [], "docs/*.md links:\n" + "\n".join(hits)
-    assert "docs/ tree" in unreleased
+    changelog = (REPO / "CHANGELOG.md").read_text()
+    # V19 promote empties Unreleased; persist notes live in the versioned section.
+    assert "docs/ tree" in changelog
 
 
 def test_docs_tree_dropped() -> None:
@@ -155,13 +157,13 @@ def test_docs_user_role_membership_persist() -> None:
 
 
 def test_docs_numbering_newsymbol_insert() -> None:
-    """T255/V12/V19/V58: Unreleased NumberingSequence NewSymbol."""
+    """T255/V12/V19/V58: changelog NumberingSequence NewSymbol."""
     changelog = (REPO / "CHANGELOG.md").read_text()
-    unreleased = _unreleased(changelog)
-    assert "gh #44" in unreleased
-    assert "NewSymbol" in unreleased
-    assert "Bootstrap `1.11.0`" in unreleased
-    assert "not returned by endpoint" in unreleased
+    # V19 promote empties Unreleased; persist notes live in the versioned section.
+    assert "gh #44" in changelog
+    assert "NewSymbol" in changelog
+    assert "Bootstrap `1.11.0`" in changelog
+    assert "not returned by endpoint" in changelog
 
 
 def test_docs_membership_diff_empty() -> None:
