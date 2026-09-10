@@ -70,7 +70,7 @@
   - PrimaryView Header (DAC Numbering): key NumberingID + Descr +
     NewSymbol (T251/V58; CS201010 "New Number Symbol"). UserNumbering
     is the OR alternative (manual numbering), not a required pair.
-    GET omits NewSymbol — write-only (V56), not LastNbr-class runtime.
+    Mapped GET returns NewSymbol (seed; GET-omit is mapping-miss drift).
   - Detail view Sequence (DAC NumberingSequence): bounds StartNbr,
     EndNbr, WarnNbr, NbrStep, StartDate. LastNbr is runtime counter —
     omitted from contract (V40/T152 strip/ignore if ever present).

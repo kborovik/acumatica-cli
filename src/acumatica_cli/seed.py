@@ -88,12 +88,13 @@ PASSWORD_FIELDS = frozenset({"Password", "b64__Password"})
 # hard-strips; diff never compares; apply never PUTs them (re-apply must
 # not reset live counters).
 NUMBERING_RUNTIME_FIELDS = frozenset({"LastNbr"})
-# Fields omitted from source↔live compare (V39 write-only + V40 runtime +
-# V56 GET-omit). Field-name deny at every nesting level. Do not add
-# bare ``Value`` here — that would hide real drift on unrelated fields (V56).
+# Fields omitted from source↔live compare (V39 write-only + V40 runtime).
+# Field-name deny at every nesting level.
 _DIFF_IGNORE_FIELDS = PASSWORD_FIELDS | NUMBERING_RUNTIME_FIELDS
 # Path-qualified write-only GET-omit (V56): (entity, detail, field).
 # Diff ignores; extract strips; apply still PUTs when present in YAML.
+# Do not add bare ``Value`` to _DIFF_IGNORE_FIELDS — that would hide
+# real drift on unrelated fields.
 _DIFF_IGNORE_PATHS = frozenset({("LotSerialClass", "Segments", "Value")})
 # Whole-detail skip (V57/B37): mapped GET Role.Users / User.Roles may be
 # empty while UsersInRoles has session-company rows. Extra live members

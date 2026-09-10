@@ -171,8 +171,7 @@ def live_instance() -> Instance:
             return load_instance()
     except SystemExit as exc:
         pytest.exit(
-            f"live config missing ({exc}) - "
-            "run 'make decrypt' in the sibling data repo",
+            f"live config missing ({exc}) - decrypt .env.gpg at the repo root",
             returncode=1,
         )
 
