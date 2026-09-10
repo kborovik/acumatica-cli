@@ -1,0 +1,23 @@
+entity: ItemClass
+key: ClassID
+records:
+- ClassID: PARTS
+  Description: Purchased raw materials
+  StockItem: true
+  ItemType: Finished Good
+  ValuationMethod: Average
+  BaseUOM: KG
+  AvailabilityCalculationRule: DEFAULT
+  PostingClass: PARTS
+  TaxCategoryID: EXEMPT
+  DefaultWarehouseID: WH-MISS-01
+- ClassID: KITS
+  Description: Manufactured nutraceuticals
+  StockItem: true
+  ItemType: Finished Good
+  ValuationMethod: Average
+  BaseUOM: EA
+  AvailabilityCalculationRule: DEFAULT
+  PostingClass: KITS
+  TaxCategoryID: EXEMPT
+  DefaultWarehouseID: WH-MISS-01

@@ -1,0 +1,11 @@
+action: GenerateCalendar
+entity: MasterCalendar
+endpoint: bootstrap
+record:
+  FinancialYear: "2026"
+parameters:
+  FromYear: "2026"
+  ToYear: "2026"
+done_when:
+  entity: CompanyCalendar
+  filter: FinancialYear eq '2026'

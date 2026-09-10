@@ -1,15 +1,15 @@
 """Bootstrap customization package: build the zip, publish via /CustomizationApi.
 
 An unconfigured tenant cannot be configured through the Default endpoint
-(features are off, no company/branch exists, credit terms have no entity —
-docs/rest-api.md). The CustomizationApi is the one door that works on a
+(features are off, no company/branch exists, credit terms have no entity).
+The CustomizationApi is the one door that works on a
 virgin tenant, so bootstrap = publish a package whose CustomizationPlugin
 (`bootstrap_plugin.cs`) enables features on publish — the contract API
 cannot write CS100000 at all (T3 verdict) — and whose Bootstrap contract
 endpoint exposes the seeding surface (serialization verified T12).
 
 Bootstrap endpoint contract is package SoT (V2/V21/T178): always the
-packaged full company ``bootstrap_project.xml`` (``Bootstrap/1.10.0``).
+packaged full company ``bootstrap_project.xml`` (``Bootstrap/1.11.0``).
 Data-repo ``config/bootstrap/project.xml`` or ``bootstrap/project.xml`` is
 not a seed — present → hard error naming package SoT (no dual contract line).
 
@@ -68,7 +68,7 @@ def _bootstrap_file(root: Path, name: str) -> Path | None:
 
 
 def packaged_contract_xml() -> bytes:
-    """The CLI-shipped full company Bootstrap contract (``Bootstrap/1.10.0``)."""
+    """The CLI-shipped full company Bootstrap contract (``Bootstrap/1.11.0``)."""
     return (resources.files("acumatica_cli") / "bootstrap_project.xml").read_bytes()
 
 

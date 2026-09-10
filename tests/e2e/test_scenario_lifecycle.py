@@ -1,193 +1,204 @@
 """Live virgin-tenant scenario + state lifecycle (SPEC T80/T98/T110/T114).
 
-Self-contained: scaffolds the packaged full ``config init`` seed into a tmp
-data repo, creates a scratch tenant, then apply → run scenario/ → warm
-once-skip → diff clean → state write → assert-unchanged. Parallel to
+Self-contained: uses the session-scaffolded packaged ``config init`` seed,
+creates a scratch tenant, then apply → run scenario/ → kit-alloc probe →
+warm once-skip → diff clean → state write → assert-unchanged. Parallel to
 ``test_provision_lifecycle`` (apply/diff focus) on a separate tenant login
 so the two modules do not share session tenant state.
+
+KitAssembly alloc (T240) folds here: leftover component stock after
+20-buy / 30-build is enough for a Hold Qty-1 assembly; Hold does not
+move TB so later state asserts stay valid.
 
 Opt-in via ``make e2e FILE=test_scenario_lifecycle``. Default offline suite
 stays green without this file (``not e2e``).
 """
 
-import subprocess
-import sys
-import threading
-from collections.abc import Callable, Iterator
+from collections.abc import Iterator
+from datetime import date
 from pathlib import Path
-from typing import IO, NamedTuple
 
 import pytest
+import yaml
 
-from acumatica_cli.config import scaffold
+from acumatica_cli import firstlogin
+from acumatica_cli.client import AcumaticaClient, unwrap
+from acumatica_cli.config import Instance
+from acumatica_cli.run import period_mmYYYY
 from acumatica_cli.tenant import TenantManager
+from tests.e2e.conftest import (
+    DeleteTenant,
+    RunAcu,
+    ScratchTenant,
+    bracket_tenant,
+    joined_output,
+)
 
 pytestmark = pytest.mark.e2e
 
-REPO_ROOT = Path(__file__).resolve().parents[2]
 SCRATCH_LOGIN = "E2ESCEN"
-
-RunAcu = Callable[..., subprocess.CompletedProcess[str]]
-DeleteTenant = Callable[[str], None]
-
-
-class ScratchTenant(NamedTuple):
-    login: str
-    company_id: int
+KIT_INVENTORY_ID = "GW-EDGE"
+KIT_REVISION = "V1"
 
 
-def _combined(proc: subprocess.CompletedProcess[str]) -> str:
-    return proc.stdout + proc.stderr
-
-
-@pytest.fixture(scope="module")
-def scenario_repo(tmp_path_factory: pytest.TempPathFactory) -> Path:
-    """Full-scaffold data repo with live credentials from repo-root .env."""
-    import shutil
-
-    root = tmp_path_factory.mktemp("scenario-data-repo")
-    for _ in scaffold(root):
-        pass
-    real_env = REPO_ROOT / ".env"
-    if real_env.exists():
-        shutil.copyfile(real_env, root / ".env")
-    else:
-        (root / ".env").unlink(missing_ok=True)
-    return root
-
-
-@pytest.fixture(scope="module")
-def scenario_acu(scenario_repo: Path) -> RunAcu:
-    """Run installed ``acu`` from the scenario scaffold (stream like conftest)."""
-
-    def _pump(pipe: IO[str], lines: list[str], sink: IO[str]) -> None:
-        for line in pipe:
-            lines.append(line)
-            sink.write(line)
-            sink.flush()
-
-    def run(*args: str) -> subprocess.CompletedProcess[str]:
-        sys.stderr.write(f"$ acu {' '.join(args)}\n")
-        sys.stderr.flush()
-        with subprocess.Popen(
-            ["acu", *args],
-            cwd=scenario_repo,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
-            text=True,
-        ) as proc:
-            assert proc.stdout is not None
-            assert proc.stderr is not None
-            out: list[str] = []
-            err: list[str] = []
-            readers = [
-                threading.Thread(target=_pump, args=(proc.stdout, out, sys.stdout)),
-                threading.Thread(target=_pump, args=(proc.stderr, err, sys.stderr)),
-            ]
-            for reader in readers:
-                reader.start()
-            try:
-                returncode = proc.wait(timeout=3600)
-            except subprocess.TimeoutExpired:
-                proc.kill()
-                raise
-            finally:
-                for reader in readers:
-                    reader.join()
-        return subprocess.CompletedProcess(
-            ["acu", *args], returncode, "".join(out), "".join(err)
-        )
-
-    return run
-
-
-@pytest.fixture(scope="module")
-def scenario_tenant(
+@pytest.fixture(scope="session")
+def scratch_tenant(
     tenant_manager: TenantManager, delete_tenant: DeleteTenant
 ) -> Iterator[ScratchTenant]:
-    delete_tenant(SCRATCH_LOGIN)
-    company_id = max(t.company_id for t in tenant_manager.list()) + 1
-    yield ScratchTenant(login=SCRATCH_LOGIN, company_id=company_id)
-    delete_tenant(SCRATCH_LOGIN)
+    yield from bracket_tenant(SCRATCH_LOGIN, tenant_manager, delete_tenant)
 
 
-def test_full_scaffold_layout(scenario_repo: Path) -> None:
+def _kit_assembly_type(instance: Instance) -> str:
+    """25r1 Default 24.200.001 uses Assembly; trunk 25.200.001 uses Production."""
+    return "Assembly" if instance.api_version.startswith("24.") else "Production"
+
+
+def test_full_scaffold_layout(data_repo: Path) -> None:
     """T80/T110/T113/T179/V28: config/ umbrella + lifecycle + TB views + README."""
     # Bootstrap contract is package SoT — never scaffolded (T178/T179)
-    assert not (scenario_repo / "config" / "bootstrap" / "project.xml").exists()
-    assert (scenario_repo / "config" / "bootstrap" / "features.yaml").is_file()
-    assert (scenario_repo / "config" / "master").is_dir()
-    assert (scenario_repo / "scenario" / "10-seed-capital.yaml").is_file()
-    assert (scenario_repo / "scenario" / "20-buy.yaml").is_file()
-    assert (scenario_repo / "scenario" / "30-build.yaml").is_file()
-    assert (scenario_repo / "scenario" / "40-sell.yaml").is_file()
-    assert not (scenario_repo / "scenario" / "buy-sell.yaml").exists()
-    assert (scenario_repo / "overlays" / "README.md").is_file()
+    assert not (data_repo / "config" / "bootstrap" / "project.xml").exists()
+    assert (data_repo / "config" / "bootstrap" / "features.yaml").is_file()
+    assert (data_repo / "config" / "master").is_dir()
+    assert (data_repo / "scenario" / "10-seed-capital.yaml").is_file()
+    assert (data_repo / "scenario" / "20-buy.yaml").is_file()
+    assert (data_repo / "scenario" / "30-build.yaml").is_file()
+    assert (data_repo / "scenario" / "40-sell.yaml").is_file()
+    assert not (data_repo / "scenario" / "buy-sell.yaml").exists()
+    assert (data_repo / "overlays" / "README.md").is_file()
     assert (
-        scenario_repo / "overlays" / "default-24.200.001" / "scenario" / "30-build.yaml"
+        data_repo / "overlays" / "default-24.200.001" / "scenario" / "30-build.yaml"
     ).is_file()
-    assert (scenario_repo / "config" / "views" / "10-trial-balance.yaml").is_file()
+    assert (data_repo / "config" / "views" / "10-trial-balance.yaml").is_file()
     # T107/V28/V33: golden state/ = trial-balance only (B25)
-    assert not (
-        scenario_repo / "config" / "views" / "20-inventory-summary.yaml"
-    ).exists()
-    assert not (scenario_repo / "config" / "snapshot").exists()
-    assert (scenario_repo / "README.md").is_file()
-    assert list((scenario_repo / "config" / "master").glob("*.yaml"))
+    assert not (data_repo / "config" / "views" / "20-inventory-summary.yaml").exists()
+    assert not (data_repo / "config" / "snapshot").exists()
+    assert (data_repo / "README.md").is_file()
+    assert list((data_repo / "config" / "master").glob("*.yaml"))
 
 
-def test_scenario_tenant_create(
-    scenario_acu: RunAcu, scenario_tenant: ScratchTenant
-) -> None:
-    proc = scenario_acu(
+def test_scenario_tenant_create(acu: RunAcu, scratch_tenant: ScratchTenant) -> None:
+    proc = acu(
         "tenant",
         "create",
         "--id",
-        str(scenario_tenant.company_id),
+        str(scratch_tenant.company_id),
         "--login",
-        scenario_tenant.login,
+        scratch_tenant.login,
     )
-    assert proc.returncode == 0, _combined(proc)
-    assert "AcuBootstrap published" in _combined(proc)
+    assert proc.returncode == 0, joined_output(proc)
+    assert "AcuBootstrap published" in joined_output(proc)
 
 
-def test_scenario_apply(scenario_acu: RunAcu, scenario_tenant: ScratchTenant) -> None:
+def test_scenario_apply(acu: RunAcu, scratch_tenant: ScratchTenant) -> None:
     """Bare apply prefers config/ and includes master after setup (T77/T84)."""
-    proc = scenario_acu("--tenant", scenario_tenant.login, "apply")
-    assert proc.returncode == 0, _combined(proc)
-    assert "config/master/" in proc.stdout or "Warehouse" in _combined(proc)
+    proc = acu("--tenant", scratch_tenant.login, "apply")
+    assert proc.returncode == 0, joined_output(proc)
+    assert "config/master/" in proc.stdout or "Warehouse" in joined_output(proc)
 
 
-def test_scenario_run(scenario_acu: RunAcu, scenario_tenant: ScratchTenant) -> None:
-    proc = scenario_acu("--tenant", scenario_tenant.login, "run", "scenario/")
-    assert proc.returncode == 0, _combined(proc)
+def test_scenario_run(acu: RunAcu, scratch_tenant: ScratchTenant) -> None:
+    proc = acu("--tenant", scratch_tenant.login, "run", "scenario/")
+    assert proc.returncode == 0, joined_output(proc)
+
+
+def test_kitassembly_alloc_put_updates_existing_line(
+    live_instance: Instance,
+    scratch_tenant: ScratchTenant,
+) -> None:
+    """T240/V54/B34: captured StockComponents[0].id PUT updates, no second row.
+
+    Runs after scenario buy/build so component on-hand exists. Hold Qty-1
+    does not release, so later TB asserts stay valid.
+    """
+    inst = live_instance.model_copy(update={"tenant": scratch_tenant.login})
+    firstlogin.initialize_admin_password(inst, tenant=scratch_tenant.login)
+    kit_type = _kit_assembly_type(inst)
+    with AcumaticaClient(inst) as client:
+        created = unwrap(
+            client.put(
+                "KitAssembly",
+                {
+                    "Type": kit_type,
+                    "KitInventoryID": KIT_INVENTORY_ID,
+                    "Revision": KIT_REVISION,
+                    "Qty": 1,
+                    "WarehouseID": "WH01",
+                    "LocationID": "MAIN",
+                    "ReasonCode": "INASSEMBLY",
+                    "Hold": True,
+                },
+            )
+        )
+        ref = created["ReferenceNbr"]
+        rec = client.get_record(
+            "KitAssembly",
+            [kit_type, ref],
+            params={"$expand": "StockComponents/Allocations"},
+        )
+        assert rec is not None
+        plain = unwrap(rec)
+        rows = plain["StockComponents"]
+        assert rows, plain
+        row0 = rows[0]
+        assert "id" in row0, row0
+        n_before = len(rows)
+        ids_before = [row["id"] for row in rows]
+        allocs = row0.get("Allocations") or [
+            {
+                "Qty": row0.get("Qty") or row0.get("ComponentQty") or 1,
+                "LocationID": row0.get("LocationID") or "MAIN",
+            }
+        ]
+        client.put(
+            "KitAssembly",
+            {
+                "Type": kit_type,
+                "ReferenceNbr": ref,
+                "StockComponents": [
+                    {
+                        "id": row0["id"],
+                        "LineNbr": row0["LineNbr"],
+                        "Allocations": allocs,
+                    }
+                ],
+            },
+        )
+        after = client.get_record(
+            "KitAssembly",
+            [kit_type, ref],
+            params={"$expand": "StockComponents"},
+        )
+        assert after is not None
+        after_plain = unwrap(after)
+        after_rows = after_plain["StockComponents"]
+        assert len(after_rows) == n_before, after_plain
+        assert [row["id"] for row in after_rows] == ids_before
+        assert after_rows[0]["id"] == row0["id"]
 
 
 def test_scenario_warm_capital_once_skip(
-    scenario_acu: RunAcu, scenario_tenant: ScratchTenant
+    acu: RunAcu, scratch_tenant: ScratchTenant
 ) -> None:
     """T89/V4: second run scenario/ skips once capital (Owner Capital non-stack).
 
     Cold path ran in test_scenario_run. Warm re-run must print the once skip
     line for 10-seed-capital and still exit 0 for additive legs.
     """
-    proc = scenario_acu("--tenant", scenario_tenant.login, "run", "scenario/")
-    combined = _combined(proc)
+    proc = acu("--tenant", scratch_tenant.login, "run", "scenario/")
+    combined = joined_output(proc)
     assert proc.returncode == 0, combined
     assert "once: already present" in combined
     assert "10-seed-capital" in combined
 
 
-def test_scenario_diff_clean(
-    scenario_acu: RunAcu, scenario_tenant: ScratchTenant
-) -> None:
-    proc = scenario_acu("--tenant", scenario_tenant.login, "diff")
-    assert proc.returncode == 0, _combined(proc)
-    assert "no drift" in _combined(proc)
+def test_scenario_diff_clean(acu: RunAcu, scratch_tenant: ScratchTenant) -> None:
+    proc = acu("--tenant", scratch_tenant.login, "diff")
+    assert proc.returncode == 0, joined_output(proc)
+    assert "no drift" in joined_output(proc)
 
 
 def test_scenario_state_write(
-    scenario_acu: RunAcu, scenario_tenant: ScratchTenant, scenario_repo: Path
+    acu: RunAcu, scratch_tenant: ScratchTenant, data_repo: Path
 ) -> None:
     """T98/T105/T107/T112/V32/V33: after scenario, state/ TB is numeric fixed-point.
 
@@ -197,16 +208,22 @@ def test_scenario_state_write(
     """
     import re
 
-    import yaml
+    # Package TB view pins Period 072026 for mock alignment (V33/V43).
+    # Scenario posts to ${current_period}; rewrite the scaffold view so
+    # state/ captures the month the JE actually landed.
+    view_path = data_repo / "config" / "views" / "10-trial-balance.yaml"
+    view = yaml.safe_load(view_path.read_text())
+    view["source"]["params"]["Period"] = period_mmYYYY(date.today())
+    view_path.write_text(yaml.safe_dump(view, sort_keys=False))
 
-    proc = scenario_acu("--tenant", scenario_tenant.login, "state")
-    assert proc.returncode == 0, _combined(proc)
-    combined = _combined(proc)
+    proc = acu("--tenant", scratch_tenant.login, "state")
+    assert proc.returncode == 0, joined_output(proc)
+    combined = joined_output(proc)
     assert "trial-balance" in combined or "wrote" in combined
 
-    tb_path = scenario_repo / "state" / "trial-balance.yaml"
+    tb_path = data_repo / "state" / "trial-balance.yaml"
     assert tb_path.is_file()
-    assert not (scenario_repo / "state" / "inventory-summary.yaml").exists()
+    assert not (data_repo / "state" / "inventory-summary.yaml").exists()
 
     tb = yaml.safe_load(tb_path.read_text())
     assert tb["view"] == "trial-balance"
@@ -223,7 +240,7 @@ def test_scenario_state_write(
 
 
 def test_scenario_state_assert_unchanged(
-    scenario_acu: RunAcu, scenario_tenant: ScratchTenant
+    acu: RunAcu, scratch_tenant: ScratchTenant
 ) -> None:
     """T98/T105/T112/V4/V32: warm once-capital + state --assert-unchanged exits 0.
 
@@ -231,16 +248,14 @@ def test_scenario_state_assert_unchanged(
     (skip path) so EndingBalance stays byte-stable — additive buy/sell
     legs would move TB cash/inventory observations.
     """
-    run = scenario_acu(
+    run = acu(
         "--tenant",
-        scenario_tenant.login,
+        scratch_tenant.login,
         "run",
         "scenario/10-seed-capital.yaml",
     )
-    combined = _combined(run)
+    combined = joined_output(run)
     assert run.returncode == 0, combined
     assert "once: already present" in combined
-    proc = scenario_acu(
-        "--tenant", scenario_tenant.login, "state", "--assert-unchanged"
-    )
-    assert proc.returncode == 0, _combined(proc)
+    proc = acu("--tenant", scratch_tenant.login, "state", "--assert-unchanged")
+    assert proc.returncode == 0, joined_output(proc)

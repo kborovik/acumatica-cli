@@ -12,7 +12,7 @@ from pydantic import ValidationError
 
 from acumatica_cli import cli, inventory
 
-# Minimal ac.exe / SM203520 table XML (docs/ac-exe.md shape).
+# Minimal ac.exe / SM203520 table XML shape.
 ACCOUNT_XML = """\
 <?xml version="1.0" encoding="utf-8"?>
 <data>

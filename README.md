@@ -61,7 +61,6 @@ acu --tenant DEV state                   # capture state/ trial-balance
 ```
 
 Bare `apply` / `diff` (no path args) also prefer `config/` when those trees exist.
-See [docs/demo-seed.md](docs/demo-seed.md) for the entity map, once-guard, apply-order notes, NumberingSequence vs prefs `*NumberingID`, curated *Preferences field depth (V41), and Role/User + password seed rules.
 
 **Hosted Acumatica (no SSH):** the tenant already exists; set a blank `ACU_SSH=` in `.env`.
 The scaffold omits the key — without it, acu defaults to `Administrator@<ACU_BASE_URL host>` for SSH boxes.
@@ -122,7 +121,7 @@ When you omit FILES:
 - `state` defaults to `config/views/`; writes go to `state/` (`--out`).
 
 Scenario YAML may use `${current_period}` (host-local `MMyyyy`) on steps, expect params, and `once.present` params.
-`config/views` and `state` keep Period pinned — see [docs/demo-seed.md](docs/demo-seed.md#period-token-current_period-vs-pinned-views).
+`config/views` and `state` keep Period pinned.
 
 `survey extract` always writes under `config/{bootstrap,baseline,setup,master}/` (catalog-driven; never root SEED_DIRS).
 
@@ -134,8 +133,6 @@ It never writes seed.
 
 Optional `snapshot_map.yaml` (data-repo root, or package defaults) maps DAC tables to catalog entities.
 It normalizes the join: pad-trim, key/field aliases, Account/Sub FK CD resolve, enum label to code.
-
-See [docs/demo-seed.md](docs/demo-seed.md).
 
 `acu --completion` emits a completion script for bash, zsh, or fish — source it from your shell profile.
 
@@ -159,8 +156,6 @@ Do not confuse them with each other or with `state`:
 
 `inventory/` and `findings/` are engagement outputs: not SEED_DIRS, never loaded by `apply`/`diff`, not scaffolded by `config init`.
 Binary `.adb` snapshots are rejected (XML only).
-
-See [docs/ac-exe.md](docs/ac-exe.md) for export / SM203520 notes and [docs/demo-seed.md](docs/demo-seed.md) for the extract/state/inventory map.
 
 ## The data repo
 
@@ -194,7 +189,6 @@ Seed YAML is state: `apply` upserts it, `diff` proves it.
 `acu survey extract` is the inverse of `apply`: GET live tenant rows into seed YAML under `config/{bootstrap,baseline,setup,master}/` (hard-cut).
 
 Packaged `seed_catalog.yaml` is the sole extract registry (entity, endpoint, keys, file, strip/include, filter-split).
-The demo entity map in [docs/demo-seed.md](docs/demo-seed.md) mirrors those catalog paths.
 
 Features synthesize to `config/bootstrap/features.yaml`.
 Existing files skip unless `--force`; empty live sets skip.
@@ -250,7 +244,7 @@ Secrets, REST where, and the Default contract pin live in one `.env` file (`ACU_
 Leftover `matrix.yaml` is ignored and never loaded.
 
 ```sh
-ACU_BASE_URL=http://acu-dev1.vm.internal/AcumaticaERP   # REST where (required)
+ACU_BASE_URL=http://erp.example.com/AcumaticaERP        # REST where (required)
 ACU_API_VERSION=25.200.001                              # Default contract half
 ACU_TENANT=LAB5                                         # sign-in name of the tenant API sessions use
 # ACU_SSH omitted → defaults to Administrator@ + resolved base_url host
@@ -373,16 +367,36 @@ GitHub Actions on tag `v*` re-runs CI, builds sdist+wheel, publishes to PyPI via
 Configuration is one file: a decrypted `.env` at the repo root names the instance — `ACU_BASE_URL`, `ACU_TENANT`, `ACU_PASSWORD` (and optional `ACU_SSH`; omitted defaults to `Administrator@` + base-url host).
 `gmake e2e` refuses to start without it.
 
-The tier is self-contained.
+The tier is three pipeline files: provision (apply/diff), scenario (run/state), and extract round-trip.
+Per-bug contract probes fold onto those tenants.
+
 Each run scaffolds a synthetic single-org company from the packaged `acu config init` templates into a temporary directory, copies the real `.env` into it, and runs the installed `acu` binary from there — no data repo, no pre-existing fixtures on the instance.
 
 Scratch tenants (`E2E`, `E2EA`, `E2EB`, `E2ESCEN`) are created on the way in and always deleted on the way out, so nothing persists.
 The packaged full `config init` seed (under `config/`) is the only scaffold.
 
 ```sh
-gmake e2e                                # whole tier, about 20 minutes
-gmake e2e FILE=test_provision_lifecycle  # apply/diff focus
-gmake e2e FILE=test_scenario_lifecycle   # scenario + state focus
+gmake e2e                                # whole tier, three files
+gmake e2e FILE=test_provision_lifecycle  # apply/diff + folded probes
+gmake e2e FILE=test_scenario_lifecycle   # scenario + state + kit alloc
+gmake e2e FILE=test_extract_roundtrip    # extract inverse
+```
+
+### CLI test-seed soak
+
+This checkout carries a CLI test seed at repo-root `config/` and `scenario/` (no `config/qms/`).
+Soak the live CLI tenant from here with `--tenant ACUCLI`.
+
+Never use tenant `CNBN`. Never `cd` the sibling GitOps repo for CLI soak.
+
+`gmake e2e` still scaffolds from packaged `config init` templates into a tmp dir.
+That path is not the soak.
+
+```sh
+uv run acu --tenant ACUCLI apply
+uv run acu --tenant ACUCLI run
+uv run acu --tenant ACUCLI diff
+uv run acu --tenant ACUCLI state
 ```
 
 ## License

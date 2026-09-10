@@ -6,7 +6,7 @@
 #   entity    contract entity name (the GET source and the emitted `entity:`)
 #   endpoint  omitted = the instance Default endpoint; the symbolic name
 #             `bootstrap` stays symbolic in emitted files and resolves to
-#             the packaged full company Bootstrap/1.10.0 at HTTP/load time
+#             the packaged full company Bootstrap/1.11.0 at HTTP/load time
 #             (package SoT - V20/V21/T178; data-repo project.xml forbidden)
 #   keys      key fields: the emitted `key:`, the record sort order, and
 #             the B9 fallback's $select projection; the tuple must
@@ -181,10 +181,10 @@ entities:
 # include field-partition (same live warehouse row, three apply phases).
 # Multi-file StockItem uses OData filter-split on ItemClass.
 #
-# NumberingSequence (T151/gh #25): V22 prefix 05- sorts before every prefs
-# file that may reference *NumberingID (IN/SO/PO/AR/AP/CA/GL setup). Bootstrap
-# only — Default has no numbering surface. Bounds-only include (no LastNbr;
-# runtime counter is V40/T152).
+# NumberingSequence (T151/gh #25, T252/gh #44): V22 prefix 05- sorts before
+# every prefs file that may reference *NumberingID (IN/SO/PO/AR/AP/CA/GL
+# setup). Bootstrap only — Default has no numbering surface. Include bounds
+# + NewSymbol (insert-required, V58); no LastNbr (runtime counter is V40).
 
 - entity: NumberingSequence
   endpoint: bootstrap
@@ -192,6 +192,7 @@ entities:
   file: config/master/05-numbering-sequences.yaml
   include:
   - Descr
+  - NewSymbol
   - StartNbr
   - EndNbr
   - WarnNbr

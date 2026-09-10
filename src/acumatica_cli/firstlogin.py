@@ -1,8 +1,8 @@
 """First-login admin password initialization via the Login.aspx screen flow.
 
 A freshly created tenant seeds ``admin``/``setup`` with a
-must-change-on-first-login flag the contract REST API cannot clear (verified —
-see docs/rest-api.md). The sign-in screen's WebForms flow can, with plain
+must-change-on-first-login flag the contract REST API cannot clear (verified
+live). The sign-in screen's WebForms flow can, with plain
 HTTP: GET the page for the hidden fields, POST the seed credentials, then
 POST again with the new password into the change view the server renders.
 """

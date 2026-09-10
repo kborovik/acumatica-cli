@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """check-md-prose - V49 human-facing Markdown paragraph density.
 
-Scope: README.md, docs/*.md, packaged template README.md under
+Scope: README.md, packaged template README.md under
 src/acumatica_cli/templates/. A prose paragraph (blank-line block) may
 have at most 2 sentences. List items, table rows, blockquotes, fenced
 code, and headings are exempt. SPEC.md / CHANGELOG / .spec stay out.
@@ -31,9 +31,6 @@ def scoped_files(root: Path) -> list[Path]:
     readme = root / "README.md"
     if readme.is_file():
         files.append(readme)
-    docs = root / "docs"
-    if docs.is_dir():
-        files.extend(sorted(p for p in docs.glob("*.md") if p.is_file()))
     templates = root / "src" / "acumatica_cli" / "templates"
     if templates.is_dir():
         files.extend(sorted(templates.rglob("README.md")))

@@ -1,0 +1,15 @@
+entity: VendorClass
+key: VendorClassID
+endpoint: bootstrap
+records:
+- VendorClassID: SUPPLIER
+  Descr: Ingredient suppliers
+  TermsID: NET30
+  APAcctID: '20100'
+  APSubID: '000000'
+  DiscTakenAcctID: '49100'
+  DiscTakenSubID: '000000'
+  ExpenseAcctID: '50000'
+  ExpenseSubID: '000000'
+  POAccrualAcctID: '20200'
+  POAccrualSubID: '000000'

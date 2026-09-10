@@ -135,6 +135,86 @@ T129|x|`acu reconcile` CLI — inventory + optional config/ → findings/ only; 
 T130|x|offline tests: parse fixtures ZIP+folder, inventory byte-stable, binary reject, version pin vs target.yaml, reconcile findings, apply/diff ignore inventory/findings paths|V13,V35,V36,V37,T127,T128,T129
 T131|x|docs + help + changelog: inventory vs extract vs state; dual-reader layout; ac-exe export + SM203520 Settings XML note; README CLI map|V12,V35,I.cmd,T128,T129
 T132|x|M2 pad-trim string keys+fields on reconcile join/compare both sides|V38,I.cmd,T129
+T133|x|M3 declarative seed→inv key/field aliases in snapshot_map; Subaccount+UnitsOfMeasure join inventory; v1 map loads|V38,I.data,T132
+T134|x|M4 FK CD↔ID resolvers from inventory (Account+Sub first); ReasonCode+VendorClass *AcctID/*SubID false deltas → 0 when live matches seed|V38,I.data,T133
+T135|x|offline unit tests trim+alias join+Account/Sub resolve; LAB5-style fixture ReasonCode+VendorClass CD/ID pairs → 0 when match; existing reconcile tests green|V13,V38,T132,T133,T134
+T136|x|docs/changelog snapshot_map beyond table→entity (aliases+resolvers)|V12,I.data,T133,T134
+T137|x|M5 declarative enums: global enums: + per-row field→enum; ReasonCode.Usage + Account Type/PostOption/Active/RequireUnits + CreditTerms/StatementCycle/bool Active package defaults; label→code before compare|V38,I.data,T136
+T138|x|M4 extend PostingClass *AcctID/*SubID + CashAccount Account/Sub/Branch + OrderType Freight resolves in package map|V38,I.data,T134,T137
+T139|x|offline unit tests: enum Usage/bool/Type + PostingClass FK resolve + decimal trailing-zero norm; package map asserts; existing reconcile tests green|V13,V38,T137,T138
+T140|x|docs/changelog/help: enums layer on snapshot_map; package defaults cover LAB5 high-churn enums + PostingClass|V12,I.data,T137,T138
+T141|x|tenant list banner hostname-only + offline assert (no full URL in title)|V9,I.cmd,B27
+T142|x|`acu tenant recycle` CLI — wire TenantManager.recycle_app_pool; confirm + --yes; V15 verb map + help; stdout progress; exit 0/1|V1,V5,V6,V9,V15,V16,I.cmd
+T143|x|offline tests: recycle invokes Restart-WebAppPool; empty ACU_SSH hard error; confirm/--yes; no REST|V13,V1,T142
+T144|x|docs + client mismatch hint → `acu tenant recycle`; changelog|V12,T142
+T145|x|bootstrap contract Role (SM201005 key Rolename ≥ Rolename+Descr) + User (SM201010 key Username identity fields) + membership (User detail roles); version bump|V21,I.data
+T146|x|seed_catalog + snapshot_map rows Roles/Users/membership; optional package template master seed; ! built-in system roles as mutable seed|V34,V35,I.data,T145
+T147|x|password-seed pipeline: apply write-only when present; extract strip Password+b64__Password; diff ignore password; offline unit tests|V39,I.cmd,T145
+T148|x|apply order Role then User then membership (V22 prefixes); virgin+warm idempotent PUT; re-apply no password when user unchanged|V4,V22,V39,T145,T147
+T149|x|docs demo-seed or README CLI map — role/user seed order + password rule (gh #24)|V12,T145,T147
+T150|x|bootstrap contract NumberingSequence (CS201010 or V12-verified screen; key NumberingID ≥ bounds fields); version bump|V21,I.data
+T151|x|seed_catalog + snapshot_map NumberingSequence; optional package template master/baseline; V22 order before prefs *NumberingID refs|V22,V34,V35,I.data,T150
+T152|x|LastNbr pipeline: extract strip LastNbr(+advanced counter); apply bounds without LastNbr; diff ignore; offline unit tests|V40,I.cmd,T150
+T153|x|docs demo-seed — numbering seed vs prefs *NumberingID apply order (gh #25)|V12,T150,T151
+T154|x|inventory+demo field pick list per prefs entity (IN/AP/AR/GL/SO/PO/CA as chosen); reason per field; ! full DAC|V41,I.data
+T155|x|extend bootstrap_project.xml *Preferences for chosen fields; version bump|V21,V41,I.data,T154
+T156|x|widen seed_catalog include + package templates only where demo claims field; snapshot_map enums/resolves if new FKs (numbering IDs depend V40)|V34,V38,V40,V41,T155
+T157|x|offline tests: apply body + extract include + no permanent drift from server-derived/runtime; bootstrap field asserts|V13,V34,V41,T155,T156
+T158|x|docs demo-seed — added fields list + apply order vs warehouse/lot class/numbering if any; changelog (gh #26)|V12,T154,T156
+T159|x|LotSerialClass: catalog+template if demo claims; else docs non-goal (IN prefs skip DfltLotSerClassID stands)|V34,V42,I.data
+T160|x|snapshot_map polish inventory masters reconcile should compare (PaymentMethod, CustomerClass, Vendor/Customer?, INLocation↔Warehouse locations, LotSerial if catalog); aliases/resolves/enums; ! Bootstrap bump|V35,V38,V42,I.data,T159
+T161|x|offline tests LAB5-class inventory+config → findings only real gaps not join-alias noise for mapped masters; existing reconcile green|V13,V38,V42,T160
+T162|x|docs table inventory table → entity → bootstrap\|default\|unmapped; changelog (gh #27)|V12,V42,T159,T160
+T163|x|`make release` promote Unreleased → `## [vX.Y.Z] - date`; empty Unreleased hard-fail; commit CHANGELOG w/ pyproject|V19,I.pkg
+T164|x|`release.yml` GH release notes from CHANGELOG version section for tag; not sole `--generate-notes`|V19,I.pkg,T163
+T165|x|docs README release path + CHANGELOG Unreleased duty for user-facing work|V12,V19,T163
+T166|x|tenant create --id optional; omit → next free CompanyID max+1 from list; exists-skip adopts existing id when --id omit|V16,I.cmd
+T167|x|offline tests: create login-only allocates; exists-skip without --id; id mismatch still hard-error; delete --login green|V13,T166
+T168|x|README CLI map + help + CHANGELOG Unreleased — create --login-only|V12,V19,T166
+T169|x|tenant delete progress — wrap ac.exe delete in output.step matching create; keep recycle step; offline assert step path; CHANGELOG Unreleased|V9,V19,I.cmd
+T170|x|inventory progress — output.step around artifact parse; keep banner + write/skip emit; offline assert|V9,I.cmd
+T171|x|reconcile progress — output.step around load+compare; keep emit write/skip; offline assert|V9,I.cmd
+T172|x|CHANGELOG Unreleased — CLI progress (delete/inventory/reconcile); suite green|V19,T169,T170,T171
+T173|x|period helper + run interpolator built-in `${current_period}` (host-local MMyyyy); expand steps+expect+once present; unknown token fail|V43,I.cmd
+T174|x|package scenario templates Period/FinPeriod → `${current_period}` where calendar-relative|V43,I.data,T173
+T175|x|offline tests: period_mmYYYY + freezegun month boundary + interpolator expect/once/step; view path no expand|V13,V33,V43,T173
+T176|x|docs + help: period token vs pinned views; ERP business-date skew; CHANGELOG Unreleased (gh #28)|V12,V19,V33,V43,T173,T174
+T177|x|e2e or offline cold seed-capital run green w/ token after mock month change; suite green|V4,V13,V43,T174,T175
+T178|x|drop data-repo project.xml resolve; load_contract always packaged bootstrap_project.xml; present data-repo file → hard error on bootstrap/publish path|V2,V21,I.data,I.cmd
+T179|x|config init never scaffolds project.xml; drop INIT_TEMPLATES sentinel + special-case package copy|V28,I.cmd,T178
+T180|x|offline tests: package-only contract; present override → hard error; flip hybrid prefer/override cases|V13,V2,V21,T178,T179
+T181|x|docs README + demo-seed + templates README + seed_catalog comments + CHANGELOG Unreleased — package SoT; data repos must not keep project.xml|V12,V19,T178,T179
+T182|x|suite green make check after package-SoT bootstrap contract|V13,T178,T179,T180,T181
+T183|x|docs multi-host matrix: trunk + target.yaml + optional overlay; no long-running branches; cross-link gitops#2|V44,V12,V27
+T184|x|apply fail report: continue multi-error summary or stopped-at + remaining list; exit 1; never silent partial|V45,I.cmd,V4
+T185|x|offline tests apply fail-report paths (first-record fail + multi-error)|V13,V45,T184
+T186|x|surface 422 field-level errors (Type.error class) in put/action RuntimeError detail|V46,I.cmd
+T187|x|offline tests field-error parse from fixture 422 bodies|V13,V46,T186
+T188|x|decide overlay: data-repo-only vs apply --overlay; docs; implement CLI only if gitops needs hook|V44,I.cmd,I.data
+T189|x|investigate User Roles membership apply/diff for built-in soadmin/apadmin/aradmin; fix or docs limit|V4,V39,I.data
+T190|x|CHANGELOG Unreleased + suite green after matrix/apply-error work|V19,V13,T183,T184,T186
+T191|x|optional later: curated compat profile by Default half for proven rewrites; no full swagger trees|V44,V11
+T192|x|matrix.yaml load+models (cells id/erp/default_api/base_url); unique ids; ordered; drop target.yaml loader|V27,I.data
+T193|x|global --cell; default first cell; resolve base_url+api_version+erp from active cell|V27,I.cmd
+T194|x|config init/show/check: matrix surface; init one-cell scaffold; retire target template|V27,V28,I.cmd
+T195|x|acu check lifecycle create→apply→run→diff→delete; --yes; tenant+SSH gates|V47,I.cmd
+T196|x|acu check --all continue+aggregate exit; per-cell progress (V9)|V47,V9,I.cmd
+T197|x|offline tests: matrix load/select; resolve order; check dry/mock paths; no target.yaml|V13,V27,T192,T193,T195
+T198|x|docs README+templates+CHANGELOG matrix.yaml + acu check; suite green|V12,V19,V44,T192,T195
+T199|x|drop acu check post-clean delete; leave tenant after green (fail path leave too)|V47,I.cmd
+T200|x|offline test green leaves tenant; README+CHANGELOG lifecycle leave-tenant; suite green|V13,V12,V19,V47,T199
+T201|x|agent-oriented root+subcommand --help (mental model, workflow, map, exit codes, -h, wide layout); offline tests; README agent pointer|V48,I.cmd
+T202|x|sweep human-facing md prose → ≤2 sentences/paragraph, sparse (scope: `README.md` `docs/*.md` `src/acumatica_cli/templates/**/*.md`)|V49
+T203|x|add V49 extras-hook `.spec/scripts/check-md-prose` + recipe; offline tests; suite green|V49,V13
+T204|x|bootstrap contract SegmentedKey (CS202000 DimensionMaint; Header Dimension key DimensionID; detail Segment SegmentID+Length); version bump|V21,I.data
+T205|x|seed_catalog + package template `config/bootstrap/` SegmentedKey; keys `[DimensionID]`; INVENTORY+BIZACCT segment 1 Length 30; ACCOUNT+INSITE unchanged; V22 bootstrap-before-master; V34 one catalog row|V22,V34,V50,I.data,T204
+T206|x|extract --force round-trips INVENTORY/BIZACCT Length 30; offline tests apply body + extract include + catalog row|V13,V34,V50,I.cmd,T205
+T207|x|live/e2e: SegmentedKey GET key-URL returns Length 30 after apply; PUT StockItem 26-char InventoryID succeeds; contract mapping fix + version bump if shape change|V4,V13,V21,V50,B28,T205
+T208|x|docs/demo-seed — SegmentedKey entity, CS202000, DAC max 30, non-goals (no shrink; no INSITE/ACCOUNT widen); CHANGELOG Unreleased (gh #30)|V12,V19,V50,T204,T205
+T209|x|drop ControlAccountModule IN on package `config/baseline/20-accounts.yaml` 12300/12400; keep 12100/12200|V51,I.data,B29
+T210|x|offline tests: 12300/12400 no ControlAccountModule IN; 12100/12200 still IN; INPreferences still 12300/12400|V13,V51,T209
+T211|x|e2e: package INPreferences apply succeeds after accounts; drop 15000 workaround in `test_segmented_key_length.py`|V4,V13,V51,B29,T209
+T212|x|docs/demo-seed — IN control on posting-class inventory assets only; WIP/transit not control; CHANGELOG Unreleased (gh #32)|V12,V19,V51,T209
 
 ## §B BUGS
 

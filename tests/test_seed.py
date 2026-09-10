@@ -68,14 +68,14 @@ def test_load_baseline_rejects_record_without_key(tmp_path: Path) -> None:
 
 
 def test_load_baseline_parses_endpoint_override(tmp_path: Path) -> None:
-    text = BASELINE + "endpoint: Bootstrap/1.10.0\n"
-    assert seed.load_baseline(_write(tmp_path, text)).endpoint == "Bootstrap/1.10.0"
+    text = BASELINE + "endpoint: Bootstrap/1.11.0\n"
+    assert seed.load_baseline(_write(tmp_path, text)).endpoint == "Bootstrap/1.11.0"
 
 
 LEDGER_LINK_YAML = """\
 entity: LedgerCompany
 key: [LedgerCD, OrganizationID]
-endpoint: Bootstrap/1.10.0
+endpoint: Bootstrap/1.11.0
 records:
   - LedgerCD: ACTUAL
     OrganizationID: PRODUCTS
@@ -127,7 +127,7 @@ def test_bootstrap_entities_parsed_from_packaged_template() -> None:
     # V2/T81: the ambiguous set comes from the active contract (packaged
     # full company fallback), never a hand-list - parity pinned so a
     # template edit surfaces offline.
-    assert seed.BOOTSTRAP_ENDPOINT == "Bootstrap/1.10.0"
+    assert seed.BOOTSTRAP_ENDPOINT == "Bootstrap/1.11.0"
     assert {
         "Company",
         "CreditTerms",
@@ -170,7 +170,7 @@ def test_load_baseline_rejects_bootstrap_entity_without_endpoint(
     """
     with pytest.raises(
         SystemExit,
-        match=r"endpoint: default.*Bootstrap/1\.10\.0.*'bootstrap' \| 'default'",
+        match=r"endpoint: default.*Bootstrap/1\.11\.0.*'bootstrap' \| 'default'",
     ):
         seed.load_baseline(_write(tmp_path, AMBIGUOUS_YAML))
 
@@ -179,7 +179,7 @@ def test_load_baseline_bootstrap_entity_explicit_endpoint_passes(
     tmp_path: Path,
 ) -> None:
     # V20: explicit endpoint: disambiguates - either target is legitimate
-    for endpoint in ("Bootstrap/1.10.0", "Default/25.200.001", "default"):
+    for endpoint in ("Bootstrap/1.11.0", "Default/25.200.001", "default"):
         text = AMBIGUOUS_YAML + f"endpoint: {endpoint}\n"
         assert seed.load_baseline(_write(tmp_path, text)).endpoint == endpoint
 
@@ -187,7 +187,7 @@ def test_load_baseline_bootstrap_entity_explicit_endpoint_passes(
 def test_load_baseline_resolves_symbolic_bootstrap(tmp_path: Path) -> None:
     """Symbolic endpoint: bootstrap resolves to the active package version."""
     text = AMBIGUOUS_YAML + "endpoint: bootstrap\n"
-    assert seed.load_baseline(_write(tmp_path, text)).endpoint == "Bootstrap/1.10.0"
+    assert seed.load_baseline(_write(tmp_path, text)).endpoint == "Bootstrap/1.11.0"
 
 
 def test_load_baseline_keeps_symbolic_default(tmp_path: Path) -> None:
@@ -252,19 +252,19 @@ def test_active_bootstrap_package_only(
     (tmp_path / ".env").write_text("ACU_BASE_URL=https://example.com\n")
     monkeypatch.chdir(tmp_path)
     name, entities = seed.active_bootstrap()
-    assert name == "Bootstrap/1.10.0"
+    assert name == "Bootstrap/1.11.0"
     assert entities == seed.BOOTSTRAP_ENTITIES
     text = (
         "entity: Company\nkey: AcctCD\nendpoint: bootstrap\n"
         "records:\n  - AcctCD: MAIN\n"
     )
-    assert seed.load_baseline(_write(tmp_path, text)).endpoint == "Bootstrap/1.10.0"
+    assert seed.load_baseline(_write(tmp_path, text)).endpoint == "Bootstrap/1.11.0"
 
 
 def test_apply_and_diff_target_endpoint_override(
     tmp_path: Path, instance: Instance
 ) -> None:
-    text = BASELINE + "endpoint: Bootstrap/1.10.0\n"
+    text = BASELINE + "endpoint: Bootstrap/1.11.0\n"
     baseline = seed.load_baseline(_write(tmp_path, text))
     recorder = Recorder({"/UnitsOfMeasure": _live({"UOM": "KG"})})
 
@@ -272,7 +272,7 @@ def test_apply_and_diff_target_endpoint_override(
     seed.diff(_client(instance, recorder), baseline)
 
     paths = {r.url.path for r in recorder.requests}
-    assert paths == {"/AcumaticaERP/entity/Bootstrap/1.10.0/UnitsOfMeasure"}
+    assert paths == {"/AcumaticaERP/entity/Bootstrap/1.11.0/UnitsOfMeasure"}
 
 
 def test_norm_folds_booleans_and_strips() -> None:
@@ -629,7 +629,7 @@ class EchoStore:
 COMPANY_YAML = """\
 entity: Company
 key: AcctCD
-endpoint: Bootstrap/1.10.0
+endpoint: Bootstrap/1.11.0
 records:
   - AcctCD: LAB5
     OrganizationName: Lab Five
@@ -652,11 +652,11 @@ def test_apply_company_relogins_once_per_session(
     assert methods_paths == [
         ("POST", "/AcumaticaERP/entity/auth/login"),
         ("GET", "/AcumaticaERP/Frames/Login.aspx"),
-        ("PUT", "/AcumaticaERP/entity/Bootstrap/1.10.0/Company"),
+        ("PUT", "/AcumaticaERP/entity/Bootstrap/1.11.0/Company"),
         ("POST", "/AcumaticaERP/entity/auth/logout"),
         ("POST", "/AcumaticaERP/entity/auth/login"),
         ("GET", "/AcumaticaERP/Frames/Login.aspx"),
-        ("PUT", "/AcumaticaERP/entity/Bootstrap/1.10.0/Company"),
+        ("PUT", "/AcumaticaERP/entity/Bootstrap/1.11.0/Company"),
         ("POST", "/AcumaticaERP/entity/auth/logout"),
     ]
 
@@ -679,7 +679,7 @@ def test_apply_retries_once_on_branch_empty(
     text = """\
 entity: INPreferences
 key: HoldEntry
-endpoint: Bootstrap/1.10.0
+endpoint: Bootstrap/1.11.0
 records:
   - HoldEntry: false
     TransitBranchID: LAB5
@@ -1216,6 +1216,42 @@ records:
     LastNbr: '000025'
 """
 
+NUMBERING_WITH_NEWSYMBOL_YAML = """\
+entity: NumberingSequence
+key: NumberingID
+endpoint: bootstrap
+records:
+  - NumberingID: BATCH
+    NewSymbol: '<NEW>'
+    StartNbr: '000000'
+    EndNbr: '999999'
+    WarnNbr: '999990'
+    NbrStep: 1
+    StartDate: '1900-01-01'
+"""
+
+NUMBERING_INSERT_AND_REAPPLY_YAML = """\
+entity: NumberingSequence
+key: NumberingID
+endpoint: bootstrap
+records:
+  - NumberingID: T254NS
+    NewSymbol: '<NEW>'
+    StartNbr: '000000'
+    EndNbr: '999999'
+    WarnNbr: '999990'
+    NbrStep: 1
+    StartDate: '1900-01-01'
+  - NumberingID: BATCH
+    NewSymbol: '<NEW>'
+    StartNbr: '000000'
+    EndNbr: '999999'
+    WarnNbr: '999990'
+    NbrStep: 1
+    StartDate: '1900-01-01'
+    LastNbr: '000025'
+"""
+
 
 def test_apply_bounds_without_lastnbr(tmp_path: Path, instance: Instance) -> None:
     """V40/T152: apply of bounds-only seed never requires LastNbr."""
@@ -1352,6 +1388,130 @@ def test_diff_startdate_different_day_is_drift(
     ]
 
 
+def test_apply_puts_newsymbol_and_strips_lastnbr(
+    tmp_path: Path, instance: Instance
+) -> None:
+    """V40/V58/T253: apply PUTs NewSymbol; LastNbr never rides the body."""
+    baseline = seed.load_baseline(_write(tmp_path, NUMBERING_INSERT_AND_REAPPLY_YAML))
+    recorder = Recorder({"/NumberingSequence": httpx.Response(200, json=[])})
+    seed.apply(_client(instance, recorder), baseline)
+    puts = [r for r in recorder.requests if r.method == "PUT"]
+    bodies = [json.loads(p.content) for p in puts]
+    by_id = {b["NumberingID"]["value"]: b for b in bodies}
+    assert set(by_id) == {"T254NS", "BATCH"}
+    for body in by_id.values():
+        assert body["NewSymbol"] == {"value": "<NEW>"}
+        assert "LastNbr" not in body
+        assert body["StartNbr"] == {"value": "000000"}
+
+
+def test_apply_package_numbering_puts_newsymbol(instance: Instance) -> None:
+    """V58/T253: package BATCH re-apply body includes NewSymbol: <NEW>."""
+    baseline = seed.load_baseline(
+        _package_template("config/master/05-numbering-sequences.yaml")
+    )
+    assert isinstance(baseline, seed.BaselineFile)
+    recorder = Recorder({"/NumberingSequence": httpx.Response(200, json=[])})
+    seed.apply(_client(instance, recorder), baseline)
+    puts = [r for r in recorder.requests if r.method == "PUT"]
+    bodies = [json.loads(p.content) for p in puts]
+    batch = next(b for b in bodies if b["NumberingID"]["value"] == "BATCH")
+    assert batch["NewSymbol"] == {"value": "<NEW>"}
+    assert "LastNbr" not in batch
+
+
+def test_diff_flags_newsymbol_get_omit(tmp_path: Path, instance: Instance) -> None:
+    """V58: mapped GET returns NewSymbol; omit is not-returned drift."""
+    baseline = seed.load_baseline(_write(tmp_path, NUMBERING_WITH_NEWSYMBOL_YAML))
+    recorder = Recorder(
+        {
+            "/NumberingSequence": _live(
+                {
+                    "NumberingID": "BATCH",
+                    "StartNbr": "000000",
+                    "EndNbr": "999999",
+                    "WarnNbr": "999990",
+                    "NbrStep": 1,
+                    "StartDate": "1900-01-01",
+                    "LastNbr": "000042",
+                }
+            )
+        }
+    )
+    drifts = seed.diff(_client(instance, recorder), baseline)
+    assert drifts == ["NumberingSequence [BATCH].NewSymbol: not returned by endpoint"]
+    assert not any("LastNbr" in d for d in drifts)
+
+
+def test_diff_newsymbol_match_no_drift(tmp_path: Path, instance: Instance) -> None:
+    """V58: seed NewSymbol vs matching mapped GET is not drift."""
+    baseline = seed.load_baseline(_write(tmp_path, NUMBERING_WITH_NEWSYMBOL_YAML))
+    recorder = Recorder(
+        {
+            "/NumberingSequence": _live(
+                {
+                    "NumberingID": "BATCH",
+                    "NewSymbol": "<NEW>",
+                    "StartNbr": "000000",
+                    "EndNbr": "999999",
+                    "WarnNbr": "999990",
+                    "NbrStep": 1,
+                    "StartDate": "1900-01-01",
+                    "LastNbr": "000042",
+                }
+            )
+        }
+    )
+    assert seed.diff(_client(instance, recorder), baseline) == []
+
+
+def test_diff_flags_newsymbol_value_drift(tmp_path: Path, instance: Instance) -> None:
+    """V58: NewSymbol value mismatch is drift (mapped GET returns it)."""
+    baseline = seed.load_baseline(_write(tmp_path, NUMBERING_WITH_NEWSYMBOL_YAML))
+    recorder = Recorder(
+        {
+            "/NumberingSequence": _live(
+                {
+                    "NumberingID": "BATCH",
+                    "NewSymbol": "OTHER",
+                    "StartNbr": "000000",
+                    "EndNbr": "999999",
+                    "WarnNbr": "999990",
+                    "NbrStep": 1,
+                    "StartDate": "1900-01-01",
+                }
+            )
+        }
+    )
+    assert seed.diff(_client(instance, recorder), baseline) == [
+        "NumberingSequence [BATCH].NewSymbol: source='<NEW>' live='OTHER'"
+    ]
+
+
+def test_diff_newsymbol_omit_still_flags_bounds_not_returned(
+    tmp_path: Path, instance: Instance
+) -> None:
+    """V56/T253: other GET-omit fields still flag not-returned (V50 stands)."""
+    baseline = seed.load_baseline(_write(tmp_path, NUMBERING_WITH_NEWSYMBOL_YAML))
+    recorder = Recorder(
+        {
+            "/NumberingSequence": _live(
+                {
+                    "NumberingID": "BATCH",
+                    "EndNbr": "999999",
+                    "WarnNbr": "999990",
+                    "NbrStep": 1,
+                    "StartDate": "1900-01-01",
+                }
+            )
+        }
+    )
+    drifts = seed.diff(_client(instance, recorder), baseline)
+    assert "NumberingSequence [BATCH].StartNbr: not returned by endpoint" in drifts
+    assert "NumberingSequence [BATCH].NewSymbol: not returned by endpoint" in drifts
+    assert not any("LastNbr" in d for d in drifts)
+
+
 LOT_SERIAL_YAML = """\
 entity: LotSerialClass
 key: ClassID
@@ -1478,7 +1638,7 @@ def test_package_company_apply_body_includes_decplqty_and_persist_uoms(
     assert body["DecPlQty"] == {"value": 3}
     assert body["WeightUOM"] == {"value": "KG"}
     assert body["VolumeUOM"] == {"value": "LITER"}
-    assert puts[0].url.path.endswith("/Bootstrap/1.10.0/Company")
+    assert puts[0].url.path.endswith("/Bootstrap/1.11.0/Company")
 
 
 def test_company_packaging_round_trip(instance: Instance) -> None:
@@ -1706,7 +1866,7 @@ def test_diff_multi_key_single_org_no_phantom_drift(
     text = """\
 entity: LedgerCompany
 key: [LedgerCD, OrganizationID]
-endpoint: Bootstrap/1.10.0
+endpoint: Bootstrap/1.11.0
 records:
   - LedgerCD: ACTUAL
     OrganizationID: COMPANY
@@ -1742,7 +1902,7 @@ NO_ENTITY_500 = httpx.Response(
 CURRENCY_YAML = """\
 entity: Currency
 key: CuryID
-endpoint: Bootstrap/1.10.0
+endpoint: Bootstrap/1.11.0
 records:
   - CuryID: EUR
     Description: Euro
@@ -1770,8 +1930,8 @@ def test_diff_falls_back_to_key_url_on_optimization_500(
     assert seed.diff(_client(instance, recorder), baseline) == []
     paths = [r.url.path for r in recorder.requests]
     assert [p.split("/entity/", 1)[1] for p in paths] == [
-        "Bootstrap/1.10.0/Currency",
-        "Bootstrap/1.10.0/Currency/EUR",
+        "Bootstrap/1.11.0/Currency",
+        "Bootstrap/1.11.0/Currency/EUR",
     ]
 
 
@@ -1801,7 +1961,7 @@ def test_diff_non_optimization_500_still_raises(
 ACTION_YAML = """\
 action: GenerateCalendar
 entity: MasterCalendar
-endpoint: Bootstrap/1.10.0
+endpoint: Bootstrap/1.11.0
 record:
   FinancialYear: 2026
 parameters:
@@ -1875,8 +2035,8 @@ def test_apply_action_invokes_on_204_never_following_location(
     assert [
         (r.method, r.url.path.split("/entity/", 1)[1]) for r in recorder.requests
     ] == [
-        ("GET", "Bootstrap/1.10.0/MasterCalendar"),
-        ("POST", "Bootstrap/1.10.0/MasterCalendar/GenerateCalendar"),
+        ("GET", "Bootstrap/1.11.0/MasterCalendar"),
+        ("POST", "Bootstrap/1.11.0/MasterCalendar/GenerateCalendar"),
     ]
     assert "invoke GenerateCalendar [MasterCalendar]" in capsys.readouterr().out
 
@@ -1905,7 +2065,7 @@ def test_apply_action_polls_202_location_to_completion(
     """202 = long-running: poll the Location status URL until it answers 204."""
     action = _action(tmp_path)
     status_path = (
-        "/AcumaticaERP/entity/Bootstrap/1.10.0/MasterCalendar"
+        "/AcumaticaERP/entity/Bootstrap/1.11.0/MasterCalendar"
         "/GenerateCalendar/status/abc"
     )
     polls: list[str] = []
@@ -1974,7 +2134,7 @@ def test_probe_routes_filter_and_defaults(tmp_path: Path, instance: Instance) ->
     seed.diff(_client(instance, recorder), action)
 
     (request,) = recorder.requests
-    assert request.url.path.endswith("/Bootstrap/1.10.0/MasterCalendar")
+    assert request.url.path.endswith("/Bootstrap/1.11.0/MasterCalendar")
     assert request.url.params["$filter"] == "FinancialYear eq '2026'"
 
 

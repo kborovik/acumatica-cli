@@ -76,7 +76,7 @@ DEFAULT PATHS (when FILES omitted)
   survey extract -> always writes config/{bootstrap,baseline,setup,master}/
 
 Run `acu <command> --help` for flags, examples, and prerequisites.
-See package README and docs/demo-seed.md for seed YAML shape.
+See package README for seed YAML shape.
 """
 
 import functools
@@ -382,7 +382,7 @@ def tenant_list(inst: Instance) -> None:
 @click.option(
     "--type",
     "company_type",
-    # the V12-verified dataset folders on the box (docs/ac-exe.md); System
+    # the V12-verified dataset folders on the box; System
     # is the system-tenant dataset, deliberately not offered
     type=click.Choice(["SalesDemo", "T100", "U100"]),
     default=None,
@@ -466,7 +466,7 @@ def tenant_create(
         output.data(raw.splitlines()[-1] if raw.strip() else "created")
     # ac.exe only sets CompanyKey from LoginName; CompanyCD stays auto-generated
     # (Company2/Company3/…). Align CD → login so list shows matching columns.
-    # Idempotent on re-run / exists-skip (docs/ac-exe.md).
+    # Idempotent on re-run / exists-skip.
     with output.step(f"aligning CompanyCD to login ({login_name})"):
         if mgr.set_company_cd(company_id, login_name):
             output.data(f"CompanyCD set to {login_name}")

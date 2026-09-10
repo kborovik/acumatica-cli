@@ -83,17 +83,18 @@ _BRANCH_EMPTY = "'Branch' cannot be empty"
 # YAML; extract always strips; diff never compares (GET returns hashes
 # or nothing — never a re-seedable value).
 PASSWORD_FIELDS = frozenset({"Password", "b64__Password"})
-# NumberingSequence runtime counters (V40/gh #25): bounds-only seed;
-# LastNbr (+ advanced counter if ever exposed) = issued progress, not
-# desired config. Extract hard-strips; diff never compares; apply never
-# PUTs them (re-apply must not reset live counters).
+# NumberingSequence runtime counters (V40/gh #25): LastNbr (+ advanced
+# counter if ever exposed) = issued progress, not desired config. Extract
+# hard-strips; diff never compares; apply never PUTs them (re-apply must
+# not reset live counters).
 NUMBERING_RUNTIME_FIELDS = frozenset({"LastNbr"})
 # Fields omitted from source↔live compare (V39 write-only + V40 runtime).
-# Field-name deny at every nesting level. Do not add bare ``Value`` here —
-# that would hide real drift on unrelated fields (V56).
+# Field-name deny at every nesting level.
 _DIFF_IGNORE_FIELDS = PASSWORD_FIELDS | NUMBERING_RUNTIME_FIELDS
 # Path-qualified write-only GET-omit (V56): (entity, detail, field).
 # Diff ignores; extract strips; apply still PUTs when present in YAML.
+# Do not add bare ``Value`` to _DIFF_IGNORE_FIELDS — that would hide
+# real drift on unrelated fields.
 _DIFF_IGNORE_PATHS = frozenset({("LotSerialClass", "Segments", "Value")})
 # Whole-detail skip (V57/B37): mapped GET Role.Users / User.Roles may be
 # empty while UsersInRoles has session-company rows. Extra live members

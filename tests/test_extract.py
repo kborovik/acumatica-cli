@@ -654,7 +654,10 @@ KEYS["Warehouse"] = ["WarehouseID"]  # Default last; bootstrap rows also set Sit
 # Empty tables for every catalog entity without canned live state → skip clean
 for row in extract.load_manifest().entities:
     TABLES.setdefault(row.entity, [])
-DELEGATE_VIEW = frozenset({"Currency"})
+# Currency = original B9 fixture (CuryRecords). Company = live V52
+# commonsetup DecPlQty/WeightUOM/VolumeUOM (BQL delegate); open-periods
+# synth and Company entity extract must survive the unprojected 500.
+DELEGATE_VIEW = frozenset({"Currency", "Company"})
 
 # Catalog row counts (V34 path set): entity + setup (+ features outside catalog).
 _CATALOG_ENTITY_ROWS = len(extract.load_manifest().entities)
@@ -939,6 +942,62 @@ def test_shape_hard_strips_lastnbr_runtime_fields() -> None:
     )
     assert "LastNbr" not in shaped2[0]
     assert shaped2[0]["StartNbr"] == "000000"
+
+
+def test_shape_emits_newsymbol_when_get_returns() -> None:
+    """V58/T253: NewSymbol is seed — extract emits if GET returns (not LastNbr)."""
+    spec = extract.EntitySpec(
+        entity="NumberingSequence",
+        keys=["NumberingID"],
+        file="config/master/05-numbering-sequences.yaml",
+        include=["Descr", "NewSymbol", "StartNbr", "EndNbr", "LastNbr"],
+    )
+    live = [
+        wrap(
+            {
+                "NumberingID": "BATCH",
+                "Descr": "GL batches",
+                "NewSymbol": "<NEW>",
+                "StartNbr": "000000",
+                "EndNbr": "999999",
+                "LastNbr": "000025",
+            }
+        )
+    ]
+    shaped = extract._shape(spec, live)  # pyright: ignore[reportPrivateUsage]
+    assert shaped == [
+        {
+            "NumberingID": "BATCH",
+            "Descr": "GL batches",
+            "EndNbr": "999999",
+            "NewSymbol": "<NEW>",
+            "StartNbr": "000000",
+        }
+    ]
+    assert "LastNbr" not in shaped[0]
+
+
+def test_shape_omits_newsymbol_when_get_omits() -> None:
+    """V58/T253: GET-omit NewSymbol is absent from extract, not LastNbr-stripped."""
+    spec = extract.EntitySpec(
+        entity="NumberingSequence",
+        keys=["NumberingID"],
+        file="config/master/05-numbering-sequences.yaml",
+        include=["Descr", "NewSymbol", "StartNbr", "EndNbr"],
+    )
+    live = [
+        wrap(
+            {
+                "NumberingID": "BATCH",
+                "Descr": "GL batches",
+                "StartNbr": "000000",
+                "EndNbr": "999999",
+            }
+        )
+    ]
+    shaped = extract._shape(spec, live)  # pyright: ignore[reportPrivateUsage]
+    assert "NewSymbol" not in shaped[0]
+    assert shaped[0]["StartNbr"] == "000000"
 
 
 def test_shape_missing_key_field_is_a_hard_error() -> None:
@@ -1239,12 +1298,12 @@ def test_b9_fallback_selects_keys_then_key_urls(
         for r in server.requests
     ]
     assert currency_requests == [
-        ("Bootstrap/1.10.0/Currency", {"$filter": "IsFinancial eq true"}),
+        ("Bootstrap/1.11.0/Currency", {"$filter": "IsFinancial eq true"}),
         (
-            "Bootstrap/1.10.0/Currency",
+            "Bootstrap/1.11.0/Currency",
             {"$select": "CuryID", "$filter": "IsFinancial eq true"},
         ),
-        ("Bootstrap/1.10.0/Currency/EUR", {}),
+        ("Bootstrap/1.11.0/Currency/EUR", {}),
     ]
     text = extract._render(spec, records)  # pyright: ignore[reportPrivateUsage]
     assert "RealGainAcctID" in text
@@ -1580,7 +1639,7 @@ def test_extract_force_round_trips_segmented_key_lengths(
 
 
 def test_catalog_numbering_sequence_row() -> None:
-    """T151: NumberingSequence catalog bounds-only; V22 before prefs."""
+    """T151/T252: NumberingSequence catalog bounds + NewSymbol; V22 before prefs."""
     manifest = extract.load_manifest()
     by_file = {s.file: s for s in manifest.entities}
     num = by_file["config/master/05-numbering-sequences.yaml"]
@@ -1589,6 +1648,7 @@ def test_catalog_numbering_sequence_row() -> None:
     assert num.endpoint == "bootstrap"
     assert set(num.include) == {
         "Descr",
+        "NewSymbol",
         "StartNbr",
         "EndNbr",
         "WarnNbr",
@@ -1597,6 +1657,8 @@ def test_catalog_numbering_sequence_row() -> None:
     }
     # V40: LastNbr is runtime — not in include (T152 hardens strip/diff)
     assert "LastNbr" not in num.include
+    # V58: NewSymbol is seed (insert-required), not LastNbr-class runtime
+    assert "NewSymbol" in num.include
     files = [s.file for s in manifest.entities]
     # V22: within master/, numbering sorts before prefs that may *NumberingID.
     # Umbrella SEED_DIRS order is bootstrap→baseline→setup→master, so
@@ -1706,7 +1768,7 @@ def test_catalog_role_user_membership_rows() -> None:
 
 
 def test_package_numbering_sequence_template() -> None:
-    """T151: package numbering = LAB5-class module sequences; bounds only."""
+    """T151/T252: package numbering = LAB5-class sequences; bounds + NewSymbol."""
     root = Path(__file__).resolve().parents[1] / "src" / "acumatica_cli" / "templates"
     path = root / "config/master/05-numbering-sequences.yaml"
     numbering = seed.load_baseline(path)
@@ -1733,6 +1795,7 @@ def test_package_numbering_sequence_template() -> None:
     assert set(ids) == expected
     for rec in numbering.records:
         assert "LastNbr" not in rec
+        assert rec["NewSymbol"] == "<NEW>"
         assert rec["StartNbr"] == "000000"
         assert rec["EndNbr"] == "999999"
         assert rec["WarnNbr"] == "999990"
@@ -1918,8 +1981,16 @@ def test_synthesized_master_calendar_spans_year_range(
 def test_synthesized_open_periods_sources_company_org(
     instance: Instance, server: FakeServer, tmp_path: Path
 ) -> None:
-    """OrganizationID = the extracted Company AcctCD (V22 in-set closure)."""
+    """OrganizationID = the extracted Company AcctCD (V22 in-set closure).
+
+    Company is in DELEGATE_VIEW (V52 commonsetup). The synth $selects
+    AcctCD so the unprojected list GET 500 never fires (B9).
+    """
     _run(instance, server, tmp_path, only=frozenset({"open-periods"}))
+    company_lists = [
+        dict(r.url.params) for r in server.requests if r.url.path.endswith("/Company")
+    ]
+    assert any(p.get("$select") == "AcctCD" for p in company_lists)
     doc = yaml.safe_load(
         (tmp_path / "config" / "setup" / "30-open-periods.yaml").read_text()
     )

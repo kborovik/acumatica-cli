@@ -140,7 +140,7 @@ def test_load_contract_xml_rejects_data_repo_project_xml(tmp_path: Path) -> None
 def test_load_contract_xml_package_only(tmp_path: Path) -> None:
     # No data-repo project.xml → always packaged full company surface
     name, entities = bootstrap.parse_endpoint(bootstrap.load_contract_xml(tmp_path))
-    assert name == "Bootstrap/1.10.0"
+    assert name == "Bootstrap/1.11.0"
     assert "Company" in entities
     assert "OnlyInDataRepo" not in entities
 
@@ -167,11 +167,11 @@ def test_package_zip_carries_the_bootstrap_endpoint() -> None:
     Verified vs 26.101.0225 by live import round-trip: the <Endpoint> child
     is the XmlSerializer form of Model.Endpoint in the entity/maintenance/5.31
     namespace; no .endpoint file is involved. Packaged contract is the single
-    full company surface (Bootstrap/1.10.0 package SoT — V2/V21/T178).
+    full company surface (Bootstrap/1.11.0 package SoT — V2/V21/T178).
     """
     ns, endpoint, entities = _packaged_endpoint()
     assert endpoint.get("name") == "Bootstrap"
-    assert endpoint.get("version") == "1.10.0"
+    assert endpoint.get("version") == "1.11.0"
     # SystemContracts.V4 is the build's only IsCurrent implementation
     assert endpoint.get("systemContractVersion") == "4"
     company_fields = {
@@ -244,7 +244,8 @@ def test_package_zip_carries_the_bootstrap_endpoint() -> None:
         f.get("name") for f in details["UserRole"].findall(f"{ns}Fields/{ns}Field")
     }
     assert membership_fields == {"Rolename"}
-    # T150: NumberingSequence bounds on CS201010 (gh #25); no LastNbr (V40)
+    # T150/T251: NumberingSequence bounds + Header NewSymbol on CS201010
+    # (gh #25/#44); no LastNbr (V40); UserNumbering is OR not a pair (V58)
     assert entities["NumberingSequence"].get("screen") == "CS201010"
     numbering_fields = {
         f.get("name"): f.get("type")
@@ -253,6 +254,7 @@ def test_package_zip_carries_the_bootstrap_endpoint() -> None:
     assert numbering_fields == {
         "NumberingID": "StringValue",
         "Descr": "StringValue",
+        "NewSymbol": "StringValue",
         "StartNbr": "StringValue",
         "EndNbr": "StringValue",
         "WarnNbr": "StringValue",
@@ -260,6 +262,7 @@ def test_package_zip_carries_the_bootstrap_endpoint() -> None:
         "StartDate": "DateTimeValue",
     }
     assert "LastNbr" not in numbering_fields
+    assert "UserNumbering" not in numbering_fields
     # T204/T207: SegmentedKey on CS202000 (gh #30); Header/Detail views (B28)
     assert entities["SegmentedKey"].get("screen") == "CS202000"
     segmented_fields = {
@@ -380,12 +383,14 @@ def test_package_zip_carries_the_bootstrap_endpoint() -> None:
             "Password": "UserList",
             "Roles": ("RolesByUser", ""),
         },
-        # T150/T159 NumberingSequence (gh #25): CS201010 NumberingMaint
-        # Header (Numbering) + Sequence (NumberingSequence) bounds; flat
-        # entity; LastNbr omitted V40. Live view names != early T150 guess.
+        # T150/T159/T251 NumberingSequence (gh #25/#44): CS201010
+        # NumberingMaint Header (Numbering) + Sequence (NumberingSequence)
+        # bounds; NewSymbol on Header not Sequence (T159-class 422);
+        # LastNbr omitted V40. Live view names != early T150 guess.
         "NumberingSequence": {
             "NumberingID": "Header",
             "Descr": "Header",
+            "NewSymbol": "Header",
             "StartNbr": "Sequence",
             "EndNbr": "Sequence",
             "WarnNbr": "Sequence",
@@ -441,7 +446,7 @@ def test_user_roles_maps_to_roles_by_user() -> None:
     with empty UsersInRoles is a mapping miss (B31/B28 class).
     """
     ns, endpoint, entities = _packaged_endpoint()
-    assert endpoint.get("version") == "1.10.0"
+    assert endpoint.get("version") == "1.11.0"
     mappings = {
         m.get("field"): m.find(f"{ns}To")
         for m in entities["User"].findall(f"{ns}Mappings/{ns}Mapping")
@@ -469,7 +474,7 @@ def test_role_users_maps_to_users_by_role() -> None:
     mapped UsersByRole PUT.
     """
     ns, endpoint, entities = _packaged_endpoint()
-    assert endpoint.get("version") == "1.10.0"
+    assert endpoint.get("version") == "1.11.0"
     mappings = {
         m.get("field"): m.find(f"{ns}To")
         for m in entities["Role"].findall(f"{ns}Mappings/{ns}Mapping")
@@ -520,6 +525,32 @@ def test_plugin_source_assigns_users_in_roles() -> None:
     assert "LastModifiedDateTime" in update_block
 
 
+def test_numbering_newsymbol_maps_to_header() -> None:
+    """T251/T253/V58: CS201010 NewSymbol maps Header, not Sequence.
+
+    Unmapped PUT drops NewSymbol and insert 422s (B38). Sequence map is
+    T159-class (every PUT 422 on NewSymbol mask). UserNumbering is the OR
+    alternative, not a required pair.
+    """
+    ns, endpoint, entities = _packaged_endpoint()
+    assert endpoint.get("version") == "1.11.0"
+    entity = entities["NumberingSequence"]
+    fields = {
+        f.get("name"): f.get("type") for f in entity.findall(f"{ns}Fields/{ns}Field")
+    }
+    assert fields["NewSymbol"] == "StringValue"
+    assert "UserNumbering" not in fields
+    mappings = {
+        m.get("field"): m.find(f"{ns}To")
+        for m in entity.findall(f"{ns}Mappings/{ns}Mapping")
+    }
+    assert mappings["NewSymbol"] is not None
+    assert mappings["NewSymbol"].get("object") == "Header"
+    assert mappings["NewSymbol"].get("field") == "NewSymbol"
+    assert mappings["StartNbr"] is not None
+    assert mappings["StartNbr"].get("object") == "Sequence"
+
+
 def test_segmented_key_maps_length_to_detail_view() -> None:
     """T207/B28: CS202000 aspx DataMember is Detail, not Details.
 
@@ -527,7 +558,7 @@ def test_segmented_key_maps_length_to_detail_view() -> None:
     DimensionID only, so the InventoryID mask stays 10 chars.
     """
     ns, endpoint, entities = _packaged_endpoint()
-    assert endpoint.get("version") == "1.10.0"
+    assert endpoint.get("version") == "1.11.0"
     entity = entities["SegmentedKey"]
     mappings = {
         m.get("field"): m.find(f"{ns}To")
@@ -545,7 +576,7 @@ def test_segmented_key_maps_length_to_detail_view() -> None:
 def test_package_prefs_field_depth_curated_not_full_dac() -> None:
     """T154/T155/V41: curated *Preferences deepen (gh #26) — not full DAC."""
     ns, endpoint, entities = _packaged_endpoint()
-    assert endpoint.get("version") == "1.10.0"
+    assert endpoint.get("version") == "1.11.0"
     gl_types = {
         f.get("name"): f.get("type")
         for f in entities["GLPreferences"].findall(f"{ns}Fields/{ns}Field")

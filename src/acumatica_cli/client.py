@@ -1,4 +1,4 @@
-"""Contract-based REST API session (see docs/rest-api.md for verified quirks)."""
+"""Contract-based REST API session."""
 
 import base64
 import html
@@ -162,7 +162,7 @@ OPTIMIZATION_500 = "Optimization cannot be performed"
 # tenant answers PXSetupNotEnteredException on most entities until bootstrap
 # lands, and the exceptionMessage names the missing form — "The required
 # configuration data is not entered on the <Form> form." (verified vs
-# 26.101.0225, docs/rest-api.md).
+# 26.101.0225).
 SETUP_NOT_ENTERED_500 = "configuration data is not entered"
 
 
@@ -188,7 +188,7 @@ class AcumaticaClient:
         self._refreshed_after_company = False
 
     def __enter__(self) -> AcumaticaClient:
-        # tenant guard (V5, docs/rest-api.md): an omitted or empty tenant is
+        # tenant guard (V5): an omitted or empty tenant is
         # the one login the server still routes silently — to the default
         # tenant. Defense-in-depth vs wrong-tenant writes: every data-plane
         # session must name its tenant, so refuse before any HTTP happens.
@@ -219,7 +219,7 @@ class AcumaticaClient:
 
         Login accepting the name proves nothing - a stale tenant map
         reroutes named logins to the default tenant, and a single-tenant
-        instance accepts ANY name (both verified live, docs/rest-api.md).
+        instance accepts ANY name (both verified live).
         """
         creds: dict[str, str] = {
             "name": self.instance.user,
@@ -261,7 +261,7 @@ class AcumaticaClient:
     def _landed_tenant(self) -> str:
         """The tenant this session actually landed on (login name).
 
-        Verified vs 26.101.0225 (docs/rest-api.md): the contract API exposes
+        Verified vs 26.101.0225: the contract API exposes
         nothing tenant-identifying, but an authenticated GET of the sign-in
         page renders a hidden ``txtSingleCompany`` input whose value is the
         session tenant's login name in every observed state - multi-tenant,

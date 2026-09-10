@@ -2,6 +2,25 @@
 
 ## Unreleased
 
+### Removed
+
+- **docs/ tree:** dropped. Live verify is `.env` plus `acu schema`. README
+  and `acu --help` stay the human-facing surface.
+
+### Fixed
+
+- **NumberingSequence NewSymbol insert (gh #44):** Bootstrap `1.11.0` maps
+  Header `NewSymbol`. Insert of a new NumberingID with `NewSymbol: <NEW>`
+  no longer 422s. Re-apply of existing sequences still succeeds. `LastNbr`
+  stays runtime (extract strips, diff ignores, apply never PUTs).
+  `NewSymbol` is seed; mapped GET returns it. GET-omit is `not returned by endpoint`
+  drift.
+- **extract open-periods Company GET:** `30-open-periods.yaml` synthesis
+  `$select`s `AcctCD` so the Company list GET does not 500 on
+  `DecPlQty`/`WeightUOM`/`VolumeUOM` (CS101500 `commonsetup` BQL delegate).
+  Unprojected list GET left extract exit 1 and a replayed tenant with
+  inactive periods.
+
 ## [v0.33.1] - 2026-09-08
 
 ### Fixed

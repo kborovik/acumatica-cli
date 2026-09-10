@@ -13,11 +13,14 @@
   and drops Selected (AllowedRoles was EPLoginTypeAllowsRole / EP202500);
   T228 bumps 1.8.0 -> 1.9.0 for Role.Users -> UsersByRole (SM201005
   Users tab; mapped-detail PUT is a no-op — B33) and 1.9.0 -> 1.10.0
-  for Role AssignUser action (PXDatabase UsersInRoles persist).
+  for Role AssignUser action (PXDatabase UsersInRoles persist);
+  T251 bumps 1.10.0 -> 1.11.0 for NumberingSequence Header NewSymbol
+  (CS201010 insert requires New Number Symbol or Manual Numbering;
+  gh #44 / V58).
 
-  package_zip() (bootstrap.py) prefers data-repo bootstrap/project.xml when
-  present; otherwise this packaged template is the fallback so config init,
-  offline tests, and package-only installs still bootstrap the full surface.
+  package_zip() always loads this packaged contract. Data-repo
+  config/bootstrap/project.xml or bootstrap/project.xml is forbidden (V21);
+  present -> hard error naming package SoT.
 
   package_zip() injects a
   <Graph ClassName="AcuBootstrapPlugin" FileType="NewFile" Source="..."/>
@@ -64,16 +67,22 @@
   T150 NumberingSequence (gh #25) - Default endpoint has no numbering
   surface; CS201010 Numbering Sequences (NumberingMaint — NOT the
   misnamed NumberingSequenceMaint):
-  - PrimaryView Header (DAC Numbering): key NumberingID + Descr.
+  - PrimaryView Header (DAC Numbering): key NumberingID + Descr +
+    NewSymbol (T251/V58; CS201010 "New Number Symbol"). UserNumbering
+    is the OR alternative (manual numbering), not a required pair.
+    Mapped GET returns NewSymbol (seed; GET-omit is mapping-miss drift).
   - Detail view Sequence (DAC NumberingSequence): bounds StartNbr,
     EndNbr, WarnNbr, NbrStep, StartDate. LastNbr is runtime counter —
     omitted from contract (V40/T152 strip/ignore if ever present).
-  - Flat entity (Currency multi-view idiom): NumberingID/Descr on Header,
-    bounds on Sequence. Single sequence row per NumberingID is the
-    demo/LAB5 shape; multi-segment / branch-scoped rows are out of v1.
+  - Flat entity (Currency multi-view idiom): NumberingID/Descr/NewSymbol
+    on Header, bounds on Sequence. Single sequence row per NumberingID
+    is the demo/LAB5 shape; multi-segment / branch-scoped rows are out
+    of v1.
   T159: view names were wrong in 1.2.0/1.3.0 (Sequence/SequenceDetail);
   live aspx + NumberingMaint reflection = Header/Sequence. Bump 1.3.0
   -> 1.4.0 (V21). Wrong maps made every PUT 422 on NewSymbol mask.
+  T251: map NewSymbol to Header (not Sequence). Insert of a new
+  NumberingID without it 422s (B38).
 
   T204 SegmentedKey (gh #30 / V50) - Default endpoint has no CS202000
   surface; DimensionMaint Segmented Keys:
@@ -121,7 +130,7 @@
 -->
 <Customization level="" description="acu bootstrap: CustomizationPlugin enables features on publish; Bootstrap endpoint exposes full company surface (company + credit terms + financial currency + GL chain + module preferences + vendor class + statement cycle + warehouse + order type + cash account + role + user + membership + numbering sequence + segmented key)" product-version="26.101">
   <EntityEndpoint>
-    <Endpoint xmlns="http://www.acumatica.com/entity/maintenance/5.31" name="Bootstrap" version="1.10.0" systemContractVersion="4">
+    <Endpoint xmlns="http://www.acumatica.com/entity/maintenance/5.31" name="Bootstrap" version="1.11.0" systemContractVersion="4">
       <TopLevelEntity name="Company" screen="CS101500">
         <Fields>
           <Field name="AcctCD" type="StringValue" />
@@ -1120,6 +1129,7 @@
         <Fields>
           <Field name="NumberingID" type="StringValue" />
           <Field name="Descr" type="StringValue" />
+          <Field name="NewSymbol" type="StringValue" />
           <Field name="StartNbr" type="StringValue" />
           <Field name="EndNbr" type="StringValue" />
           <Field name="WarnNbr" type="StringValue" />
@@ -1132,6 +1142,9 @@
           </Mapping>
           <Mapping field="Descr">
             <To object="Header" field="Descr" />
+          </Mapping>
+          <Mapping field="NewSymbol">
+            <To object="Header" field="NewSymbol" />
           </Mapping>
           <Mapping field="StartNbr">
             <To object="Sequence" field="StartNbr" />

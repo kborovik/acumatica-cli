@@ -465,8 +465,11 @@ def _synth_open_periods(client: AcumaticaClient) -> dict[str, Any] | None:
     years = _years(live)
     # OrganizationID = the extracted Company's AcctCD: the reference
     # resolves inside the emitted set (V22 - config/bootstrap/company.yaml
-    # creates the organization the action names)
-    companies = client.get_list("Company", endpoint=ep)
+    # creates the organization the action names).
+    # Company list GET 500s once DecPlQty/WeightUOM/VolumeUOM map
+    # commonsetup (V52; BQL-delegate view, B9). $select keeps AcctCD
+    # only so the synth does not pull those fields.
+    companies = client.get_list("Company", params={"$select": "AcctCD"}, endpoint=ep)
     if not companies:
         raise RuntimeError("open-periods: no Company on tenant")
     org = sorted(str(unwrap(c)["AcctCD"]) for c in companies)[0]
