@@ -1,0 +1,10 @@
+entity: SOPreferences
+key: DefaultOrderType
+endpoint: bootstrap
+records:
+- DefaultOrderType: SO
+  HoldShipments: false
+  RequireShipmentTotal: false
+  AutoReleaseIN: true
+  ShipmentNumberingID: SOSHIPMENT
+  CreditCheckError: true

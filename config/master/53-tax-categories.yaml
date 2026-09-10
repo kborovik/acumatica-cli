@@ -1,0 +1,5 @@
+entity: TaxCategory
+key: TaxCategoryID
+records:
+- TaxCategoryID: EXEMPT
+  Description: Tax exempt

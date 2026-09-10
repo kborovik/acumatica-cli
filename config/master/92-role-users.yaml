@@ -1,0 +1,30 @@
+entity: Role
+key: Rolename
+endpoint: bootstrap
+detail_keys:
+  Users: Username
+records:
+- Rolename: IN Manager
+  Users:
+  - Username: qa-director
+- Rolename: PO Viewer
+  Users:
+  - Username: qa-director
+- Rolename: PO Admin
+  Users:
+  - Username: vp-supply-chain
+- Rolename: SO Admin
+  Users:
+  - Username: vp-supply-chain
+- Rolename: IN Receiver
+  Users:
+  - Username: receiving-supervisor
+- Rolename: PO Clerk
+  Users:
+  - Username: receiving-supervisor
+- Rolename: Administrator
+  Users:
+  - Username: erp-architect
+- Rolename: LLM Agent
+  Users:
+  - Username: llm-agent

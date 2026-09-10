@@ -1,0 +1,15 @@
+name: trial-balance
+source:
+  inquire: AccountSummaryInquiry
+  params:
+    Ledger: ACTUAL
+    Period: "072026"
+key:
+  - Account
+capture:
+  - Description
+  - BegBalance
+  - DebitTotal
+  - CreditTotal
+  - EndingBalance
+decimals: 2

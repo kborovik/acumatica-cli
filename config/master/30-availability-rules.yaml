@@ -1,0 +1,6 @@
+entity: AvailabilityCalculationRule
+key: AvailabilitySchemeID
+endpoint: bootstrap
+records:
+- AvailabilitySchemeID: DEFAULT
+  Description: Default availability calculation rule

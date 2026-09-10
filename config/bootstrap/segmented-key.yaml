@@ -1,0 +1,10 @@
+entity: SegmentedKey
+key: DimensionID
+endpoint: bootstrap
+records:
+- DimensionID: BIZACCT
+  SegmentID: 1
+  Length: 30
+- DimensionID: INVENTORY
+  SegmentID: 1
+  Length: 30
