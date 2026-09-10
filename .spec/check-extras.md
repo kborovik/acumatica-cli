@@ -266,3 +266,114 @@ for granular /sdd:check runs.
 - `config/views` / `acu state` ! expand token (params pinned literals)
 - unknown `${…}` hard fail
 - no ERP business-date probe; no `--as-of`/`--period` CLI v1 (gh #28)
+
+## §V.25 — seed-file key identity (extracted from SPEC.md §V.25)
+
+- extract dup key tuple → row failure per V24, file never emitted
+- `load_baseline` dup key tuple → hard error naming entity + first dup tuple
+- catches hand-authored files (§B.14 workaround class; closes §B.21)
+
+## §V.30 — seed-layout dual (extracted from SPEC.md §V.30)
+
+- bare apply/diff defaults prefer data-repo `config/` SEED_DIRS when any child present, else root SEED_DIRS
+- never merge dual trees; explicit path args still honored
+- bootstrap features dual-resolve `config/bootstrap/` then `bootstrap/` (gh #19)
+- `project.xml` ! dual-resolve (package SoT per V2/V21)
+- extract emit hard-cut `config/` SEED_DIRS only (no root emit, no `--layout`)
+
+## §V.36 — seed authority (extracted from SPEC.md §V.36)
+
+- v1 writers into `config/` = REST extract + human only
+- REST extract success for entity → seed/entity always wins vs inventory/table
+- field/key conflict → `findings/` never silent overwrite seed
+- post-v1 SnapshotMap promote only on REST gap (not prefer-artifact flag)
+- unmapped tables never enter `config/`
+
+## §V.37 — tenant-snapshot artifact (extracted from SPEC.md §V.37)
+
+- accept SM203520 XML ZIP (`manifest.xml` + `*.xml`) or `ac.exe export xml` table-XML folder
+- both normalize one IR → inventory/
+- binary `.adb` fail-closed named error
+- never matrix `erp` match
+- format tag "XML dump" ? for ingress only — never identity side name (table owns identity)
+
+## §V.40 — numbering-runtime (extracted from SPEC.md §V.40)
+
+- seed bounds + NewSymbol fields: `NumberingID`, `StartNbr`, `EndNbr`, `WarnNbr`, `NbrStep` + StartDate? if screen requires
+- NewSymbol insert-required per numbering-new-symbol invariant
+- `LastNbr` (+ advanced counter) = runtime state — extract strips; diff ignores; apply never requires
+- ! reset live counters every apply (gh #25)
+
+## §V.44 — pin-overlay (extracted from SPEC.md §V.44)
+
+- optional Default-half overlays under `overlays/default-<half>/` keyed by resolved `api_version` (flag or `ACU_API_VERSION` or code default)
+- config init scaffolds layout + known rewrites
+- bare apply/diff/run auto-compose pin overlay when path args omitted (scenario basenames replace; config SEED_DIRS append)
+- explicit paths disable auto
+- never `matrix.yaml`; never `--cell`
+- CLI never requires long-running product branches
+- never commit multi-version OpenAPI trees as SoT (`acu schema` live dump/gitignored)
+- full seed version matrices live in data repos not CLI (extends V27)
+
+## §V.48 — agent-help (extracted from SPEC.md §V.48)
+
+- root `acu --help` ! MENTAL MODEL (data-repo layout, REST vs SSH planes, sole writer=`apply`, drift=`diff` exit 2, txns=`run`) + TYPICAL WORKFLOW (SSH box) + HOSTED path + CONFIG RESOLUTION + COMMAND MAP by intent + EXIT CODES + DEFAULT PATHS
+- LLM agents learn tool from `--help` alone (README points agents @ root help)
+- every subcommand help ! prerequisites + concrete examples + exit codes + related cmds
+- accepts `-h` + `--help`
+- help layout wide (`max_content_width` ≥ 100)
+
+## §V.50 — segmented-key-seed (extracted from SPEC.md §V.50)
+
+- SegmentedKey seed ! update existing `DimensionID` only (never insert new)
+- package seeds `INVENTORY` + `BIZACCT` one alphanumeric segment `Length` 30 (DAC max)
+- `ACCOUNT` + `INSITE` stay `Length` 10 (`SiteCD` NVarChar(10))
+- never shrink `Length` after data exists
+- key-URL GET after PUT ! return `SegmentID` + `Length`
+- PUT `Length` ! persist so live InventoryID mask accepts 30
+- silent HTTP 200 w/ omitted detail fields = mapping miss (closes §B.28) (gh #30)
+
+## §V.52 — company-qty-precision (extracted from SPEC.md §V.52)
+
+- Company CS101500 maps `DecPlQty` (`ShortValue`) + `WeightUOM`/`VolumeUOM` to view `commonsetup` (aspx DataMember; graph `Commonsetup`)
+- unmapped PUT 200 ignores (B28 class)
+- GET ! return mapped fields so extract/diff round-trip
+- package seed `DecPlQty: 3` (kit BOM milligram-scale KG; DAC default 2)
+- DistributionModule on → PUT ! send WeightUOM+VolumeUOM (`CommonSetup_RowPersisting`) even when extract strips GET-omit siblings (B26 StockItem class)
+- contract shape change ! version bump (V21) (closes §B.30) (gh #34)
+
+## §V.53 — user-role-membership (extracted from SPEC.md §V.53)
+
+- SM201010 User.Roles and SM201005 Role.Users contract-detail PUT never write UsersInRoles (silent 200) on AllowedRoles, RolesByUser, RoleList, and UsersByRole
+- persist path ! mapped contract detail
+- prove via SQL UsersInRoles (session CompanyID)
+- GET/diff membership per membership-diff-empty invariant
+- UserRole ! Selected; never AllowedRoles (EPLoginTypeAllowsRole)
+- closes §B.31, §B.32, §B.33 (gh #35)
+
+## §V.54 — unwrap-row-id (extracted from SPEC.md §V.54)
+
+- unwrap keeps `id` + `delete` on records and detail rows that also have value fields (wrap already leaves them bare)
+- files-style descriptors that unwrap to only `id` stay elided
+- GET `$expand` detail `id` ! round-trip onto later PUT so contract updates existing line
+- missing id → insert + 500 Components commit (KitAssembly StockComponents class)
+- closes §B.34 (gh #38)
+
+## §V.57 — membership-diff-empty (extracted from SPEC.md §V.57)
+
+- mapped GET Role.Users / User.Roles ? empty while UsersInRoles has session-company rows
+- diff ! flag Role.Users / User.Roles missing
+- skip those details in diff or read live source that returns rows
+- AssignUser apply + SQL-proven membership → `acu diff` exit 0 on Role.Users / User.Roles
+- closes §B.37 (gh #39)
+
+## §V.58 — numbering-new-symbol (extracted from SPEC.md §V.58)
+
+- NumberingSequence insert ! Header NewSymbol (or UserNumbering if screen requires pair)
+- Bootstrap contract maps it
+- apply PUT new NumberingID w/ `NewSymbol: <NEW>` ! 422
+- re-apply existing id succeeds (no NewSymbol mask 422 on update)
+- NewSymbol seed; mapped GET returns it
+- GET-omit → `not returned by endpoint` drift (mapping-miss per segmented-key-seed invariant; not write-only-get-omit ignore)
+- LastNbr strip per numbering-runtime invariant
+- closes §B.38 (gh #44)

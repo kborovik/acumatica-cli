@@ -76,126 +76,46 @@ V21: endpoint contract identity = name+version — entity or field shape change 
 V22: baseline reference closure — referenced entity ! exist @ PUT (tenant-native or earlier-sorting file); feature-gated file ! FeaturesSet enabled; full audit recipe → `.spec/check-extras.md` §V.22
 V23: completion path local-only — `--completion` script emit + dynamic value completion read package data + data-repo files (cwd walk-up) + `.env` only; never REST, never SSH, never live instance (fires per keystroke)
 V24: extract per-row failure isolation — row failure → continue + report; empty-state class ! skip not fail; virgin tenant full-manifest exit 0 (closes §B.19); exit/msg matrix → `.spec/check-extras.md` §V.24
-V25: seed-file key identity — declared key tuple ! uniquely identify records; extract dup key tuple → row failure per V24, file never emitted; `load_baseline` dup key tuple → hard error naming entity + first dup tuple — catches hand-authored files (§B.14 workaround class; closes §B.21)
+V25: seed-file key identity — declared key tuple ! uniquely identify records; extract dup → row failure per V24, file never emitted; `load_baseline` dup → hard error (closes §B.21); audit recipe → `.spec/check-extras.md` §V.25
 V26: org-scoped view read ! explicit org context — GL201100-class entity answers 200 [] multi-org w/o org param; probe/synth ! org-parameterized or per-org iterate; single-org green ≠ multi-org proof (closes §B.22); audit recipe → `.spec/check-extras.md` §V.26
 V27: env-sole-config — `.env` `ACU_*` sole pin+where: `ACU_BASE_URL` + `ACU_API_VERSION`; `--api-version` flag ? → else env → else code default `25.200.001`; `--url` flag ? → else env → else hard error; never `matrix.yaml`; never `--cell`; never `target.yaml`; leftover `matrix.yaml` ignored (never loaded); gate allowlist → `.spec/check-extras.md` §V.27
 V28: init-template — `config init` single full seed (no `--flavor`); config SEED_DIRS + scenario lifecycle + views TB + `.env` w/ `ACU_BASE_URL` + `ACU_API_VERSION` (not `matrix.yaml` not `target.yaml`); templates gitops-prune; no project.xml scaffold; full audit recipe → `.spec/check-extras.md` §V.28
 V29: init-org-cd — init scaffold ! single org-CD placeholder token across company `AcctCD`, ledger-company, open-periods `OrganizationID`, INPreferences `TransitBranchID`, cash-account `BranchID`
-V30: seed-layout dual — bare apply/diff defaults prefer data-repo `config/` SEED_DIRS when any child present, else root SEED_DIRS; never merge dual trees; explicit path args still honored; bootstrap features dual-resolve `config/bootstrap/` then `bootstrap/` (gh #19); `project.xml` ! dual-resolve (package SoT per V2/V21); extract emit hard-cut `config/` SEED_DIRS only (no root emit, no `--layout`)
+V30: seed-layout dual — bare apply/diff defaults prefer `config/` SEED_DIRS when any child present, else root; never merge dual trees; extract emit hard-cut `config/` only; layout recipe → `.spec/check-extras.md` §V.30
 V31: entity-list dual-shape — `parse_entity_list` accepts top-level JSON array or object w/ `endpoints` array (same name/version string row rules); empty/unparseable → fail-closed (gh #20; T74 array-only broken on 26.x wrapper)
 V32: derived-state-observation — views `config/views/`, captures `state/`; never seed/apply path; money fixed-point; exit 2 only `--assert-unchanged`; full audit recipe → `.spec/check-extras.md` §V.32
 V33: observation-source — view exactly one of `gi:`|`entity:`|`inquire:`; params pinned literals (no `${current_period}`); TB ! ≥1 numeric money; full audit recipe → `.spec/check-extras.md` §V.33
 V34: seed-catalog completeness — every packaged `templates/config/**` seed yaml ! exactly one `seed_catalog.yaml` row; template=catalog=extract paths; no GET-never-returned claims; full audit recipe → `.spec/check-extras.md` §V.34
 V35: dual-reader single-writer + vocab — REST `extract` + offline `inventory` readers (cmds under `survey`); sole mutator `apply` PUT; never SM203520 restore; vocab + layout → `.spec/check-extras.md` §V.35
-V36: seed authority — v1 writers into `config/` = REST extract + human only; when REST extract succeeds for entity, seed/entity always wins vs inventory/table; field/key conflict → `findings/` never silent overwrite seed; post-v1 SnapshotMap promote only on REST gap (not prefer-artifact flag); unmapped tables never enter `config/`
-V37: tenant-snapshot artifact — accept SM203520 XML ZIP (`manifest.xml` + `*.xml`) or `ac.exe export xml` table-XML folder; both normalize one IR → inventory/; binary `.adb` fail-closed named error; never matrix `erp` match; format tag "XML dump" ? for ingress only — never identity side name (table owns identity)
+V36: seed authority — v1 writers into `config/` = REST extract + human only; REST extract success → seed/entity wins vs inventory/table; conflict → `findings/` never silent overwrite; audit recipe → `.spec/check-extras.md` §V.36
+V37: tenant-snapshot artifact — accept SM203520 XML ZIP or `ac.exe export xml` folder; both normalize one IR → inventory/; binary `.adb` fail-closed; format recipe → `.spec/check-extras.md` §V.37
 V38: reconcile-normalize — pad-trim both sides; snapshot_map aliases + FK CD↔ID + enum label→code; never silent promote config/ (V36); full audit recipe → `.spec/check-extras.md` §V.38
 V39: password-seed — User seed Password write-only @ apply when present in YAML; extract strips `Password` + `b64__Password` (never seed hashes); diff ignores password fields
-V40: numbering-runtime — NumberingSequence seed ! bounds + NewSymbol (`NumberingID`, `StartNbr`, `EndNbr`, `WarnNbr`, `NbrStep` + StartDate? if screen requires; NewSymbol insert-required per numbering-new-symbol invariant); `LastNbr` (+ advanced counter) = runtime state — extract strips; diff ignores; apply never requires; ! reset live counters every apply (gh #25)
+V40: numbering-runtime — NumberingSequence seed ! bounds + NewSymbol; `LastNbr` (+ advanced counter) = runtime state — extract strips; diff ignores; apply never requires; ! reset live counters every apply; audit recipe → `.spec/check-extras.md` §V.40
 V41: prefs-field-depth — Bootstrap *Preferences field lists ! curated subset (demo seed need or ERP-default rebuild risk); ! full DAC mirror; each field ! seed/catalog reason; server-derived/runtime ! seed (B11 class); contract shape change ! version bump (V21) (gh #26)
 V42: inventory-map-coverage — dual-reader masters ! snapshot_map table→entity so findings = real gaps; intentional unmapped ! named in snapshot_map or findings, never silent; never docs/ table; full audit recipe → `.spec/check-extras.md` §V.42
 V43: period-token — `acu run` `${current_period}` → host-local `MMyyyy` @ process start every `${var}` site; views/state ! expand; full audit recipe → `.spec/check-extras.md` §V.43
-V44: pin-overlay — optional Default-half overlays under `overlays/default-<half>/` keyed by resolved `api_version` (flag or `ACU_API_VERSION` or code default); config init scaffolds layout + known rewrites; bare apply/diff/run auto-compose pin overlay when path args omitted (scenario basenames replace; config SEED_DIRS append); explicit paths disable auto; never `matrix.yaml`; never `--cell`; CLI never requires long-running product branches; never commit multi-version OpenAPI trees as SoT (`acu schema` live dump/gitignored); full seed version matrices live in data repos not CLI (extends V27)
+V44: pin-overlay — optional Default-half overlays keyed by resolved `api_version`; never `matrix.yaml`; never `--cell`; never commit multi-version OpenAPI trees as SoT; extends V27; compose recipe → `.spec/check-extras.md` §V.44
 V45: apply-fail-report — apply failure ! silent partial tree: either per-record continue + multi-error summary exit 1, or hard-stop w/ stopped-at file/record + remaining not-applied list exit 1; exit 2 stays drift (sibling V24 extract isolation)
 V46: contract-field-error — PUT/action HTTP error ! surface nested `Field.error` + kin (esp 422) and `innerException.exceptionMessage` when present (append, not only when top empty); not status-only or top exceptionMessage alone; curl not required
 V47: no-lifecycle-cmd — no `acu check` verb; cold rebuild = compose `tenant create` + `apply` + `run` + `diff`; `acu config check` stays preflight; never wrap pipeline as one cmd; extras-hook greps `src/` `check_cmd|_run_lifecycle|_lifecycle_|_resolve_check_tenant` → `.spec/check-extras.md` §V.47
-V48: agent-help — root `acu --help` ! MENTAL MODEL (data-repo layout, REST vs SSH planes, sole writer=`apply`, drift=`diff` exit 2, txns=`run`) + TYPICAL WORKFLOW (SSH box) + HOSTED path + CONFIG RESOLUTION + COMMAND MAP by intent + EXIT CODES + DEFAULT PATHS so LLM agents learn tool from `--help` alone (README points agents @ root help); every subcommand help ! prerequisites + concrete examples + exit codes + related cmds; accepts `-h` + `--help`; help layout wide (`max_content_width` ≥ 100)
-V49: md-prose-density — human-facing Markdown (`README.md`, packaged template README) prose paragraph ≤ 2 sentences, sparse; list / table / fence exempt; SPEC.md / SPEC.archive.md / CHANGELOG.md / `.spec/*.md` out; mechanical: extras-hook `.spec/scripts/check-md-prose` via `.spec/scripts/check-extras.sh`; ≥3-sentence prose paragraph = VIOLATE
-V50: segmented-key-seed — SegmentedKey seed ! update existing `DimensionID` only (never insert new); package seeds `INVENTORY` + `BIZACCT` one alphanumeric segment `Length` 30 (DAC max); `ACCOUNT` + `INSITE` stay `Length` 10 (`SiteCD` NVarChar(10)); never shrink `Length` after data exists; key-URL GET after PUT ! return `SegmentID` + `Length`; PUT `Length` ! persist so live InventoryID mask accepts 30; silent HTTP 200 w/ omitted detail fields = mapping miss (closes §B.28) (gh #30)
+V48: agent-help — root `acu --help` ! MENTAL MODEL + WORKFLOW + COMMAND MAP + EXIT + PATHS so agents learn from `--help` alone; subcommand help ! prereqs + examples + exit + related; accepts `-h` + `--help`; layout recipe → `.spec/check-extras.md` §V.48
+V49: md-prose-density — human-facing Markdown (`README.md`, packaged template README) prose paragraph ≤ 2 sentences, sparse; list / table / fence exempt; SPEC.md / SPEC.archive.md / CHANGELOG.md / `.spec/*.md` out; ≥3-sentence prose paragraph = VIOLATE; mechanical → `.spec/check-extras.md` §V.49
+V50: segmented-key-seed — SegmentedKey seed ! update existing `DimensionID` only (never insert new); package `INVENTORY`+`BIZACCT` Length 30; `ACCOUNT`+`INSITE` Length 10; never shrink `Length` after data exists; silent HTTP 200 omitted detail = mapping miss (closes §B.28); mapping recipe → `.spec/check-extras.md` §V.50
 V51: in-prefs-control-account — INPreferences `INProgressAcctID`/`INTransitAcctID` ! accounts w/ `ControlAccountModule: IN`; package 12300/12400 drop it; 12100/12200 keep IN control (posting-class InvtAcctID); else 26r1 PUT 500 + IN Setup cascade (closes §B.29) (gh #32)
-V52: company-qty-precision — Company CS101500 maps `DecPlQty` (`ShortValue`) + `WeightUOM`/`VolumeUOM` to view `commonsetup` (aspx DataMember; graph `Commonsetup`); unmapped PUT 200 ignores (B28 class); GET ! return mapped fields so extract/diff round-trip; package seed `DecPlQty: 3` (kit BOM milligram-scale KG; DAC default 2); DistributionModule on → PUT ! send WeightUOM+VolumeUOM (`CommonSetup_RowPersisting`) even when extract strips GET-omit siblings (B26 StockItem class); contract shape change ! version bump (V21) (closes §B.30) (gh #34)
-V53: user-role-membership — SM201010 User.Roles and SM201005 Role.Users contract-detail PUT never write UsersInRoles (silent 200) on AllowedRoles, RolesByUser, RoleList, and UsersByRole; persist path ! mapped contract detail; prove via SQL UsersInRoles (session CompanyID); GET/diff membership per membership-diff-empty invariant; UserRole ! Selected; never AllowedRoles (EPLoginTypeAllowsRole) (closes §B.31, §B.32, §B.33) (gh #35)
-V54: unwrap-row-id — unwrap keeps `id` + `delete` on records and detail rows that also have value fields (wrap already leaves them bare); files-style descriptors that unwrap to only `id` stay elided; GET `$expand` detail `id` ! round-trip onto later PUT so contract updates existing line — missing id → insert + 500 Components commit (KitAssembly StockComponents class) (closes §B.34) (gh #38)
+V52: company-qty-precision — Company CS101500 maps `DecPlQty` + `WeightUOM`/`VolumeUOM` to `commonsetup`; unmapped PUT 200 ignores; package seed `DecPlQty: 3`; DistributionModule on → PUT ! send WeightUOM+VolumeUOM (closes §B.30); mapping recipe → `.spec/check-extras.md` §V.52
+V53: user-role-membership — SM201010 User.Roles and SM201005 Role.Users contract-detail PUT never write UsersInRoles; persist path ! mapped contract detail; UserRole ! Selected; never AllowedRoles (closes §B.31, §B.32, §B.33); persist recipe → `.spec/check-extras.md` §V.53
+V54: unwrap-row-id — unwrap keeps `id` + `delete` on value-field rows; files-style id-only stay elided; GET `$expand` detail `id` ! round-trip onto later PUT; missing id → insert + 500 Components commit (closes §B.34); unwrap recipe → `.spec/check-extras.md` §V.54
 V55: datetime-calendar-day — `_norm` date-only `YYYY-MM-DD` matches live DateTimeValue same calendar day (strip `T…offset`); different day still drift; extract date-strips DateTimeValue seed emit (BegFinYear synth class) (closes §B.35) (gh #40)
 V56: write-only-get-omit — apply-needed field GET never returns ! diff-ignore (join `_DIFF_IGNORE_FIELDS`) not `not returned by endpoint`; ! general GET-omit=ok (mapping-miss per §V.50 stands); LotSerialClass Auto-Incremental `Segments.Value` first (closes §B.36) (gh #40)
-V57: membership-diff-empty — mapped GET Role.Users / User.Roles ? empty while UsersInRoles has session-company rows; diff ! flag Role.Users / User.Roles missing; skip those details in diff or read live source that returns rows; AssignUser apply + SQL-proven membership → `acu diff` exit 0 on Role.Users / User.Roles (closes §B.37) (gh #39)
-V58: numbering-new-symbol — NumberingSequence insert ! Header NewSymbol (or UserNumbering if screen requires pair); Bootstrap contract maps it; apply PUT new NumberingID w/ `NewSymbol: <NEW>` ! 422; re-apply existing id succeeds (no NewSymbol mask 422 on update); NewSymbol seed; mapped GET returns it; GET-omit → `not returned by endpoint` drift (mapping-miss per segmented-key-seed invariant; not write-only-get-omit ignore); LastNbr strip per numbering-runtime invariant (closes §B.38) (gh #44)
+V57: membership-diff-empty — mapped GET Role.Users / User.Roles ? empty while UsersInRoles has session-company rows; diff ! flag missing (closes §B.37); compare recipe → `.spec/check-extras.md` §V.57
+V58: numbering-new-symbol — NumberingSequence insert ! Header NewSymbol (or UserNumbering if screen requires pair); apply PUT new NumberingID w/ `NewSymbol: <NEW>` ! 422; GET-omit → `not returned by endpoint` drift not write-only-get-omit ignore (closes §B.38); mapping recipe → `.spec/check-extras.md` §V.58
 
 ## §T TASKS
 
-## archived: §T.1..§T.132 → SPEC.archive.md (132 rows)
+## archived: §T.1..§T.212 → SPEC.archive.md (212 rows)
 
 id|status|task|cites
-T133|x|M3 declarative seed→inv key/field aliases in snapshot_map; Subaccount+UnitsOfMeasure join inventory; v1 map loads|V38,I.data,T132
-T134|x|M4 FK CD↔ID resolvers from inventory (Account+Sub first); ReasonCode+VendorClass *AcctID/*SubID false deltas → 0 when live matches seed|V38,I.data,T133
-T135|x|offline unit tests trim+alias join+Account/Sub resolve; LAB5-style fixture ReasonCode+VendorClass CD/ID pairs → 0 when match; existing reconcile tests green|V13,V38,T132,T133,T134
-T136|x|docs/changelog snapshot_map beyond table→entity (aliases+resolvers)|V12,I.data,T133,T134
-T137|x|M5 declarative enums: global enums: + per-row field→enum; ReasonCode.Usage + Account Type/PostOption/Active/RequireUnits + CreditTerms/StatementCycle/bool Active package defaults; label→code before compare|V38,I.data,T136
-T138|x|M4 extend PostingClass *AcctID/*SubID + CashAccount Account/Sub/Branch + OrderType Freight resolves in package map|V38,I.data,T134,T137
-T139|x|offline unit tests: enum Usage/bool/Type + PostingClass FK resolve + decimal trailing-zero norm; package map asserts; existing reconcile tests green|V13,V38,T137,T138
-T140|x|docs/changelog/help: enums layer on snapshot_map; package defaults cover LAB5 high-churn enums + PostingClass|V12,I.data,T137,T138
-T141|x|tenant list banner hostname-only + offline assert (no full URL in title)|V9,I.cmd,B27
-T142|x|`acu tenant recycle` CLI — wire TenantManager.recycle_app_pool; confirm + --yes; V15 verb map + help; stdout progress; exit 0/1|V1,V5,V6,V9,V15,V16,I.cmd
-T143|x|offline tests: recycle invokes Restart-WebAppPool; empty ACU_SSH hard error; confirm/--yes; no REST|V13,V1,T142
-T144|x|docs + client mismatch hint → `acu tenant recycle`; changelog|V12,T142
-T145|x|bootstrap contract Role (SM201005 key Rolename ≥ Rolename+Descr) + User (SM201010 key Username identity fields) + membership (User detail roles); version bump|V21,I.data
-T146|x|seed_catalog + snapshot_map rows Roles/Users/membership; optional package template master seed; ! built-in system roles as mutable seed|V34,V35,I.data,T145
-T147|x|password-seed pipeline: apply write-only when present; extract strip Password+b64__Password; diff ignore password; offline unit tests|V39,I.cmd,T145
-T148|x|apply order Role then User then membership (V22 prefixes); virgin+warm idempotent PUT; re-apply no password when user unchanged|V4,V22,V39,T145,T147
-T149|x|docs demo-seed or README CLI map — role/user seed order + password rule (gh #24)|V12,T145,T147
-T150|x|bootstrap contract NumberingSequence (CS201010 or V12-verified screen; key NumberingID ≥ bounds fields); version bump|V21,I.data
-T151|x|seed_catalog + snapshot_map NumberingSequence; optional package template master/baseline; V22 order before prefs *NumberingID refs|V22,V34,V35,I.data,T150
-T152|x|LastNbr pipeline: extract strip LastNbr(+advanced counter); apply bounds without LastNbr; diff ignore; offline unit tests|V40,I.cmd,T150
-T153|x|docs demo-seed — numbering seed vs prefs *NumberingID apply order (gh #25)|V12,T150,T151
-T154|x|inventory+demo field pick list per prefs entity (IN/AP/AR/GL/SO/PO/CA as chosen); reason per field; ! full DAC|V41,I.data
-T155|x|extend bootstrap_project.xml *Preferences for chosen fields; version bump|V21,V41,I.data,T154
-T156|x|widen seed_catalog include + package templates only where demo claims field; snapshot_map enums/resolves if new FKs (numbering IDs depend V40)|V34,V38,V40,V41,T155
-T157|x|offline tests: apply body + extract include + no permanent drift from server-derived/runtime; bootstrap field asserts|V13,V34,V41,T155,T156
-T158|x|docs demo-seed — added fields list + apply order vs warehouse/lot class/numbering if any; changelog (gh #26)|V12,T154,T156
-T159|x|LotSerialClass: catalog+template if demo claims; else docs non-goal (IN prefs skip DfltLotSerClassID stands)|V34,V42,I.data
-T160|x|snapshot_map polish inventory masters reconcile should compare (PaymentMethod, CustomerClass, Vendor/Customer?, INLocation↔Warehouse locations, LotSerial if catalog); aliases/resolves/enums; ! Bootstrap bump|V35,V38,V42,I.data,T159
-T161|x|offline tests LAB5-class inventory+config → findings only real gaps not join-alias noise for mapped masters; existing reconcile green|V13,V38,V42,T160
-T162|x|docs table inventory table → entity → bootstrap\|default\|unmapped; changelog (gh #27)|V12,V42,T159,T160
-T163|x|`make release` promote Unreleased → `## [vX.Y.Z] - date`; empty Unreleased hard-fail; commit CHANGELOG w/ pyproject|V19,I.pkg
-T164|x|`release.yml` GH release notes from CHANGELOG version section for tag; not sole `--generate-notes`|V19,I.pkg,T163
-T165|x|docs README release path + CHANGELOG Unreleased duty for user-facing work|V12,V19,T163
-T166|x|tenant create --id optional; omit → next free CompanyID max+1 from list; exists-skip adopts existing id when --id omit|V16,I.cmd
-T167|x|offline tests: create login-only allocates; exists-skip without --id; id mismatch still hard-error; delete --login green|V13,T166
-T168|x|README CLI map + help + CHANGELOG Unreleased — create --login-only|V12,V19,T166
-T169|x|tenant delete progress — wrap ac.exe delete in output.step matching create; keep recycle step; offline assert step path; CHANGELOG Unreleased|V9,V19,I.cmd
-T170|x|inventory progress — output.step around artifact parse; keep banner + write/skip emit; offline assert|V9,I.cmd
-T171|x|reconcile progress — output.step around load+compare; keep emit write/skip; offline assert|V9,I.cmd
-T172|x|CHANGELOG Unreleased — CLI progress (delete/inventory/reconcile); suite green|V19,T169,T170,T171
-T173|x|period helper + run interpolator built-in `${current_period}` (host-local MMyyyy); expand steps+expect+once present; unknown token fail|V43,I.cmd
-T174|x|package scenario templates Period/FinPeriod → `${current_period}` where calendar-relative|V43,I.data,T173
-T175|x|offline tests: period_mmYYYY + freezegun month boundary + interpolator expect/once/step; view path no expand|V13,V33,V43,T173
-T176|x|docs + help: period token vs pinned views; ERP business-date skew; CHANGELOG Unreleased (gh #28)|V12,V19,V33,V43,T173,T174
-T177|x|e2e or offline cold seed-capital run green w/ token after mock month change; suite green|V4,V13,V43,T174,T175
-T178|x|drop data-repo project.xml resolve; load_contract always packaged bootstrap_project.xml; present data-repo file → hard error on bootstrap/publish path|V2,V21,I.data,I.cmd
-T179|x|config init never scaffolds project.xml; drop INIT_TEMPLATES sentinel + special-case package copy|V28,I.cmd,T178
-T180|x|offline tests: package-only contract; present override → hard error; flip hybrid prefer/override cases|V13,V2,V21,T178,T179
-T181|x|docs README + demo-seed + templates README + seed_catalog comments + CHANGELOG Unreleased — package SoT; data repos must not keep project.xml|V12,V19,T178,T179
-T182|x|suite green make check after package-SoT bootstrap contract|V13,T178,T179,T180,T181
-T183|x|docs multi-host matrix: trunk + target.yaml + optional overlay; no long-running branches; cross-link gitops#2|V44,V12,V27
-T184|x|apply fail report: continue multi-error summary or stopped-at + remaining list; exit 1; never silent partial|V45,I.cmd,V4
-T185|x|offline tests apply fail-report paths (first-record fail + multi-error)|V13,V45,T184
-T186|x|surface 422 field-level errors (Type.error class) in put/action RuntimeError detail|V46,I.cmd
-T187|x|offline tests field-error parse from fixture 422 bodies|V13,V46,T186
-T188|x|decide overlay: data-repo-only vs apply --overlay; docs; implement CLI only if gitops needs hook|V44,I.cmd,I.data
-T189|x|investigate User Roles membership apply/diff for built-in soadmin/apadmin/aradmin; fix or docs limit|V4,V39,I.data
-T190|x|CHANGELOG Unreleased + suite green after matrix/apply-error work|V19,V13,T183,T184,T186
-T191|x|optional later: curated compat profile by Default half for proven rewrites; no full swagger trees|V44,V11
-T192|x|matrix.yaml load+models (cells id/erp/default_api/base_url); unique ids; ordered; drop target.yaml loader|V27,I.data
-T193|x|global --cell; default first cell; resolve base_url+api_version+erp from active cell|V27,I.cmd
-T194|x|config init/show/check: matrix surface; init one-cell scaffold; retire target template|V27,V28,I.cmd
-T195|x|acu check lifecycle create→apply→run→diff→delete; --yes; tenant+SSH gates|V47,I.cmd
-T196|x|acu check --all continue+aggregate exit; per-cell progress (V9)|V47,V9,I.cmd
-T197|x|offline tests: matrix load/select; resolve order; check dry/mock paths; no target.yaml|V13,V27,T192,T193,T195
-T198|x|docs README+templates+CHANGELOG matrix.yaml + acu check; suite green|V12,V19,V44,T192,T195
-T199|x|drop acu check post-clean delete; leave tenant after green (fail path leave too)|V47,I.cmd
-T200|x|offline test green leaves tenant; README+CHANGELOG lifecycle leave-tenant; suite green|V13,V12,V19,V47,T199
-T201|x|agent-oriented root+subcommand --help (mental model, workflow, map, exit codes, -h, wide layout); offline tests; README agent pointer|V48,I.cmd
-T202|x|sweep human-facing md prose → ≤2 sentences/paragraph, sparse (scope: `README.md` `docs/*.md` `src/acumatica_cli/templates/**/*.md`)|V49
-T203|x|add V49 extras-hook `.spec/scripts/check-md-prose` + recipe; offline tests; suite green|V49,V13
-T204|x|bootstrap contract SegmentedKey (CS202000 DimensionMaint; Header Dimension key DimensionID; detail Segment SegmentID+Length); version bump|V21,I.data
-T205|x|seed_catalog + package template `config/bootstrap/` SegmentedKey; keys `[DimensionID]`; INVENTORY+BIZACCT segment 1 Length 30; ACCOUNT+INSITE unchanged; V22 bootstrap-before-master; V34 one catalog row|V22,V34,V50,I.data,T204
-T206|x|extract --force round-trips INVENTORY/BIZACCT Length 30; offline tests apply body + extract include + catalog row|V13,V34,V50,I.cmd,T205
-T207|x|live/e2e: SegmentedKey GET key-URL returns Length 30 after apply; PUT StockItem 26-char InventoryID succeeds; contract mapping fix + version bump if shape change|V4,V13,V21,V50,B28,T205
-T208|x|docs/demo-seed — SegmentedKey entity, CS202000, DAC max 30, non-goals (no shrink; no INSITE/ACCOUNT widen); CHANGELOG Unreleased (gh #30)|V12,V19,V50,T204,T205
-T209|x|drop ControlAccountModule IN on package `config/baseline/20-accounts.yaml` 12300/12400; keep 12100/12200|V51,I.data,B29
-T210|x|offline tests: 12300/12400 no ControlAccountModule IN; 12100/12200 still IN; INPreferences still 12300/12400|V13,V51,T209
-T211|x|e2e: package INPreferences apply succeeds after accounts; drop 15000 workaround in `test_segmented_key_length.py`|V4,V13,V51,B29,T209
-T212|x|docs/demo-seed — IN control on posting-class inventory assets only; WIP/transit not control; CHANGELOG Unreleased (gh #32)|V12,V19,V51,T209
 T213|x|drop `matrix.py` + `--cell`; Instance resolve `api_version` from `ACU_API_VERSION` env (flag > env > code default)|V27,I.cfg,I.env
 T214|x|config init/show/check: no matrix surface; `.env` scaffolds `ACU_BASE_URL` + `ACU_API_VERSION`; drop `--strict`|V27,V28,I.cmd
 T215|x|`acu check` single-instance from `.env`; drop `--all` cell walk|V47,I.cmd
