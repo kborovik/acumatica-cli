@@ -6,7 +6,8 @@ Configure Acumatica ERP purely from source — no UI, no Configuration Wizard. I
 
 ## §C CONSTRAINTS
 
-- Repo = `acu` CLI only. Data (`baseline/`, `.env.gpg`) lives in separate data repos (sibling `acumatica-devops`); infra = sibling `acumatica-infra`; blog = sibling `acumatica-blog`. C# customization projects out of scope (exclusion: bootstrap package ships one C# CustomizationPlugin package — §T.11; endpoint item returns when §T.12 lands).
+- Repo = `acu` CLI + CLI test seed (`config/` + `scenario/` @ repo root). Product data (`.env.gpg`, QMS GitOps) lives in sibling data repos; infra = sibling `acumatica-infra`; blog = sibling `acumatica-blog`. C# customization projects out of scope (exclusion: bootstrap package ships one C# CustomizationPlugin package — §T.11; endpoint item returns when §T.12 lands).
+- CLI test seed = repo-root `config/` (SEED_DIRS + `views/`; never `qms/`) + `scenario/`; copy from sibling GitOps (`~/github/acu-gitops-qms`) prune `qms/`, live `.env`, `state/`, customization, Makefile, schemas; soak from this checkout: `acu --tenant ACUCLI apply|diff|run|state` (`.env` already @ root; flag wins); never tenant `CNBN`; never `cd` sibling for CLI soak; issue-driven seed patches edit this tree; packaged `config init` templates stay demo scaffold (`gmake e2e` still 3 pipeline files on templates); `config init` never overwrite committed test seed
 - Python ≥ 3.12; click, httpx, pydantic, pydantic-settings, rich, pyyaml; uv build; module `acumatica_cli`; entry `acu`.
 - Default suite fully offline: SSH = monkeypatched `subprocess.run`, REST = `httpx.MockTransport`; no live instance needed; `make check` gate offline-only. Opt-in live tier: pytest marker `e2e`, deselected via addopts, runs only via `make e2e`; e2e self-contained — single-org synthetic company scaffolded from packaged `config init` templates into tmp dirs, no repo-root data symlinks, no dataset tenants (`SalesDemo|T100|U100` stay CLI surface, never test fixtures); live e2e = 3 pipeline files (`test_provision_lifecycle` apply/diff, `test_scenario_lifecycle` run/state, `test_extract_roundtrip` two-tenant); per-bug probes fold onto those tenants; new e2e file only when proof needs different tenant shape; multi-org out of demo scope (paid engagement).
 - Every cmd talks to live instance unless offline path: `--dry-run`, `bootstrap --export`, `survey inventory`/`survey reconcile` (artifact-only; no REST/SSH/password). Final verification live vs acu-dev1 (`acu-dev1.vm.internal`; needs tailnet + GPG key): `cd ~/github/acumatica-devops && make decrypt && make diff` or `make e2e` here (self-contained per the e2e constraint; `.env`/`.env.gpg` real files @ repo root).
@@ -53,7 +54,7 @@ Configure Acumatica ERP purely from source — no UI, no Configuration Wizard. I
 ## §V INVARIANTS
 
 V1: two-plane split — control plane = SSH (`tenant.py`, tenant CRUD only); data plane = REST (`client.py`); never mixed
-V2: two source kinds never mixed — seed YAML = what, `.env` = secrets + where (`ACU_BASE_URL`) + pin (`ACU_API_VERSION`); never `matrix.yaml`; both live in data repos, not here; never hardcode company surface in plugin source; bootstrap source closure → `.spec/check-extras.md` §V.2
+V2: two source kinds never mixed — seed YAML = what, `.env` = secrets + where (`ACU_BASE_URL`) + pin (`ACU_API_VERSION`); never `matrix.yaml`; CLI test seed lives here (`config/` SEED_DIRS + `scenario/` + `config/views/`); product GitOps stays sibling data repos; never hardcode company surface in plugin source; bootstrap source closure → `.spec/check-extras.md` §V.2
 V3: discovery — walk up from cwd to first dir containing `.env`; found → loads; absent → resolution on globals + process environment; hard error only when required value unresolved post-merge, error names missing key(s); resolution matrix → `.spec/check-extras.md` §V.3
 V4: idempotence — `PUT` keyed upsert primitive; `diff` source-authoritative (extra live not flagged); drift → exit 2; resume/skip ! desired-state never marker; `$filter` key types by YAML scalar; full audit recipe → `.spec/check-extras.md` §V.4
 V5: tenant-map — tenant create ! `AcumaticaERP` app-pool recycle after `ac.exe`; always send explicit valid `tenant`; data-plane session ! post-login landed-tenant verify, refuse on mismatch; apply that creates Company mid-session ! re-login same client before later PUTs resolving branch selectors (virgin-tenant TransitBranchID class; warm Company re-PUT re-login-safe) (closes §B.24); symptom recipe → `.spec/check-extras.md` §V.5
@@ -239,6 +240,9 @@ T253|x|offline tests: contract field+mapping; apply body includes NewSymbol; ext
 T254|x|live/e2e: insert new NumberingID (QORD-class) w/ NewSymbol; re-apply existing BATCH; no 422|V4,V13,V58,B38,T252
 T255|x|docs/demo-seed + CHANGELOG Unreleased — NumberingSequence NewSymbol insert (gh #44)|V12,V19,V58,T251,T252
 T256|x|e2e: 3 pipeline files (provision, scenario, extract); fold qty/kit-alloc/numbering/segmented-key/roles onto those tenants; shared conftest `bracket_tenant` + `joined_output`; drop per-bug files|V4,V13
+T257|.|copy sibling GitOps `config/{bootstrap,baseline,setup,master,views}` + `scenario/` → repo root (exclude `qms/`, live `.env`, `state/`, customization, Makefile, schemas)|V2,I.data
+T258|.|AGENTS.md + README: ACUCLI soak from this checkout `--tenant ACUCLI`; never CNBN; never sibling `cd` for CLI soak; e2e still packaged templates|V2,V12
+T259|.|offline test: repo-root seed trees present; no `config/qms/`; e2e still 3 pipeline files|V2,V13
 
 ## §B BUGS
 
