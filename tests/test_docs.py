@@ -97,6 +97,25 @@ def test_e2e_pipeline_files_only() -> None:
     assert "test_extract_roundtrip" in readme
 
 
+def test_readme_help_unreleased_no_docs_links() -> None:
+    """T262/V12/V19/V49: README, root help, Unreleased have no docs/*.md links."""
+    pat = re.compile(r"docs/" + r"[\w.-]+\.md")
+    readme = (REPO / "README.md").read_text()
+    help_text = (REPO / "src" / "acumatica_cli" / "cli.py").read_text()
+    unreleased = _unreleased((REPO / "CHANGELOG.md").read_text())
+    hits: list[str] = []
+    for label, text in (
+        ("README.md", readme),
+        ("src/acumatica_cli/cli.py", help_text),
+        ("CHANGELOG.md Unreleased", unreleased),
+    ):
+        for i, line in enumerate(text.splitlines(), 1):
+            if pat.search(line):
+                hits.append(f"{label}:{i}: {line.strip()}")
+    assert hits == [], "docs/*.md links:\n" + "\n".join(hits)
+    assert "docs/ tree" in unreleased
+
+
 def test_docs_tree_dropped() -> None:
     """T260/V12: never docs/ tree as SoT."""
     docs = REPO / "docs"

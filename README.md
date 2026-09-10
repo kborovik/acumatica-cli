@@ -61,7 +61,6 @@ acu --tenant DEV state                   # capture state/ trial-balance
 ```
 
 Bare `apply` / `diff` (no path args) also prefer `config/` when those trees exist.
-See [docs/demo-seed.md](docs/demo-seed.md) for the entity map, once-guard, apply-order notes, NumberingSequence vs prefs `*NumberingID`, curated *Preferences field depth (V41), and Role/User + password seed rules.
 
 **Hosted Acumatica (no SSH):** the tenant already exists; set a blank `ACU_SSH=` in `.env`.
 The scaffold omits the key — without it, acu defaults to `Administrator@<ACU_BASE_URL host>` for SSH boxes.
@@ -122,7 +121,7 @@ When you omit FILES:
 - `state` defaults to `config/views/`; writes go to `state/` (`--out`).
 
 Scenario YAML may use `${current_period}` (host-local `MMyyyy`) on steps, expect params, and `once.present` params.
-`config/views` and `state` keep Period pinned — see [docs/demo-seed.md](docs/demo-seed.md#period-token-current_period-vs-pinned-views).
+`config/views` and `state` keep Period pinned.
 
 `survey extract` always writes under `config/{bootstrap,baseline,setup,master}/` (catalog-driven; never root SEED_DIRS).
 
@@ -134,8 +133,6 @@ It never writes seed.
 
 Optional `snapshot_map.yaml` (data-repo root, or package defaults) maps DAC tables to catalog entities.
 It normalizes the join: pad-trim, key/field aliases, Account/Sub FK CD resolve, enum label to code.
-
-See [docs/demo-seed.md](docs/demo-seed.md).
 
 `acu --completion` emits a completion script for bash, zsh, or fish — source it from your shell profile.
 
@@ -159,8 +156,6 @@ Do not confuse them with each other or with `state`:
 
 `inventory/` and `findings/` are engagement outputs: not SEED_DIRS, never loaded by `apply`/`diff`, not scaffolded by `config init`.
 Binary `.adb` snapshots are rejected (XML only).
-
-See [docs/ac-exe.md](docs/ac-exe.md) for export / SM203520 notes and [docs/demo-seed.md](docs/demo-seed.md) for the extract/state/inventory map.
 
 ## The data repo
 
@@ -194,7 +189,6 @@ Seed YAML is state: `apply` upserts it, `diff` proves it.
 `acu survey extract` is the inverse of `apply`: GET live tenant rows into seed YAML under `config/{bootstrap,baseline,setup,master}/` (hard-cut).
 
 Packaged `seed_catalog.yaml` is the sole extract registry (entity, endpoint, keys, file, strip/include, filter-split).
-The demo entity map in [docs/demo-seed.md](docs/demo-seed.md) mirrors those catalog paths.
 
 Features synthesize to `config/bootstrap/features.yaml`.
 Existing files skip unless `--force`; empty live sets skip.

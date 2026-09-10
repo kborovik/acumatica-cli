@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+### Removed
+
+- **docs/ tree:** dropped. Live verify is `.env` plus `acu schema`. README
+  and `acu --help` stay the human-facing surface.
+
 ### Fixed
 
 - **NumberingSequence NewSymbol insert (gh #44):** Bootstrap `1.11.0` maps

@@ -29,7 +29,7 @@ for granular /sdd:check runs.
 ## §V.49 — md-prose-density (mechanized §T.203)
 
 - cmd: `.spec/scripts/check-md-prose` (also via extras-hook above)
-- scope: `README.md`, `docs/*.md`, `src/acumatica_cli/templates/**/README.md`
+- scope: `README.md`, `src/acumatica_cli/templates/**/README.md`
 - prose paragraph = blank-line block; list / table / blockquote / fence / heading exempt
 - surviving match (`V49|VIOLATE|file:line: N sentences`, exit 1) → bail: `prose paragraph ≥3 sentences in human-facing Markdown per §V.49 — split the paragraph`
 

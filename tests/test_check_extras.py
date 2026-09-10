@@ -295,6 +295,17 @@ def test_v47_config_check_holds(tmp_path: Path) -> None:
     assert rows(r)["V47"][0] == "HOLD"
 
 
+def test_v49_docs_md_out_of_scope(tmp_path: Path) -> None:
+    """T262/V49: check-md-prose no longer globs docs/*.md."""
+    script = make_repo(tmp_path)
+    docs = tmp_path / "docs"
+    docs.mkdir()
+    (docs / "rest-api.md").write_text("One sentence. Two sentences. Three sentences.\n")
+    r = run_hook(script)
+    assert r.returncode == 0, r.stdout + r.stderr
+    assert rows(r)["V49"][0] == "HOLD"
+
+
 def test_v49_three_sentence_prose_violates(tmp_path: Path) -> None:
     script = make_repo(tmp_path)
     (tmp_path / "README.md").write_text(
