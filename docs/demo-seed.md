@@ -493,8 +493,8 @@ Package demo pins LAB5-class module sequences (`APBILL`, `APPAYMENT`,
 `NewSymbol: <NEW>` rows. A custom sequence id used by a prefs seed must exist
 (tenant-native or earlier NumberingSequence seed) before that prefs PUT.
 
-Insert of a new NumberingID needs Header `NewSymbol: <NEW>` (auto-numbering)
-and `Descr`. Re-apply of an existing id still succeeds (gh #44 / V58).
+Insert of a new NumberingID needs Header `NewSymbol: <NEW>` (auto-numbering).
+Re-apply of an existing id still succeeds (gh #44 / V58).
 
 ### Bounds vs runtime (V40 / V58)
 
