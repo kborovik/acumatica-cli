@@ -1,8 +1,8 @@
 """TenantManager: the exact ac.exe/sqlcmd command lines sent over SSH.
 
-subprocess.run is monkeypatched — these tests pin the verified landmines
-(docs/ac-exe.md): -iname AND -h, the Deleted sub-key with the full spec,
-the -aup admin preset, and $LASTEXITCODE propagation.
+subprocess.run is monkeypatched — these tests pin the verified landmines:
+-iname AND -h, the Deleted sub-key with the full spec, the -aup admin
+preset, and $LASTEXITCODE propagation.
 """
 
 import subprocess
@@ -90,7 +90,7 @@ def test_create_builds_full_company_spec(instance: Instance, run: FakeRun) -> No
         '-company:"CompanyID=5;ParentID=1;Visible=Yes;'
         'CompanyType=;LoginName=lab5.ca-dev1;"' in command
     )
-    # both are required or CompanyConfig dies mid-run (docs/ac-exe.md)
+    # both are required or CompanyConfig dies mid-run
     assert '-iname:"AcumaticaERP"' in command
     assert '-h:"C:\\Acumatica\\AcumaticaERP"' in command
     # admin preset makes the tenant REST-loginable without the first-login dance

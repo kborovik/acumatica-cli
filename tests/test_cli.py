@@ -369,7 +369,7 @@ def test_tenant_create_chains_init_and_bootstrap(create_env: list[str]) -> None:
     )
 
     assert result.exit_code == 0
-    # the ordered pipeline from docs/ac-exe.md + docs/rest-api.md (T45):
+    # the ordered pipeline (T45):
     # create over SSH, recycle + login check (V5), then the bootstrap
     # publish into the NEW tenant (never the config default) followed by
     # the post-publish recycle - the publish's own restart caches the
@@ -574,7 +574,7 @@ def test_tenant_create_exists_skip_without_id_adopts_live_id(
 
 def test_tenant_create_type_rejects_unknown_dataset(create_env: list[str]) -> None:
     # T56/V9/V12: --type validates client-side against the box-verified
-    # dataset set (docs/ac-exe.md) - a non-member errors naming the allowed
+    # dataset set - a non-member errors naming the allowed
     # set, and nothing runs (no SSH, no chain); System stays excluded
     result = CliRunner().invoke(
         cli.cli,

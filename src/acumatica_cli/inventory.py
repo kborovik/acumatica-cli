@@ -13,7 +13,7 @@ Accepted artifacts (V37):
 Rejected: binary ``.adb`` (and ZIPs that only carry ``.adb``) — named
 error, fail-closed.
 
-Table XML shape (verified ac-exe export / dataset format, docs/ac-exe.md):
+Table XML shape (verified ac-exe export / dataset format):
 
     <data>
       <table name="Account">

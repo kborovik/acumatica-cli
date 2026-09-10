@@ -1,7 +1,7 @@
 """Tenant CRUD on the instance.
 
-Thin SSH wrapper around ac.exe CompanyConfig (the only supported CLI route,
-see docs/ac-exe.md) plus a sqlcmd read side.
+Thin SSH wrapper around ac.exe CompanyConfig (the only supported CLI route)
+plus a sqlcmd read side.
 """
 
 import subprocess
@@ -15,8 +15,8 @@ class Tenant(Model):
 
     login_name is dbo.Company.CompanyKey — the name on the sign-in page and
     the REST login's tenant value. company_cd is dbo.Company.CompanyCD; ac.exe
-    auto-generates it (Company2, Company3, …) and ignores LoginName for it
-    (docs/ac-exe.md). ``acu tenant create`` aligns CompanyCD to the login
+    auto-generates it (Company2, Company3, …) and ignores LoginName for it.
+    ``acu tenant create`` aligns CompanyCD to the login
     after CompanyConfig so list Login and CD match.
     """
 
@@ -97,7 +97,7 @@ class TenantManager:
 
         The tenant map loads at app start; without this, tenants created or
         deleted by CompanyConfig stay invisible to the sign-in page and REST
-        routing silently falls back to the default tenant (docs/rest-api.md).
+        routing silently falls back to the default tenant.
         The pool is named after the instance (how acumatica-infra builds it).
         """
         self._ssh(
@@ -108,7 +108,7 @@ class TenantManager:
     def _company_config(self, company: str, extra: str = "") -> str:
         # -iname AND -h are both required: without -iname CompanyConfig can't
         # find the site; without -h its web.config step dies on a null path
-        # (verified 2026-07-08, docs/ac-exe.md).
+        # (verified 2026-07-08).
         return self._ssh(
             f"& '{AC_EXE}' "
             f'-configmode:"CompanyConfig" -output:"Forced" '
@@ -132,7 +132,7 @@ class TenantManager:
         company_type: '' = clean tenant, 'SalesDemo' = demo data. The admin
         flags preset the tenant's admin to the instance credentials with no
         must-change flag, so the tenant is REST-loginable right after the
-        app-pool recycle — no first-login dance (verified, docs/ac-exe.md).
+        app-pool recycle — no first-login dance (verified live).
 
         Does not set CompanyCD (ac.exe auto-generates it). Call
         :meth:`set_company_cd` after create to align CD with the login.
@@ -199,7 +199,7 @@ class TenantManager:
         Identify by ``company_id`` or ``login_name`` (exactly one). Login is
         the sign-in name / REST tenant value (``CompanyKey``).
 
-        Two verified gotchas (docs/ac-exe.md):
+        Two verified gotchas:
 
         - The sub-key is ``Deleted``, not the officially documented
           ``Delete`` — an unknown key is silently ignored and the run degrades

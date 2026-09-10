@@ -1,8 +1,8 @@
 """Bootstrap customization package: build the zip, publish via /CustomizationApi.
 
 An unconfigured tenant cannot be configured through the Default endpoint
-(features are off, no company/branch exists, credit terms have no entity —
-docs/rest-api.md). The CustomizationApi is the one door that works on a
+(features are off, no company/branch exists, credit terms have no entity).
+The CustomizationApi is the one door that works on a
 virgin tenant, so bootstrap = publish a package whose CustomizationPlugin
 (`bootstrap_plugin.cs`) enables features on publish — the contract API
 cannot write CS100000 at all (T3 verdict) — and whose Bootstrap contract

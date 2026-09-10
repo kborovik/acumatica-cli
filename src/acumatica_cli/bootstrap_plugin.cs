@@ -2,7 +2,7 @@
 //
 // Runs in-process on customization publish - the one write path to
 // FeaturesSet that works: the contract API cannot persist features no
-// matter what endpoint fronts CS100000 (T3 verdict, docs/rest-api.md).
+// matter what endpoint fronts CS100000 (T3 verdict).
 //
 // Deliberately writes through PXDatabase, not FeaturesMaint: the graph
 // save collides with the publish pipeline's concurrent plugin invocations
