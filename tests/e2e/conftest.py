@@ -22,11 +22,12 @@ and stateful by design.
 from __future__ import annotations
 
 import contextlib
+import os
 import shutil
 import subprocess
 import sys
 import threading
-from collections.abc import Callable, Iterator
+from collections.abc import Callable, Iterator, Mapping
 from pathlib import Path
 from typing import IO, NamedTuple
 
@@ -58,6 +59,39 @@ class ScratchPair(NamedTuple):
 def joined_output(proc: subprocess.CompletedProcess[str]) -> str:
     """Stdout plus stderr - status lines (success/error) go to stderr."""
     return proc.stdout + proc.stderr
+
+
+def env_without_acu(src: Mapping[str, str] | None = None) -> dict[str, str]:
+    """Process environment with ambient ACU_* stripped so a found .env wins."""
+    return {k: v for k, v in (src or os.environ).items() if not k.startswith("ACU_")}
+
+
+def acu_binary() -> Path:
+    """This checkout's ``.venv/bin/acu``, never the global PyPI tool.
+
+    ``sys.executable.resolve()`` follows the venv symlink into the
+    Homebrew framework ``bin/``, which has no ``acu``. ``sys.prefix`` is
+    the venv root under ``uv run`` / ``gmake e2e``.
+    """
+    path = Path(sys.prefix) / "bin" / "acu"
+    if not path.is_file():
+        raise FileNotFoundError(f"checkout acu not found at {path}")
+    return path
+
+
+def load_instance_from_dotenv(root: Path) -> Instance:
+    """Resolve Instance from ``root/.env`` only — ambient ACU_* do not override.
+
+    Live e2e must follow the repo-root (or scaffold-copied) .env as the
+    deployment target. pydantic-settings prefers process env over the
+    file; stripping ACU_* for the load makes the file the sole source.
+    """
+    saved = {k: os.environ.pop(k) for k in list(os.environ) if k.startswith("ACU_")}
+    try:
+        with contextlib.chdir(root):
+            return load_instance()
+    finally:
+        os.environ.update(saved)
 
 
 def bracket_tenant(
@@ -120,20 +154,26 @@ def data_repo(tmp_path_factory: pytest.TempPathFactory) -> Path:
 
 @pytest.fixture(scope="session")
 def acu(data_repo: Path) -> RunAcu:
-    """Run the real acu binary from the scaffolded data repo.
+    """Run this checkout's acu binary from the scaffolded data repo.
 
-    Output is streamed through to the terminal as it arrives (acu's own
-    step lines are the progress indicator for the minutes-long create +
-    apply) while still being buffered for the assertions. `make e2e`
-    passes -s so pytest does not swallow the stream.
+    The sibling of ``sys.executable`` is ``.venv/bin/acu`` under
+    ``uv run`` / ``gmake e2e`` — never the global PyPI ``acu``. Ambient
+    ACU_* are stripped so the scaffold-copied repo-root .env is the
+    deployment target (V3: process env would otherwise win). Output is
+    streamed through to the terminal as it arrives (acu's own step lines
+    are the progress indicator for the minutes-long create + apply)
+    while still being buffered for the assertions. `make e2e` passes -s
+    so pytest does not swallow the stream.
     """
+    acu_bin = str(acu_binary())
 
     def run(*args: str) -> subprocess.CompletedProcess[str]:
         sys.stderr.write(f"$ acu {' '.join(args)}\n")
         sys.stderr.flush()
         with subprocess.Popen(
-            ["acu", *args],
+            [acu_bin, *args],
             cwd=data_repo,
+            env=env_without_acu(),
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
             text=True,
@@ -165,10 +205,9 @@ def acu(data_repo: Path) -> RunAcu:
 
 @pytest.fixture(scope="session")
 def live_instance() -> Instance:
-    """The real target, resolved exactly as every live command resolves it."""
+    """The real target from repo-root .env (ambient ACU_* ignored)."""
     try:
-        with contextlib.chdir(REPO_ROOT):
-            return load_instance()
+        return load_instance_from_dotenv(REPO_ROOT)
     except SystemExit as exc:
         pytest.exit(
             f"live config missing ({exc}) - decrypt .env.gpg at the repo root",

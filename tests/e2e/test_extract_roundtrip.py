@@ -16,9 +16,11 @@ seed under ``config/`` (bootstrap + baseline + setup + master, V34):
 
 Master is non-optional: after full bare apply, no ``config/master/`` row
 may skip as ``(no records)`` — that would mean A's configuration is
-incomplete before the inverse is even exercised. Multi-file filter-split
-(Warehouse / StockItem) quality is T117; packaging UOMs are not claimed
-(T118 / B26).
+incomplete before the inverse is even exercised. ``92-role-users.yaml``
+is the V53 exception: mapped Role.Users GET stays empty after AssignUser,
+so extract skips ``(Users GET empty)`` rather than emit identity-only YAML
+(B33/B37). Multi-file filter-split (Warehouse / StockItem) quality is
+T117; packaging UOMs are not claimed (T118 / B26).
 
 The GL batch leg proves the replayed setup chain is complete end to end
 (B16 class): a hand-built batch PUT releases to Posted on B.
@@ -56,6 +58,9 @@ pytestmark = pytest.mark.e2e
 
 LOGIN_A = "E2EA"
 LOGIN_B = "E2EB"
+# V53: mapped Role.Users GET is empty; extract skips rather than emit.
+ROLE_USERS_FILE = "config/master/92-role-users.yaml"
+USERS_GET_EMPTY = "Users GET empty"
 
 
 @pytest.fixture(scope="session")
@@ -116,10 +121,12 @@ def test_extract_dumps_tenant_a(
 
     Every in-contract catalog row must produce a file under ``config/``
     (V30 hard-cut). A ``(no records)`` skip on master means A's apply was
-    incomplete — fail loud before the byte-compare. Every entity/action
-    file must parse through ``load_baseline`` (emitted files are seed
-    files by construction). V34: catalog file set equals template seed
-    set (no multicurrency Currency row under LAB5).
+    incomplete — fail loud before the byte-compare. V53: Role.Users GET
+    empty is a clean skip for ``92-role-users.yaml`` (apply-only
+    membership), not an incomplete apply. Every entity/action file must
+    parse through ``load_baseline`` (emitted files are seed files by
+    construction). V34: catalog file set equals template seed set (no
+    multicurrency Currency row under LAB5).
     """
     dir_a, _ = out_dirs
     expected = _catalog_expected()
@@ -142,9 +149,18 @@ def test_extract_dumps_tenant_a(
         + "\n"
         + joined_output(proc)
     )
-    # allow clean (no records)/(exists) skips only for non-master rows
+    # V53: mapped GET Role.Users stays empty; skip not emit identity-only.
+    membership_skip = any(
+        ROLE_USERS_FILE in ln and USERS_GET_EMPTY in ln for ln in skips
+    )
+    if membership_skip:
+        expected.discard(ROLE_USERS_FILE)
+        master_expected.discard(ROLE_USERS_FILE)
+    # allow clean (no records)/(exists) skips; V53 Users GET empty on membership
     for ln in skips:
-        assert "(no records)" in ln or "(exists)" in ln, joined_output(proc)
+        assert "(no records)" in ln or "(exists)" in ln or USERS_GET_EMPTY in ln, (
+            joined_output(proc)
+        )
         for rel in list(expected):
             if rel in ln:
                 expected.discard(rel)
