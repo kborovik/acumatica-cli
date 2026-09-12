@@ -1280,7 +1280,7 @@ def inventory_cmd(
     "config_dir",
     type=click.Path(file_okay=False, path_type=Path),
     default=None,
-    help="Optional config/ seed tree (default: config/ when present)",
+    help="Optional seed tree (no default; omit = inventory-only)",
 )
 @click.option(
     "--out",
@@ -1302,10 +1302,11 @@ def reconcile_cmd(
     force: bool,
     dry_run: bool,
 ) -> None:
-    """Compare inventory/ to optional config/; write findings/ (offline).
+    """Compare inventory/ to optional --config seed; write findings/ (offline).
 
     Cross-check snapshot tables vs seed. No REST, no SSH, no password.
-    Never writes config/ (not extract promote) and never captures state/.
+    Omit --config for inventory-only (never assume acu-config/ or config/).
+    Never writes acu-config/ (not extract promote) and never captures state/.
     Gaps, field deltas, unmapped tables, Usr* columns → findings/ only.
     Optional snapshot_map.yaml maps DAC tables → catalog entities (aliases,
     FK resolvers, enums); package defaults cover common LAB maps. Conflicts
@@ -1317,18 +1318,14 @@ def reconcile_cmd(
     \b
     Examples
       acu survey inventory export.zip && acu survey reconcile
-      acu survey reconcile --inventory inv/ --config config/ --out findings/
+      acu survey reconcile --inventory inv/ --config acu-config/ --out findings/
     """
     inv = (
         inventory_dir
         if inventory_dir is not None
         else Path(reconcile.DEFAULT_INVENTORY)
     )
-    if config_dir is not None:
-        cfg: Path | None = config_dir
-    else:
-        default_cfg = Path(reconcile.DEFAULT_CONFIG)
-        cfg = default_cfg if default_cfg.is_dir() else None
+    cfg = config_dir
     dest = out_dir if out_dir is not None else Path(reconcile.DEFAULT_OUT)
     cfg_label = str(cfg) if cfg is not None else "(none)"
     output.data(f"{inv} + {cfg_label} -> {dest}")

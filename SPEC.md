@@ -173,7 +173,7 @@ T263|x|CLI: apply/diff/run/state require data path; zero args → that cmd help 
 T264|x|rename committed seed + packaged templates `config/`→`acu-config/`, `scenario/`→`acu-scenario/`; no customization YAML under `acu-config/`|V60,V61,V2,I.data
 T265|x|extract `--out` default `acu-config/` emit SEED_DIRS into tree root; bootstrap features `acu-config/bootstrap/features.yaml` only|V60,V30,I.cmd
 T266|x|`config init` scaffold `acu-config/`+`acu-scenario/`+views into `<dir>` or cwd; no customization tree; next-step cmds explicit paths|V28,V60,V61,I.cmd
-T267|.|`survey reconcile --config` no default path; emit `--out` defaults stay `state/` `inventory/` `findings/` `schemas/`|V59,I.cmd
+T267|x|`survey reconcile --config` no default path; emit `--out` defaults stay `state/` `inventory/` `findings/` `schemas/`|V59,I.cmd
 T268|.|sweep remaining implicit data-path defaults (scope: `src/`; pattern `default_seed_dirs`)|V59,V60,V13
 T269|.|offline tests: bare apply/diff/run/state help; `apply acu-config` umbrella; `run acu-scenario`; init names; extract `--out`; bootstrap features; reconcile omit `--config`|V13,V59,V60,T263,T264,T265,T266,T267
 T270|.|README+AGENTS.md+help PATHS+CHANGELOG Unreleased: `acu-config/` `acu-scenario/`; soak `apply acu-config`; suite green|V12,V19,V48,V49,V60,T264

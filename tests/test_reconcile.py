@@ -1637,10 +1637,11 @@ def test_cli_reconcile_defaults(
     assert "write" in result.output
     # T171/V9: load+compare via output.step (piped stderr); write/skip on stdout
     assert "loading inventory + comparing" in result.stderr
-    # never touch config/
+    # omit --config: inventory-only, never assume config/ or acu-config/
     assert not (tmp_path / "config").exists() or not any(
         (tmp_path / "config").rglob("*")
     )
+    assert not (tmp_path / "acu-config").exists()
 
 
 def test_cli_reconcile_with_config_deltas(
@@ -1649,7 +1650,9 @@ def test_cli_reconcile_with_config_deltas(
     _inventory_tree(tmp_path, ACCOUNT_XML)
     _write_config_account(tmp_path)
     monkeypatch.chdir(tmp_path)
-    result = CliRunner().invoke(cli.cli, ["survey", "reconcile"])
+    result = CliRunner().invoke(
+        cli.cli, ["survey", "reconcile", "--config", str(tmp_path / "config")]
+    )
     assert result.exit_code == 0, result.output
     deltas = yaml.safe_load(
         (tmp_path / "findings" / "deltas.yaml").read_text(encoding="utf-8")
