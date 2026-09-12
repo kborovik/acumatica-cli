@@ -652,7 +652,7 @@ def test_package_seed_capital_cold_after_month_change(
 
     packaged = (
         files("acumatica_cli")
-        .joinpath("templates/scenario/10-seed-capital.yaml")
+        .joinpath("templates/acu-scenario/10-seed-capital.yaml")
         .read_text(encoding="utf-8")
     )
     assert "${current_period}" in packaged

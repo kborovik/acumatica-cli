@@ -5,7 +5,7 @@ conftest scaffolds a synthetic single-org company from the packaged
 `acu config init` templates into a tmp data repo, then `acu tenant
 create` (which chains the bootstrap publish, T45) -> `acu apply` ->
 `acu diff` clean, all running from that repo. Bare apply/diff exercise
-the default-dirs path (I.cmd/V30): the scaffolded ``config/`` SEED_DIRS
+the default-dirs path (I.cmd/V30): the scaffolded ``acu-config/`` SEED_DIRS
 (bootstrap/baseline/setup/master) are preferred over root.
 
 Folded probes after full apply (T256): Role AssignUser SQL + diff,
@@ -128,10 +128,10 @@ def test_tenant_create_bootstraps_at_birth(
 def test_apply_configures_the_fresh_tenant(
     acu: RunAcu, scratch_tenant: ScratchTenant
 ) -> None:
-    """Bare apply sweeps default config/ SEED_DIRS (T44/V30)."""
-    proc = acu("--tenant", scratch_tenant.login, "apply")
+    """Bare apply sweeps default acu-config/ SEED_DIRS (T44/V30)."""
+    proc = acu("--tenant", scratch_tenant.login, "apply", "acu-config")
     assert proc.returncode == 0, joined_output(proc)
-    assert "config/" in proc.stdout or "Warehouse" in joined_output(proc)
+    assert "acu-config/" in proc.stdout or "Warehouse" in joined_output(proc)
 
 
 def test_diff_is_clean_on_configured_tenant(
@@ -143,13 +143,13 @@ def test_diff_is_clean_on_configured_tenant(
     action file's done_when probe answers non-empty, so the FinYearSetup
     row and the 2026 company periods exist on the tenant.
     """
-    proc = acu("--tenant", scratch_tenant.login, "diff")
+    proc = acu("--tenant", scratch_tenant.login, "diff", "acu-config")
     assert proc.returncode == 0, joined_output(proc)
     assert "no drift" in joined_output(proc)
 
 
 def test_apply_is_idempotent(acu: RunAcu, scratch_tenant: ScratchTenant) -> None:
-    proc = acu("--tenant", scratch_tenant.login, "apply")
+    proc = acu("--tenant", scratch_tenant.login, "apply", "acu-config")
     assert proc.returncode == 0, joined_output(proc)
     # every setup/ action re-verifies through its done_when probe and
     # skips - the T36 re-run leg: no second invoke, zero mutations
@@ -160,7 +160,7 @@ def test_apply_is_idempotent(acu: RunAcu, scratch_tenant: ScratchTenant) -> None
 def test_diff_detects_injected_drift(
     acu: RunAcu, scratch_tenant: ScratchTenant, data_repo: Path, tmp_path: Path
 ) -> None:
-    source = sorted((data_repo / "config" / "baseline").glob("*.yaml"))[0]
+    source = sorted((data_repo / "acu-config" / "baseline").glob("*.yaml"))[0]
     doc: dict[str, Any] = yaml.safe_load(source.read_text())
     keys = doc["key"] if isinstance(doc["key"], list) else [doc["key"]]
     record: dict[str, Any] = doc["records"][0]
@@ -179,7 +179,7 @@ def test_kit_componentqty_round_trips_after_decplqty(
 ) -> None:
     """T223/V52/B30: live kit ComponentQty 0.012 after Company DecPlQty 3.
 
-    Scratch revision is not in the demo seed, so config/ diff stays clean.
+    Scratch revision is not in the demo seed, so acu-config/ diff stays clean.
     WeightUOM/VolumeUOM come from the packaging Company PUT (folded T223).
     """
     inst = live_instance.model_copy(update={"tenant": scratch_tenant.login})
@@ -231,9 +231,9 @@ def test_role_users_sql_and_diff_clean(
         "--tenant",
         scratch_tenant.login,
         "diff",
-        "config/master/90-roles.yaml",
-        "config/master/91-users.yaml",
-        "config/master/92-role-users.yaml",
+        "acu-config/master/90-roles.yaml",
+        "acu-config/master/91-users.yaml",
+        "acu-config/master/92-role-users.yaml",
     )
     assert proc.returncode == 0, joined_output(proc)
     out = joined_output(proc)
@@ -275,7 +275,7 @@ def test_insert_newsymbol_and_reapply_batch(
         "--tenant",
         scratch_tenant.login,
         "apply",
-        str(data_repo / "config/master/05-numbering-sequences.yaml"),
+        str(data_repo / "acu-config/master/05-numbering-sequences.yaml"),
     )
     out = joined_output(proc)
     assert proc.returncode == 0, out
@@ -337,5 +337,5 @@ def test_diff_against_nonexistent_tenant_exits_one(acu: RunAcu) -> None:
     and silently lands on the default tenant, and only the landed-tenant
     guard in AcumaticaClient stands between that and a false-green diff.
     """
-    proc = acu("--tenant", "NoSuchTenantB5", "diff", "config/baseline")
+    proc = acu("--tenant", "NoSuchTenantB5", "diff", "acu-config/baseline")
     assert proc.returncode == 1, joined_output(proc)

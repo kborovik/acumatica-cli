@@ -4,7 +4,7 @@ The tier is self-contained (T63): the session scaffolds a synthetic
 single-org data repo from the packaged `acu config init` templates into
 a tmp dir, and every acu command runs from that repo - the cwd walk-up
 (V3) finds its .env there and the bare apply/diff default dirs resolve
-to the scaffolded ``config/`` SEED_DIRS (V28/V30 full seed). No repo-root
+to the scaffolded ``acu-config/`` SEED_DIRS (V28/V30 full seed). No repo-root
 data symlinks, no dataset tenants (SalesDemo|T100|U100 stay CLI surface,
 never test fixtures).
 
@@ -132,10 +132,10 @@ def data_repo(tmp_path_factory: pytest.TempPathFactory) -> Path:
     """A synthetic data repo scaffolded from the packaged templates.
 
     The template set (I.cmd `config init`, V28 single full seed) is the
-    whole company definition under ``config/``: bootstrap (company, credit
+    whole company definition under ``acu-config/``: bootstrap (company, credit
     terms, features), baseline GL chart, setup action chain, master
-    inventory/distribution, plus lifecycle ``scenario/`` and observer
-    ``config/views/``. The scaffolded placeholder .env is replaced by
+    inventory/distribution, plus lifecycle ``acu-scenario/`` and observer
+    ``acu-config/views/``. The scaffolded placeholder .env is replaced by
     the real repo-root one so the subprocess walk-up resolves the live
     instance; with no decrypted .env the placeholder is dropped instead
     and resolution rides the process environment alone (V3) -

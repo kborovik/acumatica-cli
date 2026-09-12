@@ -43,7 +43,6 @@ from .config import find_data_root
 from .models import Model, validation_summary
 
 DEFAULT_INVENTORY = "inventory"
-DEFAULT_CONFIG = "config"
 DEFAULT_OUT = "findings"
 SUMMARY_NAME = "summary.yaml"
 SEED_DIRS = ("bootstrap", "baseline", "setup", "master")
@@ -999,7 +998,6 @@ def run(
 
 
 __all__ = [
-    "DEFAULT_CONFIG",
     "DEFAULT_INVENTORY",
     "DEFAULT_OUT",
     "FindingsBundle",

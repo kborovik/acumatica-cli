@@ -1,12 +1,17 @@
 # Overlay: `default-24.200.001`
 
 For hosts whose highest published Default half is **24.200.001**
-(lab 25r1 ERP pin).
+(lab 25r1 ERP pin). Set `ACU_API_VERSION=24.200.001`.
 
 | Path | Rewrite |
 |------|---------|
-| `scenario/30-build.yaml` | KitAssembly `Type: Assembly` (trunk uses `Production`) |
+| `acu-scenario/30-build.yaml` | KitAssembly `Type: Assembly` (trunk uses `Production`) |
 
-No config-entity rewrites yet. Bare `acu run` with
-`ACU_API_VERSION=24.200.001` (or `--api-version 24.200.001`) replaces
-trunk `30-build.yaml` automatically.
+No config-entity rewrites yet.
+
+Pass the overlay dir as a second `run` path. Later same-basename wins
+(V44/V59).
+
+```sh
+acu run acu-scenario overlays/default-24.200.001/acu-scenario
+```

@@ -4,7 +4,7 @@ Driven by the packaged seed_catalog.yaml - per entity: the source
 endpoint, key fields, destination file, an optional record filter, a
 strip deny-list or include allow-list shaping the extracted records, and
 optional detail_keys for list fields (T60 load_baseline).
-Hard-cut emit under config/{bootstrap,baseline,setup,master}/ (V30/V34):
+Hard-cut emit SEED_DIRS into --out (default ``acu-config/``) (V30/V34):
 no root SEED_DIRS paths, no --layout. Emitted files parse via
 seed.load_baseline by construction (V20: bootstrap-entity rows must
 carry an endpoint) and re-extract byte-identically: records sort by key
@@ -15,7 +15,7 @@ setup/ action files are synthesized, not dumped: an action leaves no
 keyed record to extract, so each catalog setup row's kind-dispatched
 synthesizer reads the live state the action created (the done_when
 surface) and derives the action file back.
-config/bootstrap/features.yaml is the feature closure (V22/B15): the
+bootstrap/features.yaml under --out is the feature closure (V22/B15): the
 built-in six plus the union of the catalog features: gates over
 record-producing entities - a live FeaturesSet read is not available
 over the contract API (keyless BqlDelegate view), so the closure
@@ -53,7 +53,7 @@ from .seed import (
 )
 
 # The one non-catalog destination: the feature-closure file (V22/B15).
-FEATURES_FILE = "config/bootstrap/features.yaml"
+FEATURES_FILE = "bootstrap/features.yaml"
 _SYMBOLIC_BOOTSTRAP = "bootstrap"
 _CATALOG_NAME = "seed_catalog.yaml"
 
@@ -143,23 +143,23 @@ def load_manifest() -> Manifest:
 
 # V34 exclusions: features synthesis, contract XML, observer views — not seed.
 _TEMPLATE_SEED_EXEMPT_NAMES = frozenset({"features.yaml", "project.xml"})
-_TEMPLATE_SEED_EXEMPT_PREFIXES = ("config/views/",)
+_TEMPLATE_SEED_EXEMPT_PREFIXES = ("views/",)
 
 
 def packaged_template_seed_files() -> frozenset[str]:
-    """Packaged ``templates/config/**`` seed paths that V34 requires catalog rows for.
+    """Packaged ``templates/acu-config/**`` seed paths V34 requires catalog rows for.
 
-    Paths are data-repo relative (``config/...``). Excludes features synthesis,
-    ``project.xml``, and ``config/views/`` observer defs.
+    Paths are seed-tree relative (``bootstrap/...``). Excludes features synthesis,
+    ``project.xml``, and ``views/`` observer defs.
     """
-    root = resources.files("acumatica_cli").joinpath("templates", "config")
+    root = resources.files("acumatica_cli").joinpath("templates", "acu-config")
     out: set[str] = set()
 
     def walk(node: Any, prefix: str) -> None:
         for child in node.iterdir():
             name = child.name
             rel = f"{prefix}{name}" if not prefix else f"{prefix}/{name}"
-            path = f"config/{rel}"
+            path = rel
             if child.is_dir():
                 walk(child, rel)
                 continue
@@ -464,7 +464,7 @@ def _synth_open_periods(client: AcumaticaClient) -> dict[str, Any] | None:
         return None
     years = _years(live)
     # OrganizationID = the extracted Company's AcctCD: the reference
-    # resolves inside the emitted set (V22 - config/bootstrap/company.yaml
+    # resolves inside the emitted set (V22 - bootstrap/company.yaml
     # creates the organization the action names).
     # Company list GET 500s once DecPlQty/WeightUOM/VolumeUOM map
     # commonsetup (V52; BQL-delegate view, B9). $select keeps AcctCD
@@ -504,7 +504,7 @@ SYNTHESIZERS: dict[str, tuple[Synthesizer, str]] = {
 
 
 def render_features(gates: Iterable[str]) -> str:
-    """The feature-closure config/bootstrap/features.yaml: built-in six + gates.
+    """The feature-closure bootstrap/features.yaml: built-in six + gates.
 
     Deterministic order (byte-stable re-extract): the built-in six in
     their bootstrap.DEFAULT_FEATURES spelling, then the extra gates
@@ -688,7 +688,7 @@ def run(
 ) -> int:
     """Extract the catalog file set plus the feature closure under out_dir.
 
-    Paths hard-cut under config/ SEED_DIRS (V30). Per file: skip when it
+    Paths hard-cut under --out SEED_DIRS (V30). Per file: skip when it
     exists (--force overwrites), skip when the tenant has no records,
     report-only under --dry-run. `only` filters rows by entity name,
     synthesizer kind, or file stem.

@@ -1,7 +1,7 @@
 """Live virgin-tenant scenario + state lifecycle (SPEC T80/T98/T110/T114).
 
 Self-contained: uses the session-scaffolded packaged ``config init`` seed,
-creates a scratch tenant, then apply → run scenario/ → kit-alloc probe →
+creates a scratch tenant, then apply → run acu-scenario/ → kit-alloc probe →
 warm once-skip → diff clean → state write → assert-unchanged. Parallel to
 ``test_provision_lifecycle`` (apply/diff focus) on a separate tenant login
 so the two modules do not share session tenant state.
@@ -54,26 +54,28 @@ def _kit_assembly_type(instance: Instance) -> str:
 
 
 def test_full_scaffold_layout(data_repo: Path) -> None:
-    """T80/T110/T113/T179/V28: config/ umbrella + lifecycle + TB views + README."""
+    """T80/T110/T113/T179/V28: acu-config/ umbrella + lifecycle + TB views + README."""
     # Bootstrap contract is package SoT — never scaffolded (T178/T179)
-    assert not (data_repo / "config" / "bootstrap" / "project.xml").exists()
-    assert (data_repo / "config" / "bootstrap" / "features.yaml").is_file()
-    assert (data_repo / "config" / "master").is_dir()
-    assert (data_repo / "scenario" / "10-seed-capital.yaml").is_file()
-    assert (data_repo / "scenario" / "20-buy.yaml").is_file()
-    assert (data_repo / "scenario" / "30-build.yaml").is_file()
-    assert (data_repo / "scenario" / "40-sell.yaml").is_file()
-    assert not (data_repo / "scenario" / "buy-sell.yaml").exists()
+    assert not (data_repo / "acu-config" / "bootstrap" / "project.xml").exists()
+    assert (data_repo / "acu-config" / "bootstrap" / "features.yaml").is_file()
+    assert (data_repo / "acu-config" / "master").is_dir()
+    assert (data_repo / "acu-scenario" / "10-seed-capital.yaml").is_file()
+    assert (data_repo / "acu-scenario" / "20-buy.yaml").is_file()
+    assert (data_repo / "acu-scenario" / "30-build.yaml").is_file()
+    assert (data_repo / "acu-scenario" / "40-sell.yaml").is_file()
+    assert not (data_repo / "acu-scenario" / "buy-sell.yaml").exists()
     assert (data_repo / "overlays" / "README.md").is_file()
     assert (
-        data_repo / "overlays" / "default-24.200.001" / "scenario" / "30-build.yaml"
+        data_repo / "overlays" / "default-24.200.001" / "acu-scenario" / "30-build.yaml"
     ).is_file()
-    assert (data_repo / "config" / "views" / "10-trial-balance.yaml").is_file()
+    assert (data_repo / "acu-config" / "views" / "10-trial-balance.yaml").is_file()
     # T107/V28/V33: golden state/ = trial-balance only (B25)
-    assert not (data_repo / "config" / "views" / "20-inventory-summary.yaml").exists()
-    assert not (data_repo / "config" / "snapshot").exists()
+    assert not (
+        data_repo / "acu-config" / "views" / "20-inventory-summary.yaml"
+    ).exists()
+    assert not (data_repo / "acu-config" / "snapshot").exists()
     assert (data_repo / "README.md").is_file()
-    assert list((data_repo / "config" / "master").glob("*.yaml"))
+    assert list((data_repo / "acu-config" / "master").glob("*.yaml"))
 
 
 def test_scenario_tenant_create(acu: RunAcu, scratch_tenant: ScratchTenant) -> None:
@@ -90,14 +92,14 @@ def test_scenario_tenant_create(acu: RunAcu, scratch_tenant: ScratchTenant) -> N
 
 
 def test_scenario_apply(acu: RunAcu, scratch_tenant: ScratchTenant) -> None:
-    """Bare apply prefers config/ and includes master after setup (T77/T84)."""
-    proc = acu("--tenant", scratch_tenant.login, "apply")
+    """Bare apply prefers acu-config/ and includes master after setup (T77/T84)."""
+    proc = acu("--tenant", scratch_tenant.login, "apply", "acu-config")
     assert proc.returncode == 0, joined_output(proc)
-    assert "config/master/" in proc.stdout or "Warehouse" in joined_output(proc)
+    assert "acu-config/master/" in proc.stdout or "Warehouse" in joined_output(proc)
 
 
 def test_scenario_run(acu: RunAcu, scratch_tenant: ScratchTenant) -> None:
-    proc = acu("--tenant", scratch_tenant.login, "run", "scenario/")
+    proc = acu("--tenant", scratch_tenant.login, "run", "acu-scenario/")
     assert proc.returncode == 0, joined_output(proc)
 
 
@@ -179,12 +181,12 @@ def test_kitassembly_alloc_put_updates_existing_line(
 def test_scenario_warm_capital_once_skip(
     acu: RunAcu, scratch_tenant: ScratchTenant
 ) -> None:
-    """T89/V4: second run scenario/ skips once capital (Owner Capital non-stack).
+    """T89/V4: second run acu-scenario/ skips once capital (Owner Capital non-stack).
 
     Cold path ran in test_scenario_run. Warm re-run must print the once skip
     line for 10-seed-capital and still exit 0 for additive legs.
     """
-    proc = acu("--tenant", scratch_tenant.login, "run", "scenario/")
+    proc = acu("--tenant", scratch_tenant.login, "run", "acu-scenario/")
     combined = joined_output(proc)
     assert proc.returncode == 0, combined
     assert "once: already present" in combined
@@ -192,7 +194,7 @@ def test_scenario_warm_capital_once_skip(
 
 
 def test_scenario_diff_clean(acu: RunAcu, scratch_tenant: ScratchTenant) -> None:
-    proc = acu("--tenant", scratch_tenant.login, "diff")
+    proc = acu("--tenant", scratch_tenant.login, "diff", "acu-config")
     assert proc.returncode == 0, joined_output(proc)
     assert "no drift" in joined_output(proc)
 
@@ -211,12 +213,12 @@ def test_scenario_state_write(
     # Package TB view pins Period 072026 for mock alignment (V33/V43).
     # Scenario posts to ${current_period}; rewrite the scaffold view so
     # state/ captures the month the JE actually landed.
-    view_path = data_repo / "config" / "views" / "10-trial-balance.yaml"
+    view_path = data_repo / "acu-config" / "views" / "10-trial-balance.yaml"
     view = yaml.safe_load(view_path.read_text())
     view["source"]["params"]["Period"] = period_mmYYYY(date.today())
     view_path.write_text(yaml.safe_dump(view, sort_keys=False))
 
-    proc = acu("--tenant", scratch_tenant.login, "state")
+    proc = acu("--tenant", scratch_tenant.login, "state", "acu-config/views")
     assert proc.returncode == 0, joined_output(proc)
     combined = joined_output(proc)
     assert "trial-balance" in combined or "wrote" in combined
@@ -252,10 +254,16 @@ def test_scenario_state_assert_unchanged(
         "--tenant",
         scratch_tenant.login,
         "run",
-        "scenario/10-seed-capital.yaml",
+        "acu-scenario/10-seed-capital.yaml",
     )
     combined = joined_output(run)
     assert run.returncode == 0, combined
     assert "once: already present" in combined
-    proc = acu("--tenant", scratch_tenant.login, "state", "--assert-unchanged")
+    proc = acu(
+        "--tenant",
+        scratch_tenant.login,
+        "state",
+        "--assert-unchanged",
+        "acu-config/views",
+    )
     assert proc.returncode == 0, joined_output(proc)

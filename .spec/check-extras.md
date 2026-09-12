@@ -82,10 +82,10 @@ for granular /sdd:check runs.
 - `bootstrap` = data plane verb: publish AcuBootstrap (`/CustomizationApi`); optional post-publish recycle when `ACU_SSH` set; `--export` local-only zip write (no REST, no SSH)
 - `config` = configuration ops: `init` local write, `show` local read, `check` live read-only preflight
 - `survey` = existing-tenant dual-reader noun; verbs `extract|inventory|reconcile`; never L1 those verbs; never aliases (check/snapshot-alias class)
-- `survey extract` = REST seed reader: live GET → `config/` SEED_DIRS (V35); loads Instance
-- `survey inventory` = offline dual-reader verb: SnapshotArtifact → `inventory/` summary+tables; no REST/SSH/password (V35/V37); never seed/apply/`config/` write
-- `survey reconcile` = offline dual-reader verb: inventory/ + optional config/ → `findings/` only; no REST/SSH/password (V35/V36); never writes `config/`
-- `state` = data plane verb: capture derived state (balances/qty) → `state/`; views in `config/views/`; never seed/apply path (V32); hard-cut no `snapshot` alias
+- `survey extract` = REST seed reader: live GET → `--out` default `acu-config/` SEED_DIRS (V35); loads Instance
+- `survey inventory` = offline dual-reader verb: SnapshotArtifact → `inventory/` summary+tables; no REST/SSH/password (V35/V37); never seed/apply/`acu-config/` write
+- `survey reconcile` = offline dual-reader verb: inventory/ + optional `--config DIR` → `findings/` only; omit `--config` → inventory-only; no REST/SSH/password (V35/V36); never writes `acu-config/`
+- `state` = data plane verb: capture derived state (balances/qty) → `state/`; views in `acu-config/views/`; views path required (V59); never seed/apply path (V32); hard-cut no `snapshot` alias
 - cmd: `.spec/scripts/check-extras.sh` — V15 row; scope `src/`; pattern `@cli.command\("(extract|inventory|reconcile)"\)`
 - surviving match (`V15|VIOLATE|file:line: …`, exit 1) → bail: `L1 extract/inventory/reconcile cmd per §V.15 — nest under survey`
 
@@ -102,12 +102,12 @@ for granular /sdd:check runs.
 - shipped init template set self-closing: templates' `features.yaml` enables every feature the shipped baseline templates require (closes §B.15)
 - template set ships every recorded dependency-chain link its own verify chain needs — GL-posting chain = ledger + org-ledger link + GL prefs + calendar + open periods (closes §B.16)
 - dir expansion alphabetical = sole ordering mechanism within a seed dir; umbrella expands SEED_DIRS order first; filename prefixes encode order
-- feature file resolve: `config/bootstrap/features.yaml` or `bootstrap/features.yaml`
+- feature file resolve: `acu-config/bootstrap/features.yaml`
 
 ## §V.2 — bootstrap source closure (extracted from SPEC.md §V.2)
 
 - package-embedded config = what — never company surface hardcoded in plugin source
-- bootstrap feature set sources from data-repo dual path `config/bootstrap/features.yaml` then `bootstrap/features.yaml` (absent → built-in six)
+- bootstrap feature set sources from `acu-config/bootstrap/features.yaml` (absent → built-in six)
 - bootstrap endpoint contract = packaged `bootstrap_project.xml` sole SoT — never data-repo `project.xml` override; present data-repo file → hard error on bootstrap/publish/load_contract
 
 ## §V.3 — discovery resolution matrix (extracted from SPEC.md §V.3)
@@ -177,22 +177,22 @@ for granular /sdd:check runs.
 ## §V.28 — init-template recipe (extracted from SPEC.md §V.28)
 
 - `config init` single full seed — no `--flavor`
-- layout `config/{bootstrap,baseline,setup,master}/` + observer `config/views/10-trial-balance.yaml` (numeric EndingBalance-class via `inquire:` or `gi:`; `config/views/` ! SEED_DIRS)
+- layout `acu-config/{bootstrap,baseline,setup,master}/` + observer `acu-config/views/10-trial-balance.yaml` (numeric EndingBalance-class via `inquire:` or `gi:`; `acu-config/views/` ! SEED_DIRS)
 - package templates ! derive from sibling `acumatica-gitops` seed trees; prune non-seed extras (`demo/`, Makefile, live `.env`, committed `state/`)
 - package `templates/**/*.yaml` ! data only — no `#` comments (full-line `^\s*#` or trailing `\s#\s`); unit gate offline
 - narrative/docs comments ! sibling `acumatica-gitops` separate files, never inlined package YAML
 - never scaffolds `project.xml` — Bootstrap contract stays packaged SoT (V2/V21); not a second Bootstrap identity in data repo
 - never scaffolds `matrix.yaml`; `.env` includes `ACU_BASE_URL` + `ACU_API_VERSION` placeholders
-- `config/views/` TB only w/ EndingBalance-class numeric money capture (V33)
+- `acu-config/views/` TB only w/ EndingBalance-class numeric money capture (V33)
 - inventory-summary ! golden this pass
-- golden `scenario/` lifecycle: `10-seed-capital` (once+present) + `20-buy` + `30-build` + `40-sell` + README (gitops names)
+- golden `acu-scenario/` lifecycle: `10-seed-capital` (once+present) + `20-buy` + `30-build` + `40-sell` + README (gitops names)
 - monoscenario `buy-sell` forbidden; skip-if-exists unchanged
-- root SEED_DIRS ! default scaffold; V30 dual-layout still honors legacy root data repos
+- root SEED_DIRS ! scaffold; no customization tree; `<dir>` still optional (cwd)
 
 ## §V.32 — derived-state-observation recipe (extracted from SPEC.md §V.32)
 
-- views `config/views/*.yaml`, captures `state/<name>.yaml`
-- bare defaults hard-cut those paths (no `config/snapshot/` fallback)
+- views `acu-config/views/*.yaml`, captures `state/<name>.yaml`
+- `state` views path required (V59); `--out` default `state/` (no `config/snapshot/` fallback)
 - never SEED_DIRS/seed shape; never `endpoint:` symbols; `apply`/`diff` never load them
 - `capture:` allowlist only; money = Decimal → fixed-point string @ `decimals` (default 2)
 - sort by `key` always; key-tuple collision → exit 1; no body timestamps
@@ -217,7 +217,7 @@ for granular /sdd:check runs.
 
 ## §V.34 — seed-catalog completeness (extracted from SPEC.md §V.34)
 
-- every packaged `templates/config/**` seed yaml (except `project.xml`, features synthesis, `config/views/`) ! exactly one `seed_catalog.yaml` row
+- every packaged `templates/acu-config/**` seed yaml (except `project.xml`, features synthesis, `acu-config/views/`) ! exactly one `seed_catalog.yaml` row
 - multi-file same entity ! filter-split (one row per numbered file + optional filter/match partition)
 - template file set = catalog file set = extract emit paths
 - no hand_only markers
@@ -227,16 +227,16 @@ for granular /sdd:check runs.
 
 - REST = live data-plane transport only
 - entity = contract/REST identity
-- seed = `config/` SEED_DIRS YAML (CaC artifact, ! synonym for REST)
+- seed = `acu-config/` SEED_DIRS YAML (CaC artifact, ! synonym for REST)
 - tenant-snapshot artifact = SM203520 XML ZIP or `ac.exe export xml` folder (ingress only; ! side name like XMLDUMP; bare "snapshot" ! `state`)
 - table/DAC = artifact identity
 - inventory/ = offline IR (`tables/<Table>.yaml`)
 - reconcile map = table↔entity (`snapshot_map` or identity match) never seed-name↔inventory-name
-- readers = REST `extract` (seed under `config/`) + offline `inventory` (artifact → `inventory/`)
+- readers = REST `extract` (seed under `acu-config/`) + offline `inventory` (artifact → `inventory/`)
 - sole tenant mutator = `apply` PUT (V4)
 - never SM203520 restore / `ac.exe import` / binary import
 - `inventory/` + `findings/` never SEED_DIRS never `apply`/`diff` load
-- v1 artifact path writes `inventory/` + `findings/` only — never `config/` from artifact
+- v1 artifact path writes `inventory/` + `findings/` only — never `acu-config/` from artifact
 - `extract` REST-only
 - CLI cmds under `survey` (V15); never L1 extract/inventory/reconcile
 
@@ -248,7 +248,7 @@ for granular /sdd:check runs.
 - first targets Account+Sub for *AcctID/*SubID on ReasonCode/VendorClass-class + PostingClass/CashAccount/OrderType freight
 - global enums: per-row field→enum fold REST labels → DAC codes (Usage, Account Type/PostOption, bool_bit Active, CreditTerms Due/Disc/Visible, …)
 - decimal-looking strings collapse trailing zeros (0 vs 0.000000) without mangling bare CDs like 000000
-- never silent promote config/ (V36)
+- never silent promote `acu-config/` (V36)
 
 ## §V.42 — inventory-map-coverage (extracted from SPEC.md §V.42)
 
@@ -263,7 +263,7 @@ for granular /sdd:check runs.
 - expand every run `${var}` site (steps + expect + once present params)
 - pure `period_mmYYYY(date)` sole format
 - built-in available pre-steps (present ok); capture `${var}` still post-capture only
-- `config/views` / `acu state` ! expand token (params pinned literals)
+- `acu-config/views` / `acu state` ! expand token (params pinned literals)
 - unknown `${…}` hard fail
 - no ERP business-date probe; no `--as-of`/`--period` CLI v1 (gh #28)
 
@@ -273,21 +273,22 @@ for granular /sdd:check runs.
 - `load_baseline` dup key tuple → hard error naming entity + first dup tuple
 - catches hand-authored files (§B.14 workaround class; closes §B.21)
 
-## §V.30 — seed-layout dual (extracted from SPEC.md §V.30)
+## §V.30 — seed-layout (extracted from SPEC.md §V.30)
 
-- bare apply/diff defaults prefer data-repo `config/` SEED_DIRS when any child present, else root SEED_DIRS
-- never merge dual trees; explicit path args still honored
-- bootstrap features dual-resolve `config/bootstrap/` then `bootstrap/` (gh #19)
-- `project.xml` ! dual-resolve (package SoT per V2/V21)
-- extract emit hard-cut `config/` SEED_DIRS only (no root emit, no `--layout`)
+- apply/diff/run/state data path required (V59); never cwd-fill `acu-config/` or root SEED_DIRS
+- umbrella dir w/ any SEED_DIRS child expands nested those subdirs fixed SEED_DIRS order; else `*.yaml` (skip `features.yaml`)
+- never merge two trees; typed path used as given
+- bootstrap features resolve `acu-config/bootstrap/features.yaml` only
+- `project.xml` ! data-repo resolve (package SoT per V2/V21)
+- extract `--out` default `acu-config/`; emit SEED_DIRS into that tree root (no nested `acu-config/acu-config`; no root emit, no `--layout`)
 
 ## §V.36 — seed authority (extracted from SPEC.md §V.36)
 
-- v1 writers into `config/` = REST extract + human only
+- v1 writers into `acu-config/` = REST extract + human only
 - REST extract success for entity → seed/entity always wins vs inventory/table
 - field/key conflict → `findings/` never silent overwrite seed
 - post-v1 SnapshotMap promote only on REST gap (not prefer-artifact flag)
-- unmapped tables never enter `config/`
+- unmapped tables never enter `acu-config/`
 
 ## §V.37 — tenant-snapshot artifact (extracted from SPEC.md §V.37)
 
@@ -308,8 +309,9 @@ for granular /sdd:check runs.
 
 - optional Default-half overlays under `overlays/default-<half>/` keyed by resolved `api_version` (flag or `ACU_API_VERSION` or code default)
 - config init scaffolds layout + known rewrites
-- bare apply/diff/run auto-compose pin overlay when path args omitted (scenario basenames replace; config SEED_DIRS append)
-- explicit paths disable auto
+- apply/diff/run require explicit overlay paths (V59); omit path prints help, never auto-compose
+- `run` later same-basename wins across given dirs (`acu run acu-scenario overlays/default-<half>/acu-scenario`)
+- apply/diff extra dirs append (umbrella SEED_DIRS if present)
 - never `matrix.yaml`; never `--cell`
 - CLI never requires long-running product branches
 - never commit multi-version OpenAPI trees as SoT (`acu schema` live dump/gitignored)
@@ -317,7 +319,7 @@ for granular /sdd:check runs.
 
 ## §V.48 — agent-help (extracted from SPEC.md §V.48)
 
-- root `acu --help` ! MENTAL MODEL (data-repo layout, REST vs SSH planes, sole writer=`apply`, drift=`diff` exit 2, txns=`run`) + TYPICAL WORKFLOW (SSH box) + HOSTED path + CONFIG RESOLUTION + COMMAND MAP by intent + EXIT CODES + DEFAULT PATHS
+- root `acu --help` ! MENTAL MODEL (data-repo layout, REST vs SSH planes, sole writer=`apply`, drift=`diff` exit 2, txns=`run`) + TYPICAL WORKFLOW (SSH box) + HOSTED path + CONFIG RESOLUTION + COMMAND MAP by intent + EXIT CODES + PATHS (`acu-config/` `acu-scenario/` only; apply/diff/run/state examples always show explicit data path)
 - LLM agents learn tool from `--help` alone (README points agents @ root help)
 - every subcommand help ! prerequisites + concrete examples + exit codes + related cmds
 - accepts `-h` + `--help`
