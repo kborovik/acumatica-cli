@@ -1,6 +1,0 @@
-entity: LedgerCompany
-key: [LedgerCD, OrganizationID]
-endpoint: bootstrap
-records:
-- LedgerCD: ACTUAL
-  OrganizationID: CNBN

@@ -1,9 +1,0 @@
-entity: Role
-key: Rolename
-endpoint: bootstrap
-detail_keys:
-  Users: Username
-records:
-- Rolename: SO Admin
-  Users:
-  - Username: soadmin

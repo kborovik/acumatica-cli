@@ -1,8 +1,0 @@
-entity: Warehouse
-key: WarehouseID
-endpoint: default
-records:
-- WarehouseID: WH01
-  ReceivingLocationID: MAIN
-  ShippingLocationID: MAIN
-  RMALocationID: MAIN

@@ -1,9 +1,0 @@
-entity: Company
-key: AcctCD
-endpoint: bootstrap
-records:
-- AcctCD: CNBN
-  AcctName: CanNordic BioNutra Inc.
-  OrganizationType: Without Branches
-  BaseCuryID: CAD
-  CountryID: CA

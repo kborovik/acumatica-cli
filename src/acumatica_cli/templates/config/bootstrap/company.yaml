@@ -1,9 +1,0 @@
-entity: Company
-key: AcctCD
-endpoint: bootstrap
-records:
-- AcctCD: LAB5
-  AcctName: LAB5 Electronics Inc.
-  OrganizationType: Without Branches
-  BaseCuryID: USD
-  CountryID: US

@@ -1,8 +1,0 @@
-action: GeneratePeriods
-entity: FinancialYearSettings
-endpoint: bootstrap
-record:
-  BegFinYear: "2026-01-01"
-  FinPeriods: 12
-  PeriodType: Month
-done_when: {}

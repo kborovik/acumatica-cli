@@ -1,8 +1,0 @@
-entity: Warehouse
-key: WarehouseID
-endpoint: default
-records:
-- WarehouseID: WH-MISS-01
-  ReceivingLocationID: QCHOLD
-  ShippingLocationID: READY
-  RMALocationID: QCHOLD
