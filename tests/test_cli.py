@@ -1138,7 +1138,7 @@ def test_config_init_scaffold_round_trips(
     # T124: scaffold omits ACU_SSH; show emits derived Administrator@host
     assert "ACU_SSH=Administrator@erp.test" in shown.output
 
-    applied = CliRunner().invoke(cli.cli, ["apply", "--dry-run"])
+    applied = CliRunner().invoke(cli.cli, ["apply", "--dry-run", "config/"])
     assert applied.exit_code == 0, applied.output
     assert "would PUT Company" in applied.output
     assert "would PUT CreditTerms" in applied.output
@@ -1243,10 +1243,10 @@ def test_config_init_no_flavor_option(tmp_path: Path) -> None:
     )
 
 
-def test_default_seed_dirs_include_master_when_present(
+def test_expand_files_root_seed_dirs_order(
     wired: Instance, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    # T77: SEED_DIRS order bootstrap, baseline, setup, master — only existing
+    # T77/V30: explicit umbrella expands SEED_DIRS order bootstrap…master
     (tmp_path / ".env").write_text(
         "ACU_BASE_URL=http://acu.test/AcumaticaERP\nACU_PASSWORD=x\n"
     )
@@ -1264,7 +1264,7 @@ def test_default_seed_dirs_include_master_when_present(
         lambda client, baseline: seen.append(str(baseline.path)) or [],
     )
 
-    result = CliRunner().invoke(cli.cli, ["diff"])
+    result = CliRunner().invoke(cli.cli, ["diff", "."])
 
     assert result.exit_code == 0
     assert [s.replace("\\", "/") for s in seen] == [
@@ -1275,10 +1275,10 @@ def test_default_seed_dirs_include_master_when_present(
     ]
 
 
-def test_default_seed_dirs_prefer_config_over_root(
+def test_typed_path_does_not_merge_trees(
     wired: Instance, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    # T84/V30: dual layout → only config/<name>/, never merge root trees
+    # V30/V59: typed path used as given; never merge a sibling tree
     (tmp_path / ".env").write_text(
         "ACU_BASE_URL=http://acu.test/AcumaticaERP\nACU_PASSWORD=x\n"
     )
@@ -1298,7 +1298,7 @@ def test_default_seed_dirs_prefer_config_over_root(
         ),
     )
 
-    result = CliRunner().invoke(cli.cli, ["diff"])
+    result = CliRunner().invoke(cli.cli, ["diff", "config/"])
 
     assert result.exit_code == 0, result.output
     assert seen == ["config/bootstrap/cfg.yaml", "config/baseline/cfg.yaml"]
@@ -1312,17 +1312,11 @@ def test_seed_dirs_exclude_inventory_and_findings() -> None:
     assert cli.SEED_DIRS == ("bootstrap", "baseline", "setup", "master")
 
 
-def test_default_seed_dirs_ignore_inventory_and_findings(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    """V35/T130: bare defaults prefer config/ SEED_DIRS; ignore dual-reader trees."""
-    (tmp_path / ".env").write_text(
-        "ACU_BASE_URL=http://acu.test/AcumaticaERP\nACU_PASSWORD=x\n"
-    )
+def test_expand_files_ignores_inventory_and_findings(tmp_path: Path) -> None:
+    """V35/T130: umbrella expand of config/ never loads dual-reader trees."""
     seed = "entity: UnitsOfMeasure\nkey: UnitID\nrecords:\n- UnitID: HOUR\n"
     (tmp_path / "config" / "baseline").mkdir(parents=True)
     (tmp_path / "config" / "baseline" / "uoms.yaml").write_text(seed)
-    # dual-reader trees co-located at data-repo root (engagement output)
     inv = tmp_path / "inventory"
     (inv / "tables").mkdir(parents=True)
     (inv / "summary.yaml").write_text(
@@ -1343,23 +1337,20 @@ def test_default_seed_dirs_ignore_inventory_and_findings(
         "kind: unmapped\ntables: [{name: X, rows: 0}]\n",
         encoding="utf-8",
     )
-    monkeypatch.chdir(tmp_path)
-
-    dirs = [str(p).replace("\\", "/") for p in cli.default_seed_dirs()]
-    assert dirs == ["config/baseline"]
-    assert not any("inventory" in d or "findings" in d for d in dirs)
 
     expanded = [
-        str(p).replace("\\", "/") for p in cli.expand_files(cli.default_seed_dirs())
+        str(p).replace("\\", "/") for p in cli.expand_files((tmp_path / "config",))
     ]
-    assert expanded == ["config/baseline/uoms.yaml"]
+    assert expanded == [
+        str(tmp_path / "config" / "baseline" / "uoms.yaml").replace("\\", "/")
+    ]
     assert not any("inventory" in p or "findings" in p for p in expanded)
 
 
-def test_bare_apply_diff_ignore_inventory_findings(
+def test_apply_diff_explicit_config_ignores_inventory_findings(
     wired: Instance, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """V35/T130: bare apply/diff never load inventory/ or findings/ YAML."""
+    """V35/T130: apply/diff config/ never load inventory/ or findings/ YAML."""
     (tmp_path / ".env").write_text(
         "ACU_BASE_URL=http://acu.test/AcumaticaERP\nACU_PASSWORD=x\n"
     )
@@ -1385,7 +1376,7 @@ def test_bare_apply_diff_ignore_inventory_findings(
             seen_diff.append(str(baseline.path).replace("\\", "/")) or []
         ),
     )
-    result = CliRunner().invoke(cli.cli, ["diff"])
+    result = CliRunner().invoke(cli.cli, ["diff", "config/"])
     assert result.exit_code == 0, result.output
     assert seen_diff == ["config/baseline/uoms.yaml"]
     assert "inventory" not in result.output
@@ -1399,28 +1390,11 @@ def test_bare_apply_diff_ignore_inventory_findings(
             seen_apply.append(str(baseline.path).replace("\\", "/")) or (1, [])
         ),
     )
-    result = CliRunner().invoke(cli.cli, ["apply", "--dry-run"])
+    result = CliRunner().invoke(cli.cli, ["apply", "--dry-run", "config/"])
     assert result.exit_code == 0, result.output
     assert seen_apply == ["config/baseline/uoms.yaml"]
     assert "inventory" not in result.output
     assert "findings" not in result.output
-
-
-def test_only_inventory_findings_not_default_seed_dirs(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    """V35/T130: dual-reader trees alone never satisfy bare apply/diff defaults."""
-    (tmp_path / ".env").write_text(
-        "ACU_BASE_URL=http://acu.test/AcumaticaERP\nACU_PASSWORD=x\n"
-    )
-    (tmp_path / "inventory").mkdir()
-    (tmp_path / "inventory" / "summary.yaml").write_text("tables: {}\n")
-    (tmp_path / "findings").mkdir()
-    (tmp_path / "findings" / "summary.yaml").write_text("findings: {}\n")
-    monkeypatch.chdir(tmp_path)
-
-    with pytest.raises(SystemExit, match=r"none of the seed directories exist"):
-        cli.default_seed_dirs()
 
 
 def test_expand_files_umbrella_config_seed_order(tmp_path: Path) -> None:
@@ -1457,11 +1431,8 @@ def test_expand_files_leaf_dir_unchanged(tmp_path: Path) -> None:
     assert paths == ["a.yaml", "b.yaml"]
 
 
-def test_default_scenario_files_pin_overlay_replaces_basename(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
-) -> None:
-    # V44 bare run: overlays/default-<api>/scenario/<name> replaces trunk
-    (tmp_path / ".env").write_text("ACU_BASE_URL=http://h/AcumaticaERP\n")
+def test_expand_files_scenario_dir_yaml_only(tmp_path: Path) -> None:
+    # V59: run <dir> expands *.yaml in that dir; overlay is a separate path
     sc = tmp_path / "scenario"
     sc.mkdir()
     (sc / "10-seed-capital.yaml").write_text("scenario: c\nsteps: []\n")
@@ -1469,53 +1440,20 @@ def test_default_scenario_files_pin_overlay_replaces_basename(
     ov = tmp_path / "overlays" / "default-24.200.001" / "scenario"
     ov.mkdir(parents=True)
     (ov / "30-build.yaml").write_text("scenario: build-overlay\nsteps: []\n")
-    monkeypatch.chdir(tmp_path)
-    inst = Instance(
-        base_url="http://h/AcumaticaERP",
-        password="x",
-        api_version="24.200.001",
-    )
 
-    paths = [p.as_posix() for p in cli.default_scenario_files(inst)]
+    paths = [p.name for p in cli.expand_files((sc,))]
 
-    assert paths == [
-        "scenario/10-seed-capital.yaml",
-        "overlays/default-24.200.001/scenario/30-build.yaml",
-    ]
-    banner = capsys.readouterr().out
-    assert "api_version=24.200.001" in banner
-    assert "default_api=" not in banner
+    assert paths == ["10-seed-capital.yaml", "30-build.yaml"]
 
 
-def test_default_scenario_files_no_overlay_when_half_unmatched(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+def test_apply_explicit_config_does_not_append_overlay(
+    wired: Instance, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    # trunk half (25.200.001): no overlays/default-25.200.001 → trunk only
-    (tmp_path / ".env").write_text("ACU_BASE_URL=http://h/AcumaticaERP\n")
-    sc = tmp_path / "scenario"
-    sc.mkdir()
-    (sc / "30-build.yaml").write_text("scenario: build\nsteps: []\n")
-    ov = tmp_path / "overlays" / "default-24.200.001" / "scenario"
-    ov.mkdir(parents=True)
-    (ov / "30-build.yaml").write_text("scenario: build-overlay\nsteps: []\n")
-    monkeypatch.chdir(tmp_path)
-    inst = Instance(
-        base_url="http://h/AcumaticaERP",
-        password="x",
-        api_version="25.200.001",
+    # V59: typed path only; overlay config is not auto-appended
+    (tmp_path / ".env").write_text(
+        "ACU_BASE_URL=http://h/AcumaticaERP\nACU_PASSWORD=x\n"
     )
-
-    paths = [p.as_posix() for p in cli.default_scenario_files(inst)]
-
-    assert paths == ["scenario/30-build.yaml"]
-
-
-def test_default_apply_dirs_appends_overlay_config(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
-) -> None:
-    # V44 bare apply: pin overlay config/ SEED_DIRS appended after trunk
-    (tmp_path / ".env").write_text("ACU_BASE_URL=http://h/AcumaticaERP\n")
-    seed = "entity: UnitsOfMeasure\nkey: UnitID\nrecords: []\n"
+    seed = "entity: UnitsOfMeasure\nkey: UnitID\nrecords:\n- UnitID: HOUR\n"
     for name in ("bootstrap", "baseline", "setup", "master"):
         d = tmp_path / "config" / name
         d.mkdir(parents=True)
@@ -1524,56 +1462,20 @@ def test_default_apply_dirs_appends_overlay_config(
     ov_m.mkdir(parents=True)
     (ov_m / "99-rewrite.yaml").write_text(seed)
     monkeypatch.chdir(tmp_path)
-    inst = Instance(
-        base_url="http://h/AcumaticaERP",
-        password="x",
-        api_version="24.200.001",
+    seen: list[str] = []
+    monkeypatch.setattr(
+        cli.seed,
+        "diff",
+        lambda client, baseline: (
+            seen.append(str(baseline.path).replace("\\", "/")) or []
+        ),
     )
 
-    dirs = [p.as_posix() for p in cli.default_apply_dirs(inst)]
+    result = CliRunner().invoke(cli.cli, ["diff", "config/"])
 
-    assert "config/master" in dirs
-    assert "overlays/default-24.200.001/config/master" in dirs
-    assert dirs.index("config/master") < dirs.index(
-        "overlays/default-24.200.001/config/master"
-    )
-    banner = capsys.readouterr().out
-    assert "api_version=24.200.001" in banner
-    assert "default_api=" not in banner
-
-
-def test_default_apply_dirs_ignores_leftover_matrix_default_api(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
-) -> None:
-    # V44: leftover matrix.yaml default_api does not select the overlay
-    (tmp_path / ".env").write_text("ACU_BASE_URL=http://h/AcumaticaERP\n")
-    seed = "entity: UnitsOfMeasure\nkey: UnitID\nrecords: []\n"
-    for name in ("bootstrap", "baseline", "setup", "master"):
-        d = tmp_path / "config" / name
-        d.mkdir(parents=True)
-        (d / f"{name}.yaml").write_text(seed)
-    ov_m = tmp_path / "overlays" / "default-24.200.001" / "config" / "master"
-    ov_m.mkdir(parents=True)
-    (ov_m / "99-rewrite.yaml").write_text(seed)
-    (tmp_path / "matrix.yaml").write_text(
-        "cells:\n"
-        "  - id: default\n"
-        "    erp: 26.101.0225\n"
-        "    default_api: 24.200.001\n"
-        "    base_url: http://h/AcumaticaERP\n",
-        encoding="utf-8",
-    )
-    monkeypatch.chdir(tmp_path)
-    inst = Instance(
-        base_url="http://h/AcumaticaERP",
-        password="x",
-        api_version="25.200.001",
-    )
-
-    dirs = [p.as_posix() for p in cli.default_apply_dirs(inst)]
-
-    assert "overlays/default-24.200.001/config/master" not in dirs
-    assert "overlay" not in capsys.readouterr().out
+    assert result.exit_code == 0, result.output
+    assert "overlays/default-24.200.001" not in " ".join(seen)
+    assert "99-rewrite.yaml" not in " ".join(seen)
 
 
 @pytest.fixture
@@ -1920,11 +1822,10 @@ def _seed_repo(tmp_path: Path) -> None:
         (tmp_path / dirname / fname).write_text(body)
 
 
-def test_diff_defaults_to_scaffolded_dirs(
+def test_diff_explicit_umbrella_seed_order(
     wired: Instance, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    # T44/I.cmd: FILES omitted -> the existing init-scaffolded dirs at the
-    # data-repo root (V3 walk-up), in fixed order
+    # V30: explicit dir with SEED_DIRS children expands in fixed order
     _seed_repo(tmp_path)
     monkeypatch.chdir(tmp_path)
     seen: list[str] = []
@@ -1932,26 +1833,31 @@ def test_diff_defaults_to_scaffolded_dirs(
         cli.seed, "diff", lambda client, baseline: seen.append(baseline.path.name) or []
     )
 
-    result = CliRunner().invoke(cli.cli, ["diff"])
+    result = CliRunner().invoke(cli.cli, ["diff", "."])
 
     assert result.exit_code == 0
     assert seen == ["terms.yaml", "uoms.yaml", "calendar.yaml"]
     assert "+ no drift on T1 (http://acu.test/AcumaticaERP, 3 file(s))" in result.stderr
 
 
-def test_bare_diff_without_seed_dirs_errors(
-    wired: Instance, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    # T44/V9: an empty default would make a bare run a silent no-op - the
-    # error names the expected dirs, exit 1
-    (tmp_path / ".env").write_text("ACU_BASE_URL=http://acu.test/AcumaticaERP\n")
-    monkeypatch.chdir(tmp_path)
+def _boom_client(*_a: object, **_k: object) -> None:
+    raise AssertionError("bare command must not open HTTP")
 
-    result = CliRunner().invoke(cli.cli, ["diff"])
+
+@pytest.mark.parametrize("cmd", ["apply", "diff", "run", "state"])
+def test_bare_data_path_cmd_prints_help_no_http(
+    wired: Instance, monkeypatch: pytest.MonkeyPatch, cmd: str
+) -> None:
+    # V59: zero args print that command's help, exit non-zero, no HTTP
+    monkeypatch.setattr(cli, "AcumaticaClient", _boom_client)
+    result = CliRunner().invoke(cli.cli, [cmd])
 
     assert result.exit_code == 1
-    assert "none of the seed directories exist" in result.output
-    assert "bootstrap/, baseline/, setup/, master/" in result.output
+    assert "Usage:" in result.output
+    assert cmd in result.output.lower()
+    help_r = CliRunner().invoke(cli.cli, [cmd, "--help"])
+    assert help_r.exit_code == 0
+    assert result.output.strip() == help_r.output.strip()
 
 
 def test_explicit_files_override_default_dirs(
@@ -1972,11 +1878,10 @@ def test_explicit_files_override_default_dirs(
     assert seen == ["uoms.yaml"]
 
 
-def test_bare_apply_matches_explicit_dirs(
+def test_bare_apply_does_not_plan_config_umbrella(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    # T44/T108: bare `acu apply --dry-run` over a scaffolded repo plans
-    # exactly what naming the config/ umbrella plans (V30 prefer config/)
+    # V59: omitted path prints help; explicit config/ still plans the umbrella
     CliRunner().invoke(cli.cli, ["config", "init", "--host", "erp.test", str(tmp_path)])
     monkeypatch.chdir(tmp_path)
     monkeypatch.setenv("ACU_PASSWORD", "secret")
@@ -1986,11 +1891,12 @@ def test_bare_apply_matches_explicit_dirs(
     bare = CliRunner().invoke(cli.cli, ["apply", "--dry-run"])
     explicit = CliRunner().invoke(cli.cli, ["apply", "--dry-run", "config/"])
 
-    assert bare.exit_code == 0
-    plans = [line for line in bare.output.splitlines() if "would " in line]
-    explicit_plans = [line for line in explicit.output.splitlines() if "would " in line]
+    assert bare.exit_code == 1
+    assert "Usage:" in bare.output
+    assert "would PUT" not in bare.output
+    assert explicit.exit_code == 0, explicit.output
+    plans = [line for line in explicit.output.splitlines() if "would " in line]
     assert plans
-    assert plans == explicit_plans
 
 
 def test_diff_drift_exits_two_with_lines_on_stdout(

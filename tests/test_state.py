@@ -687,7 +687,7 @@ def test_cli_state_dry_run(
     (tmp_path / ".env").write_text(
         "ACU_BASE_URL=http://acu.test/AcumaticaERP\nACU_PASSWORD=pw\n"
     )
-    # T100/T113/V32: bare default hard-cut config/views/ (no config/snapshot/)
+    # V32/V59: views path required; --out still defaults to state/
     views_dir = tmp_path / "config" / "views"
     views_dir.mkdir(parents=True)
     (views_dir / "10-tb.yaml").write_text(VIEW_ENTITY)
@@ -700,7 +700,6 @@ def test_cli_state_dry_run(
             raise AssertionError("dry-run must not open a client")
 
     monkeypatch.setattr(cli, "AcumaticaClient", Dummy)
-    # pass_instance still resolves Instance — dry-run path after that
     result = CliRunner().invoke(
         cli.cli,
         [
@@ -712,6 +711,7 @@ def test_cli_state_dry_run(
             "T1",
             "state",
             "--dry-run",
+            "config/views",
         ],
     )
     assert result.exit_code == 0, result.output
@@ -735,18 +735,18 @@ def test_cli_state_missing_dir(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) 
             "T1",
             "state",
             "--dry-run",
+            "config/views",
         ],
     )
-    assert result.exit_code == 1
-    assert "views directory does not exist" in result.output
-    # T100/T113: missing-dir names hard-cut config/views (no config/snapshot/)
+    assert result.exit_code != 0
+    # click Path(exists=True) names the missing path
     assert "config/views" in result.output or "config\\views" in result.output
 
 
 def test_cli_state_no_config_snapshot_fallback(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """T113/V32: config/snapshot/ alone is not a bare-default fallback."""
+    """V32/V59: config/snapshot/ is not discovered when views path is omitted."""
     (tmp_path / ".env").write_text(
         "ACU_BASE_URL=http://acu.test/AcumaticaERP\nACU_PASSWORD=pw\n"
     )
@@ -768,7 +768,8 @@ def test_cli_state_no_config_snapshot_fallback(
         ],
     )
     assert result.exit_code == 1
-    assert "views directory does not exist" in result.output
+    assert "Usage:" in result.output
+    assert "would capture" not in result.output
 
 
 def test_observation_roundtrip_parse(tmp_path: Path) -> None:

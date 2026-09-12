@@ -52,12 +52,12 @@ COMMAND MAP (pick by intent)
   setup        config init | config show | config check
   tenants      tenant list | create | delete | recycle   (SSH)
   bootstrap    bootstrap [--export PATH]                 (REST or zip)
-  seed write   apply [--dry-run] [FILES...]              (sole mutator)
-  seed check   diff [FILES...]                           (exit 2 on drift)
-  txns         run [--dry-run] [FILES...]
+  seed write   apply [--dry-run] <FILES...>              (sole mutator)
+  seed check   diff <FILES...>                           (exit 2 on drift)
+  txns         run [--dry-run] <FILES...>
   cold rebuild tenant create then apply then run then diff (no wrap cmd)
   pull seed    survey extract [--only ENTITY]...         (inverse of apply)
-  observe      state [--diff|--assert-unchanged]
+  observe      state [--diff|--assert-unchanged] <FILES...>
   offline      survey inventory ARTIFACT | survey reconcile
   reference    schema
 
@@ -68,12 +68,13 @@ EXIT CODES (common)
   2  seed drift (diff) or state moved (state --assert-unchanged)
 
 \b
-DEFAULT PATHS (when FILES omitted)
-  apply/diff  -> config/<seed dirs>/ if present, else root bootstrap|...|master/
-                then overlays/default-<api>/ when present
-  run         -> scenario/ (overlay same-basename wins)
-  state       -> config/views/ -> writes state/
-  survey extract -> always writes config/{bootstrap,baseline,setup,master}/
+PATHS
+  apply/diff/run/state require an explicit data path (zero args print that
+    command's help, exit non-zero, no HTTP)
+  apply/diff  dir with SEED_DIRS children expands those subdirs in order
+  run         dir expands *.yaml
+  state       view files or dir; --out defaults to state/
+  survey extract -> writes config/{bootstrap,baseline,setup,master}/
 
 Run `acu <command> --help` for flags, examples, and prerequisites.
 See package README for seed YAML shape.
@@ -109,7 +110,6 @@ from .config import (
     data_root,
     find_data_root,
     load_instance,
-    pin_overlay_dir,
     read_env_values,
     scaffold,
 )
@@ -881,94 +881,19 @@ def _seed_child_dirs(parent: Path) -> list[Path]:
     return [parent / name for name in SEED_DIRS if (parent / name).is_dir()]
 
 
-def default_seed_dirs() -> tuple[Path, ...]:
-    """Default apply/diff dirs: prefer `config/` SEED_DIRS, else root (V30).
-
-    When the data-repo `config/` has any SEED_DIRS child, only those
-    `config/<name>/` paths are returned (dual layout never merges with
-    root). Else root `bootstrap/`…`master/` for present names
-    (legacy root layout). The data repo is the .env dir (V3 walk-up). None
-    existing is an error - an empty default would make a bare run a silent
-    no-op. Paths come back relative to cwd so a bare run prints exactly
-    what naming the dirs would.
-    """
-    root = data_root()
-    config = root / "config"
-    if config.is_dir() and _seed_child_dirs(config):
-        parents = _seed_child_dirs(config)
-    else:
-        parents = _seed_child_dirs(root)
-    dirs = tuple(Path(os.path.relpath(d)) for d in parents)
-    if not dirs:
-        expected = ", ".join(f"{name}/" for name in SEED_DIRS)
-        raise SystemExit(
-            f"{root}: none of the seed directories exist (config/<name>/ or {expected})"
-        )
-    return dirs
-
-
-def _overlay_seed_parents(overlay: Path) -> list[Path]:
-    """SEED_DIRS under `overlay/config/` or `overlay/` (later path wins)."""
-    for parent in (overlay / "config", overlay):
-        children = _seed_child_dirs(parent)
-        if children:
-            return children
-    return []
-
-
-def default_apply_dirs(inst: Instance) -> tuple[Path, ...]:
-    """Bare apply/diff: trunk seed dirs + pin overlay config when present (V44).
-
-    Explicit path args skip this helper. Overlay identity =
-    `overlays/default-<api_version>/` from resolved `Instance.api_version`.
-    """
-    dirs = list(default_seed_dirs())
-    root = data_root()
-    overlay = pin_overlay_dir(root, inst.api_version)
-    if overlay is not None:
-        extra = _overlay_seed_parents(overlay)
-        if extra:
-            output.data(
-                f"overlay {overlay.relative_to(root)}/ (api_version={inst.api_version})"
-            )
-            dirs.extend(Path(os.path.relpath(d)) for d in extra)
-    return tuple(dirs)
-
-
-def default_scenario_files(inst: Instance) -> tuple[Path, ...]:
-    """Bare run: trunk scenario/*.yaml with pin overlay basenames replacing.
-
-    Same-name files under `overlays/default-<api>/scenario/` win over trunk
-    (V44). Explicit path args skip this helper.
-    """
-    root = data_root()
-    scenario = root / "scenario"
-    if not scenario.is_dir():
-        raise SystemExit(f"{scenario}: scenario directory does not exist")
-    by_name: dict[str, Path] = {}
-    for path in sorted(scenario.glob("*.yaml")):
-        by_name[path.name] = path
-    overlay = pin_overlay_dir(root, inst.api_version)
-    replaced = False
-    if overlay is not None:
-        overlay_sc = overlay / "scenario"
-        if overlay_sc.is_dir():
-            for path in sorted(overlay_sc.glob("*.yaml")):
-                by_name[path.name] = path
-                replaced = True
-    if not by_name:
-        raise SystemExit(f"{scenario}: no scenario *.yaml files")
-    if replaced and overlay is not None:
-        output.data(
-            f"overlay {overlay.relative_to(root)}/scenario/ "
-            f"(api_version={inst.api_version})"
-        )
-    return tuple(Path(os.path.relpath(by_name[name])) for name in sorted(by_name))
-
-
 def _leaf_yaml(directory: Path) -> list[Path]:
     """Sorted `*.yaml` in a leaf seed dir; skip `features.yaml` (I.data)."""
     return sorted(p for p in directory.glob("*.yaml") if p.name != "features.yaml")
+
+
+def _require_data_paths(
+    ctx: click.Context, files: tuple[Path, ...]
+) -> tuple[Path, ...]:
+    """V59: zero data-path args print this command's help; no HTTP, no PUT."""
+    if files:
+        return files
+    click.echo(ctx.get_help(), color=ctx.color)
+    ctx.exit(1)
 
 
 def expand_files(files: tuple[Path, ...]) -> list[Path]:
@@ -976,8 +901,9 @@ def expand_files(files: tuple[Path, ...]) -> list[Path]:
 
     A dir with any SEED_DIRS child (umbrella e.g. `config/`) expands those
     nested subdirs in fixed SEED_DIRS order, then leaf `*.yaml` per subdir.
-    A leaf dir expands its own `*.yaml` only. `features.yaml` is skipped:
-    it configures the bootstrap package build, not an entity/records seed.
+    A leaf dir expands its own `*.yaml` only. Typed path is used as given
+    (never cwd-fill). `features.yaml` is skipped: it configures the
+    bootstrap package build, not an entity/records seed.
     """
     paths: list[Path] = []
     for path in files:
@@ -1002,15 +928,14 @@ def expand_files(files: tuple[Path, ...]) -> list[Path]:
     "files", nargs=-1, required=False, type=click.Path(exists=True, path_type=Path)
 )
 @click.option("--dry-run", is_flag=True, help="Show what would be PUT without writing")
-@pass_instance
-def apply_cmd(inst: Instance, files: tuple[Path, ...], dry_run: bool) -> None:
+@click.pass_context
+def apply_cmd(ctx: click.Context, files: tuple[Path, ...], dry_run: bool) -> None:
     """Push seed YAML into the tenant (idempotent PUT upserts).
 
-    Sole tenant writer. REST data plane. FILES = seed YAML files or dirs.
-    A dir with seed children (e.g. config/) expands nested trees in fixed
-    order: bootstrap → baseline → setup → master. Omitted FILES → prefer
-    config/<name>/ when present, else root seed dirs, then
-    overlays/default-<api>/ when present.
+    Sole tenant writer. REST data plane. FILES = seed YAML files or dirs
+    (required). A dir with seed children (e.g. config/) expands nested
+    trees in fixed order: bootstrap → baseline → setup → master. Zero
+    args print this help, exit non-zero, no PUT (V59).
 
     Per-record failure isolation: one failed PUT reports and continues;
     exit 1 with multi-error summary if any failed (never silent partial).
@@ -1029,10 +954,12 @@ def apply_cmd(inst: Instance, files: tuple[Path, ...], dry_run: bool) -> None:
 
     Related: `diff` (drift) · `survey extract` (inverse pull) · `run` (txns).
     """
+    files = _require_data_paths(ctx, files)
+    inst = _resolve_instance(ctx)
     total_ok = 0
     all_errors: list[str] = []
     with AcumaticaClient(inst) as client:
-        for path in expand_files(files or default_apply_dirs(inst)):
+        for path in expand_files(files):
             baseline = seed.load_baseline(path)
             output.data(
                 f"{path} -> {inst.tenant} on {inst.base_url} ({baseline.entity})"
@@ -1090,13 +1017,15 @@ def schema_cmd(inst: Instance, out_dir: Path | None) -> None:
 @click.argument(
     "files", nargs=-1, required=False, type=click.Path(exists=True, path_type=Path)
 )
-@pass_instance
-def diff_cmd(inst: Instance, files: tuple[Path, ...]) -> None:
+@click.pass_context
+def diff_cmd(ctx: click.Context, files: tuple[Path, ...]) -> None:
     """Compare seed YAML against the live tenant; exit 2 on drift.
 
-    Read-only REST. Same FILES rules as apply (config/ expansion, overlays).
-    Use after apply to prove the tenant matches the repo, or in CI as the
-    drift gate. Prints DRIFT lines then exits 2 when seed ≠ live.
+    Read-only REST. Same FILES rules as apply (umbrella expansion on the
+    given dir). Data path required (V59): zero args print this help, exit
+    non-zero, no HTTP. Use after apply to prove the tenant matches the
+    repo, or in CI as the drift gate. Prints DRIFT lines then exits 2
+    when seed ≠ live.
 
     \b
     Exit  0 = no drift · 1 = op failure · 2 = drift detected
@@ -1108,7 +1037,9 @@ def diff_cmd(inst: Instance, files: tuple[Path, ...]) -> None:
 
     Related: `apply` (fix) · `survey extract` (pull) · `state` (balances).
     """
-    paths = expand_files(files or default_apply_dirs(inst))
+    files = _require_data_paths(ctx, files)
+    inst = _resolve_instance(ctx)
+    paths = expand_files(files)
     drifts: list[str] = []
     with AcumaticaClient(inst) as client:
         for path in paths:
@@ -1133,15 +1064,15 @@ def diff_cmd(inst: Instance, files: tuple[Path, ...]) -> None:
     "files", nargs=-1, required=False, type=click.Path(exists=True, path_type=Path)
 )
 @click.option("--dry-run", is_flag=True, help="Parse and list steps without any HTTP")
-@pass_instance
-def run_cmd(inst: Instance, files: tuple[Path, ...], dry_run: bool) -> None:
+@click.pass_context
+def run_cmd(ctx: click.Context, files: tuple[Path, ...], dry_run: bool) -> None:
     """Execute transaction scenario YAML against the live tenant.
 
     REST data plane. Not seed upserts — documents are posted forward (server
-    assigns numbers). Delta expectations snapshot before the first step and
-    compare after the last, so re-runs are safe on a warm tenant. Omitted
-    FILES → scenario/ with overlays/default-<api>/scenario/ same-basename
-    replacements. Built-in `${current_period}` → host-local MMyyyy on
+    assigns numbers). FILES required (V59): zero args print this help, exit
+    non-zero, no HTTP. A dir expands `*.yaml`. Delta expectations snapshot
+    before the first step and compare after the last, so re-runs are safe
+    on a warm tenant. Built-in `${current_period}` → host-local MMyyyy on
     steps/expect/once (state views stay period-pinned separately).
 
     \b
@@ -1159,7 +1090,9 @@ def run_cmd(inst: Instance, files: tuple[Path, ...], dry_run: bool) -> None:
 
     Related: `apply` · `diff` · `state`.
     """
-    paths = list(default_scenario_files(inst)) if not files else expand_files(files)
+    files = _require_data_paths(ctx, files)
+    inst = _resolve_instance(ctx)
+    paths = expand_files(files)
     scenarios = [run.load_scenario(path) for path in paths]
     ok = True
     if dry_run:
@@ -1433,9 +1366,9 @@ def reconcile_cmd(
     is_flag=True,
     help="Resolve views and validate sources without HTTP",
 )
-@pass_instance
+@click.pass_context
 def state_cmd(
-    inst: Instance,
+    ctx: click.Context,
     files: tuple[Path, ...],
     out_dir: Path | None,
     do_diff: bool,
@@ -1445,28 +1378,26 @@ def state_cmd(
     """Capture live derived state (balances/totals) into state/ files.
 
     REST observer. Not seed (config/) and not inventory (snapshot tables).
-    FILES = view YAML under config/views/ (default when omitted). Writes
-    observations to state/ (--out). Bare capture always writes (change OK).
-    --diff compares live vs disk without writing. --assert-unchanged is the
-    warm-run idempotence gate (exit 2 when moved).
+    FILES = view YAML (required). Zero args print this help, exit non-zero,
+    no HTTP (V59). Writes observations to state/ (--out). Bare capture
+    always writes (change OK). --diff compares live vs disk without
+    writing. --assert-unchanged is the warm-run idempotence gate (exit 2
+    when moved).
 
     \b
     Exit  0 = ok · 1 = op fail · 2 = only with --assert-unchanged when moved
 
     \b
     Examples
-      acu --tenant DEV state
-      acu --tenant DEV state --diff
-      acu --tenant DEV state --assert-unchanged
+      acu --tenant DEV state config/views/
+      acu --tenant DEV state --diff config/views/
+      acu --tenant DEV state --assert-unchanged config/views/
       acu --tenant DEV state config/views/10-trial-balance.yaml
 
     Related: `run` (moves balances) · `diff` (seed drift) · `survey extract`.
     """
-    if not files:
-        default = data_root() / "config" / "views"
-        if not default.is_dir():
-            raise SystemExit(f"{default}: views directory does not exist")
-        files = (Path(os.path.relpath(default)),)
+    files = _require_data_paths(ctx, files)
+    inst = _resolve_instance(ctx)
     paths = state.expand_view_files(files)
     views = [state.load_view(path) for path in paths]
     dest = out_dir if out_dir is not None else Path("state")
