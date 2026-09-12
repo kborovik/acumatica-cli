@@ -1627,8 +1627,12 @@ def test_reconcile_help_documents_offline() -> None:
 def test_cli_reconcile_defaults(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """Offline CLI: no password; inventory/ + optional config/ → findings/."""
+    """Offline CLI: no password; inventory/ + omit --config → findings/."""
     _inventory_tree(tmp_path, ACCOUNT_XML, ORPHAN_XML)
+    (tmp_path / "acu-config" / "baseline").mkdir(parents=True)
+    (tmp_path / "acu-config" / "baseline" / "20-accounts.yaml").write_text(
+        ACCOUNT_SEED, encoding="utf-8"
+    )
     monkeypatch.chdir(tmp_path)
     result = CliRunner().invoke(cli.cli, ["survey", "reconcile"])
     assert result.exit_code == 0, result.output
@@ -1637,11 +1641,10 @@ def test_cli_reconcile_defaults(
     assert "write" in result.output
     # T171/V9: load+compare via output.step (piped stderr); write/skip on stdout
     assert "loading inventory + comparing" in result.stderr
-    # omit --config: inventory-only, never assume config/ or acu-config/
-    assert not (tmp_path / "config").exists() or not any(
-        (tmp_path / "config").rglob("*")
-    )
-    assert not (tmp_path / "acu-config").exists()
+    # omit --config: inventory-only even when acu-config/ exists
+    assert (tmp_path / "acu-config").is_dir()
+    assert "(none)" in result.output
+    assert "acu-config" not in result.output.split("->")[0]
 
 
 def test_cli_reconcile_with_config_deltas(

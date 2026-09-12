@@ -1485,6 +1485,103 @@ def test_apply_explicit_config_does_not_append_overlay(
 
 
 @pytest.fixture
+def test_apply_acu_config_umbrella_skips_sibling_custom(
+    wired: Instance, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """V60/V61: apply acu-config expands SEED_DIRS; sibling custom is not applied."""
+    seed = "entity: UnitsOfMeasure\nkey: UnitID\nrecords:\n- UnitID: HOUR\n"
+    custom = "entity: UnitsOfMeasure\nkey: UnitID\nrecords:\n- UnitID: CUSTOM\n"
+    for name in ("bootstrap", "baseline", "setup", "master"):
+        d = tmp_path / "acu-config" / name
+        d.mkdir(parents=True)
+        (d / f"{name}.yaml").write_text(seed)
+    (tmp_path / "qms").mkdir()
+    (tmp_path / "qms" / "custom.yaml").write_text(custom)
+    monkeypatch.chdir(tmp_path)
+    seen: list[str] = []
+    monkeypatch.setattr(
+        cli.seed,
+        "apply",
+        lambda client, baseline, dry_run=False: (
+            seen.append(str(baseline.path).replace("\\", "/")) or (1, [])
+        ),
+    )
+
+    result = CliRunner().invoke(cli.cli, ["apply", "--dry-run", "acu-config"])
+
+    assert result.exit_code == 0, result.output
+    assert seen == [
+        "acu-config/bootstrap/bootstrap.yaml",
+        "acu-config/baseline/baseline.yaml",
+        "acu-config/setup/setup.yaml",
+        "acu-config/master/master.yaml",
+    ]
+    assert not any("qms" in s or "custom.yaml" in s for s in seen)
+
+
+def test_apply_acu_config_then_custom_dir(
+    wired: Instance, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """V61: apply acu-config <custom-dir> applies stock then the free-text dir."""
+    seed = "entity: UnitsOfMeasure\nkey: UnitID\nrecords:\n- UnitID: HOUR\n"
+    custom = "entity: UnitsOfMeasure\nkey: UnitID\nrecords:\n- UnitID: CUSTOM\n"
+    (tmp_path / "acu-config" / "bootstrap").mkdir(parents=True)
+    (tmp_path / "acu-config" / "bootstrap" / "stock.yaml").write_text(seed)
+    (tmp_path / "qms").mkdir()
+    (tmp_path / "qms" / "custom.yaml").write_text(custom)
+    monkeypatch.chdir(tmp_path)
+    seen: list[str] = []
+    monkeypatch.setattr(
+        cli.seed,
+        "apply",
+        lambda client, baseline, dry_run=False: (
+            seen.append(str(baseline.path).replace("\\", "/")) or (1, [])
+        ),
+    )
+
+    result = CliRunner().invoke(cli.cli, ["apply", "--dry-run", "acu-config", "qms"])
+
+    assert result.exit_code == 0, result.output
+    assert seen == ["acu-config/bootstrap/stock.yaml", "qms/custom.yaml"]
+
+
+def test_run_acu_scenario_expands_yaml(
+    wired: Instance, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """V59/V60: run acu-scenario expands *.yaml under that dir."""
+    sc = tmp_path / "acu-scenario"
+    sc.mkdir()
+    (sc / "10-seed-capital.yaml").write_text("scenario: capital\nsteps: []\n")
+    (sc / "20-buy.yaml").write_text("scenario: buy\nsteps: []\n")
+    monkeypatch.chdir(tmp_path)
+    loaded: list[str] = []
+    monkeypatch.setattr(
+        cli.run,
+        "run",
+        lambda client, scenario, dry_run=False: (
+            loaded.append(scenario.scenario) or True
+        ),
+    )
+
+    result = CliRunner().invoke(cli.cli, ["run", "--dry-run", "acu-scenario"])
+
+    assert result.exit_code == 0, result.output
+    assert loaded == ["capital", "buy"]
+
+
+def test_src_has_no_default_seed_dirs() -> None:
+    """T268/V59: src/ never defines default_seed_dirs."""
+    src = Path(__file__).resolve().parents[1] / "src"
+    hits: list[str] = []
+    for path in src.rglob("*.py"):
+        text = path.read_text()
+        for i, line in enumerate(text.splitlines(), 1):
+            if "default_seed_dirs" in line:
+                hits.append(f"{path.relative_to(src.parent)}:{i}")
+    assert hits == []
+
+
+@pytest.fixture
 def check_repo(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
     """A real data repo for config check: one .env, password in the file only.
 
