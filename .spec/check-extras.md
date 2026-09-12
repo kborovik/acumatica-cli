@@ -309,8 +309,9 @@ for granular /sdd:check runs.
 
 - optional Default-half overlays under `overlays/default-<half>/` keyed by resolved `api_version` (flag or `ACU_API_VERSION` or code default)
 - config init scaffolds layout + known rewrites
-- bare apply/diff/run auto-compose pin overlay when path args omitted (scenario basenames replace; config SEED_DIRS append)
-- explicit paths disable auto
+- apply/diff/run require explicit overlay paths (V59); omit path prints help, never auto-compose
+- `run` later same-basename wins across given dirs (`acu run acu-scenario overlays/default-<half>/acu-scenario`)
+- apply/diff extra dirs append (umbrella SEED_DIRS if present)
 - never `matrix.yaml`; never `--cell`
 - CLI never requires long-running product branches
 - never commit multi-version OpenAPI trees as SoT (`acu schema` live dump/gitignored)

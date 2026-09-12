@@ -14,11 +14,14 @@ Pass overlay trees as extra explicit paths. apply / diff / run / state
 do not auto-compose overlays when a path is omitted (omitted path prints help).
 
 ```sh
-# host pin ACU_API_VERSION=24.200.001
-acu apply acu-config overlays/default-24.200.001/acu-config
+# host pin ACU_API_VERSION=24.200.001 (scenario-only overlay today)
+acu apply acu-config
+acu diff acu-config
 acu run acu-scenario overlays/default-24.200.001/acu-scenario
-acu diff acu-config overlays/default-24.200.001/acu-config
 ```
+
+Pass an overlay `acu-config/` dir too when that half ships seed rewrites.
+`run` later same-basename wins; apply/diff extra dirs append.
 
 ## Current lab halves (ERP line → half → overlay)
 

@@ -926,6 +926,21 @@ def expand_files(files: tuple[Path, ...]) -> list[Path]:
     return paths
 
 
+def collapse_same_basename(paths: list[Path]) -> list[Path]:
+    """Later same-basename wins (V44 overlay compose for `run`).
+
+    `acu run acu-scenario overlays/default-<half>/acu-scenario` keeps trunk
+    order and replaces overlay-matching names. apply/diff still concatenate.
+    """
+    by_name: dict[str, Path] = {}
+    order: list[str] = []
+    for path in paths:
+        if path.name not in by_name:
+            order.append(path.name)
+        by_name[path.name] = path
+    return [by_name[name] for name in order]
+
+
 @cli.command("apply")
 @click.argument(
     "files", nargs=-1, required=False, type=click.Path(exists=True, path_type=Path)
@@ -1089,13 +1104,13 @@ def run_cmd(ctx: click.Context, files: tuple[Path, ...], dry_run: bool) -> None:
     Examples
       acu --tenant DEV run acu-scenario
       acu --tenant DEV run --dry-run acu-scenario/10-seed-capital.yaml
-      acu --tenant DEV run acu-scenario/20-buy.yaml acu-scenario/40-sell.yaml
+      acu --tenant DEV run acu-scenario overlays/default-24.200.001/acu-scenario
 
     Related: `apply` · `diff` · `state`.
     """
     files = _require_data_paths(ctx, files)
     inst = _resolve_instance(ctx)
-    paths = expand_files(files)
+    paths = collapse_same_basename(expand_files(files))
     scenarios = [run.load_scenario(path) for path in paths]
     ok = True
     if dry_run:

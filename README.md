@@ -279,9 +279,9 @@ Pass overlay trees as extra explicit paths when you need them.
 Pin = resolved `api_version` (`--api-version`, else `ACU_API_VERSION`, else code default).
 
 ```sh
-# ACU_API_VERSION=24.200.001 — pass overlay dirs explicitly
-acu apply acu-config overlays/default-24.200.001/
-acu diff acu-config overlays/default-24.200.001/
+# ACU_API_VERSION=24.200.001 — this overlay is scenario-only
+acu apply acu-config
+acu diff acu-config
 acu run acu-scenario overlays/default-24.200.001/acu-scenario/
 ```
 

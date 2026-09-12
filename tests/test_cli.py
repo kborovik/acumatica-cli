@@ -1488,7 +1488,6 @@ def test_apply_explicit_config_does_not_append_overlay(
     assert "99-rewrite.yaml" not in " ".join(seen)
 
 
-@pytest.fixture
 def test_apply_acu_config_umbrella_skips_sibling_custom(
     wired: Instance, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -1571,6 +1570,41 @@ def test_run_acu_scenario_expands_yaml(
 
     assert result.exit_code == 0, result.output
     assert loaded == ["capital", "buy"]
+
+
+def test_run_overlay_same_basename_wins(
+    wired: Instance, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """V44: run trunk + overlay dir; later same-basename replaces trunk."""
+    sc = tmp_path / "acu-scenario"
+    sc.mkdir()
+    (sc / "10-seed-capital.yaml").write_text("scenario: capital\nsteps: []\n")
+    (sc / "30-build.yaml").write_text("scenario: build-trunk\nsteps: []\n")
+    ov = tmp_path / "overlays" / "default-24.200.001" / "acu-scenario"
+    ov.mkdir(parents=True)
+    (ov / "30-build.yaml").write_text("scenario: build-overlay\nsteps: []\n")
+    monkeypatch.chdir(tmp_path)
+    loaded: list[str] = []
+    monkeypatch.setattr(
+        cli.run,
+        "run",
+        lambda client, scenario, dry_run=False: (
+            loaded.append(scenario.scenario) or True
+        ),
+    )
+
+    result = CliRunner().invoke(
+        cli.cli,
+        [
+            "run",
+            "--dry-run",
+            "acu-scenario",
+            "overlays/default-24.200.001/acu-scenario",
+        ],
+    )
+
+    assert result.exit_code == 0, result.output
+    assert loaded == ["capital", "build-overlay"]
 
 
 def test_src_has_no_default_seed_dirs() -> None:
