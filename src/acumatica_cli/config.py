@@ -325,8 +325,8 @@ def find_data_root() -> Path | None:
     """Walk up from cwd to the first directory containing .env, if any.
 
     None is not an error (V3): flags plus the process environment can supply
-    the full config; only commands needing data files (schema, a bare
-    apply/diff) require a data repo and go through data_root instead.
+    the full config; only commands needing data-repo files (schema dump)
+    require a data repo and go through data_root instead.
     """
     for d in [Path.cwd(), *Path.cwd().parents]:
         if (d / ".env").is_file():
