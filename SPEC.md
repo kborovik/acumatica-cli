@@ -171,7 +171,7 @@ T261|x|sweep host + retired-sibling literals (scope: `acu-dev1|vm\.internal|acum
 T262|x|extras-hook V49 + check-md-prose drop `docs/*.md` glob; README/help/CHANGELOG Unreleased no `docs/` links; suite green|V49,V12,V19
 T263|x|CLI: apply/diff/run/state require data path; zero args → that cmd help exit non-zero, no HTTP; drop `default_seed_dirs`|V59,V30,I.cmd
 T264|x|rename committed seed + packaged templates `config/`→`acu-config/`, `scenario/`→`acu-scenario/`; no customization YAML under `acu-config/`|V60,V61,V2,I.data
-T265|.|extract `--out` default `acu-config/` emit SEED_DIRS into tree root; bootstrap features `acu-config/bootstrap/features.yaml` only|V60,V30,I.cmd
+T265|x|extract `--out` default `acu-config/` emit SEED_DIRS into tree root; bootstrap features `acu-config/bootstrap/features.yaml` only|V60,V30,I.cmd
 T266|.|`config init` scaffold `acu-config/`+`acu-scenario/`+views into `<dir>` or cwd; no customization tree; next-step cmds explicit paths|V28,V60,V61,I.cmd
 T267|.|`survey reconcile --config` no default path; emit `--out` defaults stay `state/` `inventory/` `findings/` `schemas/`|V59,I.cmd
 T268|.|sweep remaining implicit data-path defaults (scope: `src/`; pattern `default_seed_dirs`)|V59,V60,V13

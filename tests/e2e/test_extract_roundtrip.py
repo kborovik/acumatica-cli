@@ -59,7 +59,7 @@ pytestmark = pytest.mark.e2e
 LOGIN_A = "E2EA"
 LOGIN_B = "E2EB"
 # V53: mapped Role.Users GET is empty; extract skips rather than emit.
-ROLE_USERS_FILE = "acu-config/master/92-role-users.yaml"
+ROLE_USERS_FILE = "master/92-role-users.yaml"
 USERS_GET_EMPTY = "Users GET empty"
 
 
@@ -130,8 +130,8 @@ def test_extract_dumps_tenant_a(
     """
     dir_a, _ = out_dirs
     expected = _catalog_expected()
-    master_expected = {p for p in expected if p.startswith("acu-config/master/")}
-    assert master_expected, "catalog must include acu-config/master/ rows (T117/T119)"
+    master_expected = {p for p in expected if p.startswith("master/")}
+    assert master_expected, "catalog must include master/ rows (T117/T119)"
 
     proc = acu("--tenant", LOGIN_A, "survey", "extract", "--out", str(dir_a))
     assert proc.returncode == 0, joined_output(proc)
@@ -140,9 +140,7 @@ def test_extract_dumps_tenant_a(
         joined_output(proc)
     )
     # master is non-optional after full apply (T119)
-    master_skips = [
-        ln for ln in skips if "acu-config/master/" in ln and "(no records)" in ln
-    ]
+    master_skips = [ln for ln in skips if "master/" in ln and "(no records)" in ln]
     assert not master_skips, (
         "full apply left master empty — extract inverse incomplete:\n"
         + "\n".join(master_skips)
@@ -170,7 +168,8 @@ def test_extract_dumps_tenant_a(
     assert master_expected.issubset(_yaml_set(dir_a))
     # hard-cut layout: no root SEED_DIRS emit
     for rel in _yaml_set(dir_a):
-        assert rel.startswith("acu-config/"), rel
+        assert rel.startswith(("bootstrap/", "baseline/", "setup/", "master/")), rel
+        assert not rel.startswith("acu-config/"), rel
     for rel in expected - {FEATURES_FILE}:
         load_baseline(dir_a / rel)
 
@@ -187,7 +186,7 @@ def test_replay_extract_onto_tenant_b(
 ) -> None:
     """B is configured from a/ alone, umbrella expand of acu-config/ (V30)."""
     dir_a, _ = out_dirs
-    proc = acu("--tenant", LOGIN_B, "apply", str(dir_a / "acu-config"))
+    proc = acu("--tenant", LOGIN_B, "apply", str(dir_a))
     assert proc.returncode == 0, joined_output(proc)
     combined = joined_output(proc)
     assert "acu-config/master/" in combined or "master/" in combined, combined
@@ -201,7 +200,7 @@ def test_diff_over_extract_is_clean_on_b(
     Covers the full seed including master — not a GL-only subset.
     """
     dir_a, _ = out_dirs
-    proc = acu("--tenant", LOGIN_B, "diff", str(dir_a / "acu-config"))
+    proc = acu("--tenant", LOGIN_B, "diff", str(dir_a))
     assert proc.returncode == 0, joined_output(proc)
     assert "no drift" in joined_output(proc)
 
@@ -222,8 +221,8 @@ def test_reextract_is_byte_identical(
     assert proc.returncode == 0, joined_output(proc)
     set_a, set_b = _yaml_set(dir_a), _yaml_set(dir_b)
     assert set_b == set_a
-    master = {p for p in set_a if p.startswith("acu-config/master/")}
-    assert master, "re-extract must include acu-config/master/ (T119)"
+    master = {p for p in set_a if p.startswith("master/")}
+    assert master, "re-extract must include master/ (T119)"
     for rel in sorted(set_a):
         text_a = (dir_a / rel).read_text(encoding="utf-8")
         text_b = (dir_b / rel).read_text(encoding="utf-8")

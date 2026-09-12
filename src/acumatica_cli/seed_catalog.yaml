@@ -1,6 +1,6 @@
 # seed_catalog.yaml - what `acu extract` reads off a live tenant and
 # how each entity becomes a seed file (the inverse of apply).
-# Hard-cut emit under acu-config/{bootstrap,baseline,setup,master}/ (V30/V34).
+# Hard-cut emit under {bootstrap,baseline,setup,master}/ (V30/V34).
 #
 # Per entity row:
 #   entity    contract entity name (the GET source and the emitted `entity:`)
@@ -24,7 +24,7 @@
 #   file      destination path under the data root; numbered prefix encodes
 #             apply order (V22: dir expansion sorts alphabetically, so a
 #             record that references another entity must sort after the
-#             file that creates it - B10). Extract hard-cut: acu-config/ only.
+#             file that creates it - B10). Extract hard-cut: --out SEED_DIRS.
 #   strip     deny-list: live fields dropped from extracted records; the
 #             inline reasons are load-bearing (B10/B11 knowledge as code)
 #   include   allow-list: the only non-key fields kept (mutually
@@ -42,7 +42,7 @@
 
 entities:
 
-# acu-config/bootstrap/ - the virgin-tenant phase via the custom Bootstrap
+# bootstrap/ - the virgin-tenant phase via the custom Bootstrap
 # endpoint: built-in endpoints cannot create the first organization (C).
 # Company identity first (bootstrap). Packaging qty/UOMs are a second
 # Company PUT after 90-uoms.yaml (see that row). StockItem WeightUOM
@@ -51,7 +51,7 @@ entities:
 - entity: Company
   endpoint: bootstrap
   keys: [AcctCD]
-  file: acu-config/bootstrap/company.yaml
+  file: bootstrap/company.yaml
   include:
   - AcctName
   - OrganizationType
@@ -61,7 +61,7 @@ entities:
 - entity: CreditTerms
   endpoint: bootstrap
   keys: [TermsID]
-  file: acu-config/bootstrap/credit-terms.yaml
+  file: bootstrap/credit-terms.yaml
   include:
   - Descr
   - VisibleTo
@@ -79,19 +79,19 @@ entities:
 - entity: SegmentedKey
   endpoint: bootstrap
   keys: [DimensionID]
-  file: acu-config/bootstrap/segmented-key.yaml
+  file: bootstrap/segmented-key.yaml
   include:
   - SegmentID
   - Length
 
-# acu-config/baseline/ - numbered prefixes encode the V22 reference chain:
+# baseline/ - numbered prefixes encode the V22 reference chain:
 # subaccounts < accounts < ledger < GL preferences < org-ledger link;
 # units of measure. Multicurrency Currency is not in the LAB5 template
 # set (features.yaml omits Multicurrency) - V34 equality keeps it out.
 
 - entity: Subaccount
   keys: [SubaccountCD]
-  file: acu-config/baseline/10-subaccounts.yaml
+  file: baseline/10-subaccounts.yaml
   features: [SubAccount] # GL203000 is feature-gated (B15)
   strip:
   # server-assigned surrogate identity (instance-global sequence) - a
@@ -104,7 +104,7 @@ entities:
 
 - entity: Account
   keys: [AccountCD]
-  file: acu-config/baseline/20-accounts.yaml
+  file: baseline/20-accounts.yaml
   strip:
   # references PM account groups outside the baseline set - absent on a
   # fresh tenant, PUT 422s (B10)
@@ -123,7 +123,7 @@ entities:
 
 - entity: Ledger
   keys: [LedgerID]
-  file: acu-config/baseline/40-ledger.yaml
+  file: baseline/40-ledger.yaml
   strip:
   # the server derives an Actual ledger's currency from the company base
   # currency - a sourced value is redundant or a rejected write (T34)
@@ -137,7 +137,7 @@ entities:
 - entity: GLPreferences
   endpoint: bootstrap
   keys: [RetEarnAccountID]
-  file: acu-config/baseline/50-gl-preferences.yaml
+  file: baseline/50-gl-preferences.yaml
   include:
   - YtdNetIncAccountID
   - BatchNumberingID
@@ -154,11 +154,11 @@ entities:
   # (B14) - so LedgerCD (the primary-view field) sits first: diff's
   # read-back filters on it alone and matches OrganizationID client-side
   keys: [LedgerCD, OrganizationID]
-  file: acu-config/baseline/60-ledger-company.yaml
+  file: baseline/60-ledger-company.yaml
 
 - entity: UnitsOfMeasure
   keys: [UnitID]
-  file: acu-config/baseline/90-uoms.yaml
+  file: baseline/90-uoms.yaml
   include:
   - Description
   - L3Code
@@ -171,13 +171,13 @@ entities:
 - entity: Company
   endpoint: bootstrap
   keys: [AcctCD]
-  file: acu-config/baseline/91-company-packaging.yaml
+  file: baseline/91-company-packaging.yaml
   include:
   - DecPlQty
   - WeightUOM
   - VolumeUOM
 
-# acu-config/master/ - full packaged seed (T117). Multi-file Warehouse uses
+# master/ - full packaged seed (T117). Multi-file Warehouse uses
 # include field-partition (same live warehouse row, three apply phases).
 # Multi-file StockItem uses OData filter-split on ItemClass.
 #
@@ -189,7 +189,7 @@ entities:
 - entity: NumberingSequence
   endpoint: bootstrap
   keys: [NumberingID]
-  file: acu-config/master/05-numbering-sequences.yaml
+  file: master/05-numbering-sequences.yaml
   include:
   - Descr
   - NewSymbol
@@ -202,7 +202,7 @@ entities:
 - entity: ReasonCode
   endpoint: bootstrap
   keys: [ReasonCodeID]
-  file: acu-config/master/10-reason-codes.yaml
+  file: master/10-reason-codes.yaml
   include:
   - Descr
   - Usage
@@ -215,7 +215,7 @@ entities:
 - entity: INPreferences
   endpoint: bootstrap
   keys: [HoldEntry]
-  file: acu-config/master/20-in-preferences.yaml
+  file: master/20-in-preferences.yaml
   features: [Warehouse]
   include:
   - INProgressAcctID
@@ -241,14 +241,14 @@ entities:
 - entity: AvailabilityCalculationRule
   endpoint: bootstrap
   keys: [AvailabilitySchemeID]
-  file: acu-config/master/30-availability-rules.yaml
+  file: master/30-availability-rules.yaml
   include:
   - Description
 
 - entity: PostingClass
   endpoint: bootstrap
   keys: [PostClassID]
-  file: acu-config/master/40-posting-classes.yaml
+  file: master/40-posting-classes.yaml
   include:
   - Descr
   - InvtAcctID
@@ -270,7 +270,7 @@ entities:
 - entity: Warehouse
   endpoint: bootstrap
   keys: [SiteCD]
-  file: acu-config/master/50-warehouse.yaml
+  file: master/50-warehouse.yaml
   features: [Warehouse]
   include:
   - Descr
@@ -280,7 +280,7 @@ entities:
 - entity: Warehouse
   endpoint: default
   keys: [WarehouseID]
-  file: acu-config/master/51-warehouse-locations.yaml
+  file: master/51-warehouse-locations.yaml
   features: [WarehouseLocation]
   detail_keys:
     Locations: LocationID
@@ -295,7 +295,7 @@ entities:
 - entity: Warehouse
   endpoint: default
   keys: [WarehouseID]
-  file: acu-config/master/52-warehouse-defaults.yaml
+  file: master/52-warehouse-defaults.yaml
   features: [WarehouseLocation]
   # second PUT: defaults alone (Locations PUT leaves them empty live)
   include:
@@ -305,13 +305,13 @@ entities:
 
 - entity: TaxCategory
   keys: [TaxCategoryID]
-  file: acu-config/master/53-tax-categories.yaml
+  file: master/53-tax-categories.yaml
   include:
   - Description
 
 - entity: ItemClass
   keys: [ClassID]
-  file: acu-config/master/54-item-classes.yaml
+  file: master/54-item-classes.yaml
   # large Default surface; omit PurchaseUOM/SalesUOM (equal BaseUOM →
   # not returned — B11 class, live 2026-07-13)
   include:
@@ -328,7 +328,7 @@ entities:
 - entity: SOPreferences
   endpoint: bootstrap
   keys: [DefaultOrderType]
-  file: acu-config/master/56-so-preferences.yaml
+  file: master/56-so-preferences.yaml
   include:
   - HoldShipments
   - RequireShipmentTotal
@@ -339,7 +339,7 @@ entities:
 - entity: POPreferences
   endpoint: bootstrap
   keys: [HoldReceipts]
-  file: acu-config/master/57-po-preferences.yaml
+  file: master/57-po-preferences.yaml
   include:
   - AutoReleaseIN
   - RCReturnReasonCodeID
@@ -354,7 +354,7 @@ entities:
 - entity: OrderType
   endpoint: bootstrap
   keys: [OrderType]
-  file: acu-config/master/58-order-types.yaml
+  file: master/58-order-types.yaml
   filter: Active eq true
   include:
   - Active
@@ -366,7 +366,7 @@ entities:
 - entity: ARPreferences
   endpoint: bootstrap
   keys: [HoldEntry]
-  file: acu-config/master/60-ar-preferences.yaml
+  file: master/60-ar-preferences.yaml
   include:
   - BatchNumberingID
   - InvoiceNumberingID
@@ -379,7 +379,7 @@ entities:
 - entity: APPreferences
   endpoint: bootstrap
   keys: [HoldEntry]
-  file: acu-config/master/61-ap-preferences.yaml
+  file: master/61-ap-preferences.yaml
   include:
   - BatchNumberingID
   - InvoiceNumberingID
@@ -394,7 +394,7 @@ entities:
 - entity: CAPreferences
   endpoint: bootstrap
   keys: [TransitAcctId]
-  file: acu-config/master/62-ca-preferences.yaml
+  file: master/62-ca-preferences.yaml
   include:
   - HoldEntry
   - TransitSubID
@@ -406,7 +406,7 @@ entities:
 - entity: CashAccount
   endpoint: bootstrap
   keys: [CashAccountCD]
-  file: acu-config/master/63-cash-account.yaml
+  file: master/63-cash-account.yaml
   include:
   - AccountID
   - SubID
@@ -416,7 +416,7 @@ entities:
 
 - entity: PaymentMethod
   keys: [PaymentMethodID]
-  file: acu-config/master/64-payment-methods.yaml
+  file: master/64-payment-methods.yaml
   detail_keys:
     AllowedCashAccounts: CashAccount
   include:
@@ -430,7 +430,7 @@ entities:
 - entity: StatementCycle
   endpoint: bootstrap
   keys: [StatementCycleId]
-  file: acu-config/master/65-statement-cycles.yaml
+  file: master/65-statement-cycles.yaml
   include:
   - Descr
   - PrepareOn
@@ -442,7 +442,7 @@ entities:
 - entity: VendorClass
   endpoint: bootstrap
   keys: [VendorClassID]
-  file: acu-config/master/70-vendor-classes.yaml
+  file: master/70-vendor-classes.yaml
   include:
   - Descr
   - TermsID
@@ -457,7 +457,7 @@ entities:
 
 - entity: CustomerClass
   keys: [ClassID]
-  file: acu-config/master/71-customer-classes.yaml
+  file: master/71-customer-classes.yaml
   include:
   - Description
   - Terms
@@ -478,7 +478,7 @@ entities:
 
 - entity: Vendor
   keys: [VendorID]
-  file: acu-config/master/75-vendors.yaml
+  file: master/75-vendors.yaml
   include:
   - VendorName
   - VendorClass
@@ -489,7 +489,7 @@ entities:
 
 - entity: Customer
   keys: [CustomerID]
-  file: acu-config/master/76-customers.yaml
+  file: master/76-customers.yaml
   include:
   - CustomerName
   - CustomerClass
@@ -502,7 +502,7 @@ entities:
 
 - entity: StockItem
   keys: [InventoryID]
-  file: acu-config/master/80-stock-items-parts.yaml
+  file: master/80-stock-items-parts.yaml
   filter: ItemClass eq 'PARTS'
   include:
   - Description
@@ -512,7 +512,7 @@ entities:
 
 - entity: StockItem
   keys: [InventoryID]
-  file: acu-config/master/82-stock-items-kits.yaml
+  file: master/82-stock-items-kits.yaml
   filter: ItemClass eq 'KITS'
   include:
   - Description
@@ -524,7 +524,7 @@ entities:
 
 - entity: KitSpecification
   keys: [KitInventoryID, RevisionID]
-  file: acu-config/master/85-kit-specifications.yaml
+  file: master/85-kit-specifications.yaml
   features: [KitAssemblies]
   detail_keys:
     StockComponents: StockInventoryID
@@ -533,7 +533,7 @@ entities:
   - Active
   - StockComponents
 
-# acu-config/master/ Role then User then Role.Users (V22 prefixes 90/91/92;
+# master/ Role then User then Role.Users (V22 prefixes 90/91/92;
 # T145/T146/T148/T228). Bootstrap only — Default has no Role/User surface.
 # Persist = Role action AssignUser (PXDatabase UsersInRoles; T228/B33).
 # User detail Roles = GET/extract; diff skips Users/Roles (V57).
@@ -546,14 +546,14 @@ entities:
 - entity: Role
   endpoint: bootstrap
   keys: [Rolename]
-  file: acu-config/master/90-roles.yaml
+  file: master/90-roles.yaml
   include:
   - Descr
 
 - entity: User
   endpoint: bootstrap
   keys: [Username]
-  file: acu-config/master/91-users.yaml
+  file: master/91-users.yaml
   detail_keys:
     Roles: Rolename
   include:
@@ -571,24 +571,24 @@ entities:
 - entity: Role
   endpoint: bootstrap
   keys: [Rolename]
-  file: acu-config/master/92-role-users.yaml
+  file: master/92-role-users.yaml
   filter: Rolename eq 'SO Admin'
   detail_keys:
     Users: Username
   include:
   - Users
 
-# acu-config/setup/ - the GL action chain (T36/T37): financial-year setup,
+# setup/ - the GL action chain (T36/T37): financial-year setup,
 # then calendar generation, then period activation; numbered prefixes
 # mirror the verified apply order.
 
 setup:
 
 - kind: financial-year
-  file: acu-config/setup/10-financial-year.yaml
+  file: setup/10-financial-year.yaml
 
 - kind: master-calendar
-  file: acu-config/setup/20-master-calendar.yaml
+  file: setup/20-master-calendar.yaml
 
 - kind: open-periods
-  file: acu-config/setup/30-open-periods.yaml
+  file: setup/30-open-periods.yaml

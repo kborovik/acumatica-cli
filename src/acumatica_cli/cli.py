@@ -74,7 +74,7 @@ PATHS
   apply/diff  dir with SEED_DIRS children expands those subdirs in order
   run         dir expands *.yaml
   state       view files or dir; --out defaults to state/
-  survey extract -> writes config/{bootstrap,baseline,setup,master}/
+  survey extract -> --out default acu-config/ (SEED_DIRS into that root)
 
 Run `acu <command> --help` for flags, examples, and prerequisites.
 See package README for seed YAML shape.
@@ -1148,7 +1148,7 @@ def survey_group() -> None:
     "out_dir",
     type=click.Path(file_okay=False, path_type=Path),
     default=None,
-    help="Data-repo root for writes (default: .); always config/{bootstrap,...}/",
+    help="Seed-tree root (default: acu-config/); writes SEED_DIRS into it",
 )
 @click.option(
     "--only",
@@ -1168,12 +1168,13 @@ def extract_cmd(
     force: bool,
     dry_run: bool,
 ) -> None:
-    """Extract live tenant into seed YAML under config/ (inverse of apply).
+    """Extract live tenant into seed YAML under acu-config/ (inverse of apply).
 
-    REST reader. Packaged seed_catalog.yaml is the entity registry. Writes
-    only under config/{bootstrap,baseline,setup,master}/ (never root seed
-    dirs). Features → config/bootstrap/features.yaml. Existing files skip
-    unless --force; empty live sets produce no file. Row failures continue;
+    REST reader. Packaged seed_catalog.yaml is the entity registry. --out
+    default acu-config/ is the seed-tree root: writes SEED_DIRS directly
+    into it (no nested acu-config/acu-config). Features →
+    bootstrap/features.yaml under --out. Existing files skip unless
+    --force; empty live sets produce no file. Row failures continue;
     exit 1 if any failed. Drift detection stays with `diff`.
 
     Not inventory (offline snapshot tables) and not state (derived balances).
@@ -1192,7 +1193,7 @@ def extract_cmd(
     with AcumaticaClient(inst) as client:
         failed = extract.run(
             client,
-            out_dir or Path("."),
+            out_dir or Path("acu-config"),
             only=frozenset(only),
             force=force,
             dry_run=dry_run,

@@ -102,37 +102,41 @@ def test_load_features_defaults_when_file_absent(tmp_path: Path) -> None:
 
 
 def test_load_features_reads_the_yaml_list(tmp_path: Path) -> None:
-    (tmp_path / "bootstrap").mkdir()
-    (tmp_path / "bootstrap" / "features.yaml").write_text(
+    dest = tmp_path / "acu-config" / "bootstrap"
+    dest.mkdir(parents=True)
+    (dest / "features.yaml").write_text(
         "# enabled FeaturesSet bits\n- MultiCompany\n- Multicurrency\n"
     )
     assert bootstrap.load_features(tmp_path) == ["MultiCompany", "Multicurrency"]
 
 
-def test_load_features_prefers_config_bootstrap(tmp_path: Path) -> None:
-    # T85/V30: config/bootstrap/features.yaml wins over root bootstrap/
+def test_load_features_acu_config_only(tmp_path: Path) -> None:
+    # V60: acu-config/bootstrap/features.yaml only; leftover paths ignored
     (tmp_path / "bootstrap").mkdir()
     (tmp_path / "bootstrap" / "features.yaml").write_text("- MultiCompany\n")
     (tmp_path / "config" / "bootstrap").mkdir(parents=True)
     (tmp_path / "config" / "bootstrap" / "features.yaml").write_text(
         "- Inventory\n- Warehouse\n"
     )
-    assert bootstrap.load_features(tmp_path) == ["Inventory", "Warehouse"]
+    dest = tmp_path / "acu-config" / "bootstrap"
+    dest.mkdir(parents=True)
+    (dest / "features.yaml").write_text("- Branch\n- KitAssemblies\n")
+    assert bootstrap.load_features(tmp_path) == ["Branch", "KitAssemblies"]
 
 
 def test_load_contract_xml_rejects_data_repo_project_xml(tmp_path: Path) -> None:
     # T178/V2/V21: package SoT — present data-repo project.xml hard-errors
-    # (prefer config/ then root order names the first hit).
-    (tmp_path / "bootstrap").mkdir()
-    (tmp_path / "bootstrap" / "project.xml").write_text("<Customization/>\n")
-    (tmp_path / "config" / "bootstrap").mkdir(parents=True)
-    (tmp_path / "config" / "bootstrap" / "project.xml").write_text("<Customization/>\n")
+    dest = tmp_path / "acu-config" / "bootstrap"
+    dest.mkdir(parents=True)
+    (dest / "project.xml").write_text("<Customization/>\n")
 
     with pytest.raises(SystemExit, match=r"package SoT.*project\.xml"):
         bootstrap.load_contract_xml(tmp_path)
 
-    # root-only path also rejected
-    (tmp_path / "config" / "bootstrap" / "project.xml").unlink()
+    (dest / "project.xml").unlink()
+    leftover = tmp_path / "bootstrap"
+    leftover.mkdir()
+    (leftover / "project.xml").write_text("<Customization/>\n")
     with pytest.raises(SystemExit, match=r"bootstrap/project\.xml"):
         bootstrap.load_contract_xml(tmp_path)
 
@@ -155,8 +159,9 @@ def test_load_contract_xml_package_only(tmp_path: Path) -> None:
     ],
 )
 def test_load_features_rejects_bad_files(tmp_path: Path, body: str) -> None:
-    (tmp_path / "bootstrap").mkdir()
-    (tmp_path / "bootstrap" / "features.yaml").write_text(body)
+    dest = tmp_path / "acu-config" / "bootstrap"
+    dest.mkdir(parents=True)
+    (dest / "features.yaml").write_text(body)
     with pytest.raises(SystemExit, match=r"features\.yaml"):
         bootstrap.load_features(tmp_path)
 

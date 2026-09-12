@@ -689,42 +689,38 @@ def test_packaged_manifest_is_self_consistent() -> None:
     manifest = extract.load_manifest()
     files = [s.file for s in manifest.entities]
     assert files[:9] == [
-        "acu-config/bootstrap/company.yaml",
-        "acu-config/bootstrap/credit-terms.yaml",
-        "acu-config/bootstrap/segmented-key.yaml",
-        "acu-config/baseline/10-subaccounts.yaml",
-        "acu-config/baseline/20-accounts.yaml",
-        "acu-config/baseline/40-ledger.yaml",
-        "acu-config/baseline/50-gl-preferences.yaml",
-        "acu-config/baseline/60-ledger-company.yaml",
-        "acu-config/baseline/90-uoms.yaml",
+        "bootstrap/company.yaml",
+        "bootstrap/credit-terms.yaml",
+        "bootstrap/segmented-key.yaml",
+        "baseline/10-subaccounts.yaml",
+        "baseline/20-accounts.yaml",
+        "baseline/40-ledger.yaml",
+        "baseline/50-gl-preferences.yaml",
+        "baseline/60-ledger-company.yaml",
+        "baseline/90-uoms.yaml",
     ]
-    assert "acu-config/baseline/91-company-packaging.yaml" in files
-    assert (
-        "acu-config/baseline/30-currencies.yaml" not in files
-    )  # V34: not in templates
-    assert "acu-config/master/05-numbering-sequences.yaml" in files
-    assert "acu-config/master/10-reason-codes.yaml" in files
-    assert "acu-config/master/85-kit-specifications.yaml" in files
-    assert "acu-config/master/90-roles.yaml" in files
-    assert "acu-config/master/91-users.yaml" in files
-    assert "acu-config/master/92-role-users.yaml" in files
+    assert "baseline/91-company-packaging.yaml" in files
+    assert "baseline/30-currencies.yaml" not in files  # V34: not in templates
+    assert "master/05-numbering-sequences.yaml" in files
+    assert "master/10-reason-codes.yaml" in files
+    assert "master/85-kit-specifications.yaml" in files
+    assert "master/90-roles.yaml" in files
+    assert "master/91-users.yaml" in files
+    assert "master/92-role-users.yaml" in files
     assert len(manifest.entities) == _CATALOG_ENTITY_ROWS
     assert [(s.kind, s.file) for s in manifest.setup] == [
-        ("financial-year", "acu-config/setup/10-financial-year.yaml"),
-        ("master-calendar", "acu-config/setup/20-master-calendar.yaml"),
-        ("open-periods", "acu-config/setup/30-open-periods.yaml"),
+        ("financial-year", "setup/10-financial-year.yaml"),
+        ("master-calendar", "setup/20-master-calendar.yaml"),
+        ("open-periods", "setup/30-open-periods.yaml"),
     ]
-    assert extract.FEATURES_FILE == "acu-config/bootstrap/features.yaml"
+    assert extract.FEATURES_FILE == "bootstrap/features.yaml"
     seed_files = files + [s.file for s in manifest.setup]
     assert len(seed_files) == len(set(seed_files))
     assert extract.FEATURES_FILE not in seed_files
-    # V30/T115 hard-cut: every emit path under acu-config/, never root SEED_DIRS
+    # V30: emit paths are SEED_DIRS-relative (joined onto --out)
     for path in [*seed_files, extract.FEATURES_FILE]:
-        assert path.startswith("acu-config/"), path
-        assert not path.startswith(("bootstrap/", "baseline/", "setup/", "master/")), (
-            path
-        )
+        assert path.startswith(("bootstrap/", "baseline/", "setup/", "master/")), path
+        assert not path.startswith("acu-config/"), path
     for spec in manifest.entities:
         assert spec.keys, spec.entity
         if spec.entity in seed.BOOTSTRAP_ENTITIES:
@@ -748,8 +744,8 @@ def test_catalog_completeness_v34() -> None:
     # features synthesis + views are excluded from both sides
     templates = extract.packaged_template_seed_files()
     assert extract.FEATURES_FILE not in templates
-    assert not any(p.startswith("acu-config/views/") for p in templates)
-    assert "acu-config/bootstrap/project.xml" not in templates
+    assert not any(p.startswith("views/") for p in templates)
+    assert "bootstrap/project.xml" not in templates
     catalog = extract.catalog_seed_files()
     assert templates == catalog
     assert len(templates) == _CATALOG_SEED_ROWS
@@ -789,7 +785,7 @@ def test_manifest_rejects_row_claiming_features_file() -> None:
 
 def test_setup_synth_rejects_unknown_kind() -> None:
     with pytest.raises(ValueError, match="unknown setup synthesizer kind"):
-        extract.SetupSynth(kind="bogus", file="acu-config/setup/x.yaml")
+        extract.SetupSynth(kind="bogus", file="setup/x.yaml")
 
 
 def test_entity_spec_rejects_empty_keys() -> None:
@@ -820,7 +816,7 @@ def _spec(**overrides: Any) -> extract.EntitySpec:
     base: dict[str, Any] = {
         "entity": "UnitsOfMeasure",
         "keys": ["UnitID"],
-        "file": "acu-config/baseline/90-uoms.yaml",
+        "file": "baseline/90-uoms.yaml",
     }
     return extract.EntitySpec(**(base | overrides))
 
@@ -951,7 +947,7 @@ def test_shape_emits_newsymbol_when_get_returns() -> None:
     spec = extract.EntitySpec(
         entity="NumberingSequence",
         keys=["NumberingID"],
-        file="acu-config/master/05-numbering-sequences.yaml",
+        file="master/05-numbering-sequences.yaml",
         include=["Descr", "NewSymbol", "StartNbr", "EndNbr", "LastNbr"],
     )
     live = [
@@ -984,7 +980,7 @@ def test_shape_omits_newsymbol_when_get_omits() -> None:
     spec = extract.EntitySpec(
         entity="NumberingSequence",
         keys=["NumberingID"],
-        file="acu-config/master/05-numbering-sequences.yaml",
+        file="master/05-numbering-sequences.yaml",
         include=["Descr", "NewSymbol", "StartNbr", "EndNbr"],
     )
     live = [
@@ -1061,11 +1057,11 @@ def test_run_writes_files_and_reports(
 ) -> None:
     _run(instance, server, tmp_path)
     out = capsys.readouterr().out
-    # hard-cut: emit only under acu-config/, never root SEED_DIRS (T115/V30)
-    assert (tmp_path / "acu-config").is_dir()
-    assert not (tmp_path / "bootstrap").exists()
-    assert not (tmp_path / "baseline").exists()
-    assert not (tmp_path / "setup").exists()
+    # --out is the seed-tree root: SEED_DIRS land directly in it (no nesting)
+    assert (tmp_path / "bootstrap").is_dir()
+    assert (tmp_path / "baseline").is_dir()
+    assert (tmp_path / "setup").is_dir()
+    assert not (tmp_path / "acu-config").exists()
     for spec in extract.load_manifest().entities:
         target = tmp_path / spec.file
         n = _filtered_count(spec)
@@ -1085,8 +1081,8 @@ def test_run_progress_banner_before_each_outcome(
     capsys: pytest.CaptureFixture[str],
 ) -> None:
     """T121: path -> tenant on url (entity) before write/skip/would write."""
-    company = tmp_path / "acu-config" / "bootstrap" / "company.yaml"
-    packaging = tmp_path / "acu-config" / "baseline" / "91-company-packaging.yaml"
+    company = tmp_path / "bootstrap" / "company.yaml"
+    packaging = tmp_path / "baseline" / "91-company-packaging.yaml"
     company.parent.mkdir(parents=True)
     packaging.parent.mkdir(parents=True)
     company.write_text("operator-edited\n")
@@ -1119,7 +1115,7 @@ def test_run_progress_banner_before_each_outcome(
         only=frozenset({"UnitsOfMeasure"}),
         dry_run=True,
     )
-    uoms = empty / "acu-config" / "baseline" / "90-uoms.yaml"
+    uoms = empty / "baseline" / "90-uoms.yaml"
     lines = [ln for ln in capsys.readouterr().out.splitlines() if ln]
     assert lines == [
         _progress_line(uoms, "UnitsOfMeasure", instance),
@@ -1135,8 +1131,8 @@ def test_run_progress_banner_before_each_outcome(
         dry_run=True,
     )
     out = capsys.readouterr().out
-    fin = empty / "acu-config" / "setup" / "10-financial-year.yaml"
-    feats = empty / "acu-config" / "bootstrap" / "features.yaml"
+    fin = empty / "setup" / "10-financial-year.yaml"
+    feats = empty / "bootstrap" / "features.yaml"
     assert _progress_line(fin, "financial-year", instance) in out
     assert _progress_line(feats, "features", instance) in out
 
@@ -1147,8 +1143,8 @@ def test_run_skip_exists_and_force_overwrites(
     tmp_path: Path,
     capsys: pytest.CaptureFixture[str],
 ) -> None:
-    target = tmp_path / "acu-config" / "bootstrap" / "company.yaml"
-    packaging = tmp_path / "acu-config" / "baseline" / "91-company-packaging.yaml"
+    target = tmp_path / "bootstrap" / "company.yaml"
+    packaging = tmp_path / "baseline" / "91-company-packaging.yaml"
     target.parent.mkdir(parents=True)
     packaging.parent.mkdir(parents=True)
     target.write_text("operator-edited\n")
@@ -1177,7 +1173,7 @@ def test_run_skips_entity_with_no_live_records(
 ) -> None:
     server.tables = server.tables | {"UnitsOfMeasure": []}
     _run(instance, server, tmp_path, only=frozenset({"UnitsOfMeasure"}))
-    target = tmp_path / "acu-config" / "baseline" / "90-uoms.yaml"
+    target = tmp_path / "baseline" / "90-uoms.yaml"
     assert f"skip {target} (no records)" in capsys.readouterr().out
     assert not target.exists()
 
@@ -1199,7 +1195,7 @@ def test_run_skips_role_users_when_get_empty(
         ]
     }
     _run(instance, server, tmp_path, only=frozenset({"Role"}))
-    target = tmp_path / "acu-config" / "master" / "92-role-users.yaml"
+    target = tmp_path / "master" / "92-role-users.yaml"
     assert f"skip {target} (Users GET empty)" in capsys.readouterr().out
     assert not target.exists()
 
@@ -1212,9 +1208,9 @@ def test_run_dry_run_writes_nothing(
 ) -> None:
     _run(instance, server, tmp_path, dry_run=True)
     out = capsys.readouterr().out
-    company = tmp_path / "acu-config" / "bootstrap" / "company.yaml"
-    fin_year = tmp_path / "acu-config" / "setup" / "10-financial-year.yaml"
-    features = tmp_path / "acu-config" / "bootstrap" / "features.yaml"
+    company = tmp_path / "bootstrap" / "company.yaml"
+    fin_year = tmp_path / "setup" / "10-financial-year.yaml"
+    features = tmp_path / "bootstrap" / "features.yaml"
     assert f"would write {company} (1 records)" in out
     assert f"would write {fin_year} (1 records)" in out
     # built-in six + SubAccount + Warehouse + WarehouseLocation + KitAssemblies
@@ -1254,7 +1250,7 @@ def test_run_only_filters_entity_name_or_file_stem(
     capsys: pytest.CaptureFixture[str],
 ) -> None:
     _run(instance, server, tmp_path, only=frozenset({"Ledger", "20-accounts"}))
-    written = sorted(p.name for p in (tmp_path / "acu-config" / "baseline").iterdir())
+    written = sorted(p.name for p in (tmp_path / "baseline").iterdir())
     assert written == ["20-accounts.yaml", "40-ledger.yaml"]
     assert "company.yaml" not in capsys.readouterr().out
 
@@ -1267,7 +1263,7 @@ def _currency_spec() -> extract.EntitySpec:
     return extract.EntitySpec(
         entity="Currency",
         keys=["CuryID"],
-        file="acu-config/baseline/30-currencies.yaml",
+        file="baseline/30-currencies.yaml",
         endpoint="bootstrap",
         filter="IsFinancial eq true",
         strip=[
@@ -1312,7 +1308,7 @@ def test_b9_fallback_selects_keys_then_key_urls(
     assert "TranslationGainAcctID" not in text
     assert "JPY" not in text
     assert "endpoint: bootstrap" in text
-    out = tmp_path / "acu-config" / "baseline" / "30-currencies.yaml"
+    out = tmp_path / "baseline" / "30-currencies.yaml"
     out.parent.mkdir(parents=True)
     out.write_text(text)
     assert out.is_file()
@@ -1335,7 +1331,7 @@ def test_expand_for_detail_keys_and_maincontact() -> None:
     wh = extract.EntitySpec(
         entity="Warehouse",
         keys=["WarehouseID"],
-        file="acu-config/master/51-warehouse-locations.yaml",
+        file="master/51-warehouse-locations.yaml",
         detail_keys={"Locations": "LocationID"},
         include=["Locations", "ReceivingLocationID"],
     )
@@ -1343,7 +1339,7 @@ def test_expand_for_detail_keys_and_maincontact() -> None:
     vendor = extract.EntitySpec(
         entity="Vendor",
         keys=["VendorID"],
-        file="acu-config/master/75-vendors.yaml",
+        file="master/75-vendors.yaml",
         include=["VendorName", "MainContact"],
     )
     assert extract._expand_for(vendor) == [  # pyright: ignore[reportPrivateUsage]
@@ -1361,7 +1357,7 @@ def test_fetch_sends_expand_for_detail_keys(
     spec = extract.EntitySpec(
         entity="Warehouse",
         keys=["WarehouseID"],
-        file="acu-config/master/51-warehouse-locations.yaml",
+        file="master/51-warehouse-locations.yaml",
         endpoint="default",
         detail_keys={"Locations": "LocationID"},
         include=["Locations", "ReceivingLocationID"],
@@ -1377,7 +1373,7 @@ def test_fetch_sends_expand_for_maincontact(
     spec = extract.EntitySpec(
         entity="Vendor",
         keys=["VendorID"],
-        file="acu-config/master/75-vendors.yaml",
+        file="master/75-vendors.yaml",
         include=["VendorName", "MainContact"],
     )
     extract._fetch(_client(instance, server), spec)  # pyright: ignore[reportPrivateUsage]
@@ -1397,10 +1393,10 @@ def test_filter_split_stock_item_itemclass(
     """V34: multi-file StockItem partitions on ItemClass OData filter."""
     _run(instance, server, tmp_path, only=frozenset({"StockItem"}))
     parts = yaml.safe_load(
-        (tmp_path / "acu-config" / "master" / "80-stock-items-parts.yaml").read_text()
+        (tmp_path / "master" / "80-stock-items-parts.yaml").read_text()
     )
     kits = yaml.safe_load(
-        (tmp_path / "acu-config" / "master" / "82-stock-items-kits.yaml").read_text()
+        (tmp_path / "master" / "82-stock-items-kits.yaml").read_text()
     )
     assert [r["InventoryID"] for r in parts["records"]] == ["ENCL-STD"]
     assert parts["records"][0]["ItemClass"] == "PARTS"
@@ -1419,9 +1415,7 @@ def test_company_include_drops_audit_noise(
     stay omitted (B26). Packaging PUT sorts after 90-uoms.yaml (V22).
     """
     _run(instance, server, tmp_path, only=frozenset({"Company"}))
-    identity = yaml.safe_load(
-        (tmp_path / "acu-config" / "bootstrap" / "company.yaml").read_text()
-    )
+    identity = yaml.safe_load((tmp_path / "bootstrap" / "company.yaml").read_text())
     assert identity["records"] == [
         {
             "AcctCD": "COMPANY",
@@ -1433,7 +1427,7 @@ def test_company_include_drops_audit_noise(
     ]
     assert "LastModifiedDateTime" not in identity["records"][0]
     packaging = yaml.safe_load(
-        (tmp_path / "acu-config" / "baseline" / "91-company-packaging.yaml").read_text()
+        (tmp_path / "baseline" / "91-company-packaging.yaml").read_text()
     )
     assert packaging["records"] == [
         {
@@ -1450,14 +1444,12 @@ def test_warehouse_include_partitions_bootstrap_locations_defaults(
 ) -> None:
     """Warehouse x3: bootstrap site, locations+defaults, defaults-only phases."""
     _run(instance, server, tmp_path, only=frozenset({"Warehouse"}))
-    site = yaml.safe_load(
-        (tmp_path / "acu-config" / "master" / "50-warehouse.yaml").read_text()
-    )
+    site = yaml.safe_load((tmp_path / "master" / "50-warehouse.yaml").read_text())
     locs = yaml.safe_load(
-        (tmp_path / "acu-config" / "master" / "51-warehouse-locations.yaml").read_text()
+        (tmp_path / "master" / "51-warehouse-locations.yaml").read_text()
     )
     defaults = yaml.safe_load(
-        (tmp_path / "acu-config" / "master" / "52-warehouse-defaults.yaml").read_text()
+        (tmp_path / "master" / "52-warehouse-defaults.yaml").read_text()
     )
     assert site["endpoint"] == "bootstrap"
     assert site["key"] == "SiteCD"
@@ -1501,12 +1493,12 @@ def test_vendor_include_drops_large_default_surface(
         "Address": {"Country": "US"},
     }
     _run(instance, server, tmp_path, only=frozenset({"Vendor", "Customer"}))
-    vendor = yaml.safe_load(
-        (tmp_path / "acu-config" / "master" / "75-vendors.yaml").read_text()
-    )["records"][0]
-    customer = yaml.safe_load(
-        (tmp_path / "acu-config" / "master" / "76-customers.yaml").read_text()
-    )["records"][0]
+    vendor = yaml.safe_load((tmp_path / "master" / "75-vendors.yaml").read_text())[
+        "records"
+    ][0]
+    customer = yaml.safe_load((tmp_path / "master" / "76-customers.yaml").read_text())[
+        "records"
+    ][0]
     assert set(vendor) == {
         "VendorID",
         "VendorName",
@@ -1534,36 +1526,21 @@ def test_catalog_filter_split_and_include_rows_declared() -> None:
     """Packaged catalog: StockItem filters + multi-file include partitions."""
     manifest = extract.load_manifest()
     by_file = {s.file: s for s in manifest.entities}
-    assert by_file["acu-config/master/80-stock-items-parts.yaml"].filter == (
+    assert by_file["master/80-stock-items-parts.yaml"].filter == (
         "ItemClass eq 'PARTS'"
     )
-    assert by_file["acu-config/master/82-stock-items-kits.yaml"].filter == (
-        "ItemClass eq 'KITS'"
-    )
-    assert (
-        "WeightUOM"
-        not in by_file["acu-config/master/80-stock-items-parts.yaml"].include
-    )
-    assert (
-        "VolumeUOM" not in by_file["acu-config/master/82-stock-items-kits.yaml"].include
-    )
-    assert by_file["acu-config/bootstrap/company.yaml"].include
-    assert "DecPlQty" not in by_file["acu-config/bootstrap/company.yaml"].include
-    assert "WeightUOM" not in by_file["acu-config/bootstrap/company.yaml"].include
-    assert "VolumeUOM" not in by_file["acu-config/bootstrap/company.yaml"].include
-    assert (
-        "DecPlQty" in by_file["acu-config/baseline/91-company-packaging.yaml"].include
-    )
-    assert (
-        "WeightUOM" in by_file["acu-config/baseline/91-company-packaging.yaml"].include
-    )
-    assert (
-        "VolumeUOM" in by_file["acu-config/baseline/91-company-packaging.yaml"].include
-    )
-    assert "MainContact" in by_file["acu-config/master/75-vendors.yaml"].include
-    assert (
-        "Locations" in by_file["acu-config/master/51-warehouse-locations.yaml"].include
-    )
+    assert by_file["master/82-stock-items-kits.yaml"].filter == ("ItemClass eq 'KITS'")
+    assert "WeightUOM" not in by_file["master/80-stock-items-parts.yaml"].include
+    assert "VolumeUOM" not in by_file["master/82-stock-items-kits.yaml"].include
+    assert by_file["bootstrap/company.yaml"].include
+    assert "DecPlQty" not in by_file["bootstrap/company.yaml"].include
+    assert "WeightUOM" not in by_file["bootstrap/company.yaml"].include
+    assert "VolumeUOM" not in by_file["bootstrap/company.yaml"].include
+    assert "DecPlQty" in by_file["baseline/91-company-packaging.yaml"].include
+    assert "WeightUOM" in by_file["baseline/91-company-packaging.yaml"].include
+    assert "VolumeUOM" in by_file["baseline/91-company-packaging.yaml"].include
+    assert "MainContact" in by_file["master/75-vendors.yaml"].include
+    assert "Locations" in by_file["master/51-warehouse-locations.yaml"].include
     entities = [s.entity for s in manifest.entities]
     assert entities.count("Company") == 2
     assert entities.count("Warehouse") == 3
@@ -1574,17 +1551,17 @@ def test_catalog_segmented_key_row() -> None:
     """T205: SegmentedKey catalog row; V22 bootstrap before master; V50 keys."""
     manifest = extract.load_manifest()
     by_file = {s.file: s for s in manifest.entities}
-    sk = by_file["acu-config/bootstrap/segmented-key.yaml"]
+    sk = by_file["bootstrap/segmented-key.yaml"]
     assert sk.entity == "SegmentedKey"
     assert sk.keys == ["DimensionID"]
     assert sk.endpoint == "bootstrap"
     assert set(sk.include) == {"SegmentID", "Length"}
     files = [s.file for s in manifest.entities]
     for later in (
-        "acu-config/master/75-vendors.yaml",
-        "acu-config/master/76-customers.yaml",
-        "acu-config/master/80-stock-items-parts.yaml",
-        "acu-config/master/82-stock-items-kits.yaml",
+        "master/75-vendors.yaml",
+        "master/76-customers.yaml",
+        "master/80-stock-items-parts.yaml",
+        "master/82-stock-items-kits.yaml",
     ):
         assert later in by_file
         assert files.index(sk.file) < files.index(later), later
@@ -1594,8 +1571,14 @@ def test_catalog_segmented_key_row() -> None:
 
 def test_package_segmented_key_template() -> None:
     """T205/V50: package seeds INVENTORY+BIZACCT Length 30; ACCOUNT/INSITE out."""
-    root = Path(__file__).resolve().parents[1] / "src" / "acumatica_cli" / "templates"
-    path = root / "acu-config/bootstrap/segmented-key.yaml"
+    root = (
+        Path(__file__).resolve().parents[1]
+        / "src"
+        / "acumatica_cli"
+        / "templates"
+        / "acu-config"
+    )
+    path = root / "bootstrap/segmented-key.yaml"
     sk = seed.load_baseline(path)
     assert isinstance(sk, seed.BaselineFile)
     assert sk.entity == "SegmentedKey"
@@ -1609,10 +1592,8 @@ def test_package_segmented_key_template() -> None:
         assert rec["SegmentID"] == 1
         assert rec["Length"] == 30
     # V22: bootstrap/ file sorts before master StockItem/Vendor/Customer
-    bootstrap_dir = sorted(
-        p.name for p in (root / "acu-config/bootstrap").glob("*.yaml")
-    )
-    master = sorted(p.name for p in (root / "acu-config/master").glob("*.yaml"))
+    bootstrap_dir = sorted(p.name for p in (root / "bootstrap").glob("*.yaml"))
+    master = sorted(p.name for p in (root / "master").glob("*.yaml"))
     assert "segmented-key.yaml" in bootstrap_dir
     assert "company.yaml" in bootstrap_dir
     assert bootstrap_dir.index("company.yaml") < bootstrap_dir.index(
@@ -1631,7 +1612,7 @@ def test_extract_force_round_trips_segmented_key_lengths(
     Include keeps SegmentID+Length (catalog row) and drops LastModifiedDateTime.
     ACCOUNT/INSITE stay Length 10 when present on the tenant.
     """
-    target = tmp_path / "acu-config" / "bootstrap" / "segmented-key.yaml"
+    target = tmp_path / "bootstrap" / "segmented-key.yaml"
     target.parent.mkdir(parents=True)
     target.write_text("stale\n")
     failed = _run(
@@ -1659,7 +1640,7 @@ def test_catalog_numbering_sequence_row() -> None:
     """T151/T252: NumberingSequence catalog bounds + NewSymbol; V22 before prefs."""
     manifest = extract.load_manifest()
     by_file = {s.file: s for s in manifest.entities}
-    num = by_file["acu-config/master/05-numbering-sequences.yaml"]
+    num = by_file["master/05-numbering-sequences.yaml"]
     assert num.entity == "NumberingSequence"
     assert num.keys == ["NumberingID"]
     assert num.endpoint == "bootstrap"
@@ -1682,12 +1663,12 @@ def test_catalog_numbering_sequence_row() -> None:
     # baseline GL prefs still apply before master numbering (tenant-native
     # system sequences satisfy GL until master numbering is applied).
     for prefs in (
-        "acu-config/master/20-in-preferences.yaml",
-        "acu-config/master/56-so-preferences.yaml",
-        "acu-config/master/57-po-preferences.yaml",
-        "acu-config/master/60-ar-preferences.yaml",
-        "acu-config/master/61-ap-preferences.yaml",
-        "acu-config/master/62-ca-preferences.yaml",
+        "master/20-in-preferences.yaml",
+        "master/56-so-preferences.yaml",
+        "master/57-po-preferences.yaml",
+        "master/60-ar-preferences.yaml",
+        "master/61-ap-preferences.yaml",
+        "master/62-ca-preferences.yaml",
     ):
         assert prefs in by_file
         assert files.index(num.file) < files.index(prefs), prefs
@@ -1697,7 +1678,7 @@ def test_catalog_prefs_field_depth_includes() -> None:
     """T156/V41: catalog include lists match curated *Preferences deepen."""
     manifest = extract.load_manifest()
     by_file = {s.file: s for s in manifest.entities}
-    gl = by_file["acu-config/baseline/50-gl-preferences.yaml"]
+    gl = by_file["baseline/50-gl-preferences.yaml"]
     assert "BatchNumberingID" in gl.include
     assert "AutoPostOption" in gl.include
     assert "HoldEntry" in gl.include
@@ -1705,7 +1686,7 @@ def test_catalog_prefs_field_depth_includes() -> None:
     # key field not duplicated in include
     assert "RetEarnAccountID" not in gl.include
 
-    inp = by_file["acu-config/master/20-in-preferences.yaml"]
+    inp = by_file["master/20-in-preferences.yaml"]
     for field in (
         "BatchNumberingID",
         "ReceiptNumberingID",
@@ -1722,7 +1703,7 @@ def test_catalog_prefs_field_depth_includes() -> None:
     assert "DfltLotSerClassID" not in inp.include
     assert "TransitSiteID" not in inp.include
 
-    ap = by_file["acu-config/master/61-ap-preferences.yaml"]
+    ap = by_file["master/61-ap-preferences.yaml"]
     assert {
         "BatchNumberingID",
         "InvoiceNumberingID",
@@ -1731,21 +1712,21 @@ def test_catalog_prefs_field_depth_includes() -> None:
         "RequireVendorRef",
         "RequireApprovePayments",
     } <= set(ap.include)
-    ar = by_file["acu-config/master/60-ar-preferences.yaml"]
+    ar = by_file["master/60-ar-preferences.yaml"]
     assert {
         "InvoiceNumberingID",
         "PaymentNumberingID",
         "RequireExtRef",
         "CreditCheckError",
     } <= set(ar.include)
-    so = by_file["acu-config/master/56-so-preferences.yaml"]
+    so = by_file["master/56-so-preferences.yaml"]
     assert "ShipmentNumberingID" in so.include
     assert "CreditCheckError" in so.include
-    po = by_file["acu-config/master/57-po-preferences.yaml"]
+    po = by_file["master/57-po-preferences.yaml"]
     assert "RegularPONumberingID" in po.include
     assert "ReceiptNumberingID" in po.include
     assert "AutoReleaseAP" in po.include
-    ca = by_file["acu-config/master/62-ca-preferences.yaml"]
+    ca = by_file["master/62-ca-preferences.yaml"]
     assert {
         "BatchNumberingID",
         "AutoPostOption",
@@ -1759,9 +1740,9 @@ def test_catalog_role_user_membership_rows() -> None:
     """T146/T228: Role then User then Role.Users catalog rows."""
     manifest = extract.load_manifest()
     by_file = {s.file: s for s in manifest.entities}
-    role = by_file["acu-config/master/90-roles.yaml"]
-    user = by_file["acu-config/master/91-users.yaml"]
-    membership = by_file["acu-config/master/92-role-users.yaml"]
+    role = by_file["master/90-roles.yaml"]
+    user = by_file["master/91-users.yaml"]
+    membership = by_file["master/92-role-users.yaml"]
     assert role.entity == "Role"
     assert role.keys == ["Rolename"]
     assert role.endpoint == "bootstrap"
@@ -1786,8 +1767,14 @@ def test_catalog_role_user_membership_rows() -> None:
 
 def test_package_numbering_sequence_template() -> None:
     """T151/T252: package numbering = LAB5-class sequences; bounds + NewSymbol."""
-    root = Path(__file__).resolve().parents[1] / "src" / "acumatica_cli" / "templates"
-    path = root / "acu-config/master/05-numbering-sequences.yaml"
+    root = (
+        Path(__file__).resolve().parents[1]
+        / "src"
+        / "acumatica_cli"
+        / "templates"
+        / "acu-config"
+    )
+    path = root / "master/05-numbering-sequences.yaml"
     numbering = seed.load_baseline(path)
     assert isinstance(numbering, seed.BaselineFile)
     assert numbering.entity == "NumberingSequence"
@@ -1819,7 +1806,7 @@ def test_package_numbering_sequence_template() -> None:
         assert rec["NbrStep"] == 1
         assert rec["StartDate"] == "1900-01-01"
     # V22 within master/: numbering before IN prefs
-    master = sorted(p.name for p in (root / "acu-config/master").glob("*.yaml"))
+    master = sorted(p.name for p in (root / "master").glob("*.yaml"))
     assert "05-numbering-sequences.yaml" in master
     assert "20-in-preferences.yaml" in master
     assert master.index("05-numbering-sequences.yaml") < master.index(
@@ -1832,7 +1819,7 @@ def test_extract_startdate_is_date_only(
 ) -> None:
     """V55/T243: NumberingSequence StartDate emit is YYYY-MM-DD, not DateTime."""
     _run(instance, server, tmp_path, only=frozenset({"NumberingSequence"}))
-    target = tmp_path / "acu-config" / "master" / "05-numbering-sequences.yaml"
+    target = tmp_path / "master" / "05-numbering-sequences.yaml"
     doc = yaml.safe_load(target.read_text())
     (rec,) = doc["records"]
     assert rec["StartDate"] == "1900-01-01"
@@ -1844,7 +1831,7 @@ def test_extract_strips_lotserial_segments_value() -> None:
     spec = extract.EntitySpec(
         entity="LotSerialClass",
         keys=["ClassID"],
-        file="acu-config/master/lot-serial-class.yaml",
+        file="master/lot-serial-class.yaml",
         detail_keys={"Segments": "SegmentID"},
         include=["Description", "Segments"],
     )
@@ -1865,9 +1852,15 @@ def test_extract_strips_lotserial_segments_value() -> None:
 
 def test_package_role_user_templates_prebuild_roles() -> None:
     """T146: package roles = full pre-build set; soadmin membership on SO Admin."""
-    root = Path(__file__).resolve().parents[1] / "src" / "acumatica_cli" / "templates"
-    roles = seed.load_baseline(root / "acu-config/master/90-roles.yaml")
-    users = seed.load_baseline(root / "acu-config/master/91-users.yaml")
+    root = (
+        Path(__file__).resolve().parents[1]
+        / "src"
+        / "acumatica_cli"
+        / "templates"
+        / "acu-config"
+    )
+    roles = seed.load_baseline(root / "master/90-roles.yaml")
+    users = seed.load_baseline(root / "master/91-users.yaml")
     assert isinstance(roles, seed.BaselineFile)
     assert isinstance(users, seed.BaselineFile)
     assert roles.entity == "Role"
@@ -1890,7 +1883,7 @@ def test_package_role_user_templates_prebuild_roles() -> None:
     soadmin = users.records[0]
     assert "Password" not in soadmin
     assert soadmin["Roles"] == [{"Rolename": "SO Admin"}]
-    membership = seed.load_baseline(root / "acu-config/master/92-role-users.yaml")
+    membership = seed.load_baseline(root / "master/92-role-users.yaml")
     assert isinstance(membership, seed.BaselineFile)
     assert membership.entity == "Role"
     assert membership.detail_keys == {"Users": "Username"}
@@ -1905,8 +1898,14 @@ def test_templates_do_not_claim_packaging_uoms() -> None:
     Company persist UOMs live on 91-company-packaging.yaml after 90-uoms
     (V52/V22). Identity company.yaml does not send them on first insert.
     """
-    root = Path(__file__).resolve().parents[1] / "src" / "acumatica_cli" / "templates"
-    packaging = root / "acu-config" / "baseline" / "91-company-packaging.yaml"
+    root = (
+        Path(__file__).resolve().parents[1]
+        / "src"
+        / "acumatica_cli"
+        / "templates"
+        / "acu-config"
+    )
+    packaging = root / "baseline" / "91-company-packaging.yaml"
     claims: list[str] = []
     for path in root.rglob("*.yaml"):
         if path.resolve() == packaging.resolve():
@@ -1963,9 +1962,7 @@ def test_synthesized_financial_year(
     instance: Instance, server: FakeServer, tmp_path: Path
 ) -> None:
     _run(instance, server, tmp_path, only=frozenset({"financial-year"}))
-    doc = yaml.safe_load(
-        (tmp_path / "acu-config" / "setup" / "10-financial-year.yaml").read_text()
-    )
+    doc = yaml.safe_load((tmp_path / "setup" / "10-financial-year.yaml").read_text())
     assert doc == {
         "action": "GeneratePeriods",
         "entity": "FinancialYearSettings",
@@ -1980,9 +1977,7 @@ def test_synthesized_master_calendar_spans_year_range(
     instance: Instance, server: FakeServer, tmp_path: Path
 ) -> None:
     _run(instance, server, tmp_path, only=frozenset({"master-calendar"}))
-    doc = yaml.safe_load(
-        (tmp_path / "acu-config" / "setup" / "20-master-calendar.yaml").read_text()
-    )
+    doc = yaml.safe_load((tmp_path / "setup" / "20-master-calendar.yaml").read_text())
     assert doc == {
         "action": "GenerateCalendar",
         "entity": "MasterCalendar",
@@ -2008,9 +2003,7 @@ def test_synthesized_open_periods_sources_company_org(
         dict(r.url.params) for r in server.requests if r.url.path.endswith("/Company")
     ]
     assert any(p.get("$select") == "AcctCD" for p in company_lists)
-    doc = yaml.safe_load(
-        (tmp_path / "acu-config" / "setup" / "30-open-periods.yaml").read_text()
-    )
+    doc = yaml.safe_load((tmp_path / "setup" / "30-open-periods.yaml").read_text())
     assert doc == {
         "action": "ProcessAll",
         "entity": "ManagePeriods",
@@ -2041,7 +2034,7 @@ def test_open_periods_none_open_skips_with_warn(
     }
     _run(instance, server, tmp_path, only=frozenset({"open-periods"}))
     captured = capsys.readouterr()
-    target = tmp_path / "acu-config" / "setup" / "30-open-periods.yaml"
+    target = tmp_path / "setup" / "30-open-periods.yaml"
     assert f"skip {target} (no open periods)" in captured.out
     assert "no open periods on tenant" in captured.err
     assert not target.exists()
@@ -2058,18 +2051,16 @@ def test_features_closure_unions_gates_of_record_producing_entities(
     SubAccount + Warehouse + WarehouseLocation + KitAssemblies ride master
     rows that produce under the full T117 canned TABLES.
     """
-    _run(instance, server, tmp_path)
-    assert bootstrap.load_features(tmp_path / "acu-config") == list(
-        _EXPECTED_FEATURE_GATES
-    )
+    _run(instance, server, tmp_path / "acu-config")
+    assert bootstrap.load_features(tmp_path) == list(_EXPECTED_FEATURE_GATES)
 
 
 def test_features_closure_drops_gate_when_no_records(
     instance: Instance, server: FakeServer, tmp_path: Path
 ) -> None:
     server.tables = server.tables | {"Subaccount": []}
-    _run(instance, server, tmp_path)
-    names = bootstrap.load_features(tmp_path / "acu-config")
+    _run(instance, server, tmp_path / "acu-config")
+    names = bootstrap.load_features(tmp_path)
     assert "SubAccount" not in names
     # other master gates still produce under full TABLES
     assert names == [g for g in _EXPECTED_FEATURE_GATES if g != "SubAccount"]
@@ -2083,8 +2074,8 @@ def test_features_closure_counts_preexisting_files(
     target = tmp_path / "acu-config" / "baseline" / "10-subaccounts.yaml"
     target.parent.mkdir(parents=True)
     target.write_text("operator-edited\n")
-    _run(instance, server, tmp_path)
-    assert "SubAccount" in bootstrap.load_features(tmp_path / "acu-config")
+    _run(instance, server, tmp_path / "acu-config")
+    assert "SubAccount" in bootstrap.load_features(tmp_path)
 
 
 # -- the round-trip: emitted files parse and diff clean --
@@ -2152,13 +2143,13 @@ def test_row_failure_reported_and_run_continues(
     assert "x Subaccount: " in captured.err
     assert "No entity satisfies" in captured.err
     # T121: progress banner names the entity on stdout; failure detail on stderr (V9)
-    sub_target = tmp_path / "acu-config" / "baseline" / "10-subaccounts.yaml"
+    sub_target = tmp_path / "baseline" / "10-subaccounts.yaml"
     assert _progress_line(sub_target, "Subaccount", instance) in captured.out
     assert "No entity satisfies" not in captured.out
     # rows past the failure all ran: entities, setup synths, features
-    assert (tmp_path / "acu-config" / "baseline" / "20-accounts.yaml").is_file()
-    assert (tmp_path / "acu-config" / "setup" / "30-open-periods.yaml").is_file()
-    assert (tmp_path / "acu-config" / "bootstrap" / "features.yaml").is_file()
+    assert (tmp_path / "baseline" / "20-accounts.yaml").is_file()
+    assert (tmp_path / "setup" / "30-open-periods.yaml").is_file()
+    assert (tmp_path / "bootstrap" / "features.yaml").is_file()
     # every other row wrote; Subaccount failed with no skip noise
     written = _FULL_WRITES - 1
     assert f"x {written} written, 0 skipped, 1 failed" in captured.err
@@ -2175,7 +2166,7 @@ def test_setup_not_entered_500_skips_clean(
     failed = _run(instance, server, tmp_path, only=frozenset({"Ledger"}))
     assert failed == 0
     captured = capsys.readouterr()
-    target = tmp_path / "acu-config" / "baseline" / "40-ledger.yaml"
+    target = tmp_path / "baseline" / "40-ledger.yaml"
     assert f"skip {target} (screen setup not entered)" in captured.out
     assert not target.exists()
     assert "+ 0 written, 1 skipped" in captured.err
@@ -2198,10 +2189,10 @@ def test_duplicate_key_tuple_is_row_failure_and_run_continues(
     assert failed == 1
     captured = capsys.readouterr()
     assert "x Subaccount: records duplicate key tuple [000000]" in captured.err
-    assert not (tmp_path / "acu-config" / "baseline" / "10-subaccounts.yaml").exists()
+    assert not (tmp_path / "baseline" / "10-subaccounts.yaml").exists()
     # rows past the failure all ran; the failed file never gates them
-    assert (tmp_path / "acu-config" / "baseline" / "20-accounts.yaml").is_file()
-    assert (tmp_path / "acu-config" / "bootstrap" / "features.yaml").is_file()
+    assert (tmp_path / "baseline" / "20-accounts.yaml").is_file()
+    assert (tmp_path / "bootstrap" / "features.yaml").is_file()
     written = _FULL_WRITES - 1
     assert f"x {written} written, 0 skipped, 1 failed" in captured.err
 
@@ -2223,7 +2214,7 @@ def test_setup_synth_failure_isolated(
     assert failed == 1
     captured = capsys.readouterr()
     assert "x master-calendar: " in captured.err
-    assert (tmp_path / "acu-config" / "setup" / "30-open-periods.yaml").is_file()
+    assert (tmp_path / "setup" / "30-open-periods.yaml").is_file()
 
 
 # the B19 live repro (issue #5): a clean tenant's reads split by server
@@ -2282,10 +2273,10 @@ def test_virgin_tenant_dry_run_walks_full_manifest_exit_0(
     assert result.output.count("(screen setup not entered)") == screen_skip_n
     assert result.output.count("(entity not in active Bootstrap contract)") == 0
     assert result.output.count("(no financial year setup)") == 1
-    uoms = tmp_path / "acu-config" / "baseline" / "90-uoms.yaml"
+    uoms = tmp_path / "baseline" / "90-uoms.yaml"
     assert f"would write {uoms} (2 records)" in result.output
     # features closure = the built-in six: only the gate-free UoM row produced
-    feats = tmp_path / "acu-config" / "bootstrap" / "features.yaml"
+    feats = tmp_path / "bootstrap" / "features.yaml"
     assert f"would write {feats} (6 records)" in result.output
     skipped = empty_entity_n + screen_skip_n + 1  # + financial-year empty
     assert f"+ 2 written, {skipped} skipped (dry run)" in result.stderr
@@ -2351,7 +2342,7 @@ def test_extract_cmd_wires_flags_through(
     ]
 
 
-def test_extract_cmd_defaults_out_to_cwd(
+def test_extract_cmd_defaults_out_to_acu_config(
     monkeypatch: pytest.MonkeyPatch, instance: Instance
 ) -> None:
     monkeypatch.setattr(cli, "load_instance", lambda overrides=None: instance)
@@ -2365,4 +2356,4 @@ def test_extract_cmd_defaults_out_to_cwd(
     )
     result = CliRunner().invoke(cli.cli, ["survey", "extract"])
     assert result.exit_code == 0, result.output
-    assert calls == [Path(".")]
+    assert calls == [Path("acu-config")]

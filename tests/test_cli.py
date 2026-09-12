@@ -324,8 +324,9 @@ def create_env(
     calls: list[str] = []
     # features.yaml is package-build config: it must reach publish() as the
     # feature list (V2)
-    (tmp_path / "bootstrap").mkdir()
-    (tmp_path / "bootstrap" / "features.yaml").write_text(FEATURES_YAML)
+    dest = tmp_path / "acu-config" / "bootstrap"
+    dest.mkdir(parents=True)
+    (dest / "features.yaml").write_text(FEATURES_YAML)
     monkeypatch.setattr(cli, "find_data_root", lambda: tmp_path)
     # the exists-skip probe (T47) reads the live tenant list before every
     # create; an empty list keeps the fresh path exactly as before
@@ -647,7 +648,7 @@ def test_extract_help_documents_config_hard_cut(wired: Instance) -> None:
 
     assert result.exit_code == 0
     assert "inverse of apply" in result.output
-    assert "config/" in result.output
+    assert "acu-config/" in result.output
     assert "seed_catalog.yaml" in result.output
     assert "acu --tenant DEV survey extract" in result.output
 
@@ -838,8 +839,9 @@ def test_bootstrap_export_writes_zip_offline(
     # T68 --export: local-only zip write; no password, no HTTP, no SSH;
     # features.yaml from data repo is spliced the same as live publish
     (tmp_path / ".env").write_text("# data-repo sentinel for find_data_root\n")
-    (tmp_path / "bootstrap").mkdir()
-    (tmp_path / "bootstrap" / "features.yaml").write_text(FEATURES_YAML)
+    dest = tmp_path / "acu-config" / "bootstrap"
+    dest.mkdir(parents=True)
+    (dest / "features.yaml").write_text(FEATURES_YAML)
     monkeypatch.chdir(tmp_path)
     out = tmp_path / "AcuBootstrap.zip"
     http_calls: list[str] = []

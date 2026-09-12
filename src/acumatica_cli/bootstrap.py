@@ -10,7 +10,8 @@ endpoint exposes the seeding surface (serialization verified T12).
 
 Bootstrap endpoint contract is package SoT (V2/V21/T178): always the
 packaged full company ``bootstrap_project.xml`` (``Bootstrap/1.11.0``).
-Data-repo ``config/bootstrap/project.xml`` or ``bootstrap/project.xml`` is
+Data-repo ``acu-config/bootstrap/project.xml`` (or leftover
+``config/bootstrap/project.xml`` / ``bootstrap/project.xml``) is
 not a seed — present → hard error naming package SoT (no dual contract line).
 
 Customization publishes are tenant-scoped, so the package must be published
@@ -19,9 +20,8 @@ digest embedded in the published package's description against the package
 built now, and the plugin's UpdateDatabase is a keyed update on re-run.
 
 The feature set the plugin enables is data, not code (V2): load_features()
-reads config/bootstrap/features.yaml then root bootstrap/features.yaml
-(absent -> the built-in six) and package_zip() splices it into the plugin
-source at build time. Features still dual-resolve; the contract does not.
+reads acu-config/bootstrap/features.yaml only (absent -> the built-in six)
+and package_zip() splices it into the plugin source at build time.
 """
 
 import hashlib
@@ -60,11 +60,9 @@ FEATURES_SENTINEL = "/*ACU_FEATURES*/"
 
 
 def _bootstrap_file(root: Path, name: str) -> Path | None:
-    """Resolve a bootstrap package input: config/bootstrap then root (V30)."""
-    for path in (root / "config" / "bootstrap" / name, root / "bootstrap" / name):
-        if path.is_file():
-            return path
-    return None
+    """Resolve ``acu-config/bootstrap/<name>`` only (V60/V30)."""
+    path = root / "acu-config" / "bootstrap" / name
+    return path if path.is_file() else None
 
 
 def packaged_contract_xml() -> bytes:
@@ -81,6 +79,7 @@ def _reject_data_repo_contract(root: Path | None) -> None:
     if root is None:
         return
     for path in (
+        root / "acu-config" / "bootstrap" / "project.xml",
         root / "config" / "bootstrap" / "project.xml",
         root / "bootstrap" / "project.xml",
     ):
@@ -95,9 +94,9 @@ def load_contract_xml(root: Path | None = None) -> bytes:
     """Active contract bytes: always the packaged full company contract.
 
     ``root`` is the data-repo discovery root (the dir holding ``.env``).
-    Present ``config/bootstrap/project.xml`` or ``bootstrap/project.xml`` →
-    hard error naming package SoT (V2/V21/T178). Features still dual-resolve
-    via ``load_features``; the contract path does not.
+    Present ``acu-config/bootstrap/project.xml`` (or leftover
+    ``config/bootstrap/project.xml`` / ``bootstrap/project.xml``) →
+    hard error naming package SoT (V2/V21/T178).
     """
     _reject_data_repo_contract(root)
     return packaged_contract_xml()
@@ -122,13 +121,13 @@ PACKAGE_DESCRIPTION = ET.fromstring(packaged_contract_xml()).get("description", 
 
 
 def load_features(root: Path) -> list[str]:
-    """FeaturesSet property names from config/ then root bootstrap (V30).
+    """FeaturesSet property names from ``acu-config/bootstrap/features.yaml``.
 
-    Prefer ``config/bootstrap/features.yaml``, then ``bootstrap/features.yaml``.
-    Absent file -> the built-in six (SPEC I.data). Names are validated as
-    plausible property names here (they are spliced into C# string literals);
-    whether each matches a real FeaturesSet property only the plugin can
-    tell — it logs the strays at publish time (the silent-typo guard).
+    Absent file -> the built-in six (SPEC I.data). Root ``bootstrap/`` and
+    leftover ``config/bootstrap/`` are not consulted (V60). Names are
+    validated as plausible property names here (they are spliced into C#
+    string literals); whether each matches a real FeaturesSet property only
+    the plugin can tell — it logs the strays at publish time.
     """
     path = _bootstrap_file(root, "features.yaml")
     if path is None:
