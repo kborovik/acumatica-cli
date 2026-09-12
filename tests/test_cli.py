@@ -1219,16 +1219,20 @@ def test_config_init_template_set_is_reference_closed(tmp_path: Path) -> None:
 
 
 def test_config_init_prints_next_step_cmds(tmp_path: Path) -> None:
-    # V28/T108: post-scaffold stdout names rebuild cmds with config/ + scenario/
+    # V28/V60: next-step cmds use explicit acu-config / acu-scenario paths
     result = CliRunner().invoke(cli.cli, ["config", "init", str(tmp_path)])
 
     assert result.exit_code == 0
     assert "next:" in result.output
     assert "acu bootstrap" in result.output
-    assert "acu apply config/" in result.output
-    assert "acu run scenario/" in result.output
-    assert "acu diff config/" in result.output
+    assert "acu apply acu-config" in result.output
+    assert "acu run acu-scenario" in result.output
+    assert "acu diff acu-config" in result.output
+    assert "acu state acu-config/views" in result.output
     assert "acu check" not in result.output
+    assert not (tmp_path / "qms").exists()
+    assert not (tmp_path / "customization").exists()
+    assert not (tmp_path / "acu-config" / "qms").exists()
 
 
 def test_config_init_no_flavor_option(tmp_path: Path) -> None:

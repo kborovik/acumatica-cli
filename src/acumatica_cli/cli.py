@@ -689,11 +689,12 @@ def config_group() -> None:
     "directory", required=False, type=click.Path(file_okay=False, path_type=Path)
 )
 def config_init(host: str | None, directory: Path | None) -> None:
-    """Scaffold a data repo: .env, config/ seed, scenario/.
+    """Scaffold a data repo: .env, acu-config/ seed, acu-scenario/.
 
-    Local only (no network, no secrets written). Creates config/{bootstrap,
-    baseline,setup,master}/, scenario/, config/views/, .env with
-    ACU_BASE_URL + ACU_API_VERSION, README. Existing files are never
+    Local only (no network, no secrets written). Creates
+    acu-config/{bootstrap,baseline,setup,master}/, acu-scenario/,
+    acu-config/views/, .env with ACU_BASE_URL + ACU_API_VERSION, README.
+    Never scaffolds a customization tree. Existing files are never
     overwritten (reported as skipped). DIRECTORY defaults to cwd and is
     created if absent. No git init, no gpg. Never scaffolds project.xml
     (bootstrap contract is package-owned). Never scaffolds matrix.yaml.
@@ -716,10 +717,10 @@ def config_init(host: str | None, directory: Path | None) -> None:
     output.data("  1. edit .env (set ACU_PASSWORD, ACU_TENANT)")
     output.data("  2. acu config check")
     output.data("  3. acu bootstrap          # or: acu tenant create ... (SSH)")
-    output.data("  4. acu apply config/")
-    output.data("  5. acu run scenario/")
-    output.data("  6. acu diff config/")
-    output.data("  7. acu state")
+    output.data("  4. acu apply acu-config")
+    output.data("  5. acu run acu-scenario")
+    output.data("  6. acu diff acu-config")
+    output.data("  7. acu state acu-config/views")
 
 
 @config_group.command("show")

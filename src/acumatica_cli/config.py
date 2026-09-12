@@ -290,7 +290,8 @@ def scaffold(directory: Path, host: str | None = None) -> Iterator[tuple[str, Pa
     opt-out = present blank ``ACU_SSH=``. Secrets stay placeholders (V2).
     Single full seed under ``acu-config/`` + lifecycle ``acu-scenario/`` + ``.env``
     with ``ACU_BASE_URL`` + ``ACU_API_VERSION`` + pin-keyed ``overlays/``
-    (V27/V28/T108/V44; no flavor; no ``matrix.yaml``; no ``target.yaml``).
+    (V27/V28/T108/V44; no flavor; no ``matrix.yaml``; no ``target.yaml``;
+    no customization tree).
     The directory is created if absent. No git init, no gpg - version
     control and secret encryption stay the operator's call.
     """
