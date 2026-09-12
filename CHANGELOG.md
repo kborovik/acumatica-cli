@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## [v0.35.0] - 2026-09-12
+
 ### Changed
 
 - **Explicit data folders (gh #46):** stock trees are `acu-config/` and
