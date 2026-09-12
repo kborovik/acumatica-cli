@@ -176,7 +176,7 @@ T266|x|`config init` scaffold `acu-config/`+`acu-scenario/`+views into `<dir>` o
 T267|x|`survey reconcile --config` no default path; emit `--out` defaults stay `state/` `inventory/` `findings/` `schemas/`|V59,I.cmd
 T268|x|sweep remaining implicit data-path defaults (scope: `src/`; pattern `default_seed_dirs`)|V59,V60,V13
 T269|x|offline tests: bare apply/diff/run/state help; `apply acu-config` umbrella; `run acu-scenario`; init names; extract `--out`; bootstrap features; reconcile omit `--config`|V13,V59,V60,T263,T264,T265,T266,T267
-T270|.|README+AGENTS.md+help PATHS+CHANGELOG Unreleased: `acu-config/` `acu-scenario/`; soak `apply acu-config`; suite green|V12,V19,V48,V49,V60,T264
+T270|x|README+AGENTS.md+help PATHS+CHANGELOG Unreleased: `acu-config/` `acu-scenario/`; soak `apply acu-config`; suite green|V12,V19,V48,V49,V60,T264
 
 ## §B BUGS
 

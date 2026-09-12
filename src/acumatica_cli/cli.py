@@ -5,11 +5,11 @@ Configure Acumatica ERP from YAML in a git data repo. No UI wizards.
 \b
 MENTAL MODEL
   Data repo = directory with .env (walk-up from cwd). Holds:
-    config/{bootstrap,baseline,setup,master}/  seed YAML (apply/diff/survey extract)
-    config/views/                              observer views (state)
-    scenario/                                  transaction scripts (run)
-    .env                                       secrets + where + API pin
-    state/ inventory/ findings/ schemas/       command outputs (not seed)
+    acu-config/{bootstrap,baseline,setup,master}/  seed YAML (apply/diff/survey extract)
+    acu-config/views/                              observer views (state)
+    acu-scenario/                                  transaction scripts (run)
+    .env                                           secrets + where + API pin
+    state/ inventory/ findings/ schemas/           command outputs (not seed)
   Two planes (do not mix):
     REST data plane — apply diff run bootstrap survey extract state schema
       needs: base_url, tenant, password (SSH optional)
@@ -25,10 +25,10 @@ TYPICAL WORKFLOW (SSH box — create your own tenant)
   2. edit .env          # set ACU_PASSWORD, ACU_TENANT
   3. acu config check   # read-only preflight (REST + optional SSH)
   4. acu tenant create --login DEV          # create + bootstrap
-  5. acu --tenant DEV apply config/         # seed -> tenant
-  6. acu --tenant DEV run scenario/         # capital -> buy -> build -> sell
-  7. acu --tenant DEV diff config/          # prove zero drift (exit 2 = drift)
-  8. acu --tenant DEV state                 # capture trial-balance etc.
+  5. acu --tenant DEV apply acu-config      # seed -> tenant
+  6. acu --tenant DEV run acu-scenario      # capital -> buy -> build -> sell
+  7. acu --tenant DEV diff acu-config       # prove zero drift (exit 2 = drift)
+  8. acu --tenant DEV state acu-config/views  # capture trial-balance etc.
 
 \b
 HOSTED (tenant already exists, no SSH)
@@ -36,15 +36,15 @@ HOSTED (tenant already exists, no SSH)
   SSH to Administrator@<host>). Then:
     acu config check
     acu --tenant DEV bootstrap
-    acu --tenant DEV apply config/
-    acu --tenant DEV diff config/
+    acu --tenant DEV apply acu-config
+    acu --tenant DEV diff acu-config
   Offline UI fallback: acu bootstrap --export AcuBootstrap.zip  # SM204505
 
 \b
 CONFIG RESOLUTION (per key, highest wins)
   CLI global flag  ->  ACU_* env (.env or process)  ->  default
   Globals only BEFORE the subcommand:
-    acu --tenant DEV apply config/
+    acu --tenant DEV apply acu-config
   ACU_BASE_URL is where; ACU_API_VERSION pins Default half (else 25.200.001)
 
 \b
@@ -69,6 +69,7 @@ EXIT CODES (common)
 
 \b
 PATHS
+  stock trees: acu-config/ (SEED_DIRS + views) and acu-scenario/ only
   apply/diff/run/state require an explicit data path (zero args print that
     command's help, exit non-zero, no HTTP)
   apply/diff  dir with SEED_DIRS children expands those subdirs in order
@@ -417,7 +418,7 @@ def tenant_create(
 
     SSH control plane. Chains: ac.exe CompanyConfig → app-pool recycle →
     REST first-login/password → AcuBootstrap publish (features + endpoint).
-    After success, run `acu --tenant <login> apply config/`.
+    After success, run `acu --tenant <login> apply acu-config`.
 
     \b
     Identity
@@ -438,7 +439,8 @@ def tenant_create(
       acu tenant create --login DEV --id 3     # must match if already exists
 
     \b
-    Next: `acu --tenant DEV apply config/` then `run` / `diff`.
+    Next: `acu --tenant DEV apply acu-config` then `run acu-scenario`
+    / `diff acu-config`.
     """
     mgr = TenantManager(inst)
     tenants = mgr.list()
@@ -573,7 +575,7 @@ def bootstrap_cmd(ctx: click.Context, export_path: Path | None) -> None:
       acu bootstrap --export AcuBootstrap.zip   # offline; import on SM204505
 
     \b
-    Next: `acu --tenant DEV apply config/`.
+    Next: `acu --tenant DEV apply acu-config`.
     """
     features = _bootstrap_features()
     if export_path is not None:
@@ -900,7 +902,7 @@ def _require_data_paths(
 def expand_files(files: tuple[Path, ...]) -> list[Path]:
     """Expand directory arguments into seed `*.yaml` files (V22/V30).
 
-    A dir with any SEED_DIRS child (umbrella e.g. `config/`) expands those
+    A dir with any SEED_DIRS child (umbrella e.g. `acu-config/`) expands those
     nested subdirs in fixed SEED_DIRS order, then leaf `*.yaml` per subdir.
     A leaf dir expands its own `*.yaml` only. Typed path is used as given
     (never cwd-fill). `features.yaml` is skipped: it configures the
@@ -934,7 +936,7 @@ def apply_cmd(ctx: click.Context, files: tuple[Path, ...], dry_run: bool) -> Non
     """Push seed YAML into the tenant (idempotent PUT upserts).
 
     Sole tenant writer. REST data plane. FILES = seed YAML files or dirs
-    (required). A dir with seed children (e.g. config/) expands nested
+    (required). A dir with seed children (e.g. acu-config/) expands nested
     trees in fixed order: bootstrap → baseline → setup → master. Zero
     args print this help, exit non-zero, no PUT (V59).
 
@@ -949,9 +951,9 @@ def apply_cmd(ctx: click.Context, files: tuple[Path, ...], dry_run: bool) -> Non
 
     \b
     Examples
-      acu --tenant DEV apply config/
-      acu --tenant DEV apply --dry-run config/master/
-      acu --tenant DEV apply config/baseline/20-accounts.yaml
+      acu --tenant DEV apply acu-config
+      acu --tenant DEV apply --dry-run acu-config/master/
+      acu --tenant DEV apply acu-config/baseline/20-accounts.yaml
 
     Related: `diff` (drift) · `survey extract` (inverse pull) · `run` (txns).
     """
@@ -1033,8 +1035,8 @@ def diff_cmd(ctx: click.Context, files: tuple[Path, ...]) -> None:
 
     \b
     Examples
-      acu --tenant DEV diff config/
-      acu --tenant DEV diff config/master/90-roles.yaml
+      acu --tenant DEV diff acu-config
+      acu --tenant DEV diff acu-config/master/90-roles.yaml
 
     Related: `apply` (fix) · `survey extract` (pull) · `state` (balances).
     """
@@ -1081,13 +1083,13 @@ def run_cmd(ctx: click.Context, files: tuple[Path, ...], dry_run: bool) -> None:
 
     \b
     Prerequisites
-      Seed applied (apply config/) so masters/parties/items exist.
+      Seed applied (apply acu-config) so masters/parties/items exist.
 
     \b
     Examples
-      acu --tenant DEV run scenario/
-      acu --tenant DEV run --dry-run scenario/10-seed-capital.yaml
-      acu --tenant DEV run scenario/20-buy.yaml scenario/40-sell.yaml
+      acu --tenant DEV run acu-scenario
+      acu --tenant DEV run --dry-run acu-scenario/10-seed-capital.yaml
+      acu --tenant DEV run acu-scenario/20-buy.yaml acu-scenario/40-sell.yaml
 
     Related: `apply` · `diff` · `state`.
     """
@@ -1131,9 +1133,10 @@ def survey_group() -> None:
 
     \b
     Subcommands
-      extract [--only ENTITY]...   live GET -> config/ SEED_DIRS (REST)
+      extract [--only ENTITY]...   live GET -> acu-config/ SEED_DIRS (REST)
       inventory ARTIFACT           snapshot ZIP/folder -> inventory/ (offline)
-      reconcile                    inventory/ + optional config/ -> findings/ (offline)
+      reconcile                    inventory/ + optional --config DIR
+                                   -> findings/ (offline)
 
     \b
     Examples
@@ -1388,10 +1391,10 @@ def state_cmd(
 
     \b
     Examples
-      acu --tenant DEV state config/views/
-      acu --tenant DEV state --diff config/views/
-      acu --tenant DEV state --assert-unchanged config/views/
-      acu --tenant DEV state config/views/10-trial-balance.yaml
+      acu --tenant DEV state acu-config/views/
+      acu --tenant DEV state --diff acu-config/views/
+      acu --tenant DEV state --assert-unchanged acu-config/views/
+      acu --tenant DEV state acu-config/views/10-trial-balance.yaml
 
     Related: `run` (moves balances) · `diff` (seed drift) · `survey extract`.
     """

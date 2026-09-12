@@ -2,6 +2,18 @@
 
 ## Unreleased
 
+### Changed
+
+- **Explicit data folders (gh #46):** stock trees are `acu-config/` and
+  `acu-scenario/`. `apply` / `diff` / `run` / `state` require an explicit
+  data path; zero args print that command's help and do not call HTTP.
+  `acu apply acu-config` umbrella-expands SEED_DIRS and does not apply a
+  sibling customization dir. `survey extract --out` defaults to
+  `acu-config/` and writes SEED_DIRS into that root. Bootstrap features
+  read `acu-config/bootstrap/features.yaml` only. `survey reconcile
+  --config` has no default. `config init` scaffolds the new names and
+  does not write a customization tree.
+
 ## [v0.34.0] - 2026-09-10
 
 ### Removed

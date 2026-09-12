@@ -1,7 +1,7 @@
 # AGENTS.md
 
 This repository is the `acu` CLI (`acumatica-cli`) plus the CLI test seed
-(`config/` SEED_DIRS + `config/views/` + `scenario/` at repo root).
+(`acu-config/` SEED_DIRS + `acu-config/views/` + `acu-scenario/` at repo root).
 
 Product GitOps (QMS) stays in the sibling data repo. Never print `.env` secrets.
 
@@ -10,7 +10,7 @@ Product GitOps (QMS) stays in the sibling data repo. Never print `.env` secrets.
 | | |
 | --- | --- |
 | Tenant login | `ACUCLI` (`ACU_TENANT=ACUCLI`) |
-| CLI test seed | this checkout `config/` + `scenario/` |
+| CLI test seed | this checkout `acu-config/` + `acu-scenario/` |
 | Instance | this repo's `.env` (`ACU_BASE_URL`) |
 
 The sibling GitOps `.env` names tenant `CNBN`. That is the QMS product tenant.
@@ -40,7 +40,7 @@ It is not the CLI test-seed soak.
 
 ## CLI test-seed soak (this checkout)
 
-Run from this tree so cwd walk-up finds `config/` and `.env`.
+Run from this tree so cwd walk-up finds `acu-config/` and `.env`.
 Use this checkout's `.venv/bin/acu`.
 
 ```sh
@@ -51,13 +51,13 @@ uv run acu --tenant ACUCLI tenant list
 # cold rebuild of the CLI test tenant only
 uv run acu --tenant ACUCLI tenant delete --login ACUCLI --yes
 uv run acu --tenant ACUCLI tenant create --login ACUCLI
-uv run acu --tenant ACUCLI apply
-uv run acu --tenant ACUCLI run
-uv run acu --tenant ACUCLI diff
-uv run acu --tenant ACUCLI state
+uv run acu --tenant ACUCLI apply acu-config
+uv run acu --tenant ACUCLI run acu-scenario
+uv run acu --tenant ACUCLI diff acu-config
+uv run acu --tenant ACUCLI state acu-config/views
 ```
 
-This seed has no `config/qms/`. QMS apply stays in the sibling GitOps repo.
+This seed has no customization YAML under `acu-config/`. QMS apply stays in the sibling GitOps repo.
 
 ## Related repos
 

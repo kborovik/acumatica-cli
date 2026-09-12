@@ -664,6 +664,10 @@ def test_root_help_is_agent_oriented(wired: Instance) -> None:
     assert "COMMAND MAP" in out
     assert "EXIT CODES" in out
     assert "CONFIG RESOLUTION" in out
+    assert "PATHS" in out
+    assert "acu-config/" in out
+    assert "acu-scenario/" in out
+    assert "apply acu-config" in out
     assert "REST data plane" in out
     assert "SSH control plane" in out
     # sole writer + drift contract

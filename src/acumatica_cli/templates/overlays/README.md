@@ -6,29 +6,18 @@ trunk. Keyed by resolved `api_version` (`--api-version`, else
 
 ```
 overlays/default-<api_version>/
-  config/…      # optional: same SEED_DIRS layout as trunk config/
-  scenario/…    # optional: same basenames as trunk scenario/*.yaml
+  acu-config/…     # optional: same SEED_DIRS layout as trunk acu-config/
+  acu-scenario/…   # optional: same basenames as trunk acu-scenario/*.yaml
 ```
 
-## Bare compose (pin auto)
-
-When you omit path args, `acu` appends the pin overlay when present:
-
-| Command | Behavior |
-|---------|----------|
-| `acu apply` / `acu diff` | trunk `config/` then `overlays/default-<api>/config/` (or root SEED_DIRS under the overlay) |
-| `acu run` | trunk `scenario/*.yaml`, same basename under `overlays/default-<api>/scenario/` **replaces** trunk |
-
-Explicit path args disable pin auto (you compose paths yourself).
+Pass overlay trees as extra explicit paths. apply / diff / run / state
+do not auto-compose overlays when a path is omitted (omitted path prints help).
 
 ```sh
-# host pin ACU_API_VERSION=24.200.001 → uses overlays/default-24.200.001/
-acu apply
-acu run
-acu diff
-
-# explicit (no auto)
-acu apply config/ overlays/default-24.200.001/
+# host pin ACU_API_VERSION=24.200.001
+acu apply acu-config overlays/default-24.200.001/acu-config
+acu run acu-scenario overlays/default-24.200.001/acu-scenario
+acu diff acu-config overlays/default-24.200.001/acu-config
 ```
 
 ## Current lab halves (ERP line → half → overlay)
@@ -45,8 +34,8 @@ halves only need an overlay when the contract rejects trunk fields.
 ## Future halves
 
 1. Set host-true `ACU_API_VERSION` in `.env` (or `--api-version`) from `acu config check`.
-2. If bare apply/run fails on a contract field, add
+2. If apply/run fails on a contract field, add
    `overlays/default-<that-half>/…` with the minimal rewrite.
-3. Re-run bare `acu apply` / `acu run` / `acu diff` (pin auto picks it up).
+3. Re-run with explicit overlay paths.
 
 Do not add long-running git branches per ERP version. Do not commit multi-version OpenAPI trees.
