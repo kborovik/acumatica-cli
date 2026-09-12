@@ -1,0 +1,8 @@
+entity: OrderType
+key: OrderType
+endpoint: bootstrap
+records:
+- OrderType: SO
+  Active: true
+  FreightAcctID: '40100'
+  FreightSubID: '000000'

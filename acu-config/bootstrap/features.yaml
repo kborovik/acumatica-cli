@@ -1,0 +1,11 @@
+- FinancialModule
+- FinancialStandard
+- DistributionModule
+- Inventory
+- LotSerialTracking
+- Branch
+- MultiCompany
+- SubAccount
+- KitAssemblies
+- Warehouse
+- WarehouseLocation

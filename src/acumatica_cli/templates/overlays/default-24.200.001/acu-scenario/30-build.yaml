@@ -1,0 +1,116 @@
+scenario: build
+description: Assemble gateway kits from purchased components
+steps:
+- id: asm-edge
+  put: KitAssembly
+  record:
+    Type: Assembly
+    KitInventoryID: GW-EDGE
+    Revision: V1
+    Qty: 10
+    WarehouseID: WH01
+    LocationID: MAIN
+    ReasonCode: INASSEMBLY
+    Hold: false
+  capture: {ReferenceNbr: asm_edge}
+- id: release-asm-edge
+  action: {entity: KitAssembly, name: ReleaseKitAssembly}
+  record: {Type: Assembly, ReferenceNbr: "${asm_edge}"}
+  wait:
+    entity: KitAssembly
+    keys: [Assembly, "${asm_edge}"]
+    until: {Status: Released}
+- id: asm-cell
+  put: KitAssembly
+  record:
+    Type: Assembly
+    KitInventoryID: GW-CELL
+    Revision: V1
+    Qty: 5
+    WarehouseID: WH01
+    LocationID: MAIN
+    ReasonCode: INASSEMBLY
+    Hold: false
+  capture: {ReferenceNbr: asm_cell}
+- id: release-asm-cell
+  action: {entity: KitAssembly, name: ReleaseKitAssembly}
+  record: {Type: Assembly, ReferenceNbr: "${asm_cell}"}
+  wait:
+    entity: KitAssembly
+    keys: [Assembly, "${asm_cell}"]
+    until: {Status: Released}
+- id: asm-rail
+  put: KitAssembly
+  record:
+    Type: Assembly
+    KitInventoryID: GW-RAIL
+    Revision: V1
+    Qty: 5
+    WarehouseID: WH01
+    LocationID: MAIN
+    ReasonCode: INASSEMBLY
+    Hold: false
+  capture: {ReferenceNbr: asm_rail}
+- id: release-asm-rail
+  action: {entity: KitAssembly, name: ReleaseKitAssembly}
+  record: {Type: Assembly, ReferenceNbr: "${asm_rail}"}
+  wait:
+    entity: KitAssembly
+    keys: [Assembly, "${asm_rail}"]
+    until: {Status: Released}
+expect:
+- get:
+    entity: KitAssembly
+    keys: [Assembly, "${asm_edge}"]
+  fields:
+    Status: Released
+- get:
+    entity: KitAssembly
+    keys: [Assembly, "${asm_cell}"]
+  fields:
+    Status: Released
+- get:
+    entity: KitAssembly
+    keys: [Assembly, "${asm_rail}"]
+  fields:
+    Status: Released
+- inquire: InventorySummaryInquiry
+  parameters: {InventoryID: GW-EDGE, WarehouseID: WH01}
+  delta: {QtyOnHand: 10.0}
+- inquire: InventorySummaryInquiry
+  parameters: {InventoryID: GW-CELL, WarehouseID: WH01}
+  delta: {QtyOnHand: 5.0}
+- inquire: InventorySummaryInquiry
+  parameters: {InventoryID: GW-RAIL, WarehouseID: WH01}
+  delta: {QtyOnHand: 5.0}
+- inquire: InventorySummaryInquiry
+  parameters: {InventoryID: ENCL-STD, WarehouseID: WH01}
+  delta: {QtyOnHand: -15.0}
+- inquire: InventorySummaryInquiry
+  parameters: {InventoryID: ENCL-DIN, WarehouseID: WH01}
+  delta: {QtyOnHand: -5.0}
+- inquire: InventorySummaryInquiry
+  parameters: {InventoryID: MB-CM4, WarehouseID: WH01}
+  delta: {QtyOnHand: -20.0}
+- inquire: InventorySummaryInquiry
+  parameters: {InventoryID: MOD-LTE, WarehouseID: WH01}
+  delta: {QtyOnHand: -5.0}
+- inquire: InventorySummaryInquiry
+  parameters: {InventoryID: ANT-LORA, WarehouseID: WH01}
+  delta: {QtyOnHand: -20.0}
+- inquire: InventorySummaryInquiry
+  parameters: {InventoryID: ANT-LTE, WarehouseID: WH01}
+  delta: {QtyOnHand: -5.0}
+- inquire: InventorySummaryInquiry
+  parameters: {InventoryID: PSU-12V, WarehouseID: WH01}
+  delta: {QtyOnHand: -20.0}
+- inquire: InventorySummaryInquiry
+  parameters: {InventoryID: SD-32GB, WarehouseID: WH01}
+  delta: {QtyOnHand: -20.0}
+- inquire: InventorySummaryInquiry
+  parameters: {InventoryID: CBL-PWR, WarehouseID: WH01}
+  delta: {QtyOnHand: -20.0}
+- inquire: AccountSummaryInquiry
+  parameters: {Ledger: ACTUAL, Period: "${current_period}"}
+  match: {Account: '10100'}
+  delta: {EndingBalance: 0.00}

@@ -1,0 +1,17 @@
+entity: PaymentMethod
+key: PaymentMethodID
+detail_keys:
+  AllowedCashAccounts: CashAccount
+records:
+- PaymentMethodID: WIRE
+  Description: Wire transfer
+  Active: true
+  MeansOfPayment: Cash/Check
+  UseInAP: true
+  UseInAR: true
+  AllowedCashAccounts:
+  - CashAccount: '10100'
+    UseInAP: true
+    UseInAR: true
+    APDefault: true
+    ARDefault: true

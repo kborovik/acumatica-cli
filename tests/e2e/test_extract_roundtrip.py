@@ -1,20 +1,20 @@
 """Live full extract round-trip against the real instance (T119, `make e2e`).
 
 Extract's proof of fitness as the inverse of apply for the full packaged
-seed under ``config/`` (bootstrap + baseline + setup + master, V34):
+seed under ``acu-config/`` (bootstrap + baseline + setup + master, V34):
 
 1. Tenant A is configured from the scaffolded synthetic data repo (T63:
    packaged ``config init`` templates into a tmp dir — single org, no
    repo-root symlinks, no dataset tenants).
 2. ``acu survey extract --out a/`` dumps the full catalog off A (hard-cut)
-   ``config/`` emit; T115).
+   ``acu-config/`` emit; T115).
 3. Tenant B is created fresh and configured from ``a/config`` alone.
 4. ``acu diff a/config`` on B is clean (V4, exit 0).
 5. Re-extract from B into ``b/`` is byte-identical to ``a/`` — any
    server-derived field the catalog fails to strip surfaces as a byte
    difference (V22; B11/B26 class).
 
-Master is non-optional: after full bare apply, no ``config/master/`` row
+Master is non-optional: after full bare apply, no ``acu-config/master/`` row
 may skip as ``(no records)`` — that would mean A's configuration is
 incomplete before the inverse is even exercised. ``92-role-users.yaml``
 is the V53 exception: mapped Role.Users GET stays empty after AssignUser,
@@ -59,7 +59,7 @@ pytestmark = pytest.mark.e2e
 LOGIN_A = "E2EA"
 LOGIN_B = "E2EB"
 # V53: mapped Role.Users GET is empty; extract skips rather than emit.
-ROLE_USERS_FILE = "config/master/92-role-users.yaml"
+ROLE_USERS_FILE = "acu-config/master/92-role-users.yaml"
 USERS_GET_EMPTY = "Users GET empty"
 
 
@@ -102,16 +102,16 @@ def test_tenant_a_bootstraps(acu: RunAcu, scratch_pair: ScratchPair) -> None:
 
 
 def test_apply_configures_tenant_a(acu: RunAcu, scratch_pair: ScratchPair) -> None:
-    """Bare apply sweeps the scaffolded repo's config/ SEED_DIRS (V28/V30).
+    """Bare apply sweeps the scaffolded repo's acu-config/ SEED_DIRS (V28/V30).
 
     Full seed includes master after setup — the extract inverse is only
     meaningful when A carries the whole packaged surface.
     """
-    proc = acu("--tenant", LOGIN_A, "apply")
+    proc = acu("--tenant", LOGIN_A, "apply", "acu-config")
     assert proc.returncode == 0, joined_output(proc)
     combined = joined_output(proc)
     # umbrella / default_seed_dirs order: bootstrap → baseline → setup → master
-    assert "config/master/" in combined or "master/" in combined, combined
+    assert "acu-config/master/" in combined or "master/" in combined, combined
 
 
 def test_extract_dumps_tenant_a(
@@ -119,7 +119,7 @@ def test_extract_dumps_tenant_a(
 ) -> None:
     """Extract --out a/ emits the full catalog off the configured A.
 
-    Every in-contract catalog row must produce a file under ``config/``
+    Every in-contract catalog row must produce a file under ``acu-config/``
     (V30 hard-cut). A ``(no records)`` skip on master means A's apply was
     incomplete — fail loud before the byte-compare. V53: Role.Users GET
     empty is a clean skip for ``92-role-users.yaml`` (apply-only
@@ -130,8 +130,8 @@ def test_extract_dumps_tenant_a(
     """
     dir_a, _ = out_dirs
     expected = _catalog_expected()
-    master_expected = {p for p in expected if p.startswith("config/master/")}
-    assert master_expected, "catalog must include config/master/ rows (T117/T119)"
+    master_expected = {p for p in expected if p.startswith("acu-config/master/")}
+    assert master_expected, "catalog must include acu-config/master/ rows (T117/T119)"
 
     proc = acu("--tenant", LOGIN_A, "survey", "extract", "--out", str(dir_a))
     assert proc.returncode == 0, joined_output(proc)
@@ -141,7 +141,7 @@ def test_extract_dumps_tenant_a(
     )
     # master is non-optional after full apply (T119)
     master_skips = [
-        ln for ln in skips if "config/master/" in ln and "(no records)" in ln
+        ln for ln in skips if "acu-config/master/" in ln and "(no records)" in ln
     ]
     assert not master_skips, (
         "full apply left master empty — extract inverse incomplete:\n"
@@ -170,7 +170,7 @@ def test_extract_dumps_tenant_a(
     assert master_expected.issubset(_yaml_set(dir_a))
     # hard-cut layout: no root SEED_DIRS emit
     for rel in _yaml_set(dir_a):
-        assert rel.startswith("config/"), rel
+        assert rel.startswith("acu-config/"), rel
     for rel in expected - {FEATURES_FILE}:
         load_baseline(dir_a / rel)
 
@@ -185,12 +185,12 @@ def test_tenant_b_bootstraps(acu: RunAcu, scratch_pair: ScratchPair) -> None:
 def test_replay_extract_onto_tenant_b(
     acu: RunAcu, scratch_pair: ScratchPair, out_dirs: tuple[Path, Path]
 ) -> None:
-    """B is configured from a/ alone, umbrella expand of config/ (V30)."""
+    """B is configured from a/ alone, umbrella expand of acu-config/ (V30)."""
     dir_a, _ = out_dirs
-    proc = acu("--tenant", LOGIN_B, "apply", str(dir_a / "config"))
+    proc = acu("--tenant", LOGIN_B, "apply", str(dir_a / "acu-config"))
     assert proc.returncode == 0, joined_output(proc)
     combined = joined_output(proc)
-    assert "config/master/" in combined or "master/" in combined, combined
+    assert "acu-config/master/" in combined or "master/" in combined, combined
 
 
 def test_diff_over_extract_is_clean_on_b(
@@ -201,7 +201,7 @@ def test_diff_over_extract_is_clean_on_b(
     Covers the full seed including master — not a GL-only subset.
     """
     dir_a, _ = out_dirs
-    proc = acu("--tenant", LOGIN_B, "diff", str(dir_a / "config"))
+    proc = acu("--tenant", LOGIN_B, "diff", str(dir_a / "acu-config"))
     assert proc.returncode == 0, joined_output(proc)
     assert "no drift" in joined_output(proc)
 
@@ -222,8 +222,8 @@ def test_reextract_is_byte_identical(
     assert proc.returncode == 0, joined_output(proc)
     set_a, set_b = _yaml_set(dir_a), _yaml_set(dir_b)
     assert set_b == set_a
-    master = {p for p in set_a if p.startswith("config/master/")}
-    assert master, "re-extract must include config/master/ (T119)"
+    master = {p for p in set_a if p.startswith("acu-config/master/")}
+    assert master, "re-extract must include acu-config/master/ (T119)"
     for rel in sorted(set_a):
         text_a = (dir_a / rel).read_text(encoding="utf-8")
         text_b = (dir_b / rel).read_text(encoding="utf-8")

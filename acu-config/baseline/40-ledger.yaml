@@ -1,0 +1,6 @@
+entity: Ledger
+key: LedgerID
+records:
+- LedgerID: ACTUAL
+  Description: Actual Ledger
+  Type: Actual

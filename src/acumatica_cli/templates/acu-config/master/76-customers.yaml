@@ -1,0 +1,45 @@
+entity: Customer
+key: CustomerID
+records:
+- CustomerID: ACMEMFG
+  CustomerName: Acme Manufacturing
+  CustomerClass: B2B
+  MainContact:
+    Address:
+      Country: US
+- CustomerID: NORTHGRID
+  CustomerName: NorthGrid Utilities
+  CustomerClass: B2B
+  MainContact:
+    Address:
+      Country: US
+- CustomerID: AGRISENSE
+  CustomerName: AgriSense Farms
+  CustomerClass: B2B
+  MainContact:
+    Address:
+      Country: US
+- CustomerID: COLDCHAIN
+  CustomerName: ColdChain Logistics
+  CustomerClass: B2B
+  MainContact:
+    Address:
+      Country: US
+- CustomerID: SMARTBLD
+  CustomerName: SmartBuild Properties
+  CustomerClass: B2B
+  MainContact:
+    Address:
+      Country: US
+- CustomerID: AQUAFLOW
+  CustomerName: AquaFlow Water Systems
+  CustomerClass: B2B
+  MainContact:
+    Address:
+      Country: US
+- CustomerID: BAYINT
+  CustomerName: Bay Integrators
+  CustomerClass: B2B
+  MainContact:
+    Address:
+      Country: US

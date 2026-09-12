@@ -1,0 +1,34 @@
+entity: ReasonCode
+key: ReasonCodeID
+endpoint: bootstrap
+records:
+- ReasonCodeID: INISSUE
+  Descr: Inventory issue
+  Usage: Issue
+  AccountID: '50300'
+  SubID: '000000'
+- ReasonCodeID: INRECEIPT
+  Descr: Inventory receipt
+  Usage: Receipt
+  AccountID: '50300'
+  SubID: '000000'
+- ReasonCodeID: INADJUST
+  Descr: Inventory adjustment
+  Usage: Adjustment
+  AccountID: '50300'
+  SubID: '000000'
+- ReasonCodeID: INPI
+  Descr: Physical inventory variance
+  Usage: Adjustment
+  AccountID: '50300'
+  SubID: '000000'
+- ReasonCodeID: INASSEMBLY
+  Descr: Kit assembly
+  Usage: Assembly/Disassembly
+  AccountID: '50300'
+  SubID: '000000'
+- ReasonCodeID: PORETURN
+  Descr: Vendor return
+  Usage: Vendor Return
+  AccountID: '50300'
+  SubID: '000000'

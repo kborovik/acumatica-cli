@@ -1,0 +1,8 @@
+entity: Company
+key: AcctCD
+endpoint: bootstrap
+records:
+- AcctCD: CNBN
+  DecPlQty: 3
+  WeightUOM: KG
+  VolumeUOM: LITER

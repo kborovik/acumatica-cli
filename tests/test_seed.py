@@ -1129,7 +1129,7 @@ def test_apply_user_membership_warm_idempotent_no_password(
 def test_package_master_role_before_user_v22_order() -> None:
     """T148/T228/V22: 90-roles then 91-users then 92-role-users."""
     root = Path(__file__).resolve().parents[1] / "src" / "acumatica_cli" / "templates"
-    master = sorted((root / "config/master").glob("*.yaml"))
+    master = sorted((root / "acu-config/master").glob("*.yaml"))
     names = [p.name for p in master]
     assert "90-roles.yaml" in names
     assert "91-users.yaml" in names
@@ -1139,10 +1139,10 @@ def test_package_master_role_before_user_v22_order() -> None:
     # expand_files leaf-dir order matches alpha (V22 sole order within dir)
     from acumatica_cli.cli import expand_files
 
-    expanded = expand_files((root / "config/master",))
+    expanded = expand_files((root / "acu-config/master",))
     entities = [seed.load_baseline(p).entity for p in expanded]
     assert entities.index("Role") < entities.index("User")
-    membership = seed.load_baseline(root / "config/master/92-role-users.yaml")
+    membership = seed.load_baseline(root / "acu-config/master/92-role-users.yaml")
     assert isinstance(membership, seed.BaselineFile)
     assert membership.entity == "Role"
     assert membership.detail_keys == {"Users": "Username"}
@@ -1408,7 +1408,7 @@ def test_apply_puts_newsymbol_and_strips_lastnbr(
 def test_apply_package_numbering_puts_newsymbol(instance: Instance) -> None:
     """V58/T253: package BATCH re-apply body includes NewSymbol: <NEW>."""
     baseline = seed.load_baseline(
-        _package_template("config/master/05-numbering-sequences.yaml")
+        _package_template("acu-config/master/05-numbering-sequences.yaml")
     )
     assert isinstance(baseline, seed.BaselineFile)
     recorder = Recorder({"/NumberingSequence": httpx.Response(200, json=[])})
@@ -1600,7 +1600,9 @@ def test_package_in_progress_transit_accounts_are_not_in_control() -> None:
     INPreferences still names 12300/12400 as progress/transit. Load the
     packaged templates, not a fixture copy.
     """
-    accounts = seed.load_baseline(_package_template("config/baseline/20-accounts.yaml"))
+    accounts = seed.load_baseline(
+        _package_template("acu-config/baseline/20-accounts.yaml")
+    )
     assert isinstance(accounts, seed.BaselineFile)
     by_cd = {str(r["AccountCD"]): r for r in accounts.records}
     assert _control_account_module(by_cd["12100"]) == "IN"
@@ -1609,7 +1611,7 @@ def test_package_in_progress_transit_accounts_are_not_in_control() -> None:
     assert _control_account_module(by_cd["12400"]) is None
 
     prefs = seed.load_baseline(
-        _package_template("config/master/20-in-preferences.yaml")
+        _package_template("acu-config/master/20-in-preferences.yaml")
     )
     assert isinstance(prefs, seed.BaselineFile)
     rec = prefs.records[0]
@@ -1622,7 +1624,7 @@ def test_package_company_apply_body_includes_decplqty_and_persist_uoms(
 ) -> None:
     """T222/V52: packaging Company PUT carries DecPlQty 3 + persist UOMs."""
     baseline = seed.load_baseline(
-        _package_template("config/baseline/91-company-packaging.yaml")
+        _package_template("acu-config/baseline/91-company-packaging.yaml")
     )
     assert isinstance(baseline, seed.BaselineFile)
     rec = baseline.records[0]
@@ -1648,7 +1650,7 @@ def test_company_packaging_round_trip(instance: Instance) -> None:
     """
     store = EchoStore()
     company = seed.load_baseline(
-        _package_template("config/baseline/91-company-packaging.yaml")
+        _package_template("acu-config/baseline/91-company-packaging.yaml")
     )
     assert isinstance(company, seed.BaselineFile)
     with AcumaticaClient(instance, transport=httpx.MockTransport(store)) as client:
@@ -1667,7 +1669,7 @@ def test_package_segmented_key_apply_body_widens_inventory_bizacct(
 ) -> None:
     """T206/V50: package SegmentedKey PUT carries DimensionID+SegmentID+Length 30."""
     baseline = seed.load_baseline(
-        _package_template("config/bootstrap/segmented-key.yaml")
+        _package_template("acu-config/bootstrap/segmented-key.yaml")
     )
     assert isinstance(baseline, seed.BaselineFile)
     recorder = Recorder({"/SegmentedKey": httpx.Response(200, json=[])})
@@ -1690,7 +1692,7 @@ def test_package_in_preferences_apply_body_includes_deepen_fields(
 ) -> None:
     """T157/V41: package INPreferences PUT carries numbering + policy fields."""
     baseline = seed.load_baseline(
-        _package_template("config/master/20-in-preferences.yaml")
+        _package_template("acu-config/master/20-in-preferences.yaml")
     )
     assert isinstance(baseline, seed.BaselineFile)
     recorder = Recorder({"/INPreferences": httpx.Response(200, json=[])})
@@ -1717,7 +1719,7 @@ def test_package_gl_preferences_apply_body_includes_deepen_fields(
 ) -> None:
     """T157/V41: package GLPreferences PUT carries batch numbering + policy."""
     baseline = seed.load_baseline(
-        _package_template("config/baseline/50-gl-preferences.yaml")
+        _package_template("acu-config/baseline/50-gl-preferences.yaml")
     )
     assert isinstance(baseline, seed.BaselineFile)
     recorder = Recorder({"/GLPreferences": httpx.Response(200, json=[])})
@@ -1733,7 +1735,9 @@ def test_package_gl_preferences_apply_body_includes_deepen_fields(
 
 def test_package_ap_ar_so_po_ca_preferences_claim_deepen_fields() -> None:
     """T156/T157: package AR/AP/SO/PO/CA prefs claim curated fields only."""
-    ar = seed.load_baseline(_package_template("config/master/60-ar-preferences.yaml"))
+    ar = seed.load_baseline(
+        _package_template("acu-config/master/60-ar-preferences.yaml")
+    )
     assert isinstance(ar, seed.BaselineFile)
     rec = ar.records[0]
     assert rec["InvoiceNumberingID"] == "ARINVOICE"
@@ -1741,7 +1745,9 @@ def test_package_ap_ar_so_po_ca_preferences_claim_deepen_fields() -> None:
     assert rec["RequireExtRef"] is True
     assert rec["CreditCheckError"] is True
 
-    ap = seed.load_baseline(_package_template("config/master/61-ap-preferences.yaml"))
+    ap = seed.load_baseline(
+        _package_template("acu-config/master/61-ap-preferences.yaml")
+    )
     assert isinstance(ap, seed.BaselineFile)
     rec = ap.records[0]
     assert rec["InvoiceNumberingID"] == "APBILL"
@@ -1749,18 +1755,24 @@ def test_package_ap_ar_so_po_ca_preferences_claim_deepen_fields() -> None:
     assert rec["RequireVendorRef"] is True
     assert rec["RequireApprovePayments"] is True
 
-    so = seed.load_baseline(_package_template("config/master/56-so-preferences.yaml"))
+    so = seed.load_baseline(
+        _package_template("acu-config/master/56-so-preferences.yaml")
+    )
     assert isinstance(so, seed.BaselineFile)
     assert so.records[0]["ShipmentNumberingID"] == "SOSHIPMENT"
     assert so.records[0]["CreditCheckError"] is True
 
-    po = seed.load_baseline(_package_template("config/master/57-po-preferences.yaml"))
+    po = seed.load_baseline(
+        _package_template("acu-config/master/57-po-preferences.yaml")
+    )
     assert isinstance(po, seed.BaselineFile)
     assert po.records[0]["RegularPONumberingID"] == "POORDER"
     assert po.records[0]["ReceiptNumberingID"] == "PORECEIPT"
     assert po.records[0]["AutoReleaseAP"] is False
 
-    ca = seed.load_baseline(_package_template("config/master/62-ca-preferences.yaml"))
+    ca = seed.load_baseline(
+        _package_template("acu-config/master/62-ca-preferences.yaml")
+    )
     assert isinstance(ca, seed.BaselineFile)
     rec = ca.records[0]
     assert rec["BatchNumberingID"] == "BATCH"
@@ -1775,7 +1787,7 @@ def test_package_prefs_diff_clean_when_live_matches_seed(
 ) -> None:
     """T157: deepened fields compare clean; no permanent drift from extras."""
     baseline = seed.load_baseline(
-        _package_template("config/master/20-in-preferences.yaml")
+        _package_template("acu-config/master/20-in-preferences.yaml")
     )
     assert isinstance(baseline, seed.BaselineFile)
     live = {

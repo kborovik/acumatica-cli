@@ -1,0 +1,7 @@
+entity: Subaccount
+key: SubaccountCD
+records:
+- Active: true
+  Description: Default
+  Secured: false
+  SubaccountCD: '000000'

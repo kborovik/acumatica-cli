@@ -1,0 +1,57 @@
+entity: Vendor
+key: VendorID
+records:
+- VendorID: SHENZHEN
+  VendorName: Shenzhen Circuit Supply
+  VendorClass: SUPPLIER
+  Terms: NET30
+  PrintOrders: false
+  SendOrdersbyEmail: false
+  MainContact:
+    Address:
+      Country: US
+- VendorID: ENCLOTEC
+  VendorName: EncloTech Industries
+  VendorClass: SUPPLIER
+  Terms: NET30
+  PrintOrders: false
+  SendOrdersbyEmail: false
+  MainContact:
+    Address:
+      Country: US
+- VendorID: WAVELINK
+  VendorName: WaveLink Antennas
+  VendorClass: SUPPLIER
+  Terms: NET30
+  PrintOrders: false
+  SendOrdersbyEmail: false
+  MainContact:
+    Address:
+      Country: US
+- VendorID: MEMSTOR
+  VendorName: MemStore Distribution
+  VendorClass: SUPPLIER
+  Terms: NET30
+  PrintOrders: false
+  SendOrdersbyEmail: false
+  MainContact:
+    Address:
+      Country: US
+- VendorID: FREIGHT
+  VendorName: FastFreight Logistics
+  VendorClass: SERVICE
+  Terms: NET30
+  PrintOrders: false
+  SendOrdersbyEmail: false
+  MainContact:
+    Address:
+      Country: US
+- VendorID: CLOUDNET
+  VendorName: CloudNet Services
+  VendorClass: SERVICE
+  Terms: NET30
+  PrintOrders: false
+  SendOrdersbyEmail: false
+  MainContact:
+    Address:
+      Country: US

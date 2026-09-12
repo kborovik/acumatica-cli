@@ -1010,40 +1010,40 @@ def test_config_init_scaffolds_data_repo(tmp_path: Path) -> None:
         ".env",
         ".gitignore",
         "README.md",
-        "config/baseline/10-subaccounts.yaml",
-        "config/baseline/20-accounts.yaml",
-        "config/baseline/40-ledger.yaml",
-        "config/baseline/50-gl-preferences.yaml",
-        "config/baseline/60-ledger-company.yaml",
-        "config/baseline/90-uoms.yaml",
-        "config/baseline/91-company-packaging.yaml",
-        "config/bootstrap/company.yaml",
-        "config/bootstrap/credit-terms.yaml",
-        "config/bootstrap/segmented-key.yaml",
-        "config/bootstrap/features.yaml",
-        "config/setup/10-financial-year.yaml",
-        "config/setup/20-master-calendar.yaml",
-        "config/setup/30-open-periods.yaml",
-        "config/master/20-in-preferences.yaml",
-        "config/views/10-trial-balance.yaml",
-        "scenario/10-seed-capital.yaml",
-        "scenario/20-buy.yaml",
-        "scenario/30-build.yaml",
-        "scenario/40-sell.yaml",
+        "acu-config/baseline/10-subaccounts.yaml",
+        "acu-config/baseline/20-accounts.yaml",
+        "acu-config/baseline/40-ledger.yaml",
+        "acu-config/baseline/50-gl-preferences.yaml",
+        "acu-config/baseline/60-ledger-company.yaml",
+        "acu-config/baseline/90-uoms.yaml",
+        "acu-config/baseline/91-company-packaging.yaml",
+        "acu-config/bootstrap/company.yaml",
+        "acu-config/bootstrap/credit-terms.yaml",
+        "acu-config/bootstrap/segmented-key.yaml",
+        "acu-config/bootstrap/features.yaml",
+        "acu-config/setup/10-financial-year.yaml",
+        "acu-config/setup/20-master-calendar.yaml",
+        "acu-config/setup/30-open-periods.yaml",
+        "acu-config/master/20-in-preferences.yaml",
+        "acu-config/views/10-trial-balance.yaml",
+        "acu-scenario/10-seed-capital.yaml",
+        "acu-scenario/20-buy.yaml",
+        "acu-scenario/30-build.yaml",
+        "acu-scenario/40-sell.yaml",
         "overlays/README.md",
         "overlays/default-24.200.001/README.md",
-        "overlays/default-24.200.001/scenario/30-build.yaml",
+        "overlays/default-24.200.001/acu-scenario/30-build.yaml",
     ]
     for rel in expected:
         assert (repo / rel).is_file(), rel
-    assert not (repo / "config" / "bootstrap" / "project.xml").exists()
+    assert not (repo / "acu-config" / "bootstrap" / "project.xml").exists()
     assert not (repo / "bootstrap").exists()
     assert not (repo / "master").exists()
     assert not (repo / "snapshot").exists()
     writes = [ln for ln in result.output.splitlines() if ln.startswith("write ")]
     assert len(writes) == len(INIT_TEMPLATES)
     overlay_build = (
-        repo / "overlays" / "default-24.200.001" / "scenario" / "30-build.yaml"
+        repo / "overlays" / "default-24.200.001" / "acu-scenario" / "30-build.yaml"
     ).read_text()
     assert "Type: Assembly" in overlay_build
     assert "Type: Production" not in overlay_build
@@ -1066,13 +1066,13 @@ def test_config_init_scaffolds_data_repo(tmp_path: Path) -> None:
     assert "ACU_API_VERSION=25.200.001" in env
     assert not any(ln.startswith("ACU_SSH=") for ln in env.splitlines())
     # T104/V28/V33: TB is EndingBalance-class inquire, not roster Account
-    tb = (repo / "config" / "views" / "10-trial-balance.yaml").read_text()
+    tb = (repo / "acu-config" / "views" / "10-trial-balance.yaml").read_text()
     assert "inquire: AccountSummaryInquiry" in tb
     assert "EndingBalance" in tb
     assert "entity: Account" not in tb
     assert "erp.example.com" not in env
     # T107/V33: inventory-summary not golden
-    assert not (repo / "config" / "views" / "20-inventory-summary.yaml").exists()
+    assert not (repo / "acu-config" / "views" / "20-inventory-summary.yaml").exists()
 
 
 def test_config_init_defaults_to_cwd_with_placeholder_host(
@@ -1138,7 +1138,7 @@ def test_config_init_scaffold_round_trips(
     # T124: scaffold omits ACU_SSH; show emits derived Administrator@host
     assert "ACU_SSH=Administrator@erp.test" in shown.output
 
-    applied = CliRunner().invoke(cli.cli, ["apply", "--dry-run", "config/"])
+    applied = CliRunner().invoke(cli.cli, ["apply", "--dry-run", "acu-config/"])
     assert applied.exit_code == 0, applied.output
     assert "would PUT Company" in applied.output
     assert "would PUT CreditTerms" in applied.output
@@ -1152,7 +1152,7 @@ def test_config_init_scaffold_round_trips(
     assert "would invoke GenerateCalendar" in applied.output
     assert "would invoke ProcessAll" in applied.output
     assert "would PUT Warehouse" in applied.output or "Warehouse" in applied.output
-    assert "config/master/" in applied.output or "INPreferences" in applied.output
+    assert "acu-config/master/" in applied.output or "INPreferences" in applied.output
     # V22: numbered prefixes encode apply order within baseline before setup
     order = [
         applied.output.index("would PUT Subaccount ["),
@@ -1173,7 +1173,7 @@ def test_config_init_template_set_is_feature_closed(tmp_path: Path) -> None:
     CliRunner().invoke(cli.cli, ["config", "init", str(tmp_path)])
 
     features = yaml.safe_load(
-        (tmp_path / "config" / "bootstrap" / "features.yaml").read_text()
+        (tmp_path / "acu-config" / "bootstrap" / "features.yaml").read_text()
     )
     for name in [
         "FinancialModule",
@@ -1195,22 +1195,22 @@ def test_config_init_template_set_is_reference_closed(tmp_path: Path) -> None:
     CliRunner().invoke(cli.cli, ["config", "init", str(tmp_path)])
 
     company = yaml.safe_load(
-        (tmp_path / "config" / "bootstrap" / "company.yaml").read_text()
+        (tmp_path / "acu-config" / "bootstrap" / "company.yaml").read_text()
     )
     acct_cd = company["records"][0]["AcctCD"]
     ledger_link = yaml.safe_load(
-        (tmp_path / "config" / "baseline" / "60-ledger-company.yaml").read_text()
+        (tmp_path / "acu-config" / "baseline" / "60-ledger-company.yaml").read_text()
     )
     assert ledger_link["records"][0]["OrganizationID"] == acct_cd
     open_periods = yaml.safe_load(
-        (tmp_path / "config" / "setup" / "30-open-periods.yaml").read_text()
+        (tmp_path / "acu-config" / "setup" / "30-open-periods.yaml").read_text()
     )
     assert open_periods["record"]["OrganizationID"] == acct_cd
     in_prefs = yaml.safe_load(
-        (tmp_path / "config" / "master" / "20-in-preferences.yaml").read_text()
+        (tmp_path / "acu-config" / "master" / "20-in-preferences.yaml").read_text()
     )
     cash = yaml.safe_load(
-        (tmp_path / "config" / "master" / "63-cash-account.yaml").read_text()
+        (tmp_path / "acu-config" / "master" / "63-cash-account.yaml").read_text()
     )
     assert in_prefs["records"][0]["TransitBranchID"] == acct_cd
     assert cash["records"][0]["BranchID"] == acct_cd
@@ -1889,7 +1889,7 @@ def test_bare_apply_does_not_plan_config_umbrella(
     monkeypatch.setattr(cli, "AcumaticaClient", DummyClient)
 
     bare = CliRunner().invoke(cli.cli, ["apply", "--dry-run"])
-    explicit = CliRunner().invoke(cli.cli, ["apply", "--dry-run", "config/"])
+    explicit = CliRunner().invoke(cli.cli, ["apply", "--dry-run", "acu-config/"])
 
     assert bare.exit_code == 1
     assert "Usage:" in bare.output

@@ -51,96 +51,147 @@ INIT_TEMPLATES = (
     ("env", ".env"),
     ("gitignore", ".gitignore"),
     ("README.md", "README.md"),
-    ("config/bootstrap/company.yaml", "config/bootstrap/company.yaml"),
-    ("config/bootstrap/credit-terms.yaml", "config/bootstrap/credit-terms.yaml"),
+    ("acu-config/bootstrap/company.yaml", "acu-config/bootstrap/company.yaml"),
     (
-        "config/bootstrap/segmented-key.yaml",
-        "config/bootstrap/segmented-key.yaml",
-    ),
-    ("config/bootstrap/features.yaml", "config/bootstrap/features.yaml"),
-    ("config/baseline/10-subaccounts.yaml", "config/baseline/10-subaccounts.yaml"),
-    ("config/baseline/20-accounts.yaml", "config/baseline/20-accounts.yaml"),
-    ("config/baseline/40-ledger.yaml", "config/baseline/40-ledger.yaml"),
-    (
-        "config/baseline/50-gl-preferences.yaml",
-        "config/baseline/50-gl-preferences.yaml",
+        "acu-config/bootstrap/credit-terms.yaml",
+        "acu-config/bootstrap/credit-terms.yaml",
     ),
     (
-        "config/baseline/60-ledger-company.yaml",
-        "config/baseline/60-ledger-company.yaml",
+        "acu-config/bootstrap/segmented-key.yaml",
+        "acu-config/bootstrap/segmented-key.yaml",
     ),
-    ("config/baseline/90-uoms.yaml", "config/baseline/90-uoms.yaml"),
+    ("acu-config/bootstrap/features.yaml", "acu-config/bootstrap/features.yaml"),
     (
-        "config/baseline/91-company-packaging.yaml",
-        "config/baseline/91-company-packaging.yaml",
+        "acu-config/baseline/10-subaccounts.yaml",
+        "acu-config/baseline/10-subaccounts.yaml",
     ),
-    ("config/setup/10-financial-year.yaml", "config/setup/10-financial-year.yaml"),
-    ("config/setup/20-master-calendar.yaml", "config/setup/20-master-calendar.yaml"),
-    ("config/setup/30-open-periods.yaml", "config/setup/30-open-periods.yaml"),
+    ("acu-config/baseline/20-accounts.yaml", "acu-config/baseline/20-accounts.yaml"),
+    ("acu-config/baseline/40-ledger.yaml", "acu-config/baseline/40-ledger.yaml"),
     (
-        "config/master/05-numbering-sequences.yaml",
-        "config/master/05-numbering-sequences.yaml",
-    ),
-    ("config/master/10-reason-codes.yaml", "config/master/10-reason-codes.yaml"),
-    ("config/master/20-in-preferences.yaml", "config/master/20-in-preferences.yaml"),
-    (
-        "config/master/30-availability-rules.yaml",
-        "config/master/30-availability-rules.yaml",
-    ),
-    ("config/master/40-posting-classes.yaml", "config/master/40-posting-classes.yaml"),
-    ("config/master/50-warehouse.yaml", "config/master/50-warehouse.yaml"),
-    (
-        "config/master/51-warehouse-locations.yaml",
-        "config/master/51-warehouse-locations.yaml",
+        "acu-config/baseline/50-gl-preferences.yaml",
+        "acu-config/baseline/50-gl-preferences.yaml",
     ),
     (
-        "config/master/52-warehouse-defaults.yaml",
-        "config/master/52-warehouse-defaults.yaml",
+        "acu-config/baseline/60-ledger-company.yaml",
+        "acu-config/baseline/60-ledger-company.yaml",
     ),
-    ("config/master/53-tax-categories.yaml", "config/master/53-tax-categories.yaml"),
-    ("config/master/54-item-classes.yaml", "config/master/54-item-classes.yaml"),
-    ("config/master/56-so-preferences.yaml", "config/master/56-so-preferences.yaml"),
-    ("config/master/57-po-preferences.yaml", "config/master/57-po-preferences.yaml"),
-    ("config/master/58-order-types.yaml", "config/master/58-order-types.yaml"),
-    ("config/master/60-ar-preferences.yaml", "config/master/60-ar-preferences.yaml"),
-    ("config/master/61-ap-preferences.yaml", "config/master/61-ap-preferences.yaml"),
-    ("config/master/62-ca-preferences.yaml", "config/master/62-ca-preferences.yaml"),
-    ("config/master/63-cash-account.yaml", "config/master/63-cash-account.yaml"),
-    ("config/master/64-payment-methods.yaml", "config/master/64-payment-methods.yaml"),
+    ("acu-config/baseline/90-uoms.yaml", "acu-config/baseline/90-uoms.yaml"),
     (
-        "config/master/65-statement-cycles.yaml",
-        "config/master/65-statement-cycles.yaml",
-    ),
-    ("config/master/70-vendor-classes.yaml", "config/master/70-vendor-classes.yaml"),
-    (
-        "config/master/71-customer-classes.yaml",
-        "config/master/71-customer-classes.yaml",
-    ),
-    ("config/master/75-vendors.yaml", "config/master/75-vendors.yaml"),
-    ("config/master/76-customers.yaml", "config/master/76-customers.yaml"),
-    (
-        "config/master/80-stock-items-parts.yaml",
-        "config/master/80-stock-items-parts.yaml",
+        "acu-config/baseline/91-company-packaging.yaml",
+        "acu-config/baseline/91-company-packaging.yaml",
     ),
     (
-        "config/master/82-stock-items-kits.yaml",
-        "config/master/82-stock-items-kits.yaml",
+        "acu-config/setup/10-financial-year.yaml",
+        "acu-config/setup/10-financial-year.yaml",
     ),
     (
-        "config/master/85-kit-specifications.yaml",
-        "config/master/85-kit-specifications.yaml",
+        "acu-config/setup/20-master-calendar.yaml",
+        "acu-config/setup/20-master-calendar.yaml",
     ),
-    ("config/master/90-roles.yaml", "config/master/90-roles.yaml"),
-    ("config/master/91-users.yaml", "config/master/91-users.yaml"),
-    ("config/master/92-role-users.yaml", "config/master/92-role-users.yaml"),
+    ("acu-config/setup/30-open-periods.yaml", "acu-config/setup/30-open-periods.yaml"),
     (
-        "config/views/10-trial-balance.yaml",
-        "config/views/10-trial-balance.yaml",
+        "acu-config/master/05-numbering-sequences.yaml",
+        "acu-config/master/05-numbering-sequences.yaml",
     ),
-    ("scenario/10-seed-capital.yaml", "scenario/10-seed-capital.yaml"),
-    ("scenario/20-buy.yaml", "scenario/20-buy.yaml"),
-    ("scenario/30-build.yaml", "scenario/30-build.yaml"),
-    ("scenario/40-sell.yaml", "scenario/40-sell.yaml"),
+    (
+        "acu-config/master/10-reason-codes.yaml",
+        "acu-config/master/10-reason-codes.yaml",
+    ),
+    (
+        "acu-config/master/20-in-preferences.yaml",
+        "acu-config/master/20-in-preferences.yaml",
+    ),
+    (
+        "acu-config/master/30-availability-rules.yaml",
+        "acu-config/master/30-availability-rules.yaml",
+    ),
+    (
+        "acu-config/master/40-posting-classes.yaml",
+        "acu-config/master/40-posting-classes.yaml",
+    ),
+    ("acu-config/master/50-warehouse.yaml", "acu-config/master/50-warehouse.yaml"),
+    (
+        "acu-config/master/51-warehouse-locations.yaml",
+        "acu-config/master/51-warehouse-locations.yaml",
+    ),
+    (
+        "acu-config/master/52-warehouse-defaults.yaml",
+        "acu-config/master/52-warehouse-defaults.yaml",
+    ),
+    (
+        "acu-config/master/53-tax-categories.yaml",
+        "acu-config/master/53-tax-categories.yaml",
+    ),
+    (
+        "acu-config/master/54-item-classes.yaml",
+        "acu-config/master/54-item-classes.yaml",
+    ),
+    (
+        "acu-config/master/56-so-preferences.yaml",
+        "acu-config/master/56-so-preferences.yaml",
+    ),
+    (
+        "acu-config/master/57-po-preferences.yaml",
+        "acu-config/master/57-po-preferences.yaml",
+    ),
+    ("acu-config/master/58-order-types.yaml", "acu-config/master/58-order-types.yaml"),
+    (
+        "acu-config/master/60-ar-preferences.yaml",
+        "acu-config/master/60-ar-preferences.yaml",
+    ),
+    (
+        "acu-config/master/61-ap-preferences.yaml",
+        "acu-config/master/61-ap-preferences.yaml",
+    ),
+    (
+        "acu-config/master/62-ca-preferences.yaml",
+        "acu-config/master/62-ca-preferences.yaml",
+    ),
+    (
+        "acu-config/master/63-cash-account.yaml",
+        "acu-config/master/63-cash-account.yaml",
+    ),
+    (
+        "acu-config/master/64-payment-methods.yaml",
+        "acu-config/master/64-payment-methods.yaml",
+    ),
+    (
+        "acu-config/master/65-statement-cycles.yaml",
+        "acu-config/master/65-statement-cycles.yaml",
+    ),
+    (
+        "acu-config/master/70-vendor-classes.yaml",
+        "acu-config/master/70-vendor-classes.yaml",
+    ),
+    (
+        "acu-config/master/71-customer-classes.yaml",
+        "acu-config/master/71-customer-classes.yaml",
+    ),
+    ("acu-config/master/75-vendors.yaml", "acu-config/master/75-vendors.yaml"),
+    ("acu-config/master/76-customers.yaml", "acu-config/master/76-customers.yaml"),
+    (
+        "acu-config/master/80-stock-items-parts.yaml",
+        "acu-config/master/80-stock-items-parts.yaml",
+    ),
+    (
+        "acu-config/master/82-stock-items-kits.yaml",
+        "acu-config/master/82-stock-items-kits.yaml",
+    ),
+    (
+        "acu-config/master/85-kit-specifications.yaml",
+        "acu-config/master/85-kit-specifications.yaml",
+    ),
+    ("acu-config/master/90-roles.yaml", "acu-config/master/90-roles.yaml"),
+    ("acu-config/master/91-users.yaml", "acu-config/master/91-users.yaml"),
+    ("acu-config/master/92-role-users.yaml", "acu-config/master/92-role-users.yaml"),
+    (
+        "acu-config/views/10-trial-balance.yaml",
+        "acu-config/views/10-trial-balance.yaml",
+    ),
+    ("acu-scenario/10-seed-capital.yaml", "acu-scenario/10-seed-capital.yaml"),
+    ("acu-scenario/20-buy.yaml", "acu-scenario/20-buy.yaml"),
+    ("acu-scenario/30-build.yaml", "acu-scenario/30-build.yaml"),
+    ("acu-scenario/40-sell.yaml", "acu-scenario/40-sell.yaml"),
     # Default-half overlays (V44): keyed by resolved api_version
     ("overlays/README.md", "overlays/README.md"),
     (
@@ -148,8 +199,8 @@ INIT_TEMPLATES = (
         "overlays/default-24.200.001/README.md",
     ),
     (
-        "overlays/default-24.200.001/scenario/30-build.yaml",
-        "overlays/default-24.200.001/scenario/30-build.yaml",
+        "overlays/default-24.200.001/acu-scenario/30-build.yaml",
+        "overlays/default-24.200.001/acu-scenario/30-build.yaml",
     ),
 )
 
@@ -237,7 +288,7 @@ def scaffold(directory: Path, host: str | None = None) -> Iterator[tuple[str, Pa
     placeholder host inside scaffolded ``ACU_BASE_URL``. ``ACU_SSH`` is
     omitted — defaults from the resolved base_url host at resolve; hosted
     opt-out = present blank ``ACU_SSH=``. Secrets stay placeholders (V2).
-    Single full seed under ``config/`` + lifecycle ``scenario/`` + ``.env``
+    Single full seed under ``acu-config/`` + lifecycle ``acu-scenario/`` + ``.env``
     with ``ACU_BASE_URL`` + ``ACU_API_VERSION`` + pin-keyed ``overlays/``
     (V27/V28/T108/V44; no flavor; no ``matrix.yaml``; no ``target.yaml``).
     The directory is created if absent. No git init, no gpg - version

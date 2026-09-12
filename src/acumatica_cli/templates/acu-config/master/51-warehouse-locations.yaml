@@ -1,0 +1,18 @@
+entity: Warehouse
+key: WarehouseID
+endpoint: default
+detail_keys:
+  Locations: LocationID
+records:
+- WarehouseID: WH01
+  ReceivingLocationID: MAIN
+  ShippingLocationID: MAIN
+  RMALocationID: MAIN
+  Locations:
+  - LocationID: MAIN
+    Description: Main storage
+    Active: true
+    ReceiptsAllowed: true
+    SalesAllowed: true
+    TransfersAllowed: true
+    AssemblyAllowed: true

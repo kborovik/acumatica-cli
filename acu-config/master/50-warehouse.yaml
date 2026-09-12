@@ -1,0 +1,8 @@
+entity: Warehouse
+key: SiteCD
+endpoint: bootstrap
+records:
+- SiteCD: WH-MISS-01
+  Descr: Mississauga plant and QC
+  Active: true
+  CountryID: CA

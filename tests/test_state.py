@@ -596,7 +596,7 @@ def test_packaged_inquire_views_write_state_fixed_point(
     """
     from importlib import resources
 
-    pkg = resources.files("acumatica_cli") / "templates" / "config" / "views"
+    pkg = resources.files("acumatica_cli") / "templates" / "acu-config" / "views"
     tb_src = (pkg / "10-trial-balance.yaml").read_text(encoding="utf-8")
     assert not (pkg / "20-inventory-summary.yaml").is_file()
     views_dir = tmp_path / "config" / "views"

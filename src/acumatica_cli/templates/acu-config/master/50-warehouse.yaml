@@ -1,0 +1,8 @@
+entity: Warehouse
+key: SiteCD
+endpoint: bootstrap
+records:
+- SiteCD: WH01
+  Descr: Main warehouse
+  Active: true
+  CountryID: US

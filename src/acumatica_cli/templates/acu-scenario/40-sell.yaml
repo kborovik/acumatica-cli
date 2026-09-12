@@ -1,0 +1,252 @@
+scenario: sell
+description: Sell pack (SO ship invoice collect) for ACMEMFG NORTHGRID AGRISENSE
+steps:
+- id: so-acme
+  put: SalesOrder
+  record:
+    OrderType: SO
+    CustomerID: ACMEMFG
+    Hold: false
+    Details:
+    - {InventoryID: GW-EDGE, OrderQty: 4, WarehouseID: WH01}
+  capture: {OrderNbr: so_acme}
+- id: ship-acme
+  action: {entity: SalesOrder, name: SalesOrderCreateShipment}
+  record: {OrderType: SO, OrderNbr: "${so_acme}"}
+  parameters: {WarehouseID: WH01}
+- id: shipnbr-acme
+  get:
+    entity: SalesOrder
+    keys: [SO, "${so_acme}"]
+    expand: [Shipments]
+  capture:
+    Shipments[0].ShipmentNbr: ship_acme
+- id: confirm-acme
+  action: {entity: Shipment, name: ConfirmShipment}
+  record: {ShipmentNbr: "${ship_acme}"}
+  wait:
+    entity: Shipment
+    keys: ["${ship_acme}"]
+    until: {Status: Confirmed}
+- id: prepare-acme
+  action: {entity: Shipment, name: PrepareInvoice}
+  record: {ShipmentNbr: "${ship_acme}"}
+- id: invnbr-acme
+  get:
+    entity: SalesOrder
+    keys: [SO, "${so_acme}"]
+    expand: [Shipments]
+  capture:
+    Shipments[0].InvoiceNbr: inv_acme
+- id: release-inv-acme
+  action: {entity: SalesInvoice, name: ReleaseSalesInvoice}
+  record: {Type: Invoice, ReferenceNbr: "${inv_acme}"}
+  wait:
+    entity: SalesInvoice
+    keys: [Invoice, "${inv_acme}"]
+    until: {Status: Open}
+- id: pay-acme
+  put: Payment
+  record:
+    Type: Payment
+    CustomerID: ACMEMFG
+    PaymentMethod: WIRE
+    CashAccount: '10100'
+    PaymentAmount: 1196.00
+    PaymentRef: "WIRE-${inv_acme}"
+    Hold: false
+    DocumentsToApply:
+    - {DocType: Invoice, ReferenceNbr: "${inv_acme}", AmountPaid: 1196.00}
+  capture: {ReferenceNbr: pmt_acme}
+- id: release-pay-acme
+  action: {entity: Payment, name: ReleasePayment}
+  record: {Type: Payment, ReferenceNbr: "${pmt_acme}"}
+  wait:
+    entity: Payment
+    keys: [Payment, "${pmt_acme}"]
+    until: {Status: Closed}
+- id: so-northgrid
+  put: SalesOrder
+  record:
+    OrderType: SO
+    CustomerID: NORTHGRID
+    Hold: false
+    Details:
+    - {InventoryID: GW-CELL, OrderQty: 3, WarehouseID: WH01}
+    - {InventoryID: GW-RAIL, OrderQty: 2, WarehouseID: WH01}
+  capture: {OrderNbr: so_northgrid}
+- id: ship-northgrid
+  action: {entity: SalesOrder, name: SalesOrderCreateShipment}
+  record: {OrderType: SO, OrderNbr: "${so_northgrid}"}
+  parameters: {WarehouseID: WH01}
+- id: shipnbr-northgrid
+  get:
+    entity: SalesOrder
+    keys: [SO, "${so_northgrid}"]
+    expand: [Shipments]
+  capture:
+    Shipments[0].ShipmentNbr: ship_northgrid
+- id: confirm-northgrid
+  action: {entity: Shipment, name: ConfirmShipment}
+  record: {ShipmentNbr: "${ship_northgrid}"}
+  wait:
+    entity: Shipment
+    keys: ["${ship_northgrid}"]
+    until: {Status: Confirmed}
+- id: prepare-northgrid
+  action: {entity: Shipment, name: PrepareInvoice}
+  record: {ShipmentNbr: "${ship_northgrid}"}
+- id: invnbr-northgrid
+  get:
+    entity: SalesOrder
+    keys: [SO, "${so_northgrid}"]
+    expand: [Shipments]
+  capture:
+    Shipments[0].InvoiceNbr: inv_northgrid
+- id: release-inv-northgrid
+  action: {entity: SalesInvoice, name: ReleaseSalesInvoice}
+  record: {Type: Invoice, ReferenceNbr: "${inv_northgrid}"}
+  wait:
+    entity: SalesInvoice
+    keys: [Invoice, "${inv_northgrid}"]
+    until: {Status: Open}
+- id: pay-northgrid
+  put: Payment
+  record:
+    Type: Payment
+    CustomerID: NORTHGRID
+    PaymentMethod: WIRE
+    CashAccount: '10100'
+    PaymentAmount: 2045.00
+    PaymentRef: "WIRE-${inv_northgrid}"
+    Hold: false
+    DocumentsToApply:
+    - {DocType: Invoice, ReferenceNbr: "${inv_northgrid}", AmountPaid: 2045.00}
+  capture: {ReferenceNbr: pmt_northgrid}
+- id: release-pay-northgrid
+  action: {entity: Payment, name: ReleasePayment}
+  record: {Type: Payment, ReferenceNbr: "${pmt_northgrid}"}
+  wait:
+    entity: Payment
+    keys: [Payment, "${pmt_northgrid}"]
+    until: {Status: Closed}
+- id: so-agrisense
+  put: SalesOrder
+  record:
+    OrderType: SO
+    CustomerID: AGRISENSE
+    Hold: false
+    Details:
+    - {InventoryID: GW-EDGE, OrderQty: 3, WarehouseID: WH01}
+  capture: {OrderNbr: so_agrisense}
+- id: ship-agrisense
+  action: {entity: SalesOrder, name: SalesOrderCreateShipment}
+  record: {OrderType: SO, OrderNbr: "${so_agrisense}"}
+  parameters: {WarehouseID: WH01}
+- id: shipnbr-agrisense
+  get:
+    entity: SalesOrder
+    keys: [SO, "${so_agrisense}"]
+    expand: [Shipments]
+  capture:
+    Shipments[0].ShipmentNbr: ship_agrisense
+- id: confirm-agrisense
+  action: {entity: Shipment, name: ConfirmShipment}
+  record: {ShipmentNbr: "${ship_agrisense}"}
+  wait:
+    entity: Shipment
+    keys: ["${ship_agrisense}"]
+    until: {Status: Confirmed}
+- id: prepare-agrisense
+  action: {entity: Shipment, name: PrepareInvoice}
+  record: {ShipmentNbr: "${ship_agrisense}"}
+- id: invnbr-agrisense
+  get:
+    entity: SalesOrder
+    keys: [SO, "${so_agrisense}"]
+    expand: [Shipments]
+  capture:
+    Shipments[0].InvoiceNbr: inv_agrisense
+- id: release-inv-agrisense
+  action: {entity: SalesInvoice, name: ReleaseSalesInvoice}
+  record: {Type: Invoice, ReferenceNbr: "${inv_agrisense}"}
+  wait:
+    entity: SalesInvoice
+    keys: [Invoice, "${inv_agrisense}"]
+    until: {Status: Open}
+- id: pay-agrisense
+  put: Payment
+  record:
+    Type: Payment
+    CustomerID: AGRISENSE
+    PaymentMethod: WIRE
+    CashAccount: '10100'
+    PaymentAmount: 897.00
+    PaymentRef: "WIRE-${inv_agrisense}"
+    Hold: false
+    DocumentsToApply:
+    - {DocType: Invoice, ReferenceNbr: "${inv_agrisense}", AmountPaid: 897.00}
+  capture: {ReferenceNbr: pmt_agrisense}
+- id: release-pay-agrisense
+  action: {entity: Payment, name: ReleasePayment}
+  record: {Type: Payment, ReferenceNbr: "${pmt_agrisense}"}
+  wait:
+    entity: Payment
+    keys: [Payment, "${pmt_agrisense}"]
+    until: {Status: Closed}
+expect:
+- get:
+    entity: SalesInvoice
+    keys: [Invoice, "${inv_acme}"]
+  fields:
+    Status: Closed
+- get:
+    entity: Payment
+    keys: [Payment, "${pmt_acme}"]
+  fields:
+    Status: Closed
+- get:
+    entity: SalesInvoice
+    keys: [Invoice, "${inv_northgrid}"]
+  fields:
+    Status: Closed
+- get:
+    entity: Payment
+    keys: [Payment, "${pmt_northgrid}"]
+  fields:
+    Status: Closed
+- get:
+    entity: SalesInvoice
+    keys: [Invoice, "${inv_agrisense}"]
+  fields:
+    Status: Closed
+- get:
+    entity: Payment
+    keys: [Payment, "${pmt_agrisense}"]
+  fields:
+    Status: Closed
+- inquire: InventorySummaryInquiry
+  parameters: {InventoryID: GW-EDGE, WarehouseID: WH01}
+  delta: {QtyOnHand: -7.0}
+- inquire: InventorySummaryInquiry
+  parameters: {InventoryID: GW-CELL, WarehouseID: WH01}
+  delta: {QtyOnHand: -3.0}
+- inquire: InventorySummaryInquiry
+  parameters: {InventoryID: GW-RAIL, WarehouseID: WH01}
+  delta: {QtyOnHand: -2.0}
+- inquire: AccountSummaryInquiry
+  parameters: {Ledger: ACTUAL, Period: "${current_period}"}
+  match: {Account: '40000'}
+  delta: {EndingBalance: 4138.00}
+- inquire: AccountSummaryInquiry
+  parameters: {Ledger: ACTUAL, Period: "${current_period}"}
+  match: {Account: '50000'}
+  delta: {EndingBalance: 1848.00}
+- inquire: AccountSummaryInquiry
+  parameters: {Ledger: ACTUAL, Period: "${current_period}"}
+  match: {Account: '11000'}
+  delta: {EndingBalance: 0.00}
+- inquire: AccountSummaryInquiry
+  parameters: {Ledger: ACTUAL, Period: "${current_period}"}
+  match: {Account: '10100'}
+  delta: {EndingBalance: 4138.00}

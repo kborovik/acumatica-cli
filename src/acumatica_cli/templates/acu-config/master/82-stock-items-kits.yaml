@@ -1,0 +1,24 @@
+entity: StockItem
+key: InventoryID
+records:
+- InventoryID: GW-EDGE
+  Description: Edge IoT Gateway
+  ItemClass: KITS
+  ItemStatus: Active
+  DefaultWarehouseID: WH01
+  IsAKit: true
+  DefaultPrice: 299.00
+- InventoryID: GW-CELL
+  Description: Cellular IoT Gateway
+  ItemClass: KITS
+  ItemStatus: Active
+  DefaultWarehouseID: WH01
+  IsAKit: true
+  DefaultPrice: 449.00
+- InventoryID: GW-RAIL
+  Description: DIN-Rail Industrial Gateway
+  ItemClass: KITS
+  ItemStatus: Active
+  DefaultWarehouseID: WH01
+  IsAKit: true
+  DefaultPrice: 349.00

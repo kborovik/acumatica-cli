@@ -1,0 +1,23 @@
+entity: ItemClass
+key: ClassID
+records:
+- ClassID: PARTS
+  Description: Purchased components
+  StockItem: true
+  ItemType: Finished Good
+  ValuationMethod: Average
+  BaseUOM: EA
+  AvailabilityCalculationRule: DEFAULT
+  PostingClass: PARTS
+  TaxCategoryID: EXEMPT
+  DefaultWarehouseID: WH01
+- ClassID: KITS
+  Description: Assembled gateway kits
+  StockItem: true
+  ItemType: Finished Good
+  ValuationMethod: Average
+  BaseUOM: EA
+  AvailabilityCalculationRule: DEFAULT
+  PostingClass: KITS
+  TaxCategoryID: EXEMPT
+  DefaultWarehouseID: WH01
