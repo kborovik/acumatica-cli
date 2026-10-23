@@ -285,7 +285,13 @@ def test_delete_rejects_unsafe_login_before_ssh(
     assert run.commands == []
 
 
-@pytest.mark.parametrize("password", ["Pa$$w0rd", "a`b", 'q"uote', "it's", "$(x)"])
+# one value carrying every PowerShell landmine at once (gh #48 acceptance)
+ALL_SPECIALS = "P$a`s\"s'w$(x)0rd"
+
+
+@pytest.mark.parametrize(
+    "password", ["Pa$$w0rd", "a`b", 'q"uote', "it's", "$(x)", ALL_SPECIALS]
+)
 def test_create_sends_password_on_stdin_only(run: FakeRun, password: str) -> None:
     # V62: byte-for-byte on stdin; never local argv (ps) nor remote cmd text
     inst = Instance(
@@ -340,7 +346,17 @@ def _msvc_token(cmd: str) -> str:
 @pytest.mark.skipif(shutil.which("pwsh") is None, reason="pwsh not installed")
 @pytest.mark.parametrize(
     "password",
-    ["Pa$$w0rd", "a`b", 'a"b', "it's", 'x\\"y', "sp ace\\", "back\\", "$(x)"],
+    [
+        "Pa$$w0rd",
+        "a`b",
+        'a"b',
+        "it's",
+        'x\\"y',
+        "sp ace\\",
+        "back\\",
+        "$(x)",
+        ALL_SPECIALS,
+    ],
 )
 def test_read_password_prelude_round_trips(password: str) -> None:
     # V62: the remote prelude builds a -aup token ac.exe decodes back to the
