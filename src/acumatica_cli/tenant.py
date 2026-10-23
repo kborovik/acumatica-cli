@@ -4,10 +4,27 @@ Thin SSH wrapper around ac.exe CompanyConfig (the only supported CLI route)
 plus a sqlcmd read side.
 """
 
+import re
 import subprocess
 
 from .config import AC_EXE, ACU_INSTANCE_NAME, ACU_INSTANCE_PATH, DB_NAME, Instance
 from .models import Model
+
+# identity strings land inside remote PowerShell and the ac.exe -company spec
+# (`;`-delimited); a closed charset keeps them byte-for-byte (SPEC V62)
+_IDENTITY = re.compile(r"[A-Za-z0-9_-]+")
+
+
+def check_identity(value: str, what: str) -> None:
+    """Refuse an identity string unsafe for the remote shell (exit 1, V62).
+
+    Runs before any SSH. SystemExit, not click.BadParameter: click exits 2,
+    and 2 is reserved for drift.
+    """
+    if not _IDENTITY.fullmatch(value):
+        raise SystemExit(
+            f"{what} {value!r} not allowed: use letters, digits, '_' or '-'"
+        )
 
 
 class Tenant(Model):
@@ -137,6 +154,8 @@ class TenantManager:
         Does not set CompanyCD (ac.exe auto-generates it). Call
         :meth:`set_company_cd` after create to align CD with the login.
         """
+        check_identity(login_name, "--login")
+        check_identity(self.instance.user, "ACU_USER")
         company = (
             f"CompanyID={company_id};ParentID={parent_id};"
             f"Visible={'Yes' if visible else 'No'};"
@@ -211,6 +230,8 @@ class TenantManager:
         """
         if (company_id is None) == (login_name is None):
             raise ValueError("pass exactly one of company_id or login_name")
+        if login_name is not None:
+            check_identity(login_name, "--login")
         tenants = self.list()
         if login_name is not None:
             target = next((t for t in tenants if t.login_name == login_name), None)

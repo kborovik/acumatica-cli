@@ -83,12 +83,12 @@ def test_ssh_failure_raises_with_output(instance: Instance, run: FakeRun) -> Non
 
 def test_create_builds_full_company_spec(instance: Instance, run: FakeRun) -> None:
     run.results = [(0, "Company created")]
-    TenantManager(instance).create(5, "lab5.ca-dev1")
+    TenantManager(instance).create(5, "LAB5-DEV1")
 
     (command,) = run.commands
     assert (
         '-company:"CompanyID=5;ParentID=1;Visible=Yes;'
-        'CompanyType=;LoginName=lab5.ca-dev1;"' in command
+        'CompanyType=;LoginName=LAB5-DEV1;"' in command
     )
     # both are required or CompanyConfig dies mid-run
     assert '-iname:"AcumaticaERP"' in command
@@ -231,10 +231,44 @@ def test_every_ssh_command_propagates_exit_code(
     run.results = [(0, SQLCMD_ROWS), (0, ""), (0, "Company created"), (0, "pong")]
     manager.list()
     manager.recycle_app_pool()
-    manager.create(5, "lab5.ca-dev1")
+    manager.create(5, "LAB5-DEV1")
     manager.ping()
 
     assert len(run.commands) == 4
     for command in run.commands:
         assert command.endswith("\nexit $LASTEXITCODE")
         assert command.count("exit $LASTEXITCODE") == 1
+
+
+BAD_IDENTITIES = ['DEV"', "DEV;x=1", "DE V", "$env:X", "DEV`", "lab.dev", ""]
+
+
+@pytest.mark.parametrize("login", BAD_IDENTITIES)
+def test_create_rejects_unsafe_login_before_ssh(
+    instance: Instance, run: FakeRun, login: str
+) -> None:
+    # V62: --login lands in remote PowerShell + the ;-delimited -company spec
+    with pytest.raises(SystemExit, match=r"--login .* not allowed"):
+        TenantManager(instance).create(5, login)
+    assert run.commands == []
+
+
+def test_create_rejects_unsafe_user_before_ssh(run: FakeRun) -> None:
+    # V62: ACU_USER lands in -aun:"..."; same closed charset as --login
+    inst = Instance(
+        base_url="http://acu.test/AcumaticaERP",
+        ssh="user@acu.test",
+        user='ad"min',
+        password="pw",
+    )
+    with pytest.raises(SystemExit, match=r"ACU_USER .* not allowed"):
+        TenantManager(inst).create(5, "DEV")
+    assert run.commands == []
+
+
+def test_delete_rejects_unsafe_login_before_ssh(
+    instance: Instance, run: FakeRun
+) -> None:
+    with pytest.raises(SystemExit, match=r"--login .* not allowed"):
+        TenantManager(instance).delete(login_name="DEV;Deleted=Yes")
+    assert run.commands == []
