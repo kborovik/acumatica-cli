@@ -113,6 +113,7 @@ V58: numbering-new-symbol — NumberingSequence insert ! Header NewSymbol (or Us
 V59: data-path-required — apply / diff / run / state zero data-path args print that cmd help, exit non-zero, no HTTP no PUT; never cwd-fill `acu-config/` `acu-scenario/` `acu-config/views/`
 V60: canonical-tree-names — init, packaged templates, CLI test seed, extract default `--out`, bootstrap features lookup, help PATHS use `acu-config` + `acu-scenario` for stock; CLI never insert those names when apply/diff/run/state args missing; no third canonical data-folder name
 V61: stock-vs-custom — `acu-config/` holds stock SEED_DIRS + views only; customization YAML ! child of `acu-config/`; operator passes free-text path; umbrella expand of `acu-config/` never includes sibling customization dir
+V62: remote-command-safety — value interpolated into remote PowerShell over SSH ! arrive byte-for-byte; identity strings (`--login`, `ACU_USER`) ! match `^[A-Za-z0-9_-]+$` before any SSH, bad → exit 1 (never click exit 2 — 2 = drift); secrets (`ACU_PASSWORD`) via stdin only — never local `ssh` argv, never remote cmd text, never PS double-quoted string; other free string single-quoted `'`→`''` (closes §B.39) (gh #48)
 
 ## §T TASKS
 
@@ -177,6 +178,11 @@ T267|x|`survey reconcile --config` no default path; emit `--out` defaults stay `
 T268|x|sweep remaining implicit data-path defaults (scope: `src/`; pattern `default_seed_dirs`)|V59,V60,V13
 T269|x|offline tests: bare apply/diff/run/state help; `apply acu-config` umbrella; `run acu-scenario`; init names; extract `--out`; bootstrap features; reconcile omit `--config`|V13,V59,V60,T263,T264,T265,T266,T267
 T270|x|README+AGENTS.md+help PATHS+CHANGELOG Unreleased: `acu-config/` `acu-scenario/`; soak `apply acu-config`; suite green|V12,V19,V48,V49,V60,T264
+T271|x|`--login` (create + delete) + `ACU_USER` check `^[A-Za-z0-9_-]+$` before any SSH; bad → error naming value class, exit 1, no subprocess call (gh #48)|V62,V16,I.cmd
+T272|x|`_ssh` takes optional stdin; create sends password on stdin, remote reads `[Console]::In.ReadLine()` into `$p` → `-aup:$p`; password never in local argv nor remote cmd text; `exit $LASTEXITCODE` choke point kept|V62,V18,V7,I.ssh
+T273|x|offline tests: password w/ `$` `` ` `` `"` `'` → argv lacks it, stdin byte-for-byte; bad `--login` exit 1 w/ zero `subprocess.run` calls|V13,V62,T271,T272
+T274|x|live: scratch login on ACUCLI box, `--password` w/ `$`+`` ` ``+`"`+`'` → create + REST first-login ok, then delete scratch; never CNBN|V12,V62,T272
+T275|x|CHANGELOG Unreleased (gh #48); suite green|V19,V62,T271,T272,T273
 
 ## §B BUGS
 
@@ -213,3 +219,4 @@ B35|2026-09-08|_norm string-compares date-only vs live DateTimeValue same calend
 B36|2026-09-08|LotSerialClass Auto-Incremental Segments.Value GET-omit → not-returned drift after apply (B11 class; gh #40)|V56
 B37|2026-09-08|mapped GET Role.Users / User.Roles returns [] after AssignUser; UsersInRoles has rows; diff flags missing + exit 2 (gh #39)|V57
 B38|2026-09-09|NumberingSequence insert 422: contract maps bounds only; CS201010 requires NewSymbol or UserNumbering; PUT drops unmapped NewSymbol (gh #44)|V58
+B39|2026-10-23|tenant create `-aup:"…"` PS double-quoted — `$`/backtick expand, admin password ≠ `.env`, REST first-login fails; `"`/`;` in `--login` breaks `-company` spec; password in local ssh argv (`ps`) (gh #48)|V62

@@ -114,7 +114,7 @@ from .config import (
     read_env_values,
     scaffold,
 )
-from .tenant import TenantManager
+from .tenant import TenantManager, check_identity
 
 # Wider help + -h for agents/operators scanning docs offline.
 _HELP_CTX: dict[str, object] = {
@@ -442,6 +442,9 @@ def tenant_create(
     Next: `acu --tenant DEV apply acu-config` then `run acu-scenario`
     / `diff acu-config`.
     """
+    # V62: both strings reach remote PowerShell; refuse before any SSH
+    check_identity(login_name, "--login")
+    check_identity(inst.user, "ACU_USER")
     mgr = TenantManager(inst)
     tenants = mgr.list()
     existing = next((t for t in tenants if t.login_name == login_name), None)
@@ -626,6 +629,8 @@ def tenant_delete(
     """
     if (company_id is None) == (login_name is None):
         raise SystemExit("pass exactly one of --id or --login")
+    if login_name is not None:
+        check_identity(login_name, "--login")  # V62: before any SSH
     mgr = TenantManager(inst)
     # V9 long single-op: ac.exe delete matches create's step path (TTY spinner /
     # piped stderr process line); recycle stays its own step after.

@@ -3,6 +3,7 @@
 Pins diff's exit-2-on-drift contract (V9) — no live instance, no SSH.
 """
 
+import subprocess
 import sys
 from pathlib import Path
 from types import TracebackType
@@ -314,6 +315,43 @@ def test_tenant_delete_unknown_login_exits(
 
     assert result.exit_code != 0
     assert "no tenant with login 'missing'" in result.output
+
+
+@pytest.mark.parametrize(
+    "argv",
+    [
+        ["tenant", "create", "--login", 'DEV"'],
+        ["tenant", "create", "--login", "DEV;x=1", "--no-init"],
+        ["tenant", "delete", "--login", "$env:X", "--yes"],
+    ],
+)
+def test_tenant_unsafe_login_exits_1_without_ssh(
+    wired: Instance, monkeypatch: pytest.MonkeyPatch, argv: list[str]
+) -> None:
+    # V62: refused before any SSH; exit 1, never click's 2 (2 = drift)
+    calls: list[object] = []
+    monkeypatch.setattr(subprocess, "run", lambda *a, **k: calls.append(a))
+    result = CliRunner().invoke(cli.cli, argv)
+
+    assert result.exit_code == 1
+    assert "--login" in result.output
+    assert "not allowed" in result.output
+    assert calls == []
+
+
+def test_tenant_create_unsafe_user_exits_1_without_ssh(
+    wired: Instance, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    calls: list[object] = []
+    monkeypatch.setattr(subprocess, "run", lambda *a, **k: calls.append(a))
+    bad = wired.model_copy(update={"user": "ad$min"})
+    monkeypatch.setattr(cli, "load_instance", lambda overrides=None: bad)
+    result = CliRunner().invoke(cli.cli, ["tenant", "create", "--login", "DEV"])
+
+    assert result.exit_code == 1
+    assert "ACU_USER" in result.output
+    assert "not allowed" in result.output
+    assert calls == []
 
 
 @pytest.fixture

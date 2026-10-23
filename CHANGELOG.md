@@ -7,6 +7,11 @@
 - **OData quote escape (gh #49):** `diff` / `apply` key `$filter` doubles
   `'` inside string literals, so a key such as `O'Brien` matches instead
   of failing the filter parse. Bool and number literals stay bare.
+- **tenant create remote escaping (gh #48):** `ACU_PASSWORD` reaches
+  `ac.exe` over SSH stdin, never in local `ssh` argv or the remote
+  command text, so a password with `$`, `` ` ``, `"` or `'` creates a
+  working admin login. `--login` and `ACU_USER` must match
+  `^[A-Za-z0-9_-]+$`; anything else exits 1 before any SSH call.
 
 ## [v0.35.0] - 2026-09-12
 

@@ -4,10 +4,43 @@ Thin SSH wrapper around ac.exe CompanyConfig (the only supported CLI route)
 plus a sqlcmd read side.
 """
 
+import re
 import subprocess
 
 from .config import AC_EXE, ACU_INSTANCE_NAME, ACU_INSTANCE_PATH, DB_NAME, Instance
 from .models import Model
+
+# identity strings land inside remote PowerShell and the ac.exe -company spec
+# (`;`-delimited); a closed charset keeps them byte-for-byte (SPEC V62)
+_IDENTITY = re.compile(r"[A-Za-z0-9_-]+")
+
+
+def check_identity(value: str, what: str) -> None:
+    """Refuse an identity string unsafe for the remote shell (exit 1, V62).
+
+    Runs before any SSH. SystemExit, not click.BadParameter: click exits 2,
+    and 2 is reserved for drift.
+    """
+    if not _IDENTITY.fullmatch(value):
+        raise SystemExit(
+            f"{what} {value!r} not allowed: use letters, digits, '_' or '-'"
+        )
+
+
+# Remote prelude: read the admin password from stdin into $aup, the whole
+# `-aup:<value>` argv token, so the password never sits in the ssh argv, the
+# command text, or a double-quoted (expanding) PowerShell string (V62).
+# ac.exe parses its command line by MSVC rules; legacy native-arg passing
+# (Windows PowerShell 5.1; forced on pwsh 7) only wraps a token holding
+# whitespace in quotes and escapes nothing. So escape here: `\` runs before
+# a `"` double and the `"` becomes `\"`; a trailing `\` run doubles when
+# the token will be wrapped.
+_READ_PASSWORD = (
+    "$PSNativeCommandArgumentPassing = 'Legacy'\n"
+    "$p = [Console]::In.ReadLine()\n"
+    """$aup = '-aup:' + ($p -replace '(\\\\*)"', '$1$1\\"')\n"""
+    "if ($aup -match '\\s') { $aup = $aup -replace '(\\\\+)$', '$1$1' }\n"
+)
 
 
 class Tenant(Model):
@@ -40,10 +73,11 @@ class TenantManager:
             )
         self.instance = instance
 
-    def _ssh(self, command: str) -> str:
+    def _ssh(self, command: str, stdin: str | None = None) -> str:
         # PowerShell-over-ssh returns 0 even when the native command fails;
         # appending the exit here (single choke point, never at call sites)
         # makes every remote failure propagate (SPEC V18, B4).
+        # stdin carries secrets: never the argv, never the command text (V62).
         r = subprocess.run(
             [
                 "ssh",
@@ -52,6 +86,7 @@ class TenantManager:
                 self.instance.ssh,
                 command + "\nexit $LASTEXITCODE",
             ],
+            input=stdin,
             capture_output=True,
             text=True,
             check=False,
@@ -105,18 +140,25 @@ class TenantManager:
             f"Restart-WebAppPool -Name '{ACU_INSTANCE_NAME}'"
         )
 
-    def _company_config(self, company: str, extra: str = "") -> str:
+    def _company_config(
+        self,
+        company: str,
+        extra: str = "",
+        prelude: str = "",
+        stdin: str | None = None,
+    ) -> str:
         # -iname AND -h are both required: without -iname CompanyConfig can't
         # find the site; without -h its web.config step dies on a null path
         # (verified 2026-07-08).
         return self._ssh(
-            f"& '{AC_EXE}' "
+            f"{prelude}& '{AC_EXE}' "
             f'-configmode:"CompanyConfig" -output:"Forced" '
             f'-iname:"{ACU_INSTANCE_NAME}" '
             f'-h:"{ACU_INSTANCE_PATH}" '
             f'-dbsrvname:"(local)" -dbsrvwinauth:"True" '
             f'-dbname:"{DB_NAME}" -dbnew:"False" '
-            f'-company:"{company}"{extra}'
+            f'-company:"{company}"{extra}',
+            stdin=stdin,
         )
 
     def create(
@@ -137,15 +179,20 @@ class TenantManager:
         Does not set CompanyCD (ac.exe auto-generates it). Call
         :meth:`set_company_cd` after create to align CD with the login.
         """
+        check_identity(login_name, "--login")
+        check_identity(self.instance.user, "ACU_USER")
         company = (
             f"CompanyID={company_id};ParentID={parent_id};"
             f"Visible={'Yes' if visible else 'No'};"
             f"CompanyType={company_type};LoginName={login_name};"
         )
-        admin = (
-            f' -aun:"{self.instance.user}" -aup:"{self.instance.password}" -auc:"False"'
+        admin = f' -aun:"{self.instance.user}" $aup -auc:"False"'
+        return self._company_config(
+            company,
+            extra=admin,
+            prelude=_READ_PASSWORD,
+            stdin=self.instance.password + "\n",
         )
-        return self._company_config(company, extra=admin)
 
     def set_company_cd(self, company_id: int, company_cd: str) -> bool:
         """Set ``dbo.Company.CompanyCD`` for a tenant (sqlcmd over SSH).
@@ -211,6 +258,8 @@ class TenantManager:
         """
         if (company_id is None) == (login_name is None):
             raise ValueError("pass exactly one of company_id or login_name")
+        if login_name is not None:
+            check_identity(login_name, "--login")
         tenants = self.list()
         if login_name is not None:
             target = next((t for t in tenants if t.login_name == login_name), None)
