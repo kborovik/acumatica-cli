@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+### Fixed
+
+- **OData quote escape (gh #49):** `diff` / `apply` key `$filter` doubles
+  `'` inside string literals, so a key such as `O'Brien` matches instead
+  of failing the filter parse. Bool and number literals stay bare.
+
 ## [v0.35.0] - 2026-09-12
 
 ### Changed

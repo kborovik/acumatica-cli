@@ -323,13 +323,14 @@ def _filter_for(record: dict[str, Any], keys: list[str]) -> str:
     # 'false' against Edm.Boolean answers 500 "binary operator with
     # incompatible types" (T61 - INPreferences keyed on HoldEntry), and
     # numeric Edm types are the same class. Strings stay quoted, so
-    # numeric-looking codes ('000000') are unaffected.
+    # numeric-looking codes ('000000') are unaffected; an embedded ' is
+    # doubled per OData literal syntax (gh #49 - O'Brien).
     def literal(value: Any) -> str:
         if isinstance(value, bool):
             return str(value).lower()
         if isinstance(value, int | float):
             return str(value)
-        return f"'{value}'"
+        return "'" + str(value).replace("'", "''") + "'"
 
     return " and ".join(f"{k} eq {literal(record[k])}" for k in keys)
 
