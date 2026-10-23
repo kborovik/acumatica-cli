@@ -297,6 +297,15 @@ def test_filter_for_joins_keys() -> None:
     assert filter_for(record, ["UOM", "ToUOM"]) == "UOM eq 'KG' and ToUOM eq 'G'"
 
 
+def test_filter_for_doubles_single_quote() -> None:
+    """Single quote inside a string literal is doubled (gh #49)."""
+    filter_for = seed._filter_for  # pyright: ignore[reportPrivateUsage]
+    assert filter_for({"Name": "O'Brien"}, ["Name"]) == "Name eq 'O''Brien'"
+    assert filter_for({"Name": "a'b'c"}, ["Name"]) == "Name eq 'a''b''c'"
+    assert filter_for({"HoldEntry": False}, ["HoldEntry"]) == "HoldEntry eq false"
+    assert filter_for({"Qty": 3}, ["Qty"]) == "Qty eq 3"
+
+
 KIT_YAML = """\
 entity: KitSpecification
 key: [KitInventoryID, RevisionID]
