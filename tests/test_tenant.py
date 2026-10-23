@@ -5,13 +5,17 @@ subprocess.run is monkeypatched — these tests pin the verified landmines:
 preset, and $LASTEXITCODE propagation.
 """
 
+import shutil
 import subprocess
 from typing import Any
 
 import pytest
 
+from acumatica_cli import tenant
 from acumatica_cli.config import Instance
 from acumatica_cli.tenant import Tenant, TenantManager
+
+READ_PASSWORD = tenant._READ_PASSWORD  # pyright: ignore[reportPrivateUsage]
 
 SQLCMD_ROWS = """\
 1|System|  |System
@@ -27,12 +31,16 @@ class FakeRun:
     def __init__(self, *results: tuple[int, str]):
         self.results = list(results)
         self.commands: list[str] = []
+        self.argvs: list[list[str]] = []
+        self.inputs: list[str | None] = []
 
     def __call__(
         self, argv: list[str], **kwargs: Any
     ) -> subprocess.CompletedProcess[str]:
         assert argv[0] == "ssh"
         self.commands.append(argv[-1])
+        self.argvs.append(argv)
+        self.inputs.append(kwargs.get("input"))
         rc, stdout = self.results.pop(0)
         return subprocess.CompletedProcess(argv, rc, stdout=stdout, stderr="")
 
@@ -93,8 +101,11 @@ def test_create_builds_full_company_spec(instance: Instance, run: FakeRun) -> No
     # both are required or CompanyConfig dies mid-run
     assert '-iname:"AcumaticaERP"' in command
     assert '-h:"C:\\Acumatica\\AcumaticaERP"' in command
-    # admin preset makes the tenant REST-loginable without the first-login dance
-    assert '-aun:"admin" -aup:"pw" -auc:"False"' in command
+    # admin preset makes the tenant REST-loginable without the first-login dance;
+    # the password token is read from stdin on the remote side (V62)
+    assert '-aun:"admin" $aup -auc:"False"' in command
+    assert "[Console]::In.ReadLine()" in command
+    assert run.inputs == ["pw\n"]
 
 
 def test_set_company_cd_updates_when_mismatched(
@@ -272,3 +283,81 @@ def test_delete_rejects_unsafe_login_before_ssh(
     with pytest.raises(SystemExit, match=r"--login .* not allowed"):
         TenantManager(instance).delete(login_name="DEV;Deleted=Yes")
     assert run.commands == []
+
+
+@pytest.mark.parametrize("password", ["Pa$$w0rd", "a`b", 'q"uote', "it's", "$(x)"])
+def test_create_sends_password_on_stdin_only(run: FakeRun, password: str) -> None:
+    # V62: byte-for-byte on stdin; never local argv (ps) nor remote cmd text
+    inst = Instance(
+        base_url="http://acu.test/AcumaticaERP",
+        ssh="user@acu.test",
+        user="admin",
+        password=password,
+    )
+    run.results = [(0, "Company created")]
+    TenantManager(inst).create(5, "DEV")
+
+    assert run.inputs == [password + "\n"]
+    (argv,) = run.argvs
+    assert all(password not in arg for arg in argv)
+    assert "-aup:" not in run.commands[0].split("& '")[1]
+
+
+def test_non_secret_commands_send_no_stdin(instance: Instance, run: FakeRun) -> None:
+    run.results = [(0, SQLCMD_ROWS), (0, "")]
+    manager = TenantManager(instance)
+    manager.list()
+    manager.recycle_app_pool()
+    assert run.inputs == [None, None]
+
+
+def _msvc_token(cmd: str) -> str:
+    """Decode one command-line token by MSVC/CommandLineToArgvW rules."""
+    out: list[str] = []
+    i, n = 0, len(cmd)
+    while i < n:
+        if cmd[i] == "\\":
+            j = i
+            while j < n and cmd[j] == "\\":
+                j += 1
+            k = j - i
+            if j < n and cmd[j] == '"':
+                out.append("\\" * (k // 2))
+                if k % 2:
+                    out.append('"')
+                    j += 1
+            else:
+                out.append("\\" * k)
+            i = j
+        elif cmd[i] == '"':
+            i += 1
+        else:
+            out.append(cmd[i])
+            i += 1
+    return "".join(out)
+
+
+@pytest.mark.skipif(shutil.which("pwsh") is None, reason="pwsh not installed")
+@pytest.mark.parametrize(
+    "password",
+    ["Pa$$w0rd", "a`b", 'a"b', "it's", 'x\\"y', "sp ace\\", "back\\", "$(x)"],
+)
+def test_read_password_prelude_round_trips(password: str) -> None:
+    # V62: the remote prelude builds a -aup token ac.exe decodes back to the
+    # exact password (legacy native-arg passing wraps whitespace tokens only)
+    r = subprocess.run(
+        [
+            "pwsh",
+            "-NoProfile",
+            "-Command",
+            READ_PASSWORD + "[Console]::Out.Write($aup)",
+        ],
+        input=password + "\n",
+        capture_output=True,
+        text=True,
+        check=True,
+    )
+    token = r.stdout
+    if any(ch.isspace() for ch in token):
+        token = f'"{token}"'
+    assert _msvc_token(token) == "-aup:" + password

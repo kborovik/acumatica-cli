@@ -179,7 +179,7 @@ T268|x|sweep remaining implicit data-path defaults (scope: `src/`; pattern `defa
 T269|x|offline tests: bare apply/diff/run/state help; `apply acu-config` umbrella; `run acu-scenario`; init names; extract `--out`; bootstrap features; reconcile omit `--config`|V13,V59,V60,T263,T264,T265,T266,T267
 T270|x|README+AGENTS.md+help PATHS+CHANGELOG Unreleased: `acu-config/` `acu-scenario/`; soak `apply acu-config`; suite green|V12,V19,V48,V49,V60,T264
 T271|x|`--login` (create + delete) + `ACU_USER` check `^[A-Za-z0-9_-]+$` before any SSH; bad → error naming value class, exit 1, no subprocess call (gh #48)|V62,V16,I.cmd
-T272|.|`_ssh` takes optional stdin; create sends password on stdin, remote reads `[Console]::In.ReadLine()` into `$p` → `-aup:$p`; password never in local argv nor remote cmd text; `exit $LASTEXITCODE` choke point kept|V62,V18,V7,I.ssh
+T272|x|`_ssh` takes optional stdin; create sends password on stdin, remote reads `[Console]::In.ReadLine()` into `$p` → `-aup:$p`; password never in local argv nor remote cmd text; `exit $LASTEXITCODE` choke point kept|V62,V18,V7,I.ssh
 T273|.|offline tests: password w/ `$` `` ` `` `"` `'` → argv lacks it, stdin byte-for-byte; bad `--login` exit 1 w/ zero `subprocess.run` calls|V13,V62,T271,T272
 T274|.|live: scratch login on ACUCLI box, `--password` w/ `$`+`` ` ``+`"`+`'` → create + REST first-login ok, then delete scratch; never CNBN|V12,V62,T272
 T275|.|CHANGELOG Unreleased (gh #48); suite green|V19,V62,T271,T272,T273
