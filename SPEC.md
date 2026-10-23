@@ -181,7 +181,7 @@ T270|x|README+AGENTS.md+help PATHS+CHANGELOG Unreleased: `acu-config/` `acu-scen
 T271|x|`--login` (create + delete) + `ACU_USER` check `^[A-Za-z0-9_-]+$` before any SSH; bad → error naming value class, exit 1, no subprocess call (gh #48)|V62,V16,I.cmd
 T272|x|`_ssh` takes optional stdin; create sends password on stdin, remote reads `[Console]::In.ReadLine()` into `$p` → `-aup:$p`; password never in local argv nor remote cmd text; `exit $LASTEXITCODE` choke point kept|V62,V18,V7,I.ssh
 T273|x|offline tests: password w/ `$` `` ` `` `"` `'` → argv lacks it, stdin byte-for-byte; bad `--login` exit 1 w/ zero `subprocess.run` calls|V13,V62,T271,T272
-T274|.|live: scratch login on ACUCLI box, `--password` w/ `$`+`` ` ``+`"`+`'` → create + REST first-login ok, then delete scratch; never CNBN|V12,V62,T272
+T274|x|live: scratch login on ACUCLI box, `--password` w/ `$`+`` ` ``+`"`+`'` → create + REST first-login ok, then delete scratch; never CNBN|V12,V62,T272
 T275|.|CHANGELOG Unreleased (gh #48); suite green|V19,V62,T271,T272,T273
 
 ## §B BUGS
