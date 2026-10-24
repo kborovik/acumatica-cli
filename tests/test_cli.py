@@ -2039,7 +2039,7 @@ def test_apply_422_survives_dead_logout(
     assert result.exit_code == 1
     err = " ".join(result.stderr.split())  # rich wraps
     assert "x apply: 1 error(s), 0 record(s) applied" in err
-    assert "UnitsOfMeasure [KG]: KG is reserved" in err
+    assert "UnitsOfMeasure -> 422: KG is reserved" in err
     assert "! logout failed: cannot connect" in err
 
 
