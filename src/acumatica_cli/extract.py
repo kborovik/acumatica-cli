@@ -38,8 +38,10 @@ from . import output
 from .bootstrap import DEFAULT_FEATURES
 from .client import (
     OPTIMIZATION_500,
+    RECORD_FAILURES,
     SETUP_NOT_ENTERED_500,
     AcumaticaClient,
+    format_failure,
     unwrap,
 )
 from .models import Model, validation_summary
@@ -563,18 +565,19 @@ class _Extraction:
             return True
         return False
 
-    def _row_failed(self, name: str, target: Path, err: RuntimeError) -> None:
+    def _row_failed(self, name: str, target: Path, err: Exception) -> None:
         """Classify one row's live-read failure (V24: isolation, not abort).
 
         A PXSetupNotEnteredException 500 is the virgin-tenant empty-state
         class — the screen has no data to extract, same answer as 200 [] —
-        so it skips clean. Anything else is a reported row failure; the
-        run continues to the next catalog row either way.
+        so it skips clean. Anything else (REST error or transport failure)
+        is a reported row failure; the run continues to the next catalog
+        row either way.
         """
         if SETUP_NOT_ENTERED_500 in str(err):
             self._skip(target, "screen setup not entered")
             return
-        output.error(f"{name}: {err}")
+        output.error(f"{name}: {format_failure(err)}")
         self.failed += 1
 
     def _emit(self, target: Path, text: str, count: int) -> None:
@@ -612,7 +615,7 @@ class _Extraction:
             try:
                 live = _fetch(self.client, spec)
                 records = _shape(spec, live)
-            except RuntimeError as err:
+            except RECORD_FAILURES as err:
                 self._row_failed(spec.entity, target, err)
                 continue
             if not live:
@@ -641,7 +644,7 @@ class _Extraction:
             synthesize, skip_reason = SYNTHESIZERS[synth.kind]
             try:
                 doc = synthesize(self.client)
-            except RuntimeError as err:
+            except RECORD_FAILURES as err:
                 self._row_failed(synth.kind, target, err)
                 continue
             if doc is None:

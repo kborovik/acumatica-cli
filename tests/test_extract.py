@@ -2155,6 +2155,38 @@ def test_row_failure_reported_and_run_continues(
     assert f"x {written} written, 0 skipped, 1 failed" in captured.err
 
 
+class _TimeoutServer(FakeServer):
+    """FakeServer whose GETs for listed entities raise httpx.ReadTimeout."""
+
+    def __init__(self, base: FakeServer, timeout: frozenset[str]):
+        super().__init__(base.tables, base.keys, base.delegate_view)
+        self.timeout = timeout
+
+    def __call__(self, request: httpx.Request) -> httpx.Response:
+        if "/entity/" in request.url.path:
+            entity = request.url.path.split("/entity/", 1)[1].split("/")[2]
+            if entity in self.timeout:
+                raise httpx.ReadTimeout("timed out", request=request)
+        return super().__call__(request)
+
+
+def test_row_transport_error_reported_and_run_continues(
+    instance: Instance,
+    server: FakeServer,
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """V24/gh #51: a timed-out row GET is a row failure, later rows still land."""
+    failed = _run(instance, _TimeoutServer(server, frozenset({"Subaccount"})), tmp_path)
+    assert failed == 1
+    captured = capsys.readouterr()
+    assert "x Subaccount: request timed out to " in captured.err
+    assert (tmp_path / "baseline" / "20-accounts.yaml").is_file()
+    assert (tmp_path / "setup" / "30-open-periods.yaml").is_file()
+    assert (tmp_path / "bootstrap" / "features.yaml").is_file()
+    assert f"x {_FULL_WRITES - 1} written, 0 skipped, 1 failed" in captured.err
+
+
 def test_setup_not_entered_500_skips_clean(
     instance: Instance,
     server: FakeServer,

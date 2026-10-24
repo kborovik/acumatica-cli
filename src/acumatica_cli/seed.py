@@ -60,7 +60,13 @@ import yaml
 from pydantic import Field, ValidationError, field_validator, model_validator
 
 from . import bootstrap, output
-from .client import OPTIMIZATION_500, AcumaticaClient, unwrap
+from .client import (
+    OPTIMIZATION_500,
+    RECORD_FAILURES,
+    AcumaticaClient,
+    format_failure,
+    unwrap,
+)
 from .config import find_data_root
 from .models import Model, validation_summary
 
@@ -404,16 +410,17 @@ def _apply_action(
 ) -> tuple[int, list[str]]:
     """Invoke the action unless done_when already verifies the desired state.
 
-    On invoke failure, returns ``(0, [error])`` rather than raising so the
-    caller can continue other files (V45 multi-error summary).
+    On probe or invoke failure (REST or transport), returns ``(0, [error])``
+    rather than raising so the caller can continue other files (V45
+    multi-error summary).
     """
     if dry_run:
         output.data(f"  would invoke {action.action}")
         return 1, []
-    if _probe(client, action):
-        output.data(f"  skip {action.action} (already done)")
-        return 1, []
     try:
+        if _probe(client, action):
+            output.data(f"  skip {action.action} (already done)")
+            return 1, []
         client.invoke(
             action.entity,
             action.action,
@@ -422,8 +429,8 @@ def _apply_action(
             action.endpoint,
             timeout=action.timeout,
         )
-    except RuntimeError as err:
-        msg = f"action {action.action} [{action.entity}]: {err}"
+    except RECORD_FAILURES as err:
+        msg = f"action {action.action} [{action.entity}]: {format_failure(err)}"
         output.error(msg)
         return 0, [msg]
     output.data(f"  invoke {action.action} [{action.entity}]")
@@ -446,7 +453,8 @@ def apply(
     Numbering runtime fields (V40/T152): never PUT ``LastNbr`` (or kin) so
     apply of bounds never resets live counters.
 
-    Per-record failure isolation (V45): a failed PUT does not abort later
+    Per-record failure isolation (V45): a failed PUT — REST error or
+    transport failure (timeout, refused, dropped) — does not abort later
     records in the same file. Returns ``(ok_count, error_messages)`` —
     never silent partial; caller exits 1 when any errors remain. Exit 2
     stays drift (``diff`` only).
@@ -481,8 +489,8 @@ def apply(
             output.data(f"  PUT {baseline.entity} [{label}]")
             _assign_role_users(client, baseline, record, dry_run=False)
             ok += 1
-        except RuntimeError as err:
-            msg = f"{baseline.entity} [{label}]: {err}"
+        except RECORD_FAILURES as err:
+            msg = f"{baseline.entity} [{label}]: {format_failure(err)}"
             output.error(msg)
             errors.append(msg)
     return ok, errors

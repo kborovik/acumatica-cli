@@ -2419,3 +2419,53 @@ def test_apply_multi_error_summary_all_fail(
     err = capsys.readouterr().err
     assert "UnitsOfMeasure [KG]" in err
     assert "UnitsOfMeasure [HOUR]" in err
+
+
+class _TimeoutFirstPutRecorder(Recorder):
+    """First PUT raises httpx.ReadTimeout; later PUTs answer 200 (gh #51)."""
+
+    def __init__(self) -> None:
+        super().__init__()
+        self._timed_out = False
+
+    def __call__(self, request: httpx.Request) -> httpx.Response:
+        if request.method == "PUT" and not self._timed_out:
+            self._timed_out = True
+            self.requests.append(request)
+            raise httpx.ReadTimeout("timed out", request=request)
+        return super().__call__(request)
+
+
+def test_apply_transport_error_is_record_failure_and_continues(
+    tmp_path: Path, instance: Instance, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """V45/gh #51: a timed-out PUT is a record failure, not an apply abort."""
+    baseline = seed.load_baseline(_write(tmp_path, BASELINE))
+    recorder = _TimeoutFirstPutRecorder()
+    n, errors = seed.apply(_client(instance, recorder), baseline)
+    assert n == 1
+    assert len(errors) == 1
+    assert errors[0].startswith("UnitsOfMeasure [KG]: request timed out to ")
+    assert len([r for r in recorder.requests if r.method == "PUT"]) == 2
+    out = capsys.readouterr()
+    assert "PUT UnitsOfMeasure [HOUR]" in out.out
+    assert "UnitsOfMeasure [KG]: request timed out" in out.err
+
+
+def test_apply_action_probe_transport_error_is_file_error(
+    tmp_path: Path, instance: Instance
+) -> None:
+    """V45/gh #51: done_when probe transport failure returns an error, no raise."""
+    action = _action(tmp_path)
+
+    def refuse(request: httpx.Request) -> httpx.Response:
+        if request.url.path.endswith(("/auth/login", "/auth/logout")):
+            return httpx.Response(204)
+        raise httpx.ConnectError("refused", request=request)
+
+    client = AcumaticaClient(instance, transport=httpx.MockTransport(refuse))
+    n, errors = seed.apply(client, action)
+    assert n == 0
+    assert len(errors) == 1
+    assert errors[0].startswith("action GenerateCalendar [MasterCalendar]: ")
+    assert "cannot connect to " in errors[0]

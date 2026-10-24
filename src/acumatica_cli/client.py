@@ -18,6 +18,60 @@ from .config import Instance
 _BARE_FIELDS = frozenset({"id", "delete"})
 
 
+def _transport_target(
+    exc: httpx.TransportError, *, target: str | None = None
+) -> str | None:
+    """Prefer explicit target (e.g. Instance.base_url); else request URL."""
+    if target:
+        return target
+    request = getattr(exc, "request", None)
+    if request is not None:
+        return str(request.url)
+    return None
+
+
+def _format_transport_error(
+    exc: httpx.TransportError, *, target: str | None = None
+) -> str:
+    """Friendly one-line body for connect/timeout/TLS (V9 / T123).
+
+    Never surface raw httpx/OS dumps (e.g. `[Errno 61] Connection refused`).
+    """
+    raw = str(exc).lower()
+    if "ssl" in raw or "certificate" in raw or "tls" in raw:
+        kind = "TLS error"
+    elif isinstance(exc, httpx.TimeoutException):
+        kind = "request timed out"
+    elif isinstance(exc, httpx.ConnectError):
+        kind = "cannot connect"
+    elif isinstance(exc, httpx.NetworkError):
+        kind = "network error"
+    else:
+        kind = "transport error"
+    where = _transport_target(exc, target=target)
+    hint = "check ACU_BASE_URL / network / instance up"
+    if where:
+        return f"{kind} to {where} ({hint})"
+    return f"{kind} ({hint})"
+
+
+def format_failure(exc: BaseException, *, target: str | None = None) -> str:
+    """Map expected failures to one greppable error line body (V9).
+
+    Transport/network class → friendly rewrite; other RuntimeError / HTTPError
+    keep `str(exc)` (server `exceptionMessage` path unchanged).
+    """
+    if isinstance(exc, httpx.TransportError):
+        return _format_transport_error(exc, target=target)
+    return str(exc)
+
+
+# Per-record / per-row failure classes (V45 apply, V24 extract): a REST
+# error or a transport failure on one record is reported and the run
+# continues; anything else is a bug and propagates.
+RECORD_FAILURES: tuple[type[Exception], ...] = (RuntimeError, httpx.TransportError)
+
+
 def wrap(record: dict[str, Any]) -> dict[str, Any]:
     """Plain dict -> contract-API body: {"Field": {"value": ...}}.
 
