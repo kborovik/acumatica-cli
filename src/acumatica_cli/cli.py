@@ -105,7 +105,7 @@ from . import (
     seed,
     state,
 )
-from .client import AcumaticaClient
+from .client import AcumaticaClient, format_failure
 from .config import (
     Instance,
     data_root,
@@ -252,54 +252,6 @@ def pass_instance[**P, R](f: Callable[Concatenate[Instance, P], R]) -> Callable[
     return new_func
 
 
-def _transport_target(
-    exc: httpx.TransportError, *, target: str | None = None
-) -> str | None:
-    """Prefer explicit target (e.g. Instance.base_url); else request URL."""
-    if target:
-        return target
-    request = getattr(exc, "request", None)
-    if request is not None:
-        return str(request.url)
-    return None
-
-
-def _format_transport_error(
-    exc: httpx.TransportError, *, target: str | None = None
-) -> str:
-    """Friendly one-line body for connect/timeout/TLS (V9 / T123).
-
-    Never surface raw httpx/OS dumps (e.g. `[Errno 61] Connection refused`).
-    """
-    raw = str(exc).lower()
-    if "ssl" in raw or "certificate" in raw or "tls" in raw:
-        kind = "TLS error"
-    elif isinstance(exc, httpx.TimeoutException):
-        kind = "request timed out"
-    elif isinstance(exc, httpx.ConnectError):
-        kind = "cannot connect"
-    elif isinstance(exc, httpx.NetworkError):
-        kind = "network error"
-    else:
-        kind = "transport error"
-    where = _transport_target(exc, target=target)
-    hint = "check ACU_BASE_URL / network / instance up"
-    if where:
-        return f"{kind} to {where} ({hint})"
-    return f"{kind} ({hint})"
-
-
-def _format_failure(exc: BaseException, *, target: str | None = None) -> str:
-    """Map expected failures to one greppable error line body (V9).
-
-    Transport/network class → friendly rewrite; other RuntimeError / HTTPError
-    keep `str(exc)` (server `exceptionMessage` path unchanged).
-    """
-    if isinstance(exc, httpx.TransportError):
-        return _format_transport_error(exc, target=target)
-    return str(exc)
-
-
 def main() -> None:
     """Entry point: run the CLI, mapping expected failures to one-line errors.
 
@@ -312,7 +264,7 @@ def main() -> None:
     except (RuntimeError, httpx.HTTPError) as exc:
         if os.environ.get("ACU_DEBUG"):
             raise
-        output.error(_format_failure(exc))
+        output.error(format_failure(exc))
         raise SystemExit(1) from exc
 
 
@@ -833,7 +785,7 @@ def _probe_rest(inst: Instance) -> bool:
             output.data(f"ok rest ({inst.base_url}, tenant {inst.tenant})")
             return _probe_entity_root(client, inst)
     except (RuntimeError, httpx.HTTPError) as exc:
-        output.data(f"fail rest: {_format_failure(exc, target=inst.base_url)}")
+        output.data(f"fail rest: {format_failure(exc, target=inst.base_url)}")
         return False
 
 
@@ -842,7 +794,7 @@ def _probe_entity_root(client: AcumaticaClient, inst: Instance) -> bool:
     try:
         endpoints, _live_build = client.entity_root()
     except (RuntimeError, httpx.HTTPError) as exc:
-        output.data(f"fail endpoints: {_format_failure(exc, target=inst.base_url)}")
+        output.data(f"fail endpoints: {format_failure(exc, target=inst.base_url)}")
         return False
     return _probe_endpoints(endpoints, inst)
 
@@ -962,6 +914,8 @@ def apply_cmd(ctx: click.Context, files: tuple[Path, ...], dry_run: bool) -> Non
 
     Per-record failure isolation: one failed PUT reports and continues;
     exit 1 with multi-error summary if any failed (never silent partial).
+    A refused connect or failed re-login stops the run: exit 1 naming the
+    stopped-at record and every file not applied.
     Exit 2 is reserved for `diff` drift.
 
     \b
@@ -981,16 +935,29 @@ def apply_cmd(ctx: click.Context, files: tuple[Path, ...], dry_run: bool) -> Non
     inst = _resolve_instance(ctx)
     total_ok = 0
     all_errors: list[str] = []
+    paths = expand_files(files)
+    stopped = False
     with AcumaticaClient(inst) as client:
-        for path in expand_files(files):
+        for i, path in enumerate(paths):
             baseline = seed.load_baseline(path)
             output.data(
                 f"{path} -> {inst.tenant} on {inst.base_url} ({baseline.entity})"
             )
-            n, errors = seed.apply(client, baseline, dry_run=dry_run)
+            try:
+                n, errors = seed.apply(client, baseline, dry_run=dry_run)
+            except seed.ApplyStopped as stop:
+                # report now: a dead host can also fail the logout on exit
+                stopped = True
+                all_errors.extend(f"{path}: {e}" for e in stop.errors)
+                _apply_stopped(path, stop, paths[i + 1 :], total_ok + stop.ok)
+                for err in all_errors:
+                    output.error(err)
+                break
             total_ok += n
             all_errors.extend(f"{path}: {e}" for e in errors)
             output.data(f"  {n} record(s){' (dry run)' if dry_run else ''}")
+    if stopped:
+        raise SystemExit(1)
     if all_errors:
         output.error(
             f"apply: {len(all_errors)} error(s), {total_ok} record(s) applied"
@@ -999,6 +966,17 @@ def apply_cmd(ctx: click.Context, files: tuple[Path, ...], dry_run: bool) -> Non
         for err in all_errors:
             output.error(err)
         raise SystemExit(1)
+
+
+def _apply_stopped(
+    path: Path, stop: seed.ApplyStopped, rest: list[Path], applied: int
+) -> None:
+    """V45 hard-stop report: stopped-at file/record + not-applied remainder."""
+    output.error(f"apply: stopped at {path}: {stop}")
+    output.error(f"apply: {applied} record(s) applied before the stop")
+    output.error(f"not applied: {path} (from {stop.record})")
+    for later in rest:
+        output.error(f"not applied: {later}")
 
 
 @cli.command("schema")

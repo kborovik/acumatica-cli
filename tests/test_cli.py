@@ -15,6 +15,8 @@ import yaml
 from click.testing import CliRunner
 
 from acumatica_cli import cli
+from acumatica_cli.client import AcumaticaClient as RealClient
+from acumatica_cli.client import format_failure
 from acumatica_cli.config import INIT_TEMPLATES, Instance, load_instance
 from acumatica_cli.tenant import Tenant, TenantManager
 
@@ -1938,6 +1940,77 @@ def test_apply_dry_run_summary(wired: Instance, tmp_path: Path) -> None:
     assert "1 record(s) (dry run)" in result.output
 
 
+def test_apply_transport_error_summary_exits_1(
+    wired: Instance, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """V45/gh #51: timed-out PUT -> later records apply, summary names it, exit 1."""
+    path = tmp_path / "uoms.yaml"
+    path.write_text(
+        "entity: UnitsOfMeasure\nkey: UOM\nrecords:\n"
+        "  - UOM: KG\n    Description: Kilogram\n"
+        "  - UOM: HOUR\n    Description: Hour\n"
+    )
+    puts: list[str] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        if request.method == "PUT":
+            puts.append(request.content.decode())
+            if len(puts) == 1:
+                raise httpx.ReadTimeout("timed out", request=request)
+        if request.url.path.endswith("/Frames/Login.aspx"):
+            # landed-tenant guard (V5); the wired instance is tenant T1
+            return httpx.Response(
+                200, text='<input id="txtSingleCompany" value="T1" />'
+            )
+        return httpx.Response(204 if "/auth/" in request.url.path else 200, json={})
+
+    monkeypatch.setattr(
+        cli,
+        "AcumaticaClient",
+        lambda inst, **kw: RealClient(inst, transport=httpx.MockTransport(handler)),
+    )
+    result = CliRunner().invoke(cli.cli, ["apply", str(path)])
+
+    assert result.exit_code == 1
+    assert len(puts) == 2
+    assert "PUT UnitsOfMeasure [HOUR]" in result.output
+    assert "x apply: 1 error(s), 1 record(s) applied" in result.stderr
+    assert f"{path}: UnitsOfMeasure [KG]: request timed out to " in result.stderr
+
+
+def test_apply_connect_error_reports_stop_and_not_applied(
+    wired: Instance, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """V45/gh #51: hard-stop names stopped-at record + every file not applied."""
+    first, second = tmp_path / "10-a.yaml", tmp_path / "20-b.yaml"
+    for path in (first, second):
+        path.write_text("entity: UnitsOfMeasure\nkey: UOM\nrecords:\n  - UOM: KG\n")
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        if request.method == "PUT":
+            raise httpx.ConnectError("refused", request=request)
+        if request.url.path.endswith("/Frames/Login.aspx"):
+            return httpx.Response(
+                200, text='<input id="txtSingleCompany" value="T1" />'
+            )
+        return httpx.Response(204 if "/auth/" in request.url.path else 200, json={})
+
+    monkeypatch.setattr(
+        cli,
+        "AcumaticaClient",
+        lambda inst, **kw: RealClient(inst, transport=httpx.MockTransport(handler)),
+    )
+    result = CliRunner().invoke(cli.cli, ["apply", str(first), str(second)])
+
+    assert result.exit_code == 1
+    err = result.stderr
+    assert f"x apply: stopped at {first}: UnitsOfMeasure [KG]: cannot connect" in err
+    assert "x apply: 0 record(s) applied before the stop" in err
+    assert f"x not applied: {first} (from UnitsOfMeasure [KG])" in err
+    assert f"x not applied: {second}" in err
+    assert f"{second} -> " not in result.output
+
+
 def test_diff_clean_exits_zero(
     wired: Instance, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -2227,9 +2300,7 @@ def test_main_maps_tls_error_to_friendly_line(
 def test_format_failure_uses_explicit_target() -> None:
     req = httpx.Request("GET", "https://other.example/path")
     exc = httpx.ConnectError("refused", request=req)
-    msg = cli._format_failure(  # pyright: ignore[reportPrivateUsage]
-        exc, target="https://erp.example.com/AcumaticaERP"
-    )
+    msg = format_failure(exc, target="https://erp.example.com/AcumaticaERP")
     assert msg == (
         "cannot connect to https://erp.example.com/AcumaticaERP "
         "(check ACU_BASE_URL / network / instance up)"

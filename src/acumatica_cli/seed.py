@@ -56,11 +56,19 @@ import re
 from pathlib import Path
 from typing import Any
 
+import httpx
 import yaml
 from pydantic import Field, ValidationError, field_validator, model_validator
 
 from . import bootstrap, output
-from .client import OPTIMIZATION_500, AcumaticaClient, unwrap
+from .client import (
+    OPTIMIZATION_500,
+    RECORD_FAILURES,
+    AcumaticaClient,
+    SessionLostError,
+    format_failure,
+    unwrap,
+)
 from .config import find_data_root
 from .models import Model, validation_summary
 
@@ -399,21 +407,42 @@ def _probe(client: AcumaticaClient, action: ActionFile) -> bool:
     return bool(live)
 
 
+# V45 hard-stop classes: the host refuses connections or the session is
+# gone, so every later record would fail the same way.
+_STOP_FAILURES = (SessionLostError, httpx.ConnectError)
+
+
+class ApplyStopped(Exception):  # noqa: N818 - control flow, not an error class
+    """V45 hard-stop: record ``record`` hit a session/host loss.
+
+    Carries what this file already did (``ok``, ``errors``) so the caller
+    can print the stopped-at record plus the not-applied remainder.
+    """
+
+    def __init__(self, record: str, reason: str, ok: int, errors: list[str]):
+        super().__init__(f"{record}: {reason}")
+        self.record = record
+        self.reason = reason
+        self.ok = ok
+        self.errors = errors
+
+
 def _apply_action(
     client: AcumaticaClient, action: ActionFile, dry_run: bool = False
 ) -> tuple[int, list[str]]:
     """Invoke the action unless done_when already verifies the desired state.
 
-    On invoke failure, returns ``(0, [error])`` rather than raising so the
-    caller can continue other files (V45 multi-error summary).
+    On probe or invoke failure (REST or transport), returns ``(0, [error])``
+    rather than raising so the caller can continue other files (V45
+    multi-error summary). A refused connect raises ApplyStopped.
     """
     if dry_run:
         output.data(f"  would invoke {action.action}")
         return 1, []
-    if _probe(client, action):
-        output.data(f"  skip {action.action} (already done)")
-        return 1, []
     try:
+        if _probe(client, action):
+            output.data(f"  skip {action.action} (already done)")
+            return 1, []
         client.invoke(
             action.entity,
             action.action,
@@ -422,8 +451,11 @@ def _apply_action(
             action.endpoint,
             timeout=action.timeout,
         )
-    except RuntimeError as err:
-        msg = f"action {action.action} [{action.entity}]: {err}"
+    except _STOP_FAILURES as err:
+        record = f"action {action.action} [{action.entity}]"
+        raise ApplyStopped(record, format_failure(err), 0, []) from err
+    except RECORD_FAILURES as err:
+        msg = f"action {action.action} [{action.entity}]: {format_failure(err)}"
         output.error(msg)
         return 0, [msg]
     output.data(f"  invoke {action.action} [{action.entity}]")
@@ -446,10 +478,12 @@ def apply(
     Numbering runtime fields (V40/T152): never PUT ``LastNbr`` (or kin) so
     apply of bounds never resets live counters.
 
-    Per-record failure isolation (V45): a failed PUT does not abort later
-    records in the same file. Returns ``(ok_count, error_messages)`` —
-    never silent partial; caller exits 1 when any errors remain. Exit 2
-    stays drift (``diff`` only).
+    Per-record failure isolation (V45): a failed PUT — REST error or
+    transport failure (timeout, dropped) — does not abort later records
+    in the same file. A refused connect or failed mid-run re-login raises
+    ApplyStopped instead (hard-stop; later records would all fail).
+    Returns ``(ok_count, error_messages)`` — never silent partial; caller
+    exits 1 when any errors remain. Exit 2 stays drift (``diff`` only).
 
     Role.Users mapped-detail PUT is a no-op (V53/B33). After the Role PUT,
     apply invokes contract action ``AssignUser`` per Username so persist
@@ -466,8 +500,8 @@ def apply(
             try:
                 _assign_role_users(client, baseline, record, dry_run=True)
                 ok += 1
-            except RuntimeError as err:
-                msg = f"{baseline.entity} [{label}]: {err}"
+            except RECORD_FAILURES as err:
+                msg = f"{baseline.entity} [{label}]: {format_failure(err)}"
                 output.error(msg)
                 errors.append(msg)
             continue
@@ -481,8 +515,11 @@ def apply(
             output.data(f"  PUT {baseline.entity} [{label}]")
             _assign_role_users(client, baseline, record, dry_run=False)
             ok += 1
-        except RuntimeError as err:
-            msg = f"{baseline.entity} [{label}]: {err}"
+        except _STOP_FAILURES as err:
+            at = f"{baseline.entity} [{label}]"
+            raise ApplyStopped(at, format_failure(err), ok, errors) from err
+        except RECORD_FAILURES as err:
+            msg = f"{baseline.entity} [{label}]: {format_failure(err)}"
             output.error(msg)
             errors.append(msg)
     return ok, errors

@@ -2419,3 +2419,109 @@ def test_apply_multi_error_summary_all_fail(
     err = capsys.readouterr().err
     assert "UnitsOfMeasure [KG]" in err
     assert "UnitsOfMeasure [HOUR]" in err
+
+
+class _TimeoutFirstPutRecorder(Recorder):
+    """First PUT raises httpx.ReadTimeout; later PUTs answer 200 (gh #51)."""
+
+    def __init__(self) -> None:
+        super().__init__()
+        self._timed_out = False
+
+    def __call__(self, request: httpx.Request) -> httpx.Response:
+        if request.method == "PUT" and not self._timed_out:
+            self._timed_out = True
+            self.requests.append(request)
+            raise httpx.ReadTimeout("timed out", request=request)
+        return super().__call__(request)
+
+
+def test_apply_transport_error_is_record_failure_and_continues(
+    tmp_path: Path, instance: Instance, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """V45/gh #51: a timed-out PUT is a record failure, not an apply abort."""
+    baseline = seed.load_baseline(_write(tmp_path, BASELINE))
+    recorder = _TimeoutFirstPutRecorder()
+    n, errors = seed.apply(_client(instance, recorder), baseline)
+    assert n == 1
+    assert len(errors) == 1
+    assert errors[0].startswith("UnitsOfMeasure [KG]: request timed out to ")
+    assert len([r for r in recorder.requests if r.method == "PUT"]) == 2
+    out = capsys.readouterr()
+    assert "PUT UnitsOfMeasure [HOUR]" in out.out
+    assert "UnitsOfMeasure [KG]: request timed out" in out.err
+
+
+def _raising_client(
+    instance: Instance, exc: type[httpx.TransportError], method: str
+) -> AcumaticaClient:
+    """Client whose ``method`` requests raise ``exc``; everything else 200."""
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        if request.method == method:
+            raise exc("boom", request=request)
+        return httpx.Response(200, json={})
+
+    return AcumaticaClient(instance, transport=httpx.MockTransport(handler))
+
+
+def test_apply_action_probe_transport_error_is_file_error(
+    tmp_path: Path, instance: Instance
+) -> None:
+    """V45/gh #51: done_when probe timeout returns an error, no raise."""
+    client = _raising_client(instance, httpx.ReadTimeout, "GET")
+    n, errors = seed.apply(client, _action(tmp_path))
+    assert n == 0
+    assert len(errors) == 1
+    assert errors[0].startswith("action GenerateCalendar [MasterCalendar]: ")
+    assert "request timed out to " in errors[0]
+
+
+def test_apply_action_invoke_transport_error_is_file_error(
+    tmp_path: Path, instance: Instance
+) -> None:
+    """V45/gh #51: invoke POST timeout returns an error, no raise."""
+    client = _raising_client(instance, httpx.ReadTimeout, "POST")
+    n, errors = seed.apply(client, _action(tmp_path))
+    assert n == 0
+    assert "request timed out to " in errors[0]
+
+
+def test_apply_connect_error_hard_stops(tmp_path: Path, instance: Instance) -> None:
+    """V45/gh #51: refused connect stops the file; no per-record flood."""
+    baseline = seed.load_baseline(_write(tmp_path, BASELINE))
+    client = _raising_client(instance, httpx.ConnectError, "PUT")
+    with pytest.raises(seed.ApplyStopped) as excinfo:
+        seed.apply(client, baseline)
+    stop = excinfo.value
+    assert stop.record == "UnitsOfMeasure [KG]"
+    assert stop.reason.startswith("cannot connect to ")
+    assert (stop.ok, stop.errors) == (0, [])
+
+
+def test_apply_relogin_failure_hard_stops(tmp_path: Path, instance: Instance) -> None:
+    """V45/gh #51: Company PUT ok, re-login times out -> session lost, stop."""
+    baseline = seed.load_baseline(_write(tmp_path, COMPANY_YAML))
+    logins = 0
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        nonlocal logins
+        path = request.url.path
+        if path.endswith("/auth/login"):
+            logins += 1
+            if logins == 2:
+                raise httpx.ReadTimeout("timed out", request=request)
+            return httpx.Response(204)
+        if path.endswith("/Frames/Login.aspx"):
+            return httpx.Response(
+                200, text='<input id="txtSingleCompany" value="T1" />'
+            )
+        return httpx.Response(204 if path.endswith("/auth/logout") else 200, json={})
+
+    with (
+        AcumaticaClient(instance, transport=httpx.MockTransport(handler)) as client,
+        pytest.raises(seed.ApplyStopped) as excinfo,
+    ):
+        seed.apply(client, baseline)
+    assert excinfo.value.record == "Company [LAB5]"
+    assert excinfo.value.reason.startswith("re-login failed: request timed out")
