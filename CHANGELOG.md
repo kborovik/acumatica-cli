@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## [v0.36.0] - 2026-10-24
+
 ### Added
 
 - **--output json (gh #57):** `acu --output json diff|apply|run|state`
