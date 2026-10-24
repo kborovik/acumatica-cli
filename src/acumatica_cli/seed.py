@@ -767,10 +767,69 @@ def _fetch(
     return None
 
 
+def _prefetch(
+    client: AcumaticaClient, baseline: BaselineFile
+) -> dict[tuple[str, ...], dict[str, Any]]:
+    """One list GET for the whole file, indexed by normalized key tuple (gh #56).
+
+    No $filter (so no B14 cross-view conjunction); $expand / $custom are
+    the union of what each record's shape demands. A best-effort read:
+    any REST error (B9 optimization 500, an entity that will not list)
+    or an empty answer (B22 org-scoped views) yields no index, and a key
+    tuple seen on more than one live row is dropped - callers fall back
+    to the per-record ``_fetch`` for every record not indexed here, so
+    the result never differs from the per-record path. Single-record
+    files skip it (the filtered read is already one GET).
+    """
+    if len(baseline.records) < 2:
+        return {}
+    params: dict[str, str] = {}
+    expand = sorted({p for r in baseline.records for p in _expand_paths(r)})
+    if expand:
+        params["$expand"] = ",".join(expand)
+    custom = sorted(
+        {c for r in baseline.records for c in (_custom_param(r) or "").split(",") if c}
+    )
+    if custom:
+        params["$custom"] = ",".join(custom)
+    try:
+        rows = client.get_list(
+            baseline.entity, params=params or None, endpoint=baseline.endpoint
+        )
+    except RuntimeError:
+        return {}
+    index: dict[tuple[str, ...], dict[str, Any]] = {}
+    dups: set[tuple[str, ...]] = set()
+    for row in rows:
+        actual = unwrap(row)
+        if not all(k in actual for k in baseline.keys):
+            continue
+        ident = tuple(_norm(actual[k]) for k in baseline.keys)
+        if ident in index:
+            dups.add(ident)
+        index[ident] = row
+    for ident in dups:
+        del index[ident]
+    return index
+
+
+def _live_for(
+    client: AcumaticaClient,
+    baseline: BaselineFile,
+    index: dict[tuple[str, ...], dict[str, Any]],
+    record: dict[str, Any],
+) -> dict[str, Any] | None:
+    """The prefetched live row for record, else the per-record ``_fetch``."""
+    row = index.get(tuple(_norm(record[k]) for k in baseline.keys))
+    return row if row is not None else _fetch(client, baseline, record)
+
+
 def diff(client: AcumaticaClient, baseline: BaselineFile | ActionFile) -> list[str]:
     """Compare each source record against the live tenant.
 
-    Returns human-readable drift lines (empty = no drift). An action file
+    Reads the file with one list GET when it can (gh #56, ``_prefetch``),
+    per record otherwise. Returns human-readable drift lines (empty = no
+    drift). An action file
     diffs through its done_when probe - coarse present/absent (V4): a
     tenant that lost the action's effect must not diff false-green, but an
     action leaves no keyed record to compare field by field.
@@ -780,11 +839,12 @@ def diff(client: AcumaticaClient, baseline: BaselineFile | ActionFile) -> list[s
             return []
         return [f"action {baseline.action}: not applied"]
     drifts: list[str] = []
+    index = _prefetch(client, baseline)
     for record in baseline.records:
         label = (
             f"{baseline.entity} [{', '.join(str(record[k]) for k in baseline.keys)}]"
         )
-        live = _fetch(client, baseline, record)
+        live = _live_for(client, baseline, index, record)
         if live is None:
             drifts.append(f"{label}: missing on tenant")
             continue

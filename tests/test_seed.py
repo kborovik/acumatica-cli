@@ -756,8 +756,55 @@ def test_diff_clean_when_live_matches(tmp_path: Path, instance: Instance) -> Non
         "UnitsOfMeasure [HOUR].UOM: source='HOUR' live='KG'",
         "UnitsOfMeasure [HOUR].Description: source='Hour' live='Kilogram'",
     ]
-    filters = [r.url.params["$filter"] for r in recorder.requests]
-    assert filters == ["UOM eq 'KG'", "UOM eq 'HOUR'"]
+    # gh #56: one unfiltered file read finds KG; HOUR (not indexed) falls
+    # back to its own filtered read
+    filters = [r.url.params.get("$filter") for r in recorder.requests]
+    assert filters == [None, "UOM eq 'HOUR'"]
+
+
+def test_diff_reads_file_with_one_list_get(tmp_path: Path, instance: Instance) -> None:
+    """Gh #56: a multi-record file is one unfiltered GET when every key is found."""
+    baseline = seed.load_baseline(_write(tmp_path, BASELINE))
+    recorder = Recorder(
+        {
+            "/UnitsOfMeasure": _live(
+                {"UOM": "KG", "Description": "Kilogram"},
+                {"UOM": "HOUR", "Description": "Hours"},
+            )
+        }
+    )
+
+    drifts = seed.diff(_client(instance, recorder), baseline)
+
+    assert drifts == ["UnitsOfMeasure [HOUR].Description: source='Hour' live='Hours'"]
+    assert [r.url.params.get("$filter") for r in recorder.requests] == [None]
+
+
+def test_diff_bulk_read_error_falls_back_per_record(
+    tmp_path: Path, instance: Instance
+) -> None:
+    """Gh #56: a failed file read (B9-style 500) degrades to per-record reads."""
+    baseline = seed.load_baseline(_write(tmp_path, BASELINE))
+    kg = {"UOM": "KG", "Description": "Kilogram"}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        recorder.requests.append(request)
+        if "$filter" not in request.url.params:
+            return httpx.Response(500, json={"message": "boom"})
+        return _live(kg)
+
+    recorder = Recorder()
+    client = AcumaticaClient(instance, transport=httpx.MockTransport(handler))
+
+    drifts = seed.diff(client, baseline)
+
+    assert drifts == [
+        "UnitsOfMeasure [HOUR].UOM: source='HOUR' live='KG'",
+        "UnitsOfMeasure [HOUR].Description: source='Hour' live='Kilogram'",
+    ]
+    filters = [r.url.params.get("$filter") for r in recorder.requests]
+    assert filters[0] is None
+    assert filters[-2:] == ["UOM eq 'KG'", "UOM eq 'HOUR'"]
 
 
 def test_diff_flags_missing_record(tmp_path: Path, instance: Instance) -> None:
@@ -1846,8 +1893,9 @@ def test_diff_multi_key_filters_first_key_only(
     )
 
     assert seed.diff(_client(instance, recorder), baseline) == []
-    filters = [r.url.params["$filter"] for r in recorder.requests]
-    assert filters == ["LedgerCD eq 'ACTUAL'", "LedgerCD eq 'ACTUAL'"]
+    # gh #56: one unfiltered read, matched client-side on the full key tuple
+    filters = [r.url.params.get("$filter") for r in recorder.requests]
+    assert filters == [None]
 
 
 def test_diff_multi_key_no_matching_row_is_missing(

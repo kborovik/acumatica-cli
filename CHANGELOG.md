@@ -4,6 +4,11 @@
 
 ### Fixed
 
+- **diff reads each file once (gh #56):** `acu diff` reads a
+  multi-record file with one list GET and matches records by key,
+  instead of one filtered GET per record. Records the list read does not
+  return (or a list read that fails) still get the per-record GET, so
+  drift output is unchanged.
 - **retry on short blips (gh #52):** GETs, seed `apply` PUTs and
   inquiry PUTs (`run` expect/once probes, `state`) retry up to 3 tries
   with backoff on a refused connect, a read timeout, a dropped
