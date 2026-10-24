@@ -53,6 +53,7 @@ never a silent Default-endpoint PUT.
 """
 
 import re
+from collections.abc import Sequence
 from pathlib import Path
 from typing import Any
 
@@ -274,7 +275,10 @@ def load_baseline(path: Path) -> BaselineFile | ActionFile:
     B8 class.
     """
     with open(path) as f:
-        data = yaml.safe_load(f)
+        try:
+            data = yaml.safe_load(f)
+        except yaml.YAMLError as exc:
+            raise SystemExit(f"{path}: invalid YAML: {exc}") from exc
     if not isinstance(data, dict):
         raise SystemExit(f"{path}: expected a mapping at the top level")
     kind = ActionFile if "action" in data else BaselineFile
@@ -293,6 +297,32 @@ def load_baseline(path: Path) -> BaselineFile | ActionFile:
             f"pick one (literal or symbolic 'bootstrap' | 'default')"
         )
     return parsed
+
+
+def load_all(paths: Sequence[Path]) -> list[BaselineFile | ActionFile]:
+    """Load every seed file up front; report all failures together.
+
+    apply/diff call this before the session opens, so a bad late file
+    never leaves the tenant half-applied without a summary (V45, gh #54).
+    """
+    loaded: list[BaselineFile | ActionFile] = []
+    failures: list[str] = []
+    for path in paths:
+        try:
+            loaded.append(load_baseline(path))
+        except SystemExit as exc:
+            failures.append(str(exc.code))
+    if failures:
+        raise SystemExit(
+            "\n".join(
+                [
+                    f"{len(failures)} of {len(paths)} seed file(s) failed "
+                    "validation - nothing sent to the tenant",
+                    *failures,
+                ]
+            )
+        )
+    return loaded
 
 
 # ISO date or DateTimeValue: calendar-day prefix only (V55). Random strings

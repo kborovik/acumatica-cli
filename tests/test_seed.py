@@ -2525,3 +2525,39 @@ def test_apply_relogin_failure_hard_stops(tmp_path: Path, instance: Instance) ->
         seed.apply(client, baseline)
     assert excinfo.value.record == "Company [LAB5]"
     assert excinfo.value.reason.startswith("re-login failed: request timed out")
+
+
+# -- gh #54: validate every seed file before the first HTTP call --
+
+
+def test_load_baseline_yaml_syntax_error_is_systemexit(tmp_path: Path) -> None:
+    path = tmp_path / "bad.yaml"
+    path.write_text("entity: UnitsOfMeasure\nrecords: [\n")
+    with pytest.raises(SystemExit, match=r"bad\.yaml: invalid YAML"):
+        seed.load_baseline(path)
+
+
+def test_load_all_reports_every_failure_together(tmp_path: Path) -> None:
+    good = tmp_path / "10-good.yaml"
+    good.write_text("entity: UnitsOfMeasure\nkey: UOM\nrecords:\n  - UOM: KG\n")
+    no_key = tmp_path / "20-no-key.yaml"
+    no_key.write_text("entity: UnitsOfMeasure\nrecords:\n  - UOM: KG\n")
+    broken = tmp_path / "30-broken.yaml"
+    broken.write_text("entity: [\n")
+    with pytest.raises(SystemExit) as info:
+        seed.load_all([good, no_key, broken])
+    message = str(info.value.code)
+    assert message.startswith("2 of 3 seed file(s) failed validation")
+    assert "20-no-key.yaml" in message
+    assert "30-broken.yaml: invalid YAML" in message
+    assert "10-good.yaml" not in message
+
+
+def test_load_all_returns_in_order(tmp_path: Path) -> None:
+    paths = []
+    for name, uom in (("a.yaml", "KG"), ("b.yaml", "LB")):
+        path = tmp_path / name
+        path.write_text(f"entity: UnitsOfMeasure\nkey: UOM\nrecords:\n  - UOM: {uom}\n")
+        paths.append(path)
+    loaded = seed.load_all(paths)
+    assert [b.path for b in loaded] == paths

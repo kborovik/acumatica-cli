@@ -37,6 +37,11 @@
   `tenant delete` sends the tenant's real `ParentCompanyID` as `ParentID`
   (was always 1) and refuses the system tenant. `tenant list` shows a
   Parent column.
+- **seed validation before login (gh #54):** `apply` and `diff` parse
+  and validate every expanded seed file before opening a session. Any
+  invalid file (bad YAML, missing key, duplicate key) exits 1 listing
+  every failing file, with no login and nothing sent, instead of
+  stopping mid-apply on the first bad late file.
 
 ## [v0.35.0] - 2026-09-12
 
