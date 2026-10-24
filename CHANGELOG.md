@@ -12,6 +12,11 @@
   command text, so a password with `$`, `` ` ``, `"` or `'` creates a
   working admin login. `--login` and `ACU_USER` must match
   `^[A-Za-z0-9_-]+$`; anything else exits 1 before any SSH call.
+- **action 202 poll timeout (gh #50):** a contract action whose status
+  URL keeps answering 202 no longer hangs `apply` or `run`. The poll
+  stops after 600s by default with an error naming the entity, action
+  and elapsed time. Setup action files and `run` action steps take an
+  optional `timeout:` (seconds) to override it.
 
 ## [v0.35.0] - 2026-09-12
 

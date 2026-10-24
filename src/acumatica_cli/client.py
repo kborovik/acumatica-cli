@@ -443,14 +443,19 @@ class AcumaticaClient:
     # seconds between polls of a long-running action's status URL; module
     # attribute so offline tests can zero it
     poll_interval: float = 1.0
+    # default ceiling on a 202 poll (V63); sized for long actions such as
+    # calendar generation, overridable per call via ``timeout``
+    invoke_timeout: float = 600.0
 
-    def invoke(
+    def invoke(  # noqa: PLR0913 — timeout keyword-only (V63)
         self,
         entity: str,
         action: str,
         record: dict[str, Any],
         parameters: dict[str, Any] | None = None,
         endpoint: str | None = None,
+        *,
+        timeout: float | None = None,
     ) -> None:
         """Invoke a contract action: POST /entity/<endpoint>/<Entity>/<Action>.
 
@@ -463,7 +468,13 @@ class AcumaticaClient:
         Trap (T36 live): a 204 can carry a ``Location`` header too, and it
         does not resolve - only a 202 means "poll"; a 204 is done, its
         Location is never followed.
+
+        The poll is bounded (V63): ``timeout`` seconds from the first POST
+        (default ``invoke_timeout``); a status URL still answering 202
+        past the deadline raises ``RuntimeError``.
         """
+        limit = self.invoke_timeout if timeout is None else timeout
+        start = time.monotonic()
         body: dict[str, Any] = {"entity": wrap(record)}
         if parameters is not None:
             body["parameters"] = wrap(parameters)
@@ -471,6 +482,12 @@ class AcumaticaClient:
             self._http.post(f"{self._url(entity, endpoint)}/{action}", json=body)
         )
         while r.status_code == 202:
+            elapsed = time.monotonic() - start
+            if elapsed >= limit:
+                raise RuntimeError(
+                    f"{entity}/{action} still 202 after {elapsed:.0f}s "
+                    f"(timeout {limit:g}s)"
+                )
             # resolve Location per HTTP semantics (relative to the request
             # URL); the absolute result bypasses base_url re-prefixing
             status_url = r.request.url.join(r.headers.get("Location", ""))

@@ -142,6 +142,7 @@ class Step(Model):
     capture: dict[str, str] | None = None  # {Field-or-path: var_name}
     wait: WaitSpec | None = None
     endpoint: str | None = None
+    timeout: float | None = Field(default=None, gt=0)  # action 202 poll (V63)
 
     @model_validator(mode="after")
     def _one_op(self) -> Step:
@@ -156,6 +157,10 @@ class Step(Model):
             raise ValueError(f"step '{self.id}': action needs a record")
         if self.capture is not None and self.put is None and self.get is None:
             raise ValueError(f"step '{self.id}': capture rides a put or get step")
+        if self.timeout is not None and self.action is None:
+            raise ValueError(
+                f"step '{self.id}': timeout rides an action step (wait has its own)"
+            )
         return self
 
 
@@ -498,6 +503,7 @@ def _run_step(client: AcumaticaClient, step: Step, variables: dict[str, Any]) ->
             _subst(step.record, variables),
             _subst(step.parameters, variables),
             step.endpoint,
+            timeout=step.timeout,
         )
         output.data(f"  invoke {step.action.name} [{step.id}]")
     elif step.get is not None:

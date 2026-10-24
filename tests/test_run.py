@@ -195,6 +195,43 @@ def test_run_wait_timeout_names_last_state(tmp_path: Path, instance: Instance) -
         run.run(_client(instance, server), scenario)
 
 
+def test_run_action_step_timeout_bounds_202_poll(
+    tmp_path: Path, instance: Instance
+) -> None:
+    """V63: step `timeout:` reaches invoke; a stuck 202 fails the step."""
+    text = SCENARIO.replace(
+        '    record: { Module: GL, BatchNbr: "${batch_nbr}" }\n',
+        '    record: { Module: GL, BatchNbr: "${batch_nbr}" }\n    timeout: 0.05\n',
+    )
+    scenario = run.load_scenario(_write(tmp_path, text))
+    assert scenario.steps[1].timeout == 0.05
+    server = Server()
+    original = server.__class__.__call__
+
+    def stuck(self: Server, request: httpx.Request) -> httpx.Response:
+        path = request.url.path
+        if path.endswith("/ReleaseJournalTransaction"):
+            return httpx.Response(202, headers={"Location": "Release/s/1"})
+        if path.endswith("/s/1"):
+            return httpx.Response(202)
+        return original(self, request)
+
+    server.__class__ = type("Stuck", (Server,), {"__call__": stuck})
+    with pytest.raises(
+        RuntimeError, match=r"JournalTransaction/ReleaseJournalTransaction still 202"
+    ):
+        run.run(_client(instance, server), scenario)
+
+
+def test_load_scenario_rejects_timeout_off_action_step(tmp_path: Path) -> None:
+    text = SCENARIO.replace(
+        "    capture: { BatchNbr: batch_nbr }\n",
+        "    capture: { BatchNbr: batch_nbr }\n    timeout: 10\n",
+    )
+    with pytest.raises(SystemExit, match="timeout rides an action step"):
+        run.load_scenario(_write(tmp_path, text))
+
+
 def test_run_dry_run_makes_no_http(
     tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:

@@ -575,3 +575,33 @@ def test_invoke_422_surfaces_field_errors(instance: Instance) -> None:
             {"FinancialYear": 1999},
             {"FromYear": 1999, "ToYear": 1999},
         )
+
+
+def _always_202(request: httpx.Request) -> httpx.Response:
+    """A long action whose status URL never stops answering 202."""
+    if request.url.path.endswith("/Frames/Login.aspx"):
+        return _login_page("T1")
+    if request.url.path.endswith("/GenerateCalendar"):
+        return httpx.Response(202, headers={"Location": "GenerateCalendar/status/x"})
+    if request.url.path.endswith("/status/x"):
+        return httpx.Response(202)
+    return httpx.Response(204)
+
+
+def test_invoke_202_poll_raises_after_timeout(instance: Instance) -> None:
+    """V63: a status URL stuck on 202 fails, naming entity, action, elapsed."""
+    client = AcumaticaClient(instance, transport=httpx.MockTransport(_always_202))
+    client.poll_interval = 0
+    with pytest.raises(
+        RuntimeError,
+        match=r"MasterCalendar/GenerateCalendar still 202 after \d+s \(timeout 0.05s\)",
+    ):
+        client.invoke("MasterCalendar", "GenerateCalendar", {}, timeout=0.05)
+
+
+def test_invoke_202_poll_uses_default_timeout(instance: Instance) -> None:
+    client = AcumaticaClient(instance, transport=httpx.MockTransport(_always_202))
+    client.poll_interval = 0
+    client.invoke_timeout = 0
+    with pytest.raises(RuntimeError, match=r"still 202 .*\(timeout 0s\)"):
+        client.invoke("MasterCalendar", "GenerateCalendar", {})

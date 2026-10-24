@@ -184,10 +184,10 @@ T272|x|`_ssh` takes optional stdin; create sends password on stdin, remote reads
 T273|x|offline tests: password w/ `$` `` ` `` `"` `'` → argv lacks it, stdin byte-for-byte; bad `--login` exit 1 w/ zero `subprocess.run` calls|V13,V62,T271,T272
 T274|x|live: scratch login on ACUCLI box, `--password` w/ `$`+`` ` ``+`"`+`'` → create + REST first-login ok, then delete scratch; never CNBN|V12,V62,T272
 T275|x|CHANGELOG Unreleased (gh #48); suite green|V19,V62,T271,T272,T273
-T276|.|`client.invoke(..., timeout=600.0)`; monotonic deadline across 202 poll; expiry → RuntimeError `<Entity>/<Action> still 202 after <n>s`|V63,I.api
-T277|.|`timeout:` ? on ActionFile + run Step (action op only, else validation error); threaded to invoke; AssignUser keeps default|V63,I.data,I.cmd
-T278|.|offline tests: always-202 MockTransport, poll_interval 0, small timeout → RuntimeError names entity+action+elapsed; action-file + step timeout pass-through; step timeout w/o action rejected|V13,V63,T276,T277
-T279|.|CHANGELOG Unreleased (gh #50); suite green|V19,V63,T276,T277,T278
+T276|x|`client.invoke(..., timeout=600.0)`; monotonic deadline across 202 poll; expiry → RuntimeError `<Entity>/<Action> still 202 after <n>s`|V63,I.api
+T277|x|`timeout:` ? on ActionFile + run Step (action op only, else validation error); threaded to invoke; AssignUser keeps default|V63,I.data,I.cmd
+T278|x|offline tests: always-202 MockTransport, poll_interval 0, small timeout → RuntimeError names entity+action+elapsed; action-file + step timeout pass-through; step timeout w/o action rejected|V13,V63,T276,T277
+T279|x|CHANGELOG Unreleased (gh #50); suite green|V19,V63,T276,T277,T278
 
 ## §B BUGS
 
