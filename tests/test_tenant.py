@@ -18,8 +18,9 @@ from acumatica_cli.tenant import Tenant, TenantManager
 READ_PASSWORD = tenant._READ_PASSWORD  # pyright: ignore[reportPrivateUsage]
 
 SQLCMD_ROWS = """\
-1|System|  |System
-2|Company|Company|Custom
+1|System|  |System|
+2|Company|Company|Custom|1
+3|Child|Child|Custom|2
 junk line without pipes
 Rows affected: 2
 """
@@ -77,8 +78,17 @@ def test_list_parses_sqlcmd_rows_and_skips_noise(
             company_cd="Company",
             login_name="Company",
             company_type="Custom",
+            parent_id=1,
+        ),
+        Tenant(
+            company_id=3,
+            company_cd="Child",
+            login_name="Child",
+            company_type="Custom",
+            parent_id=2,
         ),
     ]
+    assert "ParentCompanyID" in run.commands[0]
     # DB name = config.py constant (T42), no longer an Instance field
     assert "AcumaticaDB.dbo.Company" in run.commands[0]
 
@@ -115,7 +125,9 @@ def test_set_company_cd_updates_when_mismatched(
     run.results = [
         (
             0,
-            "1|System|  |System\n2|Company|Company|Custom\n4|Company3|LAB6|Custom\n",
+            "1|System|  |System|\n"
+            "2|Company|Company|Custom|1\n"
+            "4|Company3|LAB6|Custom|1\n",
         ),
         (0, ""),
     ]
@@ -128,7 +140,7 @@ def test_set_company_cd_updates_when_mismatched(
 def test_set_company_cd_noop_when_already_aligned(
     instance: Instance, run: FakeRun
 ) -> None:
-    run.results = [(0, "3|LAB5|LAB5|Custom\n")]
+    run.results = [(0, "3|LAB5|LAB5|Custom|1\n")]
     changed = TenantManager(instance).set_company_cd(3, "LAB5")
     assert changed is False
     assert len(run.commands) == 1  # list only; no UPDATE
@@ -138,7 +150,7 @@ def test_set_company_cd_rejects_collision(instance: Instance, run: FakeRun) -> N
     run.results = [
         (
             0,
-            "2|Company|Company|Custom\n3|LAB5|LAB5|Custom\n4|Company3|LAB6|Custom\n",
+            "2|Company|Company|Custom|1\n3|LAB5|LAB5|Custom|1\n4|Company3|LAB6|Custom|1\n",
         ),
     ]
     with pytest.raises(RuntimeError, match=r"CompanyCD 'LAB5' already used"):
@@ -147,7 +159,7 @@ def test_set_company_cd_rejects_collision(instance: Instance, run: FakeRun) -> N
 
 
 def test_set_company_cd_escapes_sql_quotes(instance: Instance, run: FakeRun) -> None:
-    run.results = [(0, "4|Company3|O'Brien|Custom\n"), (0, "")]
+    run.results = [(0, "4|Company3|O'Brien|Custom|1\n"), (0, "")]
     TenantManager(instance).set_company_cd(4, "O'Brien")
     assert "SET CompanyCD = N'O''Brien'" in run.commands[1]
 
@@ -176,6 +188,35 @@ def test_delete_by_login_name_resolves_company_id(
         '-company:"CompanyID=2;ParentID=1;CompanyType=Custom;Deleted=Yes;"'
         in delete_command
     )
+
+
+def test_delete_sends_live_parent_id(instance: Instance, run: FakeRun) -> None:
+    """A tenant made with --parent 2 is deleted with ParentID=2 (gh #62)."""
+    run.results = [(0, SQLCMD_ROWS), (0, "Company deleted")]
+    TenantManager(instance).delete(login_name="Child")
+    assert (
+        '-company:"CompanyID=3;ParentID=2;CompanyType=Custom;Deleted=Yes;"'
+        in run.commands[1]
+    )
+
+
+def test_delete_system_tenant_refused_before_config_call(
+    instance: Instance, run: FakeRun
+) -> None:
+    run.results = [(0, SQLCMD_ROWS)]
+    with pytest.raises(RuntimeError, match="system tenant"):
+        TenantManager(instance).delete(1)
+    assert len(run.commands) == 1
+
+
+def test_delete_case_only_login_mismatch_refused(
+    instance: Instance, run: FakeRun
+) -> None:
+    """Gh #62: --login company never deletes the tenant Company."""
+    run.results = [(0, SQLCMD_ROWS)]
+    with pytest.raises(RuntimeError, match=r"differs only in case.*'Company'"):
+        TenantManager(instance).delete(login_name="company")
+    assert len(run.commands) == 1
 
 
 def test_delete_unknown_id_raises_before_ssh_config_call(

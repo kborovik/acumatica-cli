@@ -114,7 +114,7 @@ from .config import (
     read_env_values,
     scaffold,
 )
-from .tenant import TenantManager, check_identity
+from .tenant import TenantManager, check_identity, find_login
 
 # Wider help + -h for agents/operators scanning docs offline.
 _HELP_CTX: dict[str, object] = {
@@ -399,7 +399,10 @@ def tenant_create(
     check_identity(inst.user, "ACU_USER")
     mgr = TenantManager(inst)
     tenants = mgr.list()
-    existing = next((t for t in tenants if t.login_name == login_name), None)
+    try:
+        existing = find_login(tenants, login_name)
+    except RuntimeError as exc:
+        raise SystemExit(str(exc)) from exc
     if existing is not None:
         if company_id is not None and existing.company_id != company_id:
             raise SystemExit(

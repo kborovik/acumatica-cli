@@ -542,6 +542,33 @@ def test_tenant_create_exists_id_mismatch_errors(
     assert create_env == []
 
 
+def test_tenant_create_case_only_login_mismatch_errors(
+    create_env: list[str], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # gh #62: --login scratch while Scratch exists is neither a fresh create
+    # (new CompanyID) nor an exists-skip (bootstrap under a login that never
+    # routes) - hard error naming the real login, nothing runs
+    monkeypatch.setattr(
+        TenantManager,
+        "list",
+        lambda self: [
+            Tenant(
+                company_id=3,
+                company_cd="Scratch",
+                login_name="Scratch",
+                company_type="Custom",
+            )
+        ],
+    )
+    result = CliRunner().invoke(cli.cli, ["tenant", "create", "--login", "scratch"])
+
+    assert result.exit_code == 1
+    out = " ".join(result.output.split())
+    assert "differs only in case from existing 'Scratch' (id 3)" in out
+    assert "pass --login Scratch" in out
+    assert create_env == []
+
+
 def test_tenant_create_login_only_allocates_next_free_id(
     create_env: list[str], monkeypatch: pytest.MonkeyPatch
 ) -> None:
