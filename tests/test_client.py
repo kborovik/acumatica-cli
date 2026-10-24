@@ -692,3 +692,73 @@ def test_relogin_dead_logout_raises_session_lost(instance: Instance) -> None:
         pytest.raises(SessionLostError, match="re-login failed: cannot connect"),
     ):
         client.relogin()
+
+
+def _flaky(statuses: list[int]) -> tuple[list[httpx.Request], AcumaticaClient]:
+    """Client answering ``statuses`` in order (then 200) to non-auth calls."""
+    seen: list[httpx.Request] = []
+    queue = list(statuses)
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        seen.append(request)
+        return httpx.Response(queue.pop(0) if queue else 200, json=[])
+
+    client = AcumaticaClient(
+        Instance(base_url="http://acu.test/AcumaticaERP", tenant="T1", password="pw"),
+        transport=httpx.MockTransport(handler),
+    )
+    return seen, client
+
+
+def test_get_retries_503_then_succeeds(capsys: pytest.CaptureFixture[str]) -> None:
+    """Gh #52: a warmup 503 on GET is retried; the retry is logged on stderr."""
+    seen, client = _flaky([503])
+    assert client.get_list("Account") == []
+    assert len(seen) == 2
+    assert "retry 1/2: GET /entity/Default/25.200.001/Account (HTTP 503)" in (
+        capsys.readouterr().err
+    )
+
+
+def test_get_persistent_503_fails_after_retry_tries() -> None:
+    seen, client = _flaky([503, 503, 503, 503])
+    with pytest.raises(RuntimeError, match="-> 503"):
+        client.get_list("Account")
+    assert len(seen) == AcumaticaClient.retry_tries
+
+
+def test_get_retries_connect_error() -> None:
+    calls: list[int] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        calls.append(1)
+        if len(calls) == 1:
+            raise httpx.ConnectError("refused", request=request)
+        return httpx.Response(200, json=[])
+
+    client = AcumaticaClient(
+        Instance(base_url="http://acu.test/AcumaticaERP", tenant="T1", password="pw"),
+        transport=httpx.MockTransport(handler),
+    )
+    assert client.get_list("Account") == []
+    assert len(calls) == 2
+
+
+def test_invoke_post_is_not_retried() -> None:
+    """Gh #52: an action POST may create a document - it goes out once."""
+    seen, client = _flaky([503, 503])
+    with pytest.raises(RuntimeError, match="-> 503"):
+        client.invoke("SalesOrder", "ReleaseFromHold", {"OrderNbr": "1"})
+    assert [r.method for r in seen] == ["POST"]
+
+
+def test_put_retries_only_when_asked() -> None:
+    """Default PUT (run document step) is single-shot; seed PUT opts in."""
+    seen, client = _flaky([503])
+    with pytest.raises(RuntimeError, match="-> 503"):
+        client.put("SalesOrder", {"OrderType": "SO"})
+    assert len(seen) == 1
+
+    seen, client = _flaky([503])
+    client.put("UnitsOfMeasure", {"UOM": "KG"}, retry=True)
+    assert len(seen) == 2

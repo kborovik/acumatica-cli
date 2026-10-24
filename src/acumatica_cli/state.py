@@ -452,6 +452,7 @@ def _fetch_inquire_rows(client: AcumaticaClient, view: ViewDef) -> list[dict[str
         view.source.inquire,
         dict(view.source.params),
         params={"$expand": "Results"},
+        retry=True,  # inquiry PUT is a read (gh #52)
     )
     match = view.source.match
     rows: list[dict[str, Any]] = []

@@ -2,6 +2,7 @@
 
 import base64
 import html
+import random
 import re
 import time
 from collections.abc import Sequence
@@ -229,6 +230,17 @@ OPTIMIZATION_500 = "Optimization cannot be performed"
 # 26.101.0225).
 SETUP_NOT_ENTERED_500 = "configuration data is not entered"
 
+# gh #52: a short blip (IIS app-pool warmup after a recycle or publish, a
+# 503, a dropped connection) is retried for idempotent requests only - GET
+# and keyed seed PUT (V4). Action POSTs and `run` document PUTs create
+# documents, so they go out once.
+RETRY_STATUS = frozenset({502, 503, 504})
+RETRY_ERRORS: tuple[type[httpx.TransportError], ...] = (
+    httpx.ConnectError,
+    httpx.ReadTimeout,
+    httpx.RemoteProtocolError,
+)
+
 
 class AcumaticaClient:
     """Cookie-session client for the contract-based endpoint.
@@ -318,7 +330,13 @@ class AcumaticaClient:
             "password": self.instance.password,
             "tenant": self.instance.tenant,
         }
-        self._checked(self._http.post("/entity/auth/login", json=creds))
+        # retry only where no session can exist yet: refused connect or a
+        # 502/503/504 (warmup); a timed-out login may have opened one (V6)
+        self._checked(
+            self._send(
+                "POST", "/entity/auth/login", json=creds, errors=(httpx.ConnectError,)
+            )
+        )
         landed = self._landed_tenant()
         if landed.casefold() != self.instance.tenant.casefold():
             raise RuntimeError(
@@ -364,7 +382,9 @@ class AcumaticaClient:
         single-tenant, and mid-reroute under a stale tenant map. The probe
         does not disturb the session.
         """
-        r = self._checked(self._http.get("/Frames/Login.aspx", follow_redirects=True))
+        r = self._checked(
+            self._send("GET", "/Frames/Login.aspx", follow_redirects=True)
+        )
         m = re.search(r'id="txtSingleCompany" value="([^"]*)"', r.text)
         if not m:
             raise RuntimeError(
@@ -396,7 +416,7 @@ class AcumaticaClient:
         Build id is present only on the 26.x wrapper
         (``version.acumaticaBuildVersion``). Bare array → ``None`` (T92).
         """
-        r = self._checked(self._http.get("/entity"))
+        r = self._checked(self._send("GET", "/entity"))
         return parse_entity_response(r)
 
     @staticmethod
@@ -481,7 +501,7 @@ class AcumaticaClient:
         targets the custom Bootstrap endpoint; everything else defaults).
         """
         return self._checked(
-            self._http.get(self._url(entity, endpoint), params=params)
+            self._send("GET", self._url(entity, endpoint), params=params)
         ).json()
 
     def get_record(
@@ -502,7 +522,7 @@ class AcumaticaClient:
         GET.
         """
         path = "/".join(quote(str(k), safe="") for k in keys)
-        r = self._http.get(f"{self._url(entity, endpoint)}/{path}", params=params)
+        r = self._send("GET", f"{self._url(entity, endpoint)}/{path}", params=params)
         if r.status_code == 500:
             try:
                 missing = "NoEntitySatisfiesTheCondition" in r.json().get(
@@ -516,7 +536,7 @@ class AcumaticaClient:
 
     def swagger(self) -> bytes:
         """GET the endpoint's OpenAPI schema (swagger.json), raw bytes."""
-        return self._checked(self._http.get(self._url("swagger.json"))).content
+        return self._checked(self._send("GET", self._url("swagger.json"))).content
 
     def put(
         self,
@@ -524,15 +544,23 @@ class AcumaticaClient:
         record: dict[str, Any],
         endpoint: str | None = None,
         params: dict[str, str] | None = None,
+        *,
+        retry: bool = False,
     ) -> dict[str, Any]:
         """Upsert by the entity's key fields — the idempotence primitive.
 
         `params` carries OData query options — the contract-inquiry idiom
         (T62) is a PUT of the parameter record with `$expand=Results`.
+        ``retry`` opts a keyed (idempotent) PUT into the blip retry (gh
+        #52); off by default, since a `run` document PUT creates a document.
         """
         return self._checked(
-            self._http.put(
-                self._url(entity, endpoint), json=wrap(record), params=params
+            self._send(
+                "PUT",
+                self._url(entity, endpoint),
+                retry=retry,
+                json=wrap(record),
+                params=params,
             )
         ).json()
 
@@ -545,6 +573,48 @@ class AcumaticaClient:
     # logout ceiling: on an error exit against a dead server the user must
     # not wait the full request timeout again before seeing the cause
     logout_timeout: float = 10.0
+    # gh #52 idempotent-request retry: total tries, and the base backoff in
+    # seconds (doubles per retry, plus up to 50% jitter); tests zero it
+    retry_tries: int = 3
+    retry_backoff: float = 1.0
+
+    def _send(
+        self,
+        method: str,
+        url: str | httpx.URL,
+        *,
+        retry: bool = True,
+        errors: tuple[type[httpx.TransportError], ...] = RETRY_ERRORS,
+        **kwargs: Any,
+    ) -> httpx.Response:
+        """One request, retried with backoff on a blip when ``retry`` (gh #52).
+
+        Retries ``errors`` (transport) and 502/503/504 up to ``retry_tries``
+        total; the last failure surfaces unchanged (exception or response).
+        Each retry logs one stderr line.
+        """
+        tries = self.retry_tries if retry else 1
+        attempt = 1
+        while True:
+            try:
+                r = self._http.request(method, url, **kwargs)
+            except errors as err:
+                if attempt >= tries:
+                    raise
+                reason = format_failure(err)
+            else:
+                if r.status_code not in RETRY_STATUS or attempt >= tries:
+                    return r
+                reason = f"HTTP {r.status_code}"
+            delay = self.retry_backoff * 2 ** (attempt - 1)
+            delay *= 1 + random.random() / 2
+            path = httpx.URL(url).path
+            output.info(
+                f"retry {attempt}/{tries - 1}: {method} {path} ({reason}); "
+                f"waiting {delay:.1f}s"
+            )
+            time.sleep(delay)
+            attempt += 1
 
     def invoke(  # noqa: PLR0913 — timeout keyword-only (V63)
         self,
@@ -591,7 +661,7 @@ class AcumaticaClient:
             # URL); the absolute result bypasses base_url re-prefixing
             status_url = r.request.url.join(r.headers.get("Location", ""))
             time.sleep(self.poll_interval)
-            r = self._checked(self._http.get(status_url))
+            r = self._checked(self._send("GET", status_url))
 
     # -- CustomizationApi (same cookie session; works on a virgin tenant) --
 
@@ -713,12 +783,12 @@ class AcumaticaClient:
         service exposes one EDMX document at the service root.
         """
         del name  # service-level metadata; per-GI filter is validate_gi_params
-        r = self._checked(self._http.get(f"{self._odata_gi_root()}/$metadata"))
+        r = self._checked(self._send("GET", f"{self._odata_gi_root()}/$metadata"))
         return r.text
 
     def odata_gi(self, name: str, params: dict[str, str] | None = None) -> Any:
         """GET OData GI rows as JSON (requires Expose via OData on the GI)."""
         gi = quote(name, safe="")
         return self._checked(
-            self._http.get(f"{self._odata_gi_root()}/{gi}", params=params)
+            self._send("GET", f"{self._odata_gi_root()}/{gi}", params=params)
         ).json()

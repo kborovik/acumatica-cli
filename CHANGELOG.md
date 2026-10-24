@@ -4,6 +4,13 @@
 
 ### Fixed
 
+- **retry on short blips (gh #52):** GETs, seed `apply` PUTs and
+  inquiry PUTs (`run` expect/once probes, `state`) retry up to 3 tries
+  with backoff on a refused connect, a read timeout, a dropped
+  connection, or HTTP 502/503/504 (IIS warmup after `tenant recycle` or
+  a bootstrap publish). Each retry prints one stderr line. Action POSTs
+  and `run` `put` steps create documents and still go out once. Login
+  retries a refused connect or 502/503/504, never a timeout.
 - **run step failures name file and step (gh #58):** a failing step in
   `acu run` prints `x <scenario path> [<step id>]: <error>` (a failing
   `once` or `expect` probe uses `once` / `expect` as the id) instead of

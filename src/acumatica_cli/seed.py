@@ -635,15 +635,19 @@ def _put(
     body: dict[str, Any],
     endpoint: str | None,
 ) -> None:
-    """PUT one record; one re-login + retry on branch-empty 500 (V5/B24)."""
+    """PUT one record; one re-login + retry on branch-empty 500 (V5/B24).
+
+    Keyed upsert is idempotent (V4), so it opts into the client's blip
+    retry (gh #52).
+    """
     try:
-        client.put(entity, body, endpoint=endpoint)
+        client.put(entity, body, endpoint=endpoint, retry=True)
     except RuntimeError as err:
         if _BRANCH_EMPTY not in str(err):
             raise
         output.info(f"re-login and retry {entity} (branch empty)")
         client.relogin()
-        client.put(entity, body, endpoint=endpoint)
+        client.put(entity, body, endpoint=endpoint, retry=True)
 
 
 def _put_body(

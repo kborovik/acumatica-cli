@@ -356,6 +356,7 @@ def _inquiry_totals(
         _subst(probe.parameters or {}, variables),
         endpoint=probe.endpoint,
         params={"$expand": "Results"},
+        retry=True,  # inquiry PUT is a read (gh #52)
     )
     totals = dict.fromkeys(field_names, 0.0)
     match = _subst(probe.match, variables) if probe.match else None

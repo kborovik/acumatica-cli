@@ -2018,7 +2018,7 @@ def test_apply_transport_error_summary_exits_1(
     def handler(request: httpx.Request) -> httpx.Response:
         if request.method == "PUT":
             puts.append(request.content.decode())
-            if len(puts) == 1:
+            if '"KG"' in puts[-1]:  # persistent: outlasts the gh #52 retries
                 raise httpx.ReadTimeout("timed out", request=request)
         if request.url.path.endswith("/Frames/Login.aspx"):
             # landed-tenant guard (V5); the wired instance is tenant T1
@@ -2035,7 +2035,7 @@ def test_apply_transport_error_summary_exits_1(
     result = CliRunner().invoke(cli.cli, ["apply", str(path)])
 
     assert result.exit_code == 1
-    assert len(puts) == 2
+    assert len(puts) == 4  # KG x3 tries, HOUR x1
     assert "PUT UnitsOfMeasure [HOUR]" in result.output
     assert "x apply: 1 error(s), 1 record(s) applied" in result.stderr
     assert f"{path}: UnitsOfMeasure [KG]: request timed out to " in result.stderr

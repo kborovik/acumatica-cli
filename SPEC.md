@@ -116,6 +116,7 @@ V60: canonical-tree-names — init, packaged templates, CLI test seed, extract d
 V61: stock-vs-custom — `acu-config/` holds stock SEED_DIRS + views only; customization YAML ! child of `acu-config/`; operator passes free-text path; umbrella expand of `acu-config/` never includes sibling customization dir
 V62: remote-command-safety — value interpolated into remote PowerShell over SSH ! arrive byte-for-byte; identity strings (`--login`, `ACU_USER`) ! match `^[A-Za-z0-9_-]+$` before any SSH, bad → exit 1 (never click exit 2 — 2 = drift); secrets (`ACU_PASSWORD`) via stdin only — never local `ssh` argv, never remote cmd text, never PS double-quoted string; other free string single-quoted `'`→`''` (closes §B.39) (gh #48)
 V63: invoke-poll-deadline — `invoke` 202 poll ! bounded: deadline from first POST, default 600s; expiry → RuntimeError naming entity + action + elapsed; override via action file `timeout:` / run action step `timeout:`; never unbounded loop (gh #50)
+V64: idempotent-retry — client blip retry ! idempotent requests only: GET (incl 202 status poll) + seed `apply` keyed PUT + inquiry PUT (`run` present/expect, `state`); bounded `retry_tries` 3 total, exp backoff (1s base, x2) + ≤50% jitter, each retry `output.info` stderr line; retry on ConnectError/ReadTimeout/RemoteProtocolError + 502/503/504; login retries ConnectError + 502/503/504 only (timed-out login may hold session, V6); action POST (`invoke`), `run` `put` steps, CustomizationApi POSTs never auto-retry; last failure surfaces unchanged (V45 classes) (gh #52)
 
 ## §T TASKS
 

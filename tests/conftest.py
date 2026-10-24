@@ -4,6 +4,7 @@ import os
 
 import pytest
 
+from acumatica_cli.client import AcumaticaClient
 from acumatica_cli.config import Instance
 
 
@@ -18,6 +19,12 @@ def isolate_acu_env(monkeypatch: pytest.MonkeyPatch) -> None:
     """
     for key in [k for k in os.environ if k.startswith("ACU_")]:
         monkeypatch.delenv(key)
+
+
+@pytest.fixture(autouse=True)
+def no_retry_sleep(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Blip retries (gh #52) still run in tests, without the backoff wait."""
+    monkeypatch.setattr(AcumaticaClient, "retry_backoff", 0.0)
 
 
 @pytest.fixture

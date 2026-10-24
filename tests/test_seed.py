@@ -2409,15 +2409,13 @@ def test_apply_multi_error_summary_all_fail(
 
 
 class _TimeoutFirstPutRecorder(Recorder):
-    """First PUT raises httpx.ReadTimeout; later PUTs answer 200 (gh #51)."""
+    """Every PUT of the first record (KG) times out; others 200 (gh #51).
 
-    def __init__(self) -> None:
-        super().__init__()
-        self._timed_out = False
+    Persistent, so the record still fails after the blip retries (gh #52).
+    """
 
     def __call__(self, request: httpx.Request) -> httpx.Response:
-        if request.method == "PUT" and not self._timed_out:
-            self._timed_out = True
+        if request.method == "PUT" and b'"KG"' in request.content:
             self.requests.append(request)
             raise httpx.ReadTimeout("timed out", request=request)
         return super().__call__(request)
@@ -2433,7 +2431,8 @@ def test_apply_transport_error_is_record_failure_and_continues(
     assert n == 1
     assert len(errors) == 1
     assert errors[0].startswith("UnitsOfMeasure [KG]: request timed out to ")
-    assert len([r for r in recorder.requests if r.method == "PUT"]) == 2
+    # KG: retry_tries attempts, then HOUR once
+    assert len([r for r in recorder.requests if r.method == "PUT"]) == 4
     out = capsys.readouterr()
     assert "PUT UnitsOfMeasure [HOUR]" in out.out
     assert "UnitsOfMeasure [KG]: request timed out" in out.err
