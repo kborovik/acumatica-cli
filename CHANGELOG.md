@@ -29,6 +29,14 @@
   10s timeout (was 120s). A logout that fails or answers with an HTTP
   error prints a `!` warning (with the `acu tenant recycle` hint) instead
   of replacing the original error or the `apply` summary.
+- **tenant login case and delete parent (gh #62):** tenant logins route
+  case-sensitively (a REST login as `acucli` lands on the default tenant,
+  not `ACUCLI`). `tenant create` / `delete` with a `--login` that differs
+  from an existing tenant only in case now exit 1 naming the real login,
+  instead of creating a second tenant or deleting under the wrong name.
+  `tenant delete` sends the tenant's real `ParentCompanyID` as `ParentID`
+  (was always 1) and refuses the system tenant. `tenant list` shows a
+  Parent column.
 
 ## [v0.35.0] - 2026-09-12
 

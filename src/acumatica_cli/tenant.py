@@ -6,6 +6,7 @@ plus a sqlcmd read side.
 
 import re
 import subprocess
+from collections.abc import Sequence
 
 from .config import AC_EXE, ACU_INSTANCE_NAME, ACU_INSTANCE_PATH, DB_NAME, Instance
 from .models import Model
@@ -50,13 +51,38 @@ class Tenant(Model):
     the REST login's tenant value. company_cd is dbo.Company.CompanyCD; ac.exe
     auto-generates it (Company2, Company3, …) and ignores LoginName for it.
     ``acu tenant create`` aligns CompanyCD to the login
-    after CompanyConfig so list Login and CD match.
+    after CompanyConfig so list Login and CD match. parent_id is
+    dbo.Company.ParentCompanyID (None for the system tenant); delete must
+    send it back as ParentID (V7).
     """
 
     company_id: int
     company_cd: str
     login_name: str
     company_type: str
+    parent_id: int | None = None
+
+
+def find_login(tenants: Sequence[Tenant], login_name: str) -> Tenant | None:
+    """Exact CompanyKey match; a case-only match is a hard error.
+
+    The DB collation is case-insensitive, but the instance tenant map is
+    not: a REST login as ``acucli`` lands on the default tenant, not
+    ``ACUCLI`` (verified live). A case-folded hit would let create bootstrap
+    under a login that never routes, or delete the wrong-cased tenant.
+    """
+    exact = next((t for t in tenants if t.login_name == login_name), None)
+    if exact is not None:
+        return exact
+    folded = login_name.casefold()
+    near = next((t for t in tenants if t.login_name.casefold() == folded), None)
+    if near is not None:
+        raise RuntimeError(
+            f"tenant login {login_name!r} differs only in case from existing "
+            f"{near.login_name!r} (id {near.company_id}); tenant logins are "
+            f"case-sensitive - pass --login {near.login_name}"
+        )
+    return None
 
 
 class TenantManager:
@@ -109,20 +135,22 @@ class TenantManager:
         """Read tenants from the Company table (sqlcmd over SSH)."""
         query = (
             "SET NOCOUNT ON; "
-            "SELECT CompanyID, CompanyCD, ISNULL(CompanyKey, ''), CompanyType "
+            "SELECT CompanyID, CompanyCD, ISNULL(CompanyKey, ''), CompanyType, "
+            "ISNULL(CAST(ParentCompanyID AS varchar(11)), '') "
             f"FROM {DB_NAME}.dbo.Company ORDER BY CompanyID"
         )
         out = self._ssh(f'sqlcmd -S "(local)" -E -C -W -h -1 -s "|" -Q "{query}"')
         tenants = []
         for line in out.splitlines():
             parts = [p.strip() for p in line.split("|")]
-            if len(parts) == 4 and parts[0].isdigit():
+            if len(parts) == 5 and parts[0].isdigit():
                 tenants.append(
                     Tenant(
                         company_id=int(parts[0]),
                         company_cd=parts[1],
                         login_name=parts[2],
                         company_type=parts[3],
+                        parent_id=int(parts[4]) if parts[4].isdigit() else None,
                     )
                 )
         return tenants
@@ -254,7 +282,8 @@ class TenantManager:
         - The full spec (``ParentID`` + ``CompanyType``) must be passed. With
           only ``CompanyID;Deleted=Yes`` the preflight reads an empty
           CompanyType as the system tenant and aborts with "The system company
-          cannot be removed."
+          cannot be removed." ParentID is the tenant's live ParentCompanyID,
+          not a constant: create accepts ``--parent``.
         """
         if (company_id is None) == (login_name is None):
             raise ValueError("pass exactly one of company_id or login_name")
@@ -262,14 +291,22 @@ class TenantManager:
             check_identity(login_name, "--login")
         tenants = self.list()
         if login_name is not None:
-            target = next((t for t in tenants if t.login_name == login_name), None)
+            target = find_login(tenants, login_name)
             if target is None:
                 raise RuntimeError(f"no tenant with login {login_name!r}")
         else:
             target = next((t for t in tenants if t.company_id == company_id), None)
             if target is None:
                 raise RuntimeError(f"no tenant with CompanyID={company_id}")
+        if target.company_type == "System":
+            raise RuntimeError(
+                f"CompanyID={target.company_id} is the system tenant - "
+                "refusing to delete"
+            )
+        # NULL ParentCompanyID on a non-system row (older install, restored
+        # snapshot) keeps the pre-gh-#62 ParentID=1
+        parent = target.parent_id if target.parent_id is not None else 1
         return self._company_config(
-            f"CompanyID={target.company_id};ParentID=1;"
+            f"CompanyID={target.company_id};ParentID={parent};"
             f"CompanyType={target.company_type};Deleted=Yes;"
         )
