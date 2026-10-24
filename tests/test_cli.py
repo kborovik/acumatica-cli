@@ -150,6 +150,7 @@ def test_tenant_list_renders_table(
                 company_cd="Company",
                 login_name="Company",
                 company_type="Custom",
+                parent_id=1,
             )
         ]
 
@@ -165,6 +166,40 @@ def test_tenant_list_renders_table(
     assert "http://" not in result.output
     assert "AcumaticaERP" not in result.output
     assert "Company" in result.output
+    assert "Parent" in result.output
+
+
+def test_tenant_delete_case_only_login_mismatch_exits_1(
+    wired: Instance, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # gh #62: real TenantManager.delete -> find_login refuses before ac.exe
+    monkeypatch.setattr(
+        TenantManager,
+        "list",
+        lambda self: [
+            Tenant(
+                company_id=3,
+                company_cd="ACUCLI",
+                login_name="ACUCLI",
+                company_type="Custom",
+                parent_id=1,
+            )
+        ],
+    )
+    config_calls: list[str] = []
+    monkeypatch.setattr(
+        TenantManager,
+        "_company_config",
+        lambda self, *a, **k: config_calls.append("config") or "",
+    )
+    result = CliRunner().invoke(
+        cli.cli, ["tenant", "delete", "--login", "acucli", "--yes"]
+    )
+
+    assert result.exit_code == 1
+    out = " ".join(result.output.split())
+    assert "differs only in case from existing 'ACUCLI' (id 3)" in out
+    assert config_calls == []
 
 
 def test_tenant_recycle_invokes_app_pool(

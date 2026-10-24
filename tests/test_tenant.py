@@ -200,6 +200,21 @@ def test_delete_sends_live_parent_id(instance: Instance, run: FakeRun) -> None:
     )
 
 
+def test_delete_null_parent_non_system_falls_back_to_parent_1(
+    instance: Instance, run: FakeRun
+) -> None:
+    run.results = [(0, "4|Old|Old|Custom|\n"), (0, "Company deleted")]
+    TenantManager(instance).delete(4)
+    assert '-company:"CompanyID=4;ParentID=1;CompanyType=Custom;' in run.commands[1]
+
+
+def test_list_skips_rows_without_parent_column(
+    instance: Instance, run: FakeRun
+) -> None:
+    run.results = [(0, "2|Company|Company|Custom\n")]
+    assert TenantManager(instance).list() == []
+
+
 def test_delete_system_tenant_refused_before_config_call(
     instance: Instance, run: FakeRun
 ) -> None:

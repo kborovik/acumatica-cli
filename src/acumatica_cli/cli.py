@@ -296,7 +296,7 @@ def tenant_group() -> None:
 @tenant_group.command("list")
 @pass_instance
 def tenant_list(inst: Instance) -> None:
-    """List tenants: CompanyID, sign-in name, internal CD, type.
+    """List tenants: CompanyID, sign-in name, internal CD, type, parent.
 
     SSH control plane. Banner shows hostname only (from base_url), never the
     full URL. Use Login column values as --tenant / --login elsewhere.
@@ -310,9 +310,15 @@ def tenant_list(inst: Instance) -> None:
     host = urlparse(inst.base_url).hostname or inst.base_url
     output.table(
         f"Tenants on {host}",
-        ("ID", "Login", "CD", "Type"),
+        ("ID", "Login", "CD", "Type", "Parent"),
         (
-            (str(t.company_id), t.login_name, t.company_cd, t.company_type)
+            (
+                str(t.company_id),
+                t.login_name,
+                t.company_cd,
+                t.company_type,
+                "" if t.parent_id is None else str(t.parent_id),
+            )
             for t in tenants
         ),
     )

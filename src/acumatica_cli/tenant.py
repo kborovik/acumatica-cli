@@ -298,12 +298,15 @@ class TenantManager:
             target = next((t for t in tenants if t.company_id == company_id), None)
             if target is None:
                 raise RuntimeError(f"no tenant with CompanyID={company_id}")
-        if target.parent_id is None:
+        if target.company_type == "System":
             raise RuntimeError(
-                f"CompanyID={target.company_id} has no parent tenant (the "
-                "system tenant) - refusing to delete"
+                f"CompanyID={target.company_id} is the system tenant - "
+                "refusing to delete"
             )
+        # NULL ParentCompanyID on a non-system row (older install, restored
+        # snapshot) keeps the pre-gh-#62 ParentID=1
+        parent = target.parent_id if target.parent_id is not None else 1
         return self._company_config(
-            f"CompanyID={target.company_id};ParentID={target.parent_id};"
+            f"CompanyID={target.company_id};ParentID={parent};"
             f"CompanyType={target.company_type};Deleted=Yes;"
         )

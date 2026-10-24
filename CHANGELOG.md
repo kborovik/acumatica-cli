@@ -35,7 +35,8 @@
   from an existing tenant only in case now exit 1 naming the real login,
   instead of creating a second tenant or deleting under the wrong name.
   `tenant delete` sends the tenant's real `ParentCompanyID` as `ParentID`
-  (was always 1) and refuses the system tenant.
+  (was always 1) and refuses the system tenant. `tenant list` shows a
+  Parent column.
 
 ## [v0.35.0] - 2026-09-12
 
