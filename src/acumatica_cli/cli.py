@@ -852,7 +852,9 @@ def _seed_child_dirs(parent: Path) -> list[Path]:
 
 def _leaf_yaml(directory: Path) -> list[Path]:
     """Sorted `*.yaml` in a leaf seed dir; skip `features.yaml` (I.data)."""
-    return sorted(p for p in directory.glob("*.yaml") if p.name != "features.yaml")
+    return sorted(
+        p for p in directory.glob("*.yaml") if p.is_file() and p.name != "features.yaml"
+    )
 
 
 def _require_data_paths(
@@ -921,6 +923,8 @@ def apply_cmd(ctx: click.Context, files: tuple[Path, ...], dry_run: bool) -> Non
     trees in fixed order: bootstrap → baseline → setup → master. Zero
     args print this help, exit non-zero, no PUT (V59).
 
+    Every file is parsed and validated before login; any invalid file
+    exits 1 naming all of them, with nothing sent.
     Per-record failure isolation: one failed PUT reports and continues;
     exit 1 with multi-error summary if any failed (never silent partial).
     A refused connect or failed re-login stops the run: exit 1 naming the
@@ -945,10 +949,10 @@ def apply_cmd(ctx: click.Context, files: tuple[Path, ...], dry_run: bool) -> Non
     total_ok = 0
     all_errors: list[str] = []
     paths = expand_files(files)
+    baselines = seed.load_all(paths)  # V45: every file valid before login
     stopped = False
     with AcumaticaClient(inst) as client:
-        for i, path in enumerate(paths):
-            baseline = seed.load_baseline(path)
+        for i, (path, baseline) in enumerate(zip(paths, baselines, strict=True)):
             output.data(
                 f"{path} -> {inst.tenant} on {inst.base_url} ({baseline.entity})"
             )
@@ -1051,9 +1055,9 @@ def diff_cmd(ctx: click.Context, files: tuple[Path, ...]) -> None:
     inst = _resolve_instance(ctx)
     paths = expand_files(files)
     drifts: list[str] = []
+    baselines = seed.load_all(paths)
     with AcumaticaClient(inst) as client:
-        for path in paths:
-            baseline = seed.load_baseline(path)
+        for path, baseline in zip(paths, baselines, strict=True):
             # same file banner as apply so a long multi-file diff shows
             # progress instead of silence until the final status line
             output.data(

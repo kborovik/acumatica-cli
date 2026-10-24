@@ -2429,3 +2429,34 @@ def test_main_reraises_transport_under_acu_debug(
 
     with pytest.raises(httpx.ConnectError, match="refused"):
         cli.main()
+
+
+@pytest.mark.parametrize("command", ["apply", "diff"])
+def test_invalid_late_file_sends_nothing(
+    wired: Instance, tmp_path: Path, monkeypatch: pytest.MonkeyPatch, command: str
+) -> None:
+    """Gh #54: a bad file after a good one in an umbrella dir -> no HTTP."""
+    leaf = tmp_path / "acu-config" / "baseline"
+    leaf.mkdir(parents=True)
+    (leaf / "10-uoms.yaml").write_text(BASELINE)
+    (leaf / "20-bad.yaml").write_text("entity: UnitsOfMeasure\nrecords: []\n")
+    (leaf / "30-broken.yaml").write_text("entity: [\n")
+    requests: list[httpx.Request] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        requests.append(request)
+        return httpx.Response(500)
+
+    monkeypatch.setattr(
+        cli,
+        "AcumaticaClient",
+        lambda inst, **kw: RealClient(inst, transport=httpx.MockTransport(handler)),
+    )
+    result = CliRunner().invoke(cli.cli, [command, str(tmp_path / "acu-config")])
+
+    assert result.exit_code == 1
+    assert requests == []  # no login, no PUT/GET
+    err = " ".join(result.output.split())
+    assert "2 of 3 seed file(s) failed validation - nothing sent" in err
+    assert "20-bad.yaml" in err
+    assert "30-broken.yaml: invalid YAML" in err

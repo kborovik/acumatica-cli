@@ -53,6 +53,7 @@ never a silent Default-endpoint PUT.
 """
 
 import re
+from collections.abc import Sequence
 from pathlib import Path
 from typing import Any
 
@@ -207,7 +208,21 @@ class BaselineFile(Model):
                 )
             seen.add(ident)
             self._check_details(i, record)
+            self._check_role_users(i, record)
         return self
+
+    def _check_role_users(self, i: int, record: dict[str, Any]) -> None:
+        # V53: Role.Users rows become AssignUser calls after the Role PUT;
+        # a row with no Username must fail at load, not mid-apply (gh #54)
+        users = record.get("Users")
+        if self.entity != "Role" or not isinstance(users, list):
+            return
+        for j, row in enumerate(users):
+            if isinstance(row, dict) and row.get("delete") is True:
+                continue
+            username = row.get("Username") if isinstance(row, dict) else None
+            if not isinstance(username, str) or not username:
+                raise ValueError(f"records[{i}].Users[{j}] missing Username")
 
     def _check_details(self, i: int, record: dict[str, Any]) -> None:
         # T60, the V25 sibling for detail arrays: every list field needs a
@@ -262,7 +277,9 @@ class ActionFile(Model):
     done_when: DoneProbe
 
 
-def load_baseline(path: Path) -> BaselineFile | ActionFile:
+def load_baseline(
+    path: Path, bootstrap_contract: tuple[str, frozenset[str]] | None = None
+) -> BaselineFile | ActionFile:
     """Parse and validate one seed YAML file, dispatching on the action: key.
 
     Symbolic ``endpoint: bootstrap`` resolves to the packaged contract
@@ -271,18 +288,24 @@ def load_baseline(path: Path) -> BaselineFile | ActionFile:
     time via ``client._url`` (never load-rewritten — version is where).
     An entity the active Bootstrap contract serves still needs an explicit
     endpoint (literal or symbolic); silent Default-endpoint PUTs are the
-    B8 class.
+    B8 class. ``bootstrap_contract`` is a pre-read ``active_bootstrap()``
+    (load_all reads it once for every file).
     """
-    with open(path) as f:
-        data = yaml.safe_load(f)
+    try:
+        with open(path, encoding="utf-8") as f:
+            data = yaml.safe_load(f)
+    except (yaml.YAMLError, UnicodeDecodeError) as exc:
+        raise SystemExit(f"{path}: invalid YAML: {exc}") from exc
+    except OSError as exc:
+        raise SystemExit(f"{path}: cannot read: {exc.strerror}") from exc
     if not isinstance(data, dict):
         raise SystemExit(f"{path}: expected a mapping at the top level")
     kind = ActionFile if "action" in data else BaselineFile
     try:
-        parsed = kind.model_validate({"path": path, **data})
+        parsed = kind.model_validate({**data, "path": path})
     except ValidationError as exc:
         raise SystemExit(f"{path}: {validation_summary(exc)}") from exc
-    name, entities = active_bootstrap()
+    name, entities = bootstrap_contract or active_bootstrap()
     if parsed.endpoint == _SYMBOLIC_BOOTSTRAP:
         parsed = parsed.model_copy(update={"endpoint": name})
     elif parsed.endpoint is None and parsed.entity in entities:
@@ -293,6 +316,33 @@ def load_baseline(path: Path) -> BaselineFile | ActionFile:
             f"pick one (literal or symbolic 'bootstrap' | 'default')"
         )
     return parsed
+
+
+def load_all(paths: Sequence[Path]) -> list[BaselineFile | ActionFile]:
+    """Load every seed file up front; report all failures together.
+
+    apply/diff call this before the session opens, so a bad late file
+    never leaves the tenant half-applied without a summary (V45, gh #54).
+    """
+    contract = active_bootstrap()  # environment error: abort, not per-file
+    loaded: list[BaselineFile | ActionFile] = []
+    failures: list[str] = []
+    for path in paths:
+        try:
+            loaded.append(load_baseline(path, contract))
+        except SystemExit as exc:
+            failures.append(str(exc.code))
+    if failures:
+        raise SystemExit(
+            "\n".join(
+                [
+                    f"{len(failures)} of {len(paths)} seed file(s) failed "
+                    "validation - nothing sent to the tenant",
+                    *failures,
+                ]
+            )
+        )
+    return loaded
 
 
 # ISO date or DateTimeValue: calendar-day prefix only (V55). Random strings
