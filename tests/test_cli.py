@@ -1665,7 +1665,7 @@ def test_run_acu_scenario_expands_yaml(
         cli.run,
         "run",
         lambda client, scenario, dry_run=False: (
-            loaded.append(scenario.scenario) or True
+            loaded.append(scenario.scenario) or cli.run.Outcome.PASSED
         ),
     )
 
@@ -1692,7 +1692,7 @@ def test_run_overlay_same_basename_wins(
         cli.run,
         "run",
         lambda client, scenario, dry_run=False: (
-            loaded.append(scenario.scenario) or True
+            loaded.append(scenario.scenario) or cli.run.Outcome.PASSED
         ),
     )
 
@@ -2553,3 +2553,42 @@ def test_dry_run_needs_no_config_or_session(
 
     assert result.exit_code == 0, result.output
     assert "password" not in result.output
+
+
+def test_run_step_422_names_file_and_step_and_lists_not_run(
+    wired: Instance, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Gh #58: 422 on step 2 of scenario 1 -> x <file> [<id>]; scenario 2 not run."""
+    first, second = tmp_path / "10-a.yaml", tmp_path / "20-b.yaml"
+    steps = (
+        "steps:\n"
+        "  - id: one\n    put: SalesOrder\n    record: {OrderType: SO}\n"
+        "  - id: two\n    put: SalesOrder\n    record: {OrderType: SO}\n"
+    )
+    first.write_text("scenario: a\n" + steps)
+    second.write_text("scenario: b\n" + steps)
+    puts: list[str] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        if request.method == "PUT":
+            puts.append(request.url.path)
+            if len(puts) == 2:
+                return httpx.Response(422, json={"message": "bad order"})
+        if request.url.path.endswith("/Frames/Login.aspx"):
+            return httpx.Response(
+                200, text='<input id="txtSingleCompany" value="T1" />'
+            )
+        return httpx.Response(204 if "/auth/" in request.url.path else 200, json={})
+
+    monkeypatch.setattr(
+        cli,
+        "AcumaticaClient",
+        lambda inst, **kw: RealClient(inst, transport=httpx.MockTransport(handler)),
+    )
+    result = CliRunner().invoke(cli.cli, ["run", str(tmp_path)])
+
+    assert result.exit_code == 1
+    assert len(puts) == 2
+    assert f"x {first} [two]: PUT " in result.stderr
+    assert f"x not run: {second}" in result.stderr
+    assert "x run: 0 passed, 1 failed, 0 skipped, 1 not run on T1" in result.stderr

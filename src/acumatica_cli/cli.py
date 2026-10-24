@@ -1096,6 +1096,11 @@ def run_cmd(ctx: click.Context, files: tuple[Path, ...], dry_run: bool) -> None:
     on a warm tenant. Built-in `${current_period}` → host-local MMyyyy on
     steps/expect/once (state views stay period-pinned separately).
 
+    A step error prints `x <file> [<step id>]: <error>` and stops: later
+    scenarios are listed as not run (they build on earlier ones). An
+    expectation miss marks that scenario failed and the run continues.
+    Summary: passed / failed / skipped (once) / not run.
+
     \b
     Exit  0 = all expectations hold · 1 = step error or expectation miss
 
@@ -1114,7 +1119,6 @@ def run_cmd(ctx: click.Context, files: tuple[Path, ...], dry_run: bool) -> None:
     files = _require_data_paths(ctx, files)
     paths = collapse_same_basename(expand_files(files))
     scenarios = [run.load_scenario(path) for path in paths]
-    ok = True
     if dry_run:
         # gh #63: offline - no instance resolution, no HTTP
         for scenario in scenarios:
@@ -1122,12 +1126,29 @@ def run_cmd(ctx: click.Context, files: tuple[Path, ...], dry_run: bool) -> None:
         output.success(f"{len(scenarios)} scenario(s) parsed (dry run)")
         return
     inst = _resolve_instance(ctx)
+    counts = dict.fromkeys(run.Outcome, 0)
+    not_run: list[Path] = []
     with AcumaticaClient(inst) as client:
-        for scenario in scenarios:
-            ok = run.run(client, scenario) and ok
-    if not ok:
+        for i, scenario in enumerate(scenarios):
+            try:
+                counts[run.run(client, scenario)] += 1
+            except run.StepError as err:
+                # gh #58: lifecycle scenarios chain, so stop and list the rest
+                output.error(str(err))
+                counts[run.Outcome.FAILED] += 1
+                not_run = [later.path for later in scenarios[i + 1 :]]
+                break
+    for path in not_run:
+        output.error(f"not run: {path}")
+    summary = (
+        f"{counts[run.Outcome.PASSED]} passed, {counts[run.Outcome.FAILED]} failed, "
+        f"{counts[run.Outcome.SKIPPED]} skipped, {len(not_run)} not run "
+        f"on {inst.tenant}"
+    )
+    if counts[run.Outcome.FAILED]:
+        output.error(f"run: {summary}")
         raise SystemExit(1)
-    output.success(f"{len(scenarios)} scenario(s) passed on {inst.tenant}")
+    output.success(f"run: {summary}")
 
 
 def _complete_only(

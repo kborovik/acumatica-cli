@@ -4,6 +4,12 @@
 
 ### Fixed
 
+- **run step failures name file and step (gh #58):** a failing step in
+  `acu run` prints `x <scenario path> [<step id>]: <error>` (a failing
+  `once` or `expect` probe uses `once` / `expect` as the id) instead of
+  the bare HTTP text. The run stops there and lists each later scenario
+  as `not run`; an expectation miss still marks the scenario failed and
+  continues. The final line counts passed / failed / skipped / not run.
 - **offline --dry-run (gh #63):** `apply --dry-run`, `run --dry-run` and
   `state --dry-run` no longer resolve the instance or open a session, so
   they work with no `.env` and no password (CI, pre-commit seed checks).

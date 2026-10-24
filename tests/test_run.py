@@ -154,7 +154,7 @@ def test_run_executes_steps_and_expectations(
     server = Server()
     ok = run.run(_client(instance, server), scenario)
     out = capsys.readouterr().out
-    assert ok
+    assert ok is run.Outcome.PASSED
     assert "+ JournalTransaction [GL, 000042].Status = 'Posted'" in out
     assert "+ AccountSummaryInquiry [Account=30000].EndingBalance delta +125" in out
     # the batch PUT carried the detail list bare (wrap recursion, T60)
@@ -180,7 +180,7 @@ def test_run_reports_expectation_miss(
 
     server.__class__ = type("Quiet", (Server,), {"__call__": no_bump})
     ok = run.run(_client(instance, server), scenario)
-    assert not ok
+    assert ok is run.Outcome.FAILED
     assert "x AccountSummaryInquiry [Account=30000].EndingBalance" in (
         capsys.readouterr().out
     )
@@ -236,7 +236,7 @@ def test_run_dry_run_makes_no_http(
     tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
     scenario = run.load_scenario(_write(tmp_path, SCENARIO))
-    assert run.run(None, scenario, dry_run=True)
+    assert run.run(None, scenario, dry_run=True) is run.Outcome.PASSED
     out = capsys.readouterr().out
     assert "would PUT JournalTransaction [batch]" in out
     assert "would invoke JournalTransaction/ReleaseJournalTransaction" in out
@@ -475,7 +475,7 @@ def test_once_skip_when_present(
     scenario = run.load_scenario(_write(tmp_path, ONCE_SCENARIO))
     client = AcumaticaClient(instance, transport=httpx.MockTransport(server))
     ok = run.run(client, scenario)
-    assert ok is True
+    assert ok is run.Outcome.SKIPPED
     assert puts == []  # no JE put — skip path
     out = capsys.readouterr().out
     assert "skip " in out
@@ -507,7 +507,7 @@ def test_once_runs_when_absent(
     scenario = run.load_scenario(_write(tmp_path, ONCE_SCENARIO))
     client = AcumaticaClient(instance, transport=httpx.MockTransport(server))
     ok = run.run(client, scenario)
-    assert ok is True
+    assert ok is run.Outcome.PASSED
     out = capsys.readouterr().out
     assert "put JournalTransaction" in out
     assert "(once: already present)" not in out
@@ -517,7 +517,7 @@ def test_once_dry_run_annotates(
     tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
     scenario = run.load_scenario(_write(tmp_path, ONCE_SCENARIO))
-    assert run.run(None, scenario, dry_run=True) is True
+    assert run.run(None, scenario, dry_run=True) is run.Outcome.PASSED
     out = capsys.readouterr().out
     assert "once: present AccountSummaryInquiry" in out
     assert "would PUT JournalTransaction" in out
@@ -631,7 +631,7 @@ def test_run_expands_current_period_on_present_expect_and_step(
 
     scenario = run.load_scenario(_write(tmp_path, PERIOD_SCENARIO))
     client = AcumaticaClient(instance, transport=httpx.MockTransport(server))
-    assert run.run(client, scenario) is True
+    assert run.run(client, scenario) is run.Outcome.PASSED
     # present + pre-snapshot + post-delta = 3 inquire PUTs, all 082026
     assert periods == ["082026", "082026", "082026"]
     assert descriptions == ["period 082026"]
@@ -662,7 +662,7 @@ def test_run_once_skip_sends_current_period_on_present(
 
     scenario = run.load_scenario(_write(tmp_path, PERIOD_SCENARIO))
     client = AcumaticaClient(instance, transport=httpx.MockTransport(server))
-    assert run.run(client, scenario) is True
+    assert run.run(client, scenario) is run.Outcome.SKIPPED
     assert periods == ["092026"]
     assert "(once: already present)" in capsys.readouterr().out
 
@@ -732,7 +732,7 @@ def test_package_seed_capital_cold_after_month_change(
     scenario = run.load_scenario(path)
     client = AcumaticaClient(instance, transport=httpx.MockTransport(server))
     client.poll_interval = 0.0
-    assert run.run(client, scenario) is True
+    assert run.run(client, scenario) is run.Outcome.PASSED
     out = capsys.readouterr().out
     assert "(once: already present)" not in out
     # present + 2 pre-snapshots (10100, 30000 expects) + 2 post-deltas

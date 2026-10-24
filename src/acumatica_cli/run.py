@@ -48,20 +48,24 @@ assertions are absolute (statuses of documents created in this run).
 `once: true` + authored `present` inquire-absolute gate skips steps and
 expects when the probe already holds (capital non-stack; V4/gh #19).
 Exit 0 = every expectation holds or once-skip; 1 = any step error or
-expectation miss (2 stays diff's drift code).
+expectation miss (2 stays diff's drift code). A step error stops the
+run: later scenarios are listed as not run (gh #58).
 """
 
 import re
 import time
+from collections.abc import Callable
 from datetime import date
+from enum import StrEnum
 from pathlib import Path
 from typing import Any
 
+import httpx
 import yaml
 from pydantic import Field, ValidationError, model_validator
 
 from . import output
-from .client import AcumaticaClient, unwrap
+from .client import AcumaticaClient, SessionLostError, format_failure, unwrap
 from .models import Model, validation_summary
 from .seed import _norm  # pyright: ignore[reportPrivateUsage]
 
@@ -562,10 +566,50 @@ def _check_delta(
     return ok
 
 
+class Outcome(StrEnum):
+    """How one scenario ended (gh #58 summary buckets)."""
+
+    PASSED = "passed"
+    FAILED = "failed"  # an expectation missed; later scenarios still run
+    SKIPPED = "skipped"  # once: already present
+
+
+class StepError(RuntimeError):
+    """A step (or once/expect probe) raised: names file and step (gh #58).
+
+    The caller stops the run here - lifecycle scenarios build on each
+    other, so later ones would fail on missing documents.
+    """
+
+    def __init__(self, path: Path, step_id: str, message: str) -> None:
+        super().__init__(f"{path} [{step_id}]: {message}")
+        self.path = path
+        self.step_id = step_id
+
+
+# Everything a live step can raise for a reason outside the code: REST
+# errors, transport, a lost session, an unknown ${var} (SystemExit).
+_STEP_FAILURES = (RuntimeError, httpx.HTTPError, SessionLostError, SystemExit)
+
+
+def _guard[**P, T](
+    scenario: Scenario,
+    step_id: str,
+    fn: Callable[P, T],
+    *args: P.args,
+    **kwargs: P.kwargs,
+) -> T:
+    """Call fn, re-raising a step-class failure as StepError for step_id."""
+    try:
+        return fn(*args, **kwargs)
+    except _STEP_FAILURES as err:
+        raise StepError(scenario.path, step_id, format_failure(err)) from err
+
+
 def run(
     client: AcumaticaClient | None, scenario: Scenario, dry_run: bool = False
-) -> bool:
-    """Execute the scenario; True when every step and expectation held.
+) -> Outcome:
+    """Execute the scenario; PASSED when every step and expectation held.
 
     client may be None only under dry_run - parsing and step listing
     never touch HTTP (a preview costs nothing live). Delta expectations
@@ -580,28 +624,37 @@ def run(
     ``once: true`` (V4/gh #19): inquire-absolute ``present`` probe first.
     Probe true → stdout ``skip <path> (once: already present)``, no step
     HTTP, no expects, exit 0. Probe false → steps + expects as usual.
+
+    A step failure raises StepError naming the file and step id (gh #58);
+    a failing once probe or expect probe names ``once`` / ``expect``.
     """
     output.data(f"{scenario.path} -> {scenario.scenario}")
     if dry_run:
         _dry_run(scenario)
-        return True
+        return Outcome.PASSED
     assert client is not None  # non-dry-run callers pass a live session
     variables: dict[str, Any] = _builtin_variables()
     if scenario.once:
-        assert scenario.present is not None
-        if _present(client, scenario.present, variables):
+        present = scenario.present
+        assert present is not None
+        if _guard(scenario, "once", _present, client, present, variables):
             output.data(f"skip {scenario.path} (once: already present)")
-            return True
+            return Outcome.SKIPPED
     before = [
-        _inquire(client, expect, variables) if expect.inquire else {}
+        _guard(scenario, "expect", _inquire, client, expect, variables)
+        if expect.inquire
+        else {}
         for expect in scenario.expect
     ]
     for step in scenario.steps:
-        _run_step(client, step, variables)
+        _guard(scenario, step.id, _run_step, client, step, variables)
     ok = True
     for expect, snapshot in zip(scenario.expect, before, strict=True):
         if expect.get is not None:
-            ok = _check_get(client, expect, variables) and ok
+            held = _guard(scenario, "expect", _check_get, client, expect, variables)
         else:
-            ok = _check_delta(client, expect, snapshot, variables) and ok
-    return ok
+            held = _guard(
+                scenario, "expect", _check_delta, client, expect, snapshot, variables
+            )
+        ok = held and ok
+    return Outcome.PASSED if ok else Outcome.FAILED
