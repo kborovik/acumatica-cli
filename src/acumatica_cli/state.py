@@ -514,29 +514,44 @@ def _dry_run_views(views: list[ViewDef], out_dir: Path) -> int:
     return 0
 
 
-def _process_view(
+def _process_view(  # noqa: PLR0913 — keyword-only; gh #57 report
     client: AcumaticaClient,
     view: ViewDef,
     *,
     out_dir: Path,
     erp: str,
     diff: bool,
+    report: list[dict[str, object]],
 ) -> bool:
-    """Capture one view; write or compare. Returns True if state moved."""
+    """Capture one view; write or compare. Returns True if state moved.
+
+    Appends ``{view, file, rows, status, differences}`` to report
+    (gh #57 ``--output json``); status is wrote | changed | unchanged.
+    """
     dest = observation_path(out_dir, view)
     output.data(f"{view.path} -> {view.name} ({view.source.kind}:{view.source.name})")
     live = capture_view(client, view, erp=erp)
+    entry: dict[str, object] = {
+        "view": str(view.path),
+        "file": str(dest),
+        "rows": len(live.rows),
+        "differences": [],
+    }
+    report.append(entry)
     if not diff:
         write_observation(dest, live)
+        entry["status"] = "wrote"
         output.data(f"  wrote {dest} ({len(live.rows)} row(s))")
         return False
     disk = load_observation(dest) if dest.is_file() else None
     drifts = compare_observations(live, disk)
     if drifts:
+        entry |= {"status": "changed", "differences": list(drifts)}
         output.data(f"  changed ({len(drifts)} difference(s))")
         for line in drifts:
             output.data(f"    {line}")
         return True
+    entry["status"] = "unchanged"
     output.data(f"  {len(live.rows)} row(s) unchanged")
     return False
 
@@ -547,8 +562,11 @@ def run_views(
     *,
     out_dir: Path,
     mode: Literal["write", "diff", "assert", "dry"] = "write",
+    report: list[dict[str, object]] | None = None,
 ) -> int:
     """Execute state capture for views; return process exit code (V32 exit matrix).
+
+    report (gh #57) collects one entry per processed view.
 
     0 = ok (write or compare; change fine unless assert)
     1 = operational failure
@@ -562,7 +580,14 @@ def run_views(
     moved = False
     try:
         for view in views:
-            if _process_view(client, view, out_dir=out_dir, erp=erp, diff=diff):
+            if _process_view(
+                client,
+                view,
+                out_dir=out_dir,
+                erp=erp,
+                diff=diff,
+                report=[] if report is None else report,
+            ):
                 moved = True
     except SystemExit:
         raise

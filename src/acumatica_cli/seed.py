@@ -903,19 +903,59 @@ def _classify(
         return "create", []
     label = f"{baseline.entity} [{', '.join(str(record[k]) for k in baseline.keys)}]"
     fields: list[str] = []
-    for line in _record_drifts(baseline, label, record, live):
-        name = re.split(r"[.\[:]", line[len(label) + 1 :], maxsplit=1)[0]
+    for drift in _record_drifts(baseline, label, record, live):
+        name = re.split(r"[.\[]", drift.where[len(label) + 1 :], maxsplit=1)[0]
         if name not in fields:
             fields.append(name)
     return ("update", fields) if fields else ("unchanged", [])
 
 
-def diff(client: AcumaticaClient, baseline: BaselineFile | ActionFile) -> list[str]:
+_DRIFT_TEXT = {
+    "missing": "missing on tenant",
+    "extra": "extra on tenant",
+    "not_returned": "not returned by endpoint",
+    "not_applied": "not applied",
+}
+
+
+class Drift(str):
+    """One drift line: the str is the human text, attributes the parts.
+
+    ``where`` is ``<Entity> [<keys>][.<field path>]`` (or ``action X``);
+    ``kind`` one of changed | missing | extra | not_returned | not_applied;
+    ``source`` / ``live`` set for ``changed``. ``diff`` fills ``keys``
+    (record key values) and ``field`` (path below the record, "" for the
+    record itself) for ``--output json`` (gh #57).
+    """
+
+    where: str
+    kind: str
+    source: Any
+    live: Any
+    keys: dict[str, Any]
+    field: str
+
+    def __new__(
+        cls, where: str, kind: str, source: Any = None, live: Any = None
+    ) -> Drift:
+        """Render the human text from where + kind (+ source/live)."""
+        text = (
+            f"{where}: source={source!r} live={live!r}"
+            if kind == "changed"
+            else f"{where}: {_DRIFT_TEXT[kind]}"
+        )
+        self = super().__new__(cls, text)
+        self.where, self.kind, self.source, self.live = where, kind, source, live
+        self.keys, self.field = {}, ""
+        return self
+
+
+def diff(client: AcumaticaClient, baseline: BaselineFile | ActionFile) -> list[Drift]:
     """Compare each source record against the live tenant.
 
     Reads the file with one list GET when it can (gh #56, ``_prefetch``),
-    per record otherwise. Returns human-readable drift lines (empty = no
-    drift). An action file
+    per record otherwise. Returns drift lines (empty = no drift; each a
+    ``Drift``, str = the human text). An action file
     diffs through its done_when probe - coarse present/absent (V4): a
     tenant that lost the action's effect must not diff false-green, but an
     action leaves no keyed record to compare field by field.
@@ -923,26 +963,31 @@ def diff(client: AcumaticaClient, baseline: BaselineFile | ActionFile) -> list[s
     if isinstance(baseline, ActionFile):
         if _probe(client, baseline):
             return []
-        return [f"action {baseline.action}: not applied"]
-    drifts: list[str] = []
+        return [Drift(f"action {baseline.action}", "not_applied")]
+    drifts: list[Drift] = []
     index = _prefetch(client, baseline)
     for record in baseline.records:
         label = (
             f"{baseline.entity} [{', '.join(str(record[k]) for k in baseline.keys)}]"
         )
         live = _live_for(client, baseline, index, record)
-        if live is None:
-            drifts.append(f"{label}: missing on tenant")
-            continue
-        drifts.extend(_record_drifts(baseline, label, record, live))
+        found = (
+            [Drift(label, "missing")]
+            if live is None
+            else _record_drifts(baseline, label, record, live)
+        )
+        for drift in found:
+            drift.keys = {k: record[k] for k in baseline.keys}
+            drift.field = drift.where[len(label) + 1 :]
+        drifts.extend(found)
     return drifts
 
 
 def _record_drifts(
     baseline: BaselineFile, label: str, record: dict[str, Any], live: dict[str, Any]
-) -> list[str]:
+) -> list[Drift]:
     """Field drift lines for one source record against its live row."""
-    drifts: list[str] = []
+    drifts: list[Drift] = []
     actual = unwrap(live)
     # V39/V40/V56/V57: never compare write-only, runtime, GET-omit,
     # or membership details whose mapped GET may stay empty.
@@ -958,28 +1003,26 @@ def _record_drifts(
         elif isinstance(expected, dict):
             drifts.extend(_diff_nested(f"{label}.{field}", expected, actual.get(field)))
         elif field not in actual:
-            drifts.append(f"{label}.{field}: not returned by endpoint")
+            drifts.append(Drift(f"{label}.{field}", "not_returned"))
         elif _norm(actual[field]) != _norm(expected):
-            drifts.append(
-                f"{label}.{field}: source={expected!r} live={actual[field]!r}"
-            )
+            drifts.append(Drift(f"{label}.{field}", "changed", expected, actual[field]))
     return drifts
 
 
-def _diff_nested(path: str, expected: dict[str, Any], live: Any) -> list[str]:
+def _diff_nested(path: str, expected: dict[str, Any], live: Any) -> list[Drift]:
     """Linked-entity drift (T65): recurse source-side fields only."""
     if not isinstance(live, dict):
-        return [f"{path}: not returned by endpoint"]
-    drifts: list[str] = []
+        return [Drift(path, "not_returned")]
+    drifts: list[Drift] = []
     for field, want in expected.items():
         if field in _DIFF_IGNORE_FIELDS:
             continue
         if isinstance(want, dict):
             drifts.extend(_diff_nested(f"{path}.{field}", want, live.get(field)))
         elif field not in live:
-            drifts.append(f"{path}.{field}: not returned by endpoint")
+            drifts.append(Drift(f"{path}.{field}", "not_returned"))
         elif _norm(live[field]) != _norm(want):
-            drifts.append(f"{path}.{field}: source={want!r} live={live[field]!r}")
+            drifts.append(Drift(f"{path}.{field}", "changed", want, live[field]))
     return drifts
 
 
@@ -989,7 +1032,7 @@ def _diff_details(
     key: str,
     expected: list[dict[str, Any]],
     live_rows: list[dict[str, Any]],
-) -> list[str]:
+) -> list[Drift]:
     """Detail-array drift (T60): rows matched by detail key, order-insensitive.
 
     Unlike top-level records (V4 exemption), an extra live detail row IS
@@ -997,26 +1040,22 @@ def _diff_details(
     source never claimed. Within a matched row only source-side fields
     compare (server-derived LineNbr and ids stay omitted from source).
     """
-    drifts: list[str] = []
+    drifts: list[Drift] = []
     live_by_key = {_norm(row[key]): row for row in live_rows if key in row}
     for row in expected:
         ident = _norm(row[key])
         live_row = live_by_key.pop(ident, None)
+        where = f"{label}.{field}[{row[key]}]"
         if live_row is None:
-            drifts.append(f"{label}.{field}[{row[key]}]: missing on tenant")
+            drifts.append(Drift(where, "missing"))
             continue
         for sub, want in row.items():
             if sub in _DIFF_IGNORE_FIELDS:
                 continue
             if sub not in live_row:
-                drifts.append(
-                    f"{label}.{field}[{row[key]}].{sub}: not returned by endpoint"
-                )
+                drifts.append(Drift(f"{where}.{sub}", "not_returned"))
             elif _norm(live_row[sub]) != _norm(want):
-                drifts.append(
-                    f"{label}.{field}[{row[key]}].{sub}: "
-                    f"source={want!r} live={live_row[sub]!r}"
-                )
+                drifts.append(Drift(f"{where}.{sub}", "changed", want, live_row[sub]))
     for ident in live_by_key:
-        drifts.append(f"{label}.{field}[{ident}]: extra on tenant")
+        drifts.append(Drift(f"{label}.{field}[{ident}]", "extra"))
     return drifts

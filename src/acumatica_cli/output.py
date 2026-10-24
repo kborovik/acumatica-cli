@@ -4,8 +4,13 @@ Two audiences, one code path (SPEC V9): rich renders color, tables,
 and spinners on a TTY and degrades to plain deterministic text when piped
 (how LLM agents and scripts see it). stdout carries data and results;
 stderr carries status, warnings, and errors.
+
+JSON mode (gh #57, ``--output json``): a command that supports it calls
+``use_json()``; result lines then move to stderr with the progress, and
+stdout carries only the one ``document()``.
 """
 
+import json
 import os
 from collections.abc import Generator, Iterable
 from contextlib import contextmanager
@@ -40,11 +45,26 @@ err = Console(
 )
 
 
+_json = False
+
+
+def use_json(on: bool = True) -> None:
+    """Switch result lines to stderr; stdout is reserved for ``document``."""
+    global _json  # noqa: PLW0603 - one process-wide output mode
+    _json = on
+
+
 def data(msg: str) -> None:
     """Result line on stdout — what a script or agent consumes."""
     # soft_wrap: a result line must stay one greppable line, never
     # hard-wrapped at console width (long paths, drift lines)
-    out.print(msg, soft_wrap=True)
+    (err if _json else out).print(msg, soft_wrap=True)
+
+
+def document(doc: object) -> None:
+    """The JSON result document on stdout (``--output json``), no markup."""
+    out.file.write(json.dumps(doc, indent=2, default=str) + "\n")
+    out.file.flush()
 
 
 def info(msg: str) -> None:

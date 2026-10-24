@@ -4,6 +4,11 @@
 
 ### Fixed
 
+- **--output json (gh #57):** `acu --output json diff|apply|run|state`
+  prints one JSON document on stdout for agents and CI, with progress on
+  stderr. `diff` drift items carry `file`, `entity`, `keys`, `field`,
+  `kind`, `source` and `live`. Exit codes do not change. The README
+  documents the schema.
 - **apply --plan and --changed-only (gh #55):** `acu apply --plan`
   reads the live tenant and labels each record `create`, `update
   (<fields>)` or `unchanged` (and each action `invoke` or skip) without

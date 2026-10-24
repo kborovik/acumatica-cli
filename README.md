@@ -155,6 +155,37 @@ Do not confuse them with each other or with `state`:
 `inventory/` and `findings/` are engagement outputs: not SEED_DIRS, never loaded by `apply`/`diff`, not scaffolded by `config init`.
 Binary `.adb` snapshots are rejected (XML only).
 
+### Machine-readable output (`--output json`)
+
+`acu --output json <diff|apply|run|state> ...` prints one JSON document on stdout; progress and result lines move to stderr.
+Exit codes do not change (`diff` still exits 2 on drift), and other commands ignore the flag.
+
+`diff`:
+
+```json
+{
+  "command": "diff", "tenant": "DEV", "base_url": "https://...", "drift": 1,
+  "files": [{
+    "file": "acu-config/baseline/10-uoms.yaml", "entity": "UnitsOfMeasure",
+    "records": 2,
+    "drifts": [{
+      "file": "acu-config/baseline/10-uoms.yaml", "entity": "UnitsOfMeasure",
+      "keys": {"UOM": "KG"}, "field": "Description", "kind": "changed",
+      "source": "Kilogram", "live": "kg",
+      "text": "UnitsOfMeasure [KG].Description: source='Kilogram' live='kg'"
+    }]
+  }]
+}
+```
+
+- `kind`: `changed`, `missing`, `extra` (detail row), `not_returned` or `not_applied` (setup action).
+- `field`: path below the record (e.g. `Details[A].Qty`); `""` when the record itself is missing.
+- `source` / `live`: set only for `changed`.
+
+- `apply`: `{command, tenant, mode (all|plan|changed|dry_run), ok, failed, counts, errors, stopped, not_applied, files: [{file, entity, ok, errors}]}`; `counts` keys `create`, `update`, `unchanged`, `invoke`, `put`.
+- `run`: `{command, tenant, counts: {passed, failed, skipped, not_run}, scenarios: [{file, outcome, misses, error?}], not_run}`; `misses` = failed expectation lines.
+- `state`: `{command, tenant, mode (write|diff|assert), exit, changed, views: [{view, file, rows, status (wrote|changed|unchanged), differences}]}`.
+
 ## The data repo
 
 Your configuration lives in its own git repo.

@@ -2704,3 +2704,25 @@ def test_apply_default_still_puts_every_record(
 
     assert [p["UOM"] for p in live.puts] == ["KG", "HOUR"]
     assert all(r.method == "PUT" for r in requests)
+
+
+def test_detail_drifts_carry_kind_and_values() -> None:
+    """Gh #57: Drift keeps the text and exposes kind / source / live."""
+    drifts = seed._diff_details(  # pyright: ignore[reportPrivateUsage]
+        "SalesOrder [SO, 1]",
+        "Details",
+        "InventoryID",
+        [{"InventoryID": "A", "Qty": 1}, {"InventoryID": "B"}],
+        [{"InventoryID": "A", "Qty": 2}, {"InventoryID": "C"}],
+    )
+
+    assert drifts == [
+        "SalesOrder [SO, 1].Details[A].Qty: source=1 live=2",
+        "SalesOrder [SO, 1].Details[B]: missing on tenant",
+        "SalesOrder [SO, 1].Details[C]: extra on tenant",
+    ]
+    assert [(d.kind, d.source, d.live) for d in drifts] == [
+        ("changed", 1, 2),
+        ("missing", None, None),
+        ("extra", None, None),
+    ]

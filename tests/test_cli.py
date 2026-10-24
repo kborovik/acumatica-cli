@@ -3,6 +3,7 @@
 Pins diff's exit-2-on-drift contract (V9) — no live instance, no SSH.
 """
 
+import json
 import os
 import subprocess
 import sys
@@ -17,7 +18,7 @@ from click.testing import CliRunner
 
 from acumatica_cli import cli
 from acumatica_cli.client import AcumaticaClient as RealClient
-from acumatica_cli.client import format_failure
+from acumatica_cli.client import format_failure, wrap
 from acumatica_cli.config import INIT_TEMPLATES, Instance, default_out, load_instance
 from acumatica_cli.tenant import Tenant, TenantManager
 
@@ -2635,3 +2636,135 @@ def test_apply_plan_modes_are_exclusive(wired: Instance, tmp_path: Path) -> None
 
     assert result.exit_code == 2
     assert "exclusive" in result.output
+
+
+def _live_rest(
+    monkeypatch: pytest.MonkeyPatch, rows: dict[str, list[dict[str, Any]]]
+) -> None:
+    """RealClient over a fake host: GET <entity> returns rows (wrapped)."""
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        if request.url.path.endswith("/Frames/Login.aspx"):
+            return httpx.Response(
+                200, text='<input id="txtSingleCompany" value="T1" />'
+            )
+        for entity, found in rows.items():
+            if request.method == "GET" and request.url.path.endswith(f"/{entity}"):
+                return httpx.Response(200, json=[wrap(r) for r in found])
+        return httpx.Response(204 if "/auth/" in request.url.path else 200, json={})
+
+    monkeypatch.setattr(
+        cli,
+        "AcumaticaClient",
+        lambda inst, **kw: RealClient(inst, transport=httpx.MockTransport(handler)),
+    )
+
+
+def test_diff_output_json_is_one_document_on_stdout(
+    wired: Instance, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Gh #57: diff --output json -> parseable stdout, typed drift items, exit 2."""
+    path = _baseline(tmp_path)
+    _live_rest(monkeypatch, {"UnitsOfMeasure": [{"UOM": "KG", "Description": "kg"}]})
+    result = CliRunner().invoke(cli.cli, ["--output", "json", "diff", str(path)])
+
+    assert result.exit_code == 2
+    doc = json.loads(result.stdout)
+    assert doc["command"] == "diff"
+    assert doc["drift"] == 1
+    [item] = doc["files"][0]["drifts"]
+    assert item == {
+        "file": str(path),
+        "entity": "UnitsOfMeasure",
+        "keys": {"UOM": "KG"},
+        "field": "Description",
+        "kind": "changed",
+        "source": "Kilogram",
+        "live": "kg",
+        "text": "UnitsOfMeasure [KG].Description: source='Kilogram' live='kg'",
+    }
+    # progress and the drift dump moved to stderr
+    assert f"{path} -> T1" in result.stderr
+
+
+def test_diff_output_json_missing_record(
+    wired: Instance, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    path = _baseline(tmp_path)
+    _live_rest(monkeypatch, {"UnitsOfMeasure": []})
+    result = CliRunner().invoke(cli.cli, ["--output", "json", "diff", str(path)])
+
+    [item] = json.loads(result.stdout)["files"][0]["drifts"]
+    assert (item["kind"], item["field"], item["keys"]) == ("missing", "", {"UOM": "KG"})
+
+
+def test_apply_output_json_summary(
+    wired: Instance, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Gh #57: apply --output json -> counts + errors document."""
+    path = _baseline(tmp_path)
+    _live_rest(monkeypatch, {"UnitsOfMeasure": []})
+    result = CliRunner().invoke(
+        cli.cli, ["--output", "json", "apply", "--plan", str(path)]
+    )
+
+    assert result.exit_code == 0, result.output
+    doc = json.loads(result.stdout)
+    assert doc["command"] == "apply"
+    assert doc["mode"] == "plan"
+    assert doc["counts"] == {"create": 1}
+    assert (doc["ok"], doc["failed"], doc["errors"]) == (1, 0, [])
+    assert doc["files"] == [
+        {"file": str(path), "entity": "UnitsOfMeasure", "ok": 1, "errors": []}
+    ]
+
+
+def test_run_output_json_lists_outcomes_and_misses(
+    wired: Instance, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Gh #57: run --output json -> per-scenario outcome + expectation misses."""
+    scenario = tmp_path / "10-a.yaml"
+    scenario.write_text("scenario: a\nsteps: []\n")
+
+    def fake_run(
+        client: object, sc: object, dry_run: bool = False, misses: Any = None
+    ) -> cli.run.Outcome:
+        misses.append("GL [1].Balance: expected 1 got 2")
+        return cli.run.Outcome.FAILED
+
+    monkeypatch.setattr(cli.run, "run", fake_run)
+    result = CliRunner().invoke(cli.cli, ["--output", "json", "run", str(scenario)])
+
+    assert result.exit_code == 1
+    doc = json.loads(result.stdout)
+    assert doc["counts"] == {"passed": 0, "failed": 1, "skipped": 0, "not_run": 0}
+    assert doc["scenarios"] == [
+        {
+            "file": str(scenario),
+            "outcome": "failed",
+            "misses": ["GL [1].Balance: expected 1 got 2"],
+        }
+    ]
+
+
+def test_state_output_json_reports_views(
+    wired: Instance, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Gh #57: state --diff --output json -> per-view status document."""
+    view = _REPO / "acu-config" / "views" / "10-trial-balance.yaml"
+
+    def fake_views(
+        client: object, views: object, *, out_dir: Path, mode: str, report: Any
+    ) -> int:
+        report.append({"view": str(view), "status": "changed", "differences": ["x"]})
+        return 0
+
+    monkeypatch.setattr(cli.state, "run_views", fake_views)
+    result = CliRunner().invoke(
+        cli.cli, ["--output", "json", "state", "--diff", str(view)]
+    )
+
+    assert result.exit_code == 0, result.output
+    doc = json.loads(result.stdout)
+    assert (doc["command"], doc["mode"], doc["changed"]) == ("state", "diff", 1)
+    assert doc["views"][0]["differences"] == ["x"]

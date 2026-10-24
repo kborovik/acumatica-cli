@@ -4,6 +4,7 @@ import os
 
 import pytest
 
+from acumatica_cli import output
 from acumatica_cli.client import AcumaticaClient
 from acumatica_cli.config import Instance
 
@@ -25,6 +26,12 @@ def isolate_acu_env(monkeypatch: pytest.MonkeyPatch) -> None:
 def no_retry_sleep(monkeypatch: pytest.MonkeyPatch) -> None:
     """Blip retries (gh #52) still run in tests, without the backoff wait."""
     monkeypatch.setattr(AcumaticaClient, "retry_backoff", 0.0)
+
+
+@pytest.fixture(autouse=True)
+def text_output() -> None:
+    """Every test starts in text mode; --output json (gh #57) is process-wide."""
+    output.use_json(False)
 
 
 @pytest.fixture

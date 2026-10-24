@@ -521,9 +521,12 @@ def _run_step(client: AcumaticaClient, step: Step, variables: dict[str, Any]) ->
 
 
 def _check_get(
-    client: AcumaticaClient, expect: Expect, variables: dict[str, Any]
+    client: AcumaticaClient,
+    expect: Expect,
+    variables: dict[str, Any],
+    misses: list[str],
 ) -> bool:
-    """Absolute field assertions on a key-URL record."""
+    """Absolute field assertions on a key-URL record; misses collect text."""
     assert expect.get is not None
     assert expect.fields is not None
     keys = _subst(expect.get.keys, variables)
@@ -536,10 +539,12 @@ def _check_get(
         got = state.get(field)
         if record is None or field not in state:
             ok = False
-            output.data(f"  x {label}.{field}: not found")
+            misses.append(f"{label}.{field}: not found")
+            output.data(f"  x {misses[-1]}")
         elif _norm(got) != _norm(want):
             ok = False
-            output.data(f"  x {label}.{field}: expected {want!r} got {got!r}")
+            misses.append(f"{label}.{field}: expected {want!r} got {got!r}")
+            output.data(f"  x {misses[-1]}")
         else:
             output.data(f"  + {label}.{field} = {want!r}")
     return ok
@@ -550,6 +555,7 @@ def _check_delta(
     expect: Expect,
     snapshot: dict[str, float],
     variables: dict[str, Any],
+    misses: list[str],
 ) -> bool:
     """Delta assertions: post-run probe minus the pre-run snapshot."""
     assert expect.delta is not None
@@ -559,9 +565,10 @@ def _check_delta(
         got = after[field] - snapshot[field]
         if abs(got - want) > 0.005:
             ok = False
-            output.data(
-                f"  x {expect.label()}.{field}: expected delta {want:+g} got {got:+g}"
+            misses.append(
+                f"{expect.label()}.{field}: expected delta {want:+g} got {got:+g}"
             )
+            output.data(f"  x {misses[-1]}")
         else:
             output.data(f"  + {expect.label()}.{field} delta {want:+g}")
     return ok
@@ -608,7 +615,10 @@ def _guard[**P, T](
 
 
 def run(
-    client: AcumaticaClient | None, scenario: Scenario, dry_run: bool = False
+    client: AcumaticaClient | None,
+    scenario: Scenario,
+    dry_run: bool = False,
+    misses: list[str] | None = None,
 ) -> Outcome:
     """Execute the scenario; PASSED when every step and expectation held.
 
@@ -628,7 +638,9 @@ def run(
 
     A step failure raises StepError naming the file and step id (gh #58);
     a failing once probe or expect probe names ``once`` / ``expect``.
+    Expectation misses append their text to ``misses`` (gh #57 JSON).
     """
+    missed: list[str] = [] if misses is None else misses
     output.data(f"{scenario.path} -> {scenario.scenario}")
     if dry_run:
         _dry_run(scenario)
@@ -652,10 +664,19 @@ def run(
     ok = True
     for expect, snapshot in zip(scenario.expect, before, strict=True):
         if expect.get is not None:
-            held = _guard(scenario, "expect", _check_get, client, expect, variables)
+            held = _guard(
+                scenario, "expect", _check_get, client, expect, variables, missed
+            )
         else:
             held = _guard(
-                scenario, "expect", _check_delta, client, expect, snapshot, variables
+                scenario,
+                "expect",
+                _check_delta,
+                client,
+                expect,
+                snapshot,
+                variables,
+                missed,
             )
         ok = held and ok
     return Outcome.PASSED if ok else Outcome.FAILED

@@ -224,15 +224,33 @@ def _emit_completion(
     default=None,
     help="API password (ACU_PASSWORD). Prefer .env over the flag.",
 )
+@click.option(
+    "--output",
+    "output_format",
+    type=click.Choice(["text", "json"]),
+    default="text",
+    show_default=True,
+    help="json: diff/apply/run/state print one JSON document on stdout "
+    "(progress on stderr). Other commands stay text.",
+)
 @click.pass_context
-def cli(ctx: click.Context, **flags: str | None) -> None:
+def cli(ctx: click.Context, output_format: str, **flags: str | None) -> None:
     """Stash the global flags; the instance resolves lazily per command.
 
     Resolution stays out of the group callback so commands that need no
     target (config init) never trigger it; per key a flag beats the
     ACU_* var (.env or process) beats the code default (I.cmd precedence).
     """
+    ctx.meta["output"] = output_format
+    output.use_json(False)
     ctx.obj = {k: v for k, v in flags.items() if v is not None}
+
+
+def _json_output(ctx: click.Context) -> bool:
+    """True under ``--output json`` (gh #57); moves result lines to stderr."""
+    on = ctx.meta.get("output") == "json"
+    output.use_json(on)
+    return on
 
 
 def _resolve_instance(ctx: click.Context) -> Instance:
@@ -985,9 +1003,12 @@ def apply_cmd(
         if changed_only
         else seed.ApplyMode.ALL
     )
+    as_json = _json_output(ctx)
     counts: Counter[str] = Counter()
     total_ok = 0
     all_errors: list[str] = []
+    report: list[dict[str, object]] = []
+    not_applied: list[Path] = []
     paths = expand_files(files)
     baselines = seed.load_all(paths)  # V45: every file valid before login
     stopped = False
@@ -1003,6 +1024,7 @@ def apply_cmd(
             except seed.ApplyStopped as stop:
                 # report now: a dead host can also fail the logout on exit
                 stopped = True
+                not_applied = paths[i:]
                 all_errors.extend(f"{path}: {e}" for e in stop.errors)
                 _apply_stopped(path, stop, paths[i + 1 :], total_ok + stop.ok)
                 for err in all_errors:
@@ -1010,7 +1032,30 @@ def apply_cmd(
                 break
             total_ok += n
             all_errors.extend(f"{path}: {e}" for e in errors)
+            report.append(
+                {
+                    "file": str(path),
+                    "entity": baseline.entity,
+                    "ok": n,
+                    "errors": errors,
+                }
+            )
             output.data(f"  {n} record(s){' (dry run)' if dry_run else ''}")
+    if as_json:
+        output.document(
+            {
+                "command": "apply",
+                "tenant": None if inst is None else inst.tenant,
+                "mode": "dry_run" if dry_run else mode.value,
+                "ok": total_ok,
+                "failed": len(all_errors),
+                "counts": dict(counts),
+                "errors": all_errors,
+                "stopped": stopped,
+                "not_applied": [str(p) for p in not_applied],
+                "files": report,
+            }
+        )
     if stopped:
         raise SystemExit(1)
     if mode is not seed.ApplyMode.ALL:
@@ -1109,9 +1154,11 @@ def diff_cmd(ctx: click.Context, files: tuple[Path, ...]) -> None:
     Related: `apply` (fix) · `survey extract` (pull) · `state` (balances).
     """
     files = _require_data_paths(ctx, files)
+    as_json = _json_output(ctx)
     inst = _resolve_instance(ctx)
     paths = expand_files(files)
     drifts: list[str] = []
+    report: list[dict[str, object]] = []
     baselines = seed.load_all(paths)
     with AcumaticaClient(inst) as client:
         for path, baseline in zip(paths, baselines, strict=True):
@@ -1123,11 +1170,47 @@ def diff_cmd(ctx: click.Context, files: tuple[Path, ...]) -> None:
             file_drifts = seed.diff(client, baseline)
             drifts += file_drifts
             n = 1 if isinstance(baseline, seed.ActionFile) else len(baseline.records)
+            if as_json:
+                report.append(_diff_file_doc(path, baseline.entity, n, file_drifts))
             if file_drifts:
                 output.data(f"  {n} record(s), {len(file_drifts)} drift(s)")
             else:
                 output.data(f"  {n} record(s) ok")
+    if as_json:
+        output.document(
+            {
+                "command": "diff",
+                "tenant": inst.tenant,
+                "base_url": inst.base_url,
+                "drift": len(drifts),
+                "files": report,
+            }
+        )
     _exit_on_drift(inst, drifts, len(paths))
+
+
+def _diff_file_doc(
+    path: Path, entity: str, records: int, drifts: list[seed.Drift]
+) -> dict[str, object]:
+    """One file of the ``diff --output json`` document (gh #57 schema)."""
+    return {
+        "file": str(path),
+        "entity": entity,
+        "records": records,
+        "drifts": [
+            {
+                "file": str(path),
+                "entity": entity,
+                "keys": d.keys,
+                "field": d.field,
+                "kind": d.kind,
+                "source": d.source,
+                "live": d.live,
+                "text": str(d),
+            }
+            for d in drifts
+        ],
+    }
 
 
 @cli.command("run")
@@ -1175,21 +1258,39 @@ def run_cmd(ctx: click.Context, files: tuple[Path, ...], dry_run: bool) -> None:
             run.run(None, scenario, dry_run=True)
         output.success(f"{len(scenarios)} scenario(s) parsed (dry run)")
         return
+    as_json = _json_output(ctx)
     inst = _resolve_instance(ctx)
     counts = dict.fromkeys(run.Outcome, 0)
     not_run: list[Path] = []
+    report: list[dict[str, object]] = []
     with AcumaticaClient(inst) as client:
         for i, scenario in enumerate(scenarios):
+            misses: list[str] = []
+            entry: dict[str, object] = {"file": str(scenario.path), "misses": misses}
+            report.append(entry)
             try:
-                counts[run.run(client, scenario)] += 1
+                entry["outcome"] = outcome = run.run(client, scenario, misses=misses)
+                counts[outcome] += 1
             except run.StepError as err:
                 # gh #58: lifecycle scenarios chain, so stop and list the rest
                 output.error(str(err))
+                entry |= {"outcome": run.Outcome.FAILED, "error": str(err)}
                 counts[run.Outcome.FAILED] += 1
                 not_run = [later.path for later in scenarios[i + 1 :]]
                 break
     for path in not_run:
         output.error(f"not run: {path}")
+    if as_json:
+        output.document(
+            {
+                "command": "run",
+                "tenant": inst.tenant,
+                "counts": {str(k): v for k, v in counts.items()}
+                | {"not_run": len(not_run)},
+                "scenarios": report,
+                "not_run": [str(p) for p in not_run],
+            }
+        )
     summary = (
         f"{counts[run.Outcome.PASSED]} passed, {counts[run.Outcome.FAILED]} failed, "
         f"{counts[run.Outcome.SKIPPED]} skipped, {len(not_run)} not run "
@@ -1499,10 +1600,24 @@ def state_cmd(
         if code:
             raise SystemExit(code)
         return
+    as_json = _json_output(ctx)
     inst = _resolve_instance(ctx)
     mode = "assert" if assert_unchanged else "diff" if do_diff else "write"
+    report: list[dict[str, object]] = []
     with AcumaticaClient(inst) as client:
-        code = state.run_views(client, views, out_dir=dest, mode=mode)
+        code = state.run_views(client, views, out_dir=dest, mode=mode, report=report)
+    if as_json:
+        moved = sum(1 for v in report if v.get("status") == "changed")
+        output.document(
+            {
+                "command": "state",
+                "tenant": inst.tenant,
+                "mode": mode,
+                "exit": code,
+                "changed": moved,
+                "views": report,
+            }
+        )
     if code:
         raise SystemExit(code)
     if assert_unchanged:
