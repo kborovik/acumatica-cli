@@ -72,6 +72,14 @@ def format_failure(exc: BaseException, *, target: str | None = None) -> str:
 RECORD_FAILURES: tuple[type[Exception], ...] = (RuntimeError, httpx.TransportError)
 
 
+class SessionLostError(Exception):
+    """A mid-run re-login failed: the session is gone, later calls cannot work.
+
+    Deliberately not a RuntimeError, so it escapes RECORD_FAILURES and
+    apply hard-stops (V45) instead of reporting every later record.
+    """
+
+
 def wrap(record: dict[str, Any]) -> dict[str, Any]:
     """Plain dict -> contract-API body: {"Field": {"value": ...}}.
 
@@ -296,10 +304,15 @@ class AcumaticaClient:
         Mid-session Company create leaves branch selectors empty until a
         fresh login (V5, B24). Unlike ``__exit__``, the httpx client stays
         open so the outer context manager still owns the session lifecycle.
+        Any failure raises SessionLostError: logout already ran, so the old
+        session is gone too.
         """
-        # empty body → Content-Length: 0 (V6 / IIS 411)
-        self._http.post("/entity/auth/logout", content=b"")
-        self._login()
+        try:
+            # empty body → Content-Length: 0 (V6 / IIS 411)
+            self._http.post("/entity/auth/logout", content=b"")
+            self._login()
+        except RECORD_FAILURES as err:
+            raise SessionLostError(f"re-login failed: {format_failure(err)}") from err
 
     def refresh_after_company(self) -> None:
         """Re-login once after the first successful Company PUT this session.

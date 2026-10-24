@@ -574,7 +574,7 @@ class _Extraction:
         is a reported row failure; the run continues to the next catalog
         row either way.
         """
-        if SETUP_NOT_ENTERED_500 in str(err):
+        if isinstance(err, RuntimeError) and SETUP_NOT_ENTERED_500 in str(err):
             self._skip(target, "screen setup not entered")
             return
         output.error(f"{name}: {format_failure(err)}")

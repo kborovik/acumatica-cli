@@ -1978,6 +1978,39 @@ def test_apply_transport_error_summary_exits_1(
     assert f"{path}: UnitsOfMeasure [KG]: request timed out to " in result.stderr
 
 
+def test_apply_connect_error_reports_stop_and_not_applied(
+    wired: Instance, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """V45/gh #51: hard-stop names stopped-at record + every file not applied."""
+    first, second = tmp_path / "10-a.yaml", tmp_path / "20-b.yaml"
+    for path in (first, second):
+        path.write_text("entity: UnitsOfMeasure\nkey: UOM\nrecords:\n  - UOM: KG\n")
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        if request.method == "PUT":
+            raise httpx.ConnectError("refused", request=request)
+        if request.url.path.endswith("/Frames/Login.aspx"):
+            return httpx.Response(
+                200, text='<input id="txtSingleCompany" value="T1" />'
+            )
+        return httpx.Response(204 if "/auth/" in request.url.path else 200, json={})
+
+    monkeypatch.setattr(
+        cli,
+        "AcumaticaClient",
+        lambda inst, **kw: RealClient(inst, transport=httpx.MockTransport(handler)),
+    )
+    result = CliRunner().invoke(cli.cli, ["apply", str(first), str(second)])
+
+    assert result.exit_code == 1
+    err = result.stderr
+    assert f"x apply: stopped at {first}: UnitsOfMeasure [KG]: cannot connect" in err
+    assert "x apply: 0 record(s) applied before the stop" in err
+    assert f"x not applied: {first} (from UnitsOfMeasure [KG])" in err
+    assert f"x not applied: {second}" in err
+    assert f"{second} -> " not in result.output
+
+
 def test_diff_clean_exits_zero(
     wired: Instance, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:

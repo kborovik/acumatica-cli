@@ -17,12 +17,14 @@
   stops after 600s by default with an error naming the entity, action
   and elapsed time. Setup action files and `run` action steps take an
   optional `timeout:` (seconds) to override it.
-- **transport errors per record (gh #51):** a timeout, refused connect
-  or dropped connection on one record's PUT (or an action's `done_when`
-  probe) is now a record failure in the `apply` summary; later records
-  and files still apply. `survey extract` treats a transport failure on
-  one row the same way (V24). The error line uses the friendly transport
-  text (`request timed out to <url> ...`).
+- **transport errors per record (gh #51):** a timeout or dropped
+  connection on one record's PUT (or an action's probe or invoke) is now
+  a record failure in the `apply` summary; later records and files still
+  apply. A refused connect or a failed mid-run re-login stops `apply`
+  instead, naming the stopped-at record and every file not applied.
+  `survey extract` treats a transport failure on one row as a row
+  failure (V24). Error lines use the friendly transport text
+  (`request timed out to <url> ...`).
 
 ## [v0.35.0] - 2026-09-12
 

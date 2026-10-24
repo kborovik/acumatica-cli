@@ -914,6 +914,8 @@ def apply_cmd(ctx: click.Context, files: tuple[Path, ...], dry_run: bool) -> Non
 
     Per-record failure isolation: one failed PUT reports and continues;
     exit 1 with multi-error summary if any failed (never silent partial).
+    A refused connect or failed re-login stops the run: exit 1 naming the
+    stopped-at record and every file not applied.
     Exit 2 is reserved for `diff` drift.
 
     \b
@@ -933,16 +935,29 @@ def apply_cmd(ctx: click.Context, files: tuple[Path, ...], dry_run: bool) -> Non
     inst = _resolve_instance(ctx)
     total_ok = 0
     all_errors: list[str] = []
+    paths = expand_files(files)
+    stopped = False
     with AcumaticaClient(inst) as client:
-        for path in expand_files(files):
+        for i, path in enumerate(paths):
             baseline = seed.load_baseline(path)
             output.data(
                 f"{path} -> {inst.tenant} on {inst.base_url} ({baseline.entity})"
             )
-            n, errors = seed.apply(client, baseline, dry_run=dry_run)
+            try:
+                n, errors = seed.apply(client, baseline, dry_run=dry_run)
+            except seed.ApplyStopped as stop:
+                # report now: a dead host can also fail the logout on exit
+                stopped = True
+                all_errors.extend(f"{path}: {e}" for e in stop.errors)
+                _apply_stopped(path, stop, paths[i + 1 :], total_ok + stop.ok)
+                for err in all_errors:
+                    output.error(err)
+                break
             total_ok += n
             all_errors.extend(f"{path}: {e}" for e in errors)
             output.data(f"  {n} record(s){' (dry run)' if dry_run else ''}")
+    if stopped:
+        raise SystemExit(1)
     if all_errors:
         output.error(
             f"apply: {len(all_errors)} error(s), {total_ok} record(s) applied"
@@ -951,6 +966,17 @@ def apply_cmd(ctx: click.Context, files: tuple[Path, ...], dry_run: bool) -> Non
         for err in all_errors:
             output.error(err)
         raise SystemExit(1)
+
+
+def _apply_stopped(
+    path: Path, stop: seed.ApplyStopped, rest: list[Path], applied: int
+) -> None:
+    """V45 hard-stop report: stopped-at file/record + not-applied remainder."""
+    output.error(f"apply: stopped at {path}: {stop}")
+    output.error(f"apply: {applied} record(s) applied before the stop")
+    output.error(f"not applied: {path} (from {stop.record})")
+    for later in rest:
+        output.error(f"not applied: {later}")
 
 
 @cli.command("schema")
