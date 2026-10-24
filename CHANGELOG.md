@@ -4,6 +4,12 @@
 
 ### Fixed
 
+- **apply --plan and --changed-only (gh #55):** `acu apply --plan`
+  reads the live tenant and labels each record `create`, `update
+  (<fields>)` or `unchanged` (and each action `invoke` or skip) without
+  writing. `acu apply --changed-only` does the same read, then PUTs only
+  the records that differ. Both print a count summary. Plain `apply`
+  still PUTs every record.
 - **diff reads each file once (gh #56):** `acu diff` reads a
   multi-record file with one list GET and matches records by key,
   instead of one filtered GET per record. Records the list read does not

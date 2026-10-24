@@ -5,6 +5,7 @@ apply/diff run through the real client (wrap, $filter, _checked) offline.
 """
 
 import json
+from collections import Counter
 from pathlib import Path
 from typing import Any
 
@@ -2617,3 +2618,89 @@ def test_load_baseline_path_key_cannot_override(tmp_path: Path) -> None:
         "path: /etc\nentity: UnitsOfMeasure\nkey: UOM\nrecords:\n  - UOM: KG\n"
     )
     assert seed.load_baseline(path).path == path
+
+
+class _LiveUoms:
+    """GET honours ``UOM eq 'X'`` filters over a live row set; records PUTs."""
+
+    def __init__(self, *rows: dict[str, Any]):
+        self.rows = list(rows)
+        self.puts: list[dict[str, Any]] = []
+
+    def __call__(self, request: httpx.Request) -> httpx.Response:
+        if request.method == "PUT":
+            self.puts.append(unwrap(json.loads(request.content)))
+            return httpx.Response(200, json={})
+        flt = request.url.params.get("$filter")
+        rows = self.rows
+        if flt:
+            want = flt.split("'")[1]
+            rows = [r for r in rows if r["UOM"] == want]
+        return _live(*rows)
+
+
+def test_apply_plan_labels_records_and_writes_nothing(
+    tmp_path: Path, instance: Instance, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """Gh #55: --plan labels create / update (fields) / unchanged, no PUT."""
+    text = BASELINE + "  - UOM: EA\n    Description: Each\n"
+    baseline = seed.load_baseline(_write(tmp_path, text))
+    live = _LiveUoms(
+        {"UOM": "KG", "Description": "Kilogram"},
+        {"UOM": "HOUR", "Description": "Hours"},
+    )
+    client = AcumaticaClient(instance, transport=httpx.MockTransport(live))
+    counts: Counter[str] = Counter()
+
+    n, errors = seed.apply(client, baseline, mode=seed.ApplyMode.PLAN, counts=counts)
+
+    assert (n, errors) == (3, [])
+    assert live.puts == []
+    assert capsys.readouterr().out.splitlines() == [
+        "  unchanged UnitsOfMeasure [KG]",
+        "  update UnitsOfMeasure [HOUR] (Description)",
+        "  create UnitsOfMeasure [EA]",
+    ]
+    assert counts == {"unchanged": 1, "update": 1, "create": 1}
+
+
+def test_apply_changed_only_skips_unchanged_put(
+    tmp_path: Path, instance: Instance, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """Gh #55: --changed-only PUTs drifted records only."""
+    baseline = seed.load_baseline(_write(tmp_path, BASELINE))
+    live = _LiveUoms(
+        {"UOM": "KG", "Description": "Kilogram"},
+        {"UOM": "HOUR", "Description": "Hours"},
+    )
+    client = AcumaticaClient(instance, transport=httpx.MockTransport(live))
+    counts: Counter[str] = Counter()
+
+    n, errors = seed.apply(client, baseline, mode=seed.ApplyMode.CHANGED, counts=counts)
+
+    assert (n, errors) == (2, [])
+    assert [p["UOM"] for p in live.puts] == ["HOUR"]
+    assert capsys.readouterr().out.splitlines() == [
+        "  unchanged UnitsOfMeasure [KG]",
+        "  PUT UnitsOfMeasure [HOUR] (update)",
+    ]
+    assert counts == {"unchanged": 1, "update": 1}
+
+
+def test_apply_default_still_puts_every_record(
+    tmp_path: Path, instance: Instance
+) -> None:
+    """Gh #55: default mode keeps V4 re-PUT - no live read, every record PUT."""
+    baseline = seed.load_baseline(_write(tmp_path, BASELINE))
+    live = _LiveUoms({"UOM": "KG", "Description": "Kilogram"})
+    requests: list[httpx.Request] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        requests.append(request)
+        return live(request)
+
+    client = AcumaticaClient(instance, transport=httpx.MockTransport(handler))
+    seed.apply(client, baseline)
+
+    assert [p["UOM"] for p in live.puts] == ["KG", "HOUR"]
+    assert all(r.method == "PUT" for r in requests)

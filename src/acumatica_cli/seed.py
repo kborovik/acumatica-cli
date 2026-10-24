@@ -53,7 +53,9 @@ never a silent Default-endpoint PUT.
 """
 
 import re
+from collections import Counter
 from collections.abc import Sequence
+from enum import StrEnum
 from pathlib import Path
 from typing import Any
 
@@ -477,15 +479,29 @@ class ApplyStopped(Exception):  # noqa: N818 - control flow, not an error class
         self.errors = errors
 
 
+class ApplyMode(StrEnum):
+    """apply write policy (gh #55): PUT all (V4), PLAN (read-only), CHANGED."""
+
+    ALL = "all"
+    PLAN = "plan"
+    CHANGED = "changed"
+
+
 def _apply_action(
-    client: AcumaticaClient | None, action: ActionFile, dry_run: bool = False
+    client: AcumaticaClient | None,
+    action: ActionFile,
+    dry_run: bool = False,
+    plan: bool = False,
+    counts: Counter[str] | None = None,
 ) -> tuple[int, list[str]]:
     """Invoke the action unless done_when already verifies the desired state.
 
     On probe or invoke failure (REST or transport), returns ``(0, [error])``
     rather than raising so the caller can continue other files (V45
-    multi-error summary). A refused connect raises ApplyStopped.
+    multi-error summary). A refused connect raises ApplyStopped. Under
+    plan (gh #55) only the probe runs: ``unchanged`` or ``invoke``.
     """
+    tally = counts if counts is not None else Counter[str]()
     if dry_run:
         # gh #63: no done_when probe, so dry-run stays offline (no session)
         output.data(f"  would invoke {action.action}")
@@ -494,6 +510,11 @@ def _apply_action(
     try:
         if _probe(client, action):
             output.data(f"  skip {action.action} (already done)")
+            tally["unchanged"] += 1
+            return 1, []
+        if plan:
+            output.data(f"  invoke {action.action} [{action.entity}]")
+            tally["invoke"] += 1
             return 1, []
         client.invoke(
             action.entity,
@@ -511,6 +532,7 @@ def _apply_action(
         output.error(msg)
         return 0, [msg]
     output.data(f"  invoke {action.action} [{action.entity}]")
+    tally["invoke"] += 1
     return 1, []
 
 
@@ -518,6 +540,8 @@ def apply(
     client: AcumaticaClient | None,
     baseline: BaselineFile | ActionFile,
     dry_run: bool = False,
+    mode: ApplyMode = ApplyMode.ALL,
+    counts: Counter[str] | None = None,
 ) -> tuple[int, list[str]]:
     """PUT every record (upsert by key); an action file invokes its action.
 
@@ -545,11 +569,24 @@ def apply(
 
     client may be None only under dry_run: the preview never touches HTTP
     (gh #63), so it needs no session or credentials.
+
+    PLAN / CHANGED mode (gh #55) read live first with the ``diff`` compare
+    and label each record create / update (fields) / unchanged into
+    ``counts``. PLAN writes nothing; CHANGED skips the PUT of an
+    unchanged record (Role user assignment still runs: V57 membership is
+    not diffable). Default stays PUT-everything (V4).
     """
+    tally = counts if counts is not None else Counter[str]()
     if isinstance(baseline, ActionFile):
-        return _apply_action(client, baseline, dry_run)
+        plan = mode is ApplyMode.PLAN
+        return _apply_action(client, baseline, dry_run, plan, tally)
     ok = 0
     errors: list[str] = []
+    index = (
+        _prefetch(client, baseline)
+        if client is not None and mode is not ApplyMode.ALL
+        else {}
+    )
     for record in baseline.records:
         label = ", ".join(str(record[k]) for k in baseline.keys)
         if dry_run:
@@ -563,24 +600,50 @@ def apply(
                 errors.append(msg)
             continue
         assert client is not None, "live apply needs a client"
+        at = f"{baseline.entity} [{label}]"
         try:
-            body = _put_body(client, baseline, record)
-            if baseline.entity == "Role":
-                body.pop("Users", None)
-            _put(client, baseline.entity, body, baseline.endpoint)
-            if baseline.entity == "Company":
-                client.refresh_after_company()
-            output.data(f"  PUT {baseline.entity} [{label}]")
-            _assign_role_users(client, baseline, record, dry_run=False)
+            _apply_record(client, baseline, record, index=index, mode=mode, tally=tally)
             ok += 1
         except _STOP_FAILURES as err:
-            at = f"{baseline.entity} [{label}]"
             raise ApplyStopped(at, format_failure(err), ok, errors) from err
         except RECORD_FAILURES as err:
             msg = f"{baseline.entity} [{label}]: {format_failure(err)}"
             output.error(msg)
             errors.append(msg)
     return ok, errors
+
+
+def _apply_record(  # noqa: PLR0913 — keyword-only; gh #55 plan bundle
+    client: AcumaticaClient,
+    baseline: BaselineFile,
+    record: dict[str, Any],
+    *,
+    index: dict[tuple[str, ...], dict[str, Any]],
+    mode: ApplyMode,
+    tally: Counter[str],
+) -> None:
+    """One live record: classify (PLAN/CHANGED), then PUT unless skipped."""
+    at = f"{baseline.entity} [{', '.join(str(record[k]) for k in baseline.keys)}]"
+    kind = ""
+    if mode is not ApplyMode.ALL:
+        kind, fields = _classify(client, baseline, index, record)
+        if mode is ApplyMode.PLAN or kind == "unchanged":
+            output.data(
+                f"  {kind} {at}" + (f" ({', '.join(fields)})" if fields else "")
+            )
+            if mode is ApplyMode.CHANGED:
+                _assign_role_users(client, baseline, record, dry_run=False)
+            tally[kind] += 1
+            return
+    body = _put_body(client, baseline, record)
+    if baseline.entity == "Role":
+        body.pop("Users", None)
+    _put(client, baseline.entity, body, baseline.endpoint)
+    if baseline.entity == "Company":
+        client.refresh_after_company()
+    output.data(f"  PUT {at}" + (f" ({kind})" if kind else ""))
+    _assign_role_users(client, baseline, record, dry_run=False)
+    tally[kind or "put"] += 1
 
 
 def _assign_role_users(
@@ -824,6 +887,29 @@ def _live_for(
     return row if row is not None else _fetch(client, baseline, record)
 
 
+def _classify(
+    client: AcumaticaClient,
+    baseline: BaselineFile,
+    index: dict[tuple[str, ...], dict[str, Any]],
+    record: dict[str, Any],
+) -> tuple[str, list[str]]:
+    """``create`` / ``update`` + drifted top-level fields / ``unchanged`` (gh #55).
+
+    Same live read and compare as ``diff``; a field the endpoint does not
+    return counts as an update (conservative: it is PUT).
+    """
+    live = _live_for(client, baseline, index, record)
+    if live is None:
+        return "create", []
+    label = f"{baseline.entity} [{', '.join(str(record[k]) for k in baseline.keys)}]"
+    fields: list[str] = []
+    for line in _record_drifts(baseline, label, record, live):
+        name = re.split(r"[.\[:]", line[len(label) + 1 :], maxsplit=1)[0]
+        if name not in fields:
+            fields.append(name)
+    return ("update", fields) if fields else ("unchanged", [])
+
+
 def diff(client: AcumaticaClient, baseline: BaselineFile | ActionFile) -> list[str]:
     """Compare each source record against the live tenant.
 
@@ -848,30 +934,35 @@ def diff(client: AcumaticaClient, baseline: BaselineFile | ActionFile) -> list[s
         if live is None:
             drifts.append(f"{label}: missing on tenant")
             continue
-        actual = unwrap(live)
-        # V39/V40/V56/V57: never compare write-only, runtime, GET-omit,
-        # or membership details whose mapped GET may stay empty.
-        fields = {
-            k: v for k, v in record.items() if not _diff_ignored(baseline.entity, k)
-        }
-        for field, expected in fields.items():
-            if isinstance(expected, list):
-                key = (baseline.detail_keys or {})[field]  # load-validated
-                want_rows = _drop_path_ignored(baseline.entity, field, expected)
-                live_rows = _drop_path_ignored(
-                    baseline.entity, field, actual.get(field, [])
-                )
-                drifts.extend(_diff_details(label, field, key, want_rows, live_rows))
-            elif isinstance(expected, dict):
-                drifts.extend(
-                    _diff_nested(f"{label}.{field}", expected, actual.get(field))
-                )
-            elif field not in actual:
-                drifts.append(f"{label}.{field}: not returned by endpoint")
-            elif _norm(actual[field]) != _norm(expected):
-                drifts.append(
-                    f"{label}.{field}: source={expected!r} live={actual[field]!r}"
-                )
+        drifts.extend(_record_drifts(baseline, label, record, live))
+    return drifts
+
+
+def _record_drifts(
+    baseline: BaselineFile, label: str, record: dict[str, Any], live: dict[str, Any]
+) -> list[str]:
+    """Field drift lines for one source record against its live row."""
+    drifts: list[str] = []
+    actual = unwrap(live)
+    # V39/V40/V56/V57: never compare write-only, runtime, GET-omit,
+    # or membership details whose mapped GET may stay empty.
+    fields = {k: v for k, v in record.items() if not _diff_ignored(baseline.entity, k)}
+    for field, expected in fields.items():
+        if isinstance(expected, list):
+            key = (baseline.detail_keys or {})[field]  # load-validated
+            want_rows = _drop_path_ignored(baseline.entity, field, expected)
+            live_rows = _drop_path_ignored(
+                baseline.entity, field, actual.get(field, [])
+            )
+            drifts.extend(_diff_details(label, field, key, want_rows, live_rows))
+        elif isinstance(expected, dict):
+            drifts.extend(_diff_nested(f"{label}.{field}", expected, actual.get(field)))
+        elif field not in actual:
+            drifts.append(f"{label}.{field}: not returned by endpoint")
+        elif _norm(actual[field]) != _norm(expected):
+            drifts.append(
+                f"{label}.{field}: source={expected!r} live={actual[field]!r}"
+            )
     return drifts
 
 

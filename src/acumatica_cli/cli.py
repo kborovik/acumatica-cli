@@ -85,6 +85,7 @@ See package README for seed YAML shape.
 import functools
 import json
 import os
+from collections import Counter
 from collections.abc import Callable
 from contextlib import nullcontext
 from importlib.metadata import distribution
@@ -920,8 +921,24 @@ def collapse_same_basename(paths: list[Path]) -> list[Path]:
     is_flag=True,
     help="List what would be PUT; offline (no login, no .env needed)",
 )
+@click.option(
+    "--plan",
+    is_flag=True,
+    help="Read live; label each record create / update / unchanged; no writes",
+)
+@click.option(
+    "--changed-only",
+    is_flag=True,
+    help="Read live first; skip the PUT of records with no drift",
+)
 @click.pass_context
-def apply_cmd(ctx: click.Context, files: tuple[Path, ...], dry_run: bool) -> None:
+def apply_cmd(
+    ctx: click.Context,
+    files: tuple[Path, ...],
+    dry_run: bool,
+    plan: bool,
+    changed_only: bool,
+) -> None:
     """Push seed YAML into the tenant (idempotent PUT upserts).
 
     Sole tenant writer. REST data plane. FILES = seed YAML files or dirs
@@ -937,6 +954,12 @@ def apply_cmd(ctx: click.Context, files: tuple[Path, ...], dry_run: bool) -> Non
     stopped-at record and every file not applied.
     Exit 2 is reserved for `diff` drift.
 
+    --plan reads live state with the `diff` compare and labels each
+    record create / update (fields) / unchanged, and each action invoke /
+    skip; it writes nothing. --changed-only does the same read, then PUTs
+    only create / update records. Both end with a count summary. Default
+    PUTs every record (idempotent re-PUT).
+
     \b
     Prerequisites
       Tenant exists and is bootstrapped (tenant create or acu bootstrap).
@@ -946,11 +969,23 @@ def apply_cmd(ctx: click.Context, files: tuple[Path, ...], dry_run: bool) -> Non
     Examples
       acu --tenant DEV apply acu-config
       acu --tenant DEV apply --dry-run acu-config/master/
+      acu --tenant DEV apply --plan acu-config
+      acu --tenant DEV apply --changed-only acu-config
       acu --tenant DEV apply acu-config/baseline/20-accounts.yaml
 
     Related: `diff` (drift) · `survey extract` (inverse pull) · `run` (txns).
     """
     files = _require_data_paths(ctx, files)
+    if sum((dry_run, plan, changed_only)) > 1:
+        raise click.UsageError("--dry-run, --plan, --changed-only are exclusive")
+    mode = (
+        seed.ApplyMode.PLAN
+        if plan
+        else seed.ApplyMode.CHANGED
+        if changed_only
+        else seed.ApplyMode.ALL
+    )
+    counts: Counter[str] = Counter()
     total_ok = 0
     all_errors: list[str] = []
     paths = expand_files(files)
@@ -964,7 +999,7 @@ def apply_cmd(ctx: click.Context, files: tuple[Path, ...], dry_run: bool) -> Non
             target = "dry run" if inst is None else f"{inst.tenant} on {inst.base_url}"
             output.data(f"{path} -> {target} ({baseline.entity})")
             try:
-                n, errors = seed.apply(client, baseline, dry_run=dry_run)
+                n, errors = seed.apply(client, baseline, dry_run, mode, counts)
             except seed.ApplyStopped as stop:
                 # report now: a dead host can also fail the logout on exit
                 stopped = True
@@ -978,6 +1013,8 @@ def apply_cmd(ctx: click.Context, files: tuple[Path, ...], dry_run: bool) -> Non
             output.data(f"  {n} record(s){' (dry run)' if dry_run else ''}")
     if stopped:
         raise SystemExit(1)
+    if mode is not seed.ApplyMode.ALL:
+        output.data(_plan_summary(mode, counts, len(all_errors)))
     if all_errors:
         output.error(
             f"apply: {len(all_errors)} error(s), {total_ok} record(s) applied"
@@ -986,6 +1023,19 @@ def apply_cmd(ctx: click.Context, files: tuple[Path, ...], dry_run: bool) -> Non
         for err in all_errors:
             output.error(err)
         raise SystemExit(1)
+
+
+def _plan_summary(mode: seed.ApplyMode, counts: Counter[str], failed: int) -> str:
+    """Tally line (gh #55): ``plan: 2 create, ...`` / ``apply: 2 created, ...``."""
+    done = mode is seed.ApplyMode.CHANGED
+    parts = [
+        f"{counts[kind]} {kind}{'d' if done else ''}"
+        for kind in ("create", "update", "invoke")
+    ]
+    head = "apply" if done else "plan"
+    return (
+        f"{head}: {', '.join(parts)}, {counts['unchanged']} unchanged, {failed} failed"
+    )
 
 
 def _apply_stopped(

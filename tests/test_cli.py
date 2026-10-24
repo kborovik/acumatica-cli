@@ -1499,7 +1499,7 @@ def test_apply_diff_explicit_config_ignores_inventory_findings(
     monkeypatch.setattr(
         cli.seed,
         "apply",
-        lambda client, baseline, dry_run=False: (
+        lambda client, baseline, *_: (
             seen_apply.append(str(baseline.path).replace("\\", "/")) or (1, [])
         ),
     )
@@ -1608,7 +1608,7 @@ def test_apply_acu_config_umbrella_skips_sibling_custom(
     monkeypatch.setattr(
         cli.seed,
         "apply",
-        lambda client, baseline, dry_run=False: (
+        lambda client, baseline, *_: (
             seen.append(str(baseline.path).replace("\\", "/")) or (1, [])
         ),
     )
@@ -1640,7 +1640,7 @@ def test_apply_acu_config_then_custom_dir(
     monkeypatch.setattr(
         cli.seed,
         "apply",
-        lambda client, baseline, dry_run=False: (
+        lambda client, baseline, *_: (
             seen.append(str(baseline.path).replace("\\", "/")) or (1, [])
         ),
     )
@@ -2592,3 +2592,46 @@ def test_run_step_422_names_file_and_step_and_lists_not_run(
     assert f"x {first} [two]: PUT " in result.stderr
     assert f"x not run: {second}" in result.stderr
     assert "x run: 0 passed, 1 failed, 0 skipped, 1 not run on T1" in result.stderr
+
+
+def test_apply_plan_prints_summary_and_writes_nothing(
+    wired: Instance, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Gh #55: --plan reads live, labels records, ends with the count line."""
+    path = _baseline(tmp_path)
+    puts: list[str] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        if request.method == "PUT":
+            puts.append(request.url.path)
+        if request.url.path.endswith("/Frames/Login.aspx"):
+            return httpx.Response(
+                200, text='<input id="txtSingleCompany" value="T1" />'
+            )
+        if request.url.path.endswith("/UnitsOfMeasure"):
+            return httpx.Response(200, json=[])
+        return httpx.Response(204 if "/auth/" in request.url.path else 200, json={})
+
+    monkeypatch.setattr(
+        cli,
+        "AcumaticaClient",
+        lambda inst, **kw: RealClient(inst, transport=httpx.MockTransport(handler)),
+    )
+    result = CliRunner().invoke(cli.cli, ["apply", "--plan", str(path)])
+
+    assert result.exit_code == 0, result.output
+    assert puts == []
+    assert "  create UnitsOfMeasure [KG]" in result.stdout
+    assert "plan: 1 create, 0 update, 0 invoke, 0 unchanged, 0 failed" in (
+        result.stdout
+    )
+
+
+def test_apply_plan_modes_are_exclusive(wired: Instance, tmp_path: Path) -> None:
+    """Gh #55: --plan, --changed-only, --dry-run do not combine."""
+    result = CliRunner().invoke(
+        cli.cli, ["apply", "--plan", "--changed-only", str(_baseline(tmp_path))]
+    )
+
+    assert result.exit_code == 2
+    assert "exclusive" in result.output
