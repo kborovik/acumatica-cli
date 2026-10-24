@@ -66,7 +66,7 @@ py-reset:
 	uv venv --clear && hash -r && uv sync
 
 uv.lock: pyproject.toml
-	uv lock --upgrade && touch $(@)
+	uv lock && touch $(@)
 
 ###############################################################################
 # Install
