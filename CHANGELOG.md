@@ -25,6 +25,10 @@
   `survey extract` treats a transport failure on one row as a row
   failure (V24). Error lines use the friendly transport text
   (`request timed out to <url> ...`).
+- **logout never masks the real error (gh #53):** logout on exit waits
+  at most 10s, and a logout failure prints a `!` warning (with the
+  `acu tenant recycle` hint) instead of replacing the original error or
+  the `apply` summary.
 
 ## [v0.35.0] - 2026-09-12
 

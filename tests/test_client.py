@@ -605,3 +605,61 @@ def test_invoke_202_poll_uses_default_timeout(instance: Instance) -> None:
     client.invoke_timeout = 0
     with pytest.raises(RuntimeError, match=r"still 202 .*\(timeout 0s\)"):
         client.invoke("MasterCalendar", "GenerateCalendar", {})
+
+
+# -- gh #53: bounded logout; a logout failure never masks the real error --
+
+
+class _DeadLogout(Recorder):
+    """Recorder whose logout POST raises httpx.ConnectError."""
+
+    def __call__(self, request: httpx.Request) -> httpx.Response:
+        if request.url.path.endswith("/entity/auth/logout"):
+            self.requests.append(request)
+            raise httpx.ConnectError("refused", request=request)
+        return super().__call__(request)
+
+
+def test_logout_uses_short_timeout(instance: Instance) -> None:
+    recorder = Recorder({})
+    with _client(instance, recorder):
+        pass
+    logout = recorder.requests[-1]
+    assert logout.url.path.endswith("/entity/auth/logout")
+    assert logout.extensions["timeout"]["read"] == AcumaticaClient.logout_timeout
+    assert AcumaticaClient.logout_timeout == 10.0
+
+
+def test_logout_failure_on_error_exit_keeps_original(
+    instance: Instance, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """PUT 422 then logout ConnectError: the 422 text propagates, logout warns."""
+    body = {"exceptionMessage": "UOM 'KG' is reserved."}
+    recorder = _DeadLogout({"/UnitsOfMeasure": httpx.Response(422, json=body)})
+    with (
+        pytest.raises(RuntimeError, match="UOM 'KG' is reserved"),
+        _client(instance, recorder) as client,
+    ):
+        client.put("UnitsOfMeasure", {"UOM": "KG"})
+    err = " ".join(capsys.readouterr().err.split())  # rich wraps
+    assert "! logout failed: cannot connect to " in err
+    assert "(acu tenant recycle)" in err
+
+
+def test_logout_failure_on_clean_exit_warns(
+    instance: Instance, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """Clean exit: logout failure is a warning, not an exception."""
+    with _client(instance, _DeadLogout({})):
+        pass
+    assert "! logout failed: cannot connect to " in capsys.readouterr().err
+
+
+def test_login_failure_survives_logout_failure(
+    instance: Instance, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """__enter__ cleanup logout failing must not replace the login error."""
+    recorder = _DeadLogout({}, landed="OTHER")
+    with pytest.raises(RuntimeError, match="tenant guard"), _client(instance, recorder):
+        pass
+    assert "! logout failed:" in capsys.readouterr().err
