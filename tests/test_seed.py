@@ -978,10 +978,8 @@ def test_apply_role_users_warm_idempotent(tmp_path: Path, instance: Instance) ->
     assert unassigns == []
 
 
-def test_apply_role_users_missing_username_is_error(
-    tmp_path: Path, instance: Instance, capsys: pytest.CaptureFixture[str]
-) -> None:
-    """V45/V53: a Users row without Username fails the Role record."""
+def test_load_role_users_missing_username_is_error(tmp_path: Path) -> None:
+    """V53/gh #54: a Users row without Username fails at load, before any PUT."""
     path = tmp_path / "92-role-users.yaml"
     path.write_text(
         """\
@@ -989,27 +987,16 @@ entity: Role
 key: Rolename
 endpoint: bootstrap
 detail_keys:
-  Users: Username
+  Users: Login
 records:
   - Rolename: SO Admin
     Users:
-      - Username: ""
+      - Login: soadmin
+        Username: ""
 """
     )
-    membership = seed.load_baseline(path)
-    assert isinstance(membership, seed.BaselineFile)
-    recorder = Recorder({"/Role": httpx.Response(200, json=[])})
-    ok, errors = seed.apply(_client(instance, recorder), membership)
-    assert ok == 0
-    assert len(errors) == 1
-    assert "Users[0] missing Username" in errors[0]
-    assigns = [
-        r
-        for r in recorder.requests
-        if r.method == "POST" and r.url.path.endswith("/Role/AssignUser")
-    ]
-    assert assigns == []
-    capsys.readouterr()
+    with pytest.raises(SystemExit, match=r"records\[0\]\.Users\[0\] missing Username"):
+        seed.load_baseline(path)
 
 
 def test_diff_ignores_empty_mapped_role_users(
@@ -2561,3 +2548,25 @@ def test_load_all_returns_in_order(tmp_path: Path) -> None:
         paths.append(path)
     loaded = seed.load_all(paths)
     assert [b.path for b in loaded] == paths
+
+
+def test_load_baseline_non_utf8_is_systemexit(tmp_path: Path) -> None:
+    path = tmp_path / "binary.yaml"
+    path.write_bytes(b"\xff\xfeentity: UnitsOfMeasure\n")
+    with pytest.raises(SystemExit, match=r"binary\.yaml: invalid YAML"):
+        seed.load_baseline(path)
+
+
+def test_load_baseline_unreadable_is_systemexit(tmp_path: Path) -> None:
+    path = tmp_path / "dir.yaml"
+    path.mkdir()
+    with pytest.raises(SystemExit, match=r"dir\.yaml: cannot read"):
+        seed.load_baseline(path)
+
+
+def test_load_baseline_path_key_cannot_override(tmp_path: Path) -> None:
+    path = tmp_path / "p.yaml"
+    path.write_text(
+        "path: /etc\nentity: UnitsOfMeasure\nkey: UOM\nrecords:\n  - UOM: KG\n"
+    )
+    assert seed.load_baseline(path).path == path

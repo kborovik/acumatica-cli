@@ -2440,6 +2440,7 @@ def test_invalid_late_file_sends_nothing(
     leaf.mkdir(parents=True)
     (leaf / "10-uoms.yaml").write_text(BASELINE)
     (leaf / "20-bad.yaml").write_text("entity: UnitsOfMeasure\nrecords: []\n")
+    (leaf / "30-broken.yaml").write_text("entity: [\n")
     requests: list[httpx.Request] = []
 
     def handler(request: httpx.Request) -> httpx.Response:
@@ -2456,5 +2457,6 @@ def test_invalid_late_file_sends_nothing(
     assert result.exit_code == 1
     assert requests == []  # no login, no PUT/GET
     err = " ".join(result.output.split())
-    assert "1 of 2 seed file(s) failed validation - nothing sent" in err
+    assert "2 of 3 seed file(s) failed validation - nothing sent" in err
     assert "20-bad.yaml" in err
+    assert "30-broken.yaml: invalid YAML" in err

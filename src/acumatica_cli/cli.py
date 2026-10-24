@@ -852,7 +852,9 @@ def _seed_child_dirs(parent: Path) -> list[Path]:
 
 def _leaf_yaml(directory: Path) -> list[Path]:
     """Sorted `*.yaml` in a leaf seed dir; skip `features.yaml` (I.data)."""
-    return sorted(p for p in directory.glob("*.yaml") if p.name != "features.yaml")
+    return sorted(
+        p for p in directory.glob("*.yaml") if p.is_file() and p.name != "features.yaml"
+    )
 
 
 def _require_data_paths(
