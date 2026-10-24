@@ -12,6 +12,7 @@ import pytest
 
 from acumatica_cli.client import (
     AcumaticaClient,
+    SessionLostError,
     parse_entity_list,
     parse_entity_response,
     unwrap,
@@ -663,3 +664,31 @@ def test_login_failure_survives_logout_failure(
     with pytest.raises(RuntimeError, match="tenant guard"), _client(instance, recorder):
         pass
     assert "! logout failed:" in capsys.readouterr().err
+
+
+def test_logout_error_status_warns(
+    instance: Instance, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """A non-2xx logout leaks the session as surely as a dead socket (V6)."""
+    with _client(instance, Recorder({"/entity/auth/logout": httpx.Response(500)})):
+        pass
+    err = " ".join(capsys.readouterr().err.split())
+    assert "! logout failed: HTTP 500" in err
+
+
+def test_relogin_uses_short_logout_timeout(instance: Instance) -> None:
+    recorder = Recorder({})
+    with _client(instance, recorder) as client:
+        n_after_enter = len(recorder.requests)
+        client.relogin()
+        logout = recorder.requests[n_after_enter]
+        assert logout.url.path.endswith("/entity/auth/logout")
+        assert logout.extensions["timeout"]["read"] == AcumaticaClient.logout_timeout
+
+
+def test_relogin_dead_logout_raises_session_lost(instance: Instance) -> None:
+    with (
+        _client(instance, _DeadLogout({})) as client,
+        pytest.raises(SessionLostError, match="re-login failed: cannot connect"),
+    ):
+        client.relogin()

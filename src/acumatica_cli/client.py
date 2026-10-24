@@ -5,6 +5,7 @@ import html
 import re
 import time
 from collections.abc import Sequence
+from types import TracebackType
 from typing import Any
 from urllib.parse import quote
 
@@ -274,7 +275,7 @@ class AcumaticaClient:
         self,
         exc_type: type[BaseException] | None = None,
         exc: BaseException | None = None,
-        tb: object = None,
+        tb: TracebackType | None = None,
     ) -> None:
         """Logout (bounded by ``logout_timeout``) and close the transport.
 
@@ -283,19 +284,27 @@ class AcumaticaClient:
         work is done and the caller's own report (e.g. the apply summary)
         still prints. The warning names the leaked-session fix (V6).
         """
+        failure: str | None = None
         try:
-            self._logout()
+            resp = self._logout()
+            if resp.is_error:
+                failure = f"HTTP {resp.status_code}"
         except (RuntimeError, httpx.HTTPError) as err:
-            output.warn(
-                f"logout failed: {format_failure(err)} - the session may hold "
-                "an API license slot until it expires (acu tenant recycle)"
-            )
+            failure = format_failure(err)
         finally:
             self._http.close()
+        if failure:
+            output.warn(
+                f"logout failed: {failure} - the session may hold an API "
+                "license slot until it expires (acu tenant recycle)"
+            )
 
-    def _logout(self) -> None:
-        # empty body sets Content-Length: 0 — IIS 411s without it
-        self._http.post("/entity/auth/logout", content=b"", timeout=self.logout_timeout)
+    def _logout(self) -> httpx.Response:
+        # empty body sets Content-Length: 0 — IIS 411s without it. The
+        # timeout bounds each phase (connect/read/...), not the whole call.
+        return self._http.post(
+            "/entity/auth/logout", content=b"", timeout=self.logout_timeout
+        )
 
     def _login(self) -> None:
         """POST login + refuse on landed-tenant mismatch (V5, B5).
