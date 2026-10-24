@@ -17,7 +17,7 @@ from click.testing import CliRunner
 from acumatica_cli import cli
 from acumatica_cli.client import AcumaticaClient as RealClient
 from acumatica_cli.client import format_failure
-from acumatica_cli.config import INIT_TEMPLATES, Instance, load_instance
+from acumatica_cli.config import INIT_TEMPLATES, Instance, default_out, load_instance
 from acumatica_cli.tenant import Tenant, TenantManager
 
 BASELINE = """\
@@ -2284,11 +2284,15 @@ def test_schema_short_o_flag_is_gone(wired: Instance, tmp_path: Path) -> None:
 def test_schema_defaults_to_data_root_schemas(
     wired: Instance, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    monkeypatch.setattr(cli, "data_root", lambda: tmp_path)
+    (tmp_path / ".env").write_text("# data-repo sentinel\n")
+    sub = tmp_path / "sub"
+    sub.mkdir()
+    monkeypatch.chdir(sub)
     result = CliRunner().invoke(cli.cli, ["schema"])
 
     assert result.exit_code == 0
     assert (tmp_path / "schemas" / "swagger-Default-25.200.001.json").exists()
+    assert not (sub / "schemas").exists()
 
 
 def test_main_maps_runtime_error_to_one_line_and_exit_1(
@@ -2460,3 +2464,60 @@ def test_invalid_late_file_sends_nothing(
     assert "2 of 3 seed file(s) failed validation - nothing sent" in err
     assert "20-bad.yaml" in err
     assert "30-broken.yaml: invalid YAML" in err
+
+
+def _subdir_of_data_root(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
+    (tmp_path / ".env").write_text("# data-repo sentinel\n")
+    sub = tmp_path / "sub"
+    sub.mkdir()
+    monkeypatch.chdir(sub)
+    return sub
+
+
+def test_extract_default_out_resolves_to_data_root(
+    wired: Instance, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Gh #59: run from <root>/sub/, default --out is <root>/acu-config."""
+    _subdir_of_data_root(tmp_path, monkeypatch)
+    seen: list[Path] = []
+
+    def fake_run(client: object, out_dir: Path, **_: object) -> int:
+        seen.append(out_dir)
+        return 0
+
+    monkeypatch.setattr(cli.extract, "run", fake_run)
+    result = CliRunner().invoke(cli.cli, ["survey", "extract"])
+
+    assert result.exit_code == 0, result.output
+    assert seen == [Path("../acu-config")]
+    assert seen[0].resolve() == (tmp_path / "acu-config").resolve()
+
+
+def test_state_default_out_resolves_to_data_root(
+    wired: Instance, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Gh #59: run from <root>/sub/, default --out is <root>/state."""
+    sub = _subdir_of_data_root(tmp_path, monkeypatch)
+    view = sub / "10-tb.yaml"
+    view.write_text("x\n")
+    seen: list[Path] = []
+
+    def fake_run_views(
+        client: object, views: object, *, out_dir: Path, mode: str
+    ) -> int:
+        seen.append(out_dir)
+        return 0
+
+    monkeypatch.setattr(cli.state, "load_view", lambda path: path)
+    monkeypatch.setattr(cli.state, "run_views", fake_run_views)
+    result = CliRunner().invoke(cli.cli, ["state", "--dry-run", str(view)])
+
+    assert result.exit_code == 0, result.output
+    assert seen[0].resolve() == (tmp_path / "state").resolve()
+
+
+def test_default_out_without_data_root_is_cwd_relative(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.chdir(tmp_path)
+    assert default_out("state") == Path("state")

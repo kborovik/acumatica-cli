@@ -4,6 +4,12 @@
 
 ### Fixed
 
+- **default --out under the data root (gh #59):** `survey extract`,
+  `survey inventory`, `survey reconcile`, `state` and `schema` default
+  output dirs resolve against the data root (the directory holding
+  `.env`), so a run from a subdirectory writes into the committed tree
+  instead of a stray copy beside cwd. No `.env` found: cwd, as before
+  (`schema` no longer errors there). Explicit `--out` stays as typed.
 - **OData quote escape (gh #49):** `diff` / `apply` key `$filter` doubles
   `'` inside string literals, so a key such as `O'Brien` matches instead
   of failing the filter parse. Bool and number literals stay bare.

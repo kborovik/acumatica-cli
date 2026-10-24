@@ -9,7 +9,8 @@ MENTAL MODEL
     acu-config/views/                              observer views (state)
     acu-scenario/                                  transaction scripts (run)
     .env                                           secrets + where + API pin
-    state/ inventory/ findings/ schemas/           command outputs (not seed)
+    state/ inventory/ findings/ schemas/           command outputs (not seed;
+                                                   default --out under data root)
   Two planes (do not mix):
     REST data plane — apply diff run bootstrap survey extract state schema
       needs: base_url, tenant, password (SSH optional)
@@ -108,7 +109,7 @@ from . import (
 from .client import AcumaticaClient, format_failure
 from .config import (
     Instance,
-    data_root,
+    default_out,
     find_data_root,
     load_instance,
     read_env_values,
@@ -998,7 +999,7 @@ def _apply_stopped(
     "out_dir",
     type=click.Path(file_okay=False, path_type=Path),
     default=None,
-    help="Output directory (default: <data repo>/schemas)",
+    help="Output directory (default: <data root>/schemas; no .env: ./schemas)",
 )
 @pass_instance
 def schema_cmd(inst: Instance, out_dir: Path | None) -> None:
@@ -1013,7 +1014,7 @@ def schema_cmd(inst: Instance, out_dir: Path | None) -> None:
       acu --api-version 25.200.001 schema --out ./schemas
     """
     if out_dir is None:
-        out_dir = data_root() / "schemas"
+        out_dir = default_out("schemas")
     out_file = out_dir / f"swagger-Default-{inst.api_version}.json"
     with (
         output.step(
@@ -1163,7 +1164,7 @@ def survey_group() -> None:
     "out_dir",
     type=click.Path(file_okay=False, path_type=Path),
     default=None,
-    help="Seed-tree root (default: acu-config/); writes SEED_DIRS into it",
+    help="Seed-tree root (default: <data root>/acu-config/); writes SEED_DIRS into it",
 )
 @click.option(
     "--only",
@@ -1208,7 +1209,7 @@ def extract_cmd(
     with AcumaticaClient(inst) as client:
         failed = extract.run(
             client,
-            out_dir or Path("acu-config"),
+            out_dir or default_out("acu-config"),
             only=frozenset(only),
             force=force,
             dry_run=dry_run,
@@ -1237,7 +1238,7 @@ def _exit_on_drift(inst: Instance, drifts: list[str], files: int) -> None:
     "out_dir",
     type=click.Path(file_okay=False, path_type=Path),
     default=None,
-    help="Output directory (default: inventory/)",
+    help="Output directory (default: <data root>/inventory/)",
 )
 @click.option("--force", is_flag=True, help="Overwrite existing files")
 @click.option(
@@ -1273,7 +1274,7 @@ def inventory_cmd(
     # per-table write/skip emit stay multi-unit stdout after.
     with output.step(f"parsing snapshot artifact {artifact}"):
         art = inventory.parse_artifact(artifact)
-    dest = out_dir if out_dir is not None else Path(inventory.DEFAULT_OUT)
+    dest = out_dir if out_dir is not None else default_out(inventory.DEFAULT_OUT)
     output.data(
         f"{artifact} -> {dest} ({len(art.tables)} table(s)"
         f"{f', erp={art.erp}' if art.erp else ''})"
@@ -1287,7 +1288,7 @@ def inventory_cmd(
     "inventory_dir",
     type=click.Path(file_okay=False, path_type=Path),
     default=None,
-    help="Inventory tree from `acu survey inventory` (default: inventory/)",
+    help="Inventory tree from `acu survey inventory` (default: <data root>/inventory/)",
 )
 @click.option(
     "--config",
@@ -1301,7 +1302,7 @@ def inventory_cmd(
     "out_dir",
     type=click.Path(file_okay=False, path_type=Path),
     default=None,
-    help="Findings output directory (default: findings/)",
+    help="Findings output directory (default: <data root>/findings/)",
 )
 @click.option("--force", is_flag=True, help="Overwrite existing findings files")
 @click.option(
@@ -1337,10 +1338,10 @@ def reconcile_cmd(
     inv = (
         inventory_dir
         if inventory_dir is not None
-        else Path(reconcile.DEFAULT_INVENTORY)
+        else default_out(reconcile.DEFAULT_INVENTORY)
     )
     cfg = config_dir
-    dest = out_dir if out_dir is not None else Path(reconcile.DEFAULT_OUT)
+    dest = out_dir if out_dir is not None else default_out(reconcile.DEFAULT_OUT)
     cfg_label = str(cfg) if cfg is not None else "(none)"
     output.data(f"{inv} + {cfg_label} -> {dest}")
     reconcile.run(
@@ -1361,7 +1362,7 @@ def reconcile_cmd(
     "out_dir",
     type=click.Path(file_okay=False, path_type=Path),
     default=None,
-    help="Observation output directory (default: state/)",
+    help="Observation output directory (default: <data root>/state/)",
 )
 @click.option(
     "--diff",
@@ -1413,7 +1414,7 @@ def state_cmd(
     inst = _resolve_instance(ctx)
     paths = state.expand_view_files(files)
     views = [state.load_view(path) for path in paths]
-    dest = out_dir if out_dir is not None else Path("state")
+    dest = out_dir if out_dir is not None else default_out("state")
     if dry_run:
         code = state.run_views(None, views, out_dir=dest, mode="dry")
     else:

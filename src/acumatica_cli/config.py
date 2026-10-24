@@ -16,6 +16,7 @@ only; tenant cmds hard-error when empty post-default — V1/V3). The
 password must resolve via ``--password`` or ``ACU_PASSWORD``.
 """
 
+import os
 from collections.abc import Iterator, Mapping
 from importlib import resources
 from pathlib import Path
@@ -325,8 +326,7 @@ def find_data_root() -> Path | None:
     """Walk up from cwd to the first directory containing .env, if any.
 
     None is not an error (V3): flags plus the process environment can supply
-    the full config; only commands needing data-repo files (schema dump)
-    require a data repo and go through data_root instead.
+    the full config; default output dirs fall back to cwd (default_out).
     """
     for d in [Path.cwd(), *Path.cwd().parents]:
         if (d / ".env").is_file():
@@ -334,15 +334,18 @@ def find_data_root() -> Path | None:
     return None
 
 
-def data_root() -> Path:
-    """The data repo root, for commands that need its files, not just config."""
+def default_out(name: str) -> Path:
+    """Default output dir `name`: under the data root when found, else cwd.
+
+    One rule for every default --out (explicit --out stays as typed), so a
+    run from a data-repo subdirectory writes into the committed tree rather
+    than a stray copy beside cwd. Relative to cwd when it can be, so
+    progress lines stay short (`state`, `../state`).
+    """
     root = find_data_root()
     if root is None:
-        raise SystemExit(
-            ".env not found in the current directory or any parent - "
-            "run acu from inside a data repo (e.g. acumatica-baseline)"
-        )
-    return root
+        return Path(name)
+    return Path(os.path.relpath(root / name))
 
 
 def read_env_values(env_file: Path) -> dict[str, Any]:
