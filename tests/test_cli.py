@@ -2011,6 +2011,38 @@ def test_apply_connect_error_reports_stop_and_not_applied(
     assert f"{second} -> " not in result.output
 
 
+def test_apply_422_survives_dead_logout(
+    wired: Instance, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Gh #53: PUT 422 then logout ConnectError -> 422 text + summary, exit 1."""
+    path = tmp_path / "uoms.yaml"
+    path.write_text("entity: UnitsOfMeasure\nkey: UOM\nrecords:\n  - UOM: KG\n")
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        if request.url.path.endswith("/entity/auth/logout"):
+            raise httpx.ConnectError("refused", request=request)
+        if request.method == "PUT":
+            return httpx.Response(422, json={"exceptionMessage": "KG is reserved"})
+        if request.url.path.endswith("/Frames/Login.aspx"):
+            return httpx.Response(
+                200, text='<input id="txtSingleCompany" value="T1" />'
+            )
+        return httpx.Response(204 if "/auth/" in request.url.path else 200, json={})
+
+    monkeypatch.setattr(
+        cli,
+        "AcumaticaClient",
+        lambda inst, **kw: RealClient(inst, transport=httpx.MockTransport(handler)),
+    )
+    result = CliRunner().invoke(cli.cli, ["apply", str(path)])
+
+    assert result.exit_code == 1
+    err = " ".join(result.stderr.split())  # rich wraps
+    assert "x apply: 1 error(s), 0 record(s) applied" in err
+    assert "UnitsOfMeasure -> 422: KG is reserved" in err
+    assert "! logout failed: cannot connect" in err
+
+
 def test_diff_clean_exits_zero(
     wired: Instance, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:

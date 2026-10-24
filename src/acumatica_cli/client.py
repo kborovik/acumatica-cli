@@ -5,11 +5,13 @@ import html
 import re
 import time
 from collections.abc import Sequence
+from types import TracebackType
 from typing import Any
 from urllib.parse import quote
 
 import httpx
 
+from . import output
 from .config import Instance
 
 # Contract control fields travel bare on wrap and stay on unwrap of
@@ -264,17 +266,45 @@ class AcumaticaClient:
         # (V6 - sessions count against the license)
         try:
             self._login()
-        except BaseException:
-            self.__exit__()
+        except BaseException as err:
+            self.__exit__(type(err), err, err.__traceback__)
             raise
         return self
 
-    def __exit__(self, *exc: object) -> None:
+    def __exit__(
+        self,
+        exc_type: type[BaseException] | None = None,
+        exc: BaseException | None = None,
+        tb: TracebackType | None = None,
+    ) -> None:
+        """Logout (bounded by ``logout_timeout``) and close the transport.
+
+        A logout failure is a warning, never an exception: on an error exit
+        the original exception propagates unmasked; on a clean exit the
+        work is done and the caller's own report (e.g. the apply summary)
+        still prints. The warning names the leaked-session fix (V6).
+        """
+        failure: str | None = None
         try:
-            # empty body sets Content-Length: 0 — IIS 411s without it
-            self._http.post("/entity/auth/logout", content=b"")
+            resp = self._logout()
+            if resp.is_error:
+                failure = f"HTTP {resp.status_code}"
+        except (RuntimeError, httpx.HTTPError) as err:
+            failure = format_failure(err)
         finally:
             self._http.close()
+        if failure:
+            output.warn(
+                f"logout failed: {failure} - the session may hold an API "
+                "license slot until it expires (acu tenant recycle)"
+            )
+
+    def _logout(self) -> httpx.Response:
+        # empty body sets Content-Length: 0 — IIS 411s without it. The
+        # timeout bounds each phase (connect/read/...), not the whole call.
+        return self._http.post(
+            "/entity/auth/logout", content=b"", timeout=self.logout_timeout
+        )
 
     def _login(self) -> None:
         """POST login + refuse on landed-tenant mismatch (V5, B5).
@@ -308,8 +338,7 @@ class AcumaticaClient:
         session is gone too.
         """
         try:
-            # empty body → Content-Length: 0 (V6 / IIS 411)
-            self._http.post("/entity/auth/logout", content=b"")
+            self._logout()
             self._login()
         except RECORD_FAILURES as err:
             raise SessionLostError(f"re-login failed: {format_failure(err)}") from err
@@ -513,6 +542,9 @@ class AcumaticaClient:
     # default ceiling on a 202 poll (V63); sized for long actions such as
     # calendar generation, overridable per call via ``timeout``
     invoke_timeout: float = 600.0
+    # logout ceiling: on an error exit against a dead server the user must
+    # not wait the full request timeout again before seeing the cause
+    logout_timeout: float = 10.0
 
     def invoke(  # noqa: PLR0913 — timeout keyword-only (V63)
         self,
