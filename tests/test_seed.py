@@ -2112,6 +2112,37 @@ def test_apply_action_polls_202_location_to_completion(
     assert "invoke GenerateCalendar [MasterCalendar]" in capsys.readouterr().out
 
 
+def test_apply_action_timeout_bounds_202_poll(
+    tmp_path: Path, instance: Instance, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """V63: action-file `timeout:` reaches invoke; a stuck 202 is a file error."""
+    action = _action(tmp_path, ACTION_YAML + "timeout: 0.05\n")
+    assert action.timeout == 0.05
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        path = request.url.path
+        if path.endswith("/GenerateCalendar"):
+            return httpx.Response(202, headers={"Location": "GenerateCalendar/s/1"})
+        if path.endswith("/s/1"):
+            return httpx.Response(202)
+        return httpx.Response(200, json=[])  # the done_when probe: empty
+
+    client = AcumaticaClient(instance, transport=httpx.MockTransport(handler))
+    client.poll_interval = 0
+
+    n, errors = seed.apply(client, action)
+
+    assert n == 0
+    assert len(errors) == 1
+    assert "MasterCalendar/GenerateCalendar still 202" in errors[0]
+    assert "(timeout 0.05s)" in errors[0]
+
+
+def test_load_action_file_rejects_non_positive_timeout(tmp_path: Path) -> None:
+    with pytest.raises(SystemExit, match="timeout"):
+        seed.load_baseline(_write(tmp_path, ACTION_YAML + "timeout: 0\n"))
+
+
 def test_apply_action_dry_run_makes_no_calls(
     tmp_path: Path, instance: Instance, capsys: pytest.CaptureFixture[str]
 ) -> None:

@@ -250,6 +250,7 @@ class ActionFile(Model):
     record: dict[str, Any]
     parameters: dict[str, Any] | None = None
     endpoint: str | None = None
+    timeout: float | None = Field(default=None, gt=0)  # 202 poll ceiling (V63)
     done_when: DoneProbe
 
 
@@ -419,6 +420,7 @@ def _apply_action(
             action.record,
             action.parameters,
             action.endpoint,
+            timeout=action.timeout,
         )
     except RuntimeError as err:
         msg = f"action {action.action} [{action.entity}]: {err}"
