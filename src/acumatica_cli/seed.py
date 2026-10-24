@@ -478,7 +478,7 @@ class ApplyStopped(Exception):  # noqa: N818 - control flow, not an error class
 
 
 def _apply_action(
-    client: AcumaticaClient, action: ActionFile, dry_run: bool = False
+    client: AcumaticaClient | None, action: ActionFile, dry_run: bool = False
 ) -> tuple[int, list[str]]:
     """Invoke the action unless done_when already verifies the desired state.
 
@@ -487,8 +487,10 @@ def _apply_action(
     multi-error summary). A refused connect raises ApplyStopped.
     """
     if dry_run:
+        # gh #63: no done_when probe, so dry-run stays offline (no session)
         output.data(f"  would invoke {action.action}")
         return 1, []
+    assert client is not None, "live apply needs a client"
     try:
         if _probe(client, action):
             output.data(f"  skip {action.action} (already done)")
@@ -513,7 +515,9 @@ def _apply_action(
 
 
 def apply(
-    client: AcumaticaClient, baseline: BaselineFile | ActionFile, dry_run: bool = False
+    client: AcumaticaClient | None,
+    baseline: BaselineFile | ActionFile,
+    dry_run: bool = False,
 ) -> tuple[int, list[str]]:
     """PUT every record (upsert by key); an action file invokes its action.
 
@@ -538,6 +542,9 @@ def apply(
     Role.Users mapped-detail PUT is a no-op (V53/B33). After the Role PUT,
     apply invokes contract action ``AssignUser`` per Username so persist
     is PXDatabase UsersInRoles, not the mapped detail.
+
+    client may be None only under dry_run: the preview never touches HTTP
+    (gh #63), so it needs no session or credentials.
     """
     if isinstance(baseline, ActionFile):
         return _apply_action(client, baseline, dry_run)
@@ -555,6 +562,7 @@ def apply(
                 output.error(msg)
                 errors.append(msg)
             continue
+        assert client is not None, "live apply needs a client"
         try:
             body = _put_body(client, baseline, record)
             if baseline.entity == "Role":
@@ -576,7 +584,7 @@ def apply(
 
 
 def _assign_role_users(
-    client: AcumaticaClient,
+    client: AcumaticaClient | None,
     baseline: BaselineFile,
     record: dict[str, Any],
     *,
@@ -610,6 +618,7 @@ def _assign_role_users(
         if dry_run:
             output.data(f"  would invoke AssignUser [{rolename}/{username}]")
             continue
+        assert client is not None, "live apply needs a client"
         client.invoke(
             "Role",
             "AssignUser",

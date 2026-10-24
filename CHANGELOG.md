@@ -4,6 +4,11 @@
 
 ### Fixed
 
+- **offline --dry-run (gh #63):** `apply --dry-run`, `run --dry-run` and
+  `state --dry-run` no longer resolve the instance or open a session, so
+  they work with no `.env` and no password (CI, pre-commit seed checks).
+  `apply --dry-run` lists setup actions as `would invoke` without the
+  `done_when` probe; the file banner reads `<path> -> dry run (<entity>)`.
 - **default --out under the data root (gh #59):** `survey extract`,
   `survey inventory`, `survey reconcile`, `state` and `schema` default
   output dirs resolve against the data root (the directory holding

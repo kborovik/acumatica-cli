@@ -3,6 +3,7 @@
 Pins diff's exit-2-on-drift contract (V9) — no live instance, no SSH.
 """
 
+import os
 import subprocess
 import sys
 from pathlib import Path
@@ -2521,3 +2522,34 @@ def test_default_out_without_data_root_is_cwd_relative(
 ) -> None:
     monkeypatch.chdir(tmp_path)
     assert default_out("state") == Path("state")
+
+
+_REPO = Path(__file__).resolve().parents[1]
+
+
+@pytest.mark.parametrize(
+    "argv",
+    [
+        ["apply", "--dry-run", str(_REPO / "acu-config")],
+        ["run", "--dry-run", str(_REPO / "acu-scenario")],
+        ["state", "--dry-run", str(_REPO / "acu-config" / "views")],
+    ],
+    ids=["apply", "run", "state"],
+)
+def test_dry_run_needs_no_config_or_session(
+    argv: list[str], tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Gh #63: dry-run with no .env and no ACU_* resolves nothing, opens nothing."""
+    for key in list(os.environ):
+        if key.startswith("ACU_"):
+            monkeypatch.delenv(key)
+    monkeypatch.chdir(tmp_path)
+
+    def no_client(*_: object, **__: object) -> None:
+        raise AssertionError("dry-run opened a session")
+
+    monkeypatch.setattr(cli, "AcumaticaClient", no_client)
+    result = CliRunner().invoke(cli.cli, argv)
+
+    assert result.exit_code == 0, result.output
+    assert "password" not in result.output

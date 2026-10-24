@@ -86,6 +86,7 @@ import functools
 import json
 import os
 from collections.abc import Callable
+from contextlib import nullcontext
 from importlib.metadata import distribution
 from pathlib import Path
 from typing import Concatenate
@@ -914,7 +915,11 @@ def collapse_same_basename(paths: list[Path]) -> list[Path]:
 @click.argument(
     "files", nargs=-1, required=False, type=click.Path(exists=True, path_type=Path)
 )
-@click.option("--dry-run", is_flag=True, help="Show what would be PUT without writing")
+@click.option(
+    "--dry-run",
+    is_flag=True,
+    help="List what would be PUT; offline (no login, no .env needed)",
+)
 @click.pass_context
 def apply_cmd(ctx: click.Context, files: tuple[Path, ...], dry_run: bool) -> None:
     """Push seed YAML into the tenant (idempotent PUT upserts).
@@ -946,17 +951,18 @@ def apply_cmd(ctx: click.Context, files: tuple[Path, ...], dry_run: bool) -> Non
     Related: `diff` (drift) · `survey extract` (inverse pull) · `run` (txns).
     """
     files = _require_data_paths(ctx, files)
-    inst = _resolve_instance(ctx)
     total_ok = 0
     all_errors: list[str] = []
     paths = expand_files(files)
     baselines = seed.load_all(paths)  # V45: every file valid before login
     stopped = False
-    with AcumaticaClient(inst) as client:
+    # gh #63: dry-run is offline - no instance resolution, no session
+    inst = None if dry_run else _resolve_instance(ctx)
+    session = nullcontext() if inst is None else AcumaticaClient(inst)
+    with session as client:
         for i, (path, baseline) in enumerate(zip(paths, baselines, strict=True)):
-            output.data(
-                f"{path} -> {inst.tenant} on {inst.base_url} ({baseline.entity})"
-            )
+            target = "dry run" if inst is None else f"{inst.tenant} on {inst.base_url}"
+            output.data(f"{path} -> {target} ({baseline.entity})")
             try:
                 n, errors = seed.apply(client, baseline, dry_run=dry_run)
             except seed.ApplyStopped as stop:
@@ -1106,17 +1112,19 @@ def run_cmd(ctx: click.Context, files: tuple[Path, ...], dry_run: bool) -> None:
     Related: `apply` · `diff` · `state`.
     """
     files = _require_data_paths(ctx, files)
-    inst = _resolve_instance(ctx)
     paths = collapse_same_basename(expand_files(files))
     scenarios = [run.load_scenario(path) for path in paths]
     ok = True
     if dry_run:
+        # gh #63: offline - no instance resolution, no HTTP
         for scenario in scenarios:
             run.run(None, scenario, dry_run=True)
-    else:
-        with AcumaticaClient(inst) as client:
-            for scenario in scenarios:
-                ok = run.run(client, scenario) and ok
+        output.success(f"{len(scenarios)} scenario(s) parsed (dry run)")
+        return
+    inst = _resolve_instance(ctx)
+    with AcumaticaClient(inst) as client:
+        for scenario in scenarios:
+            ok = run.run(client, scenario) and ok
     if not ok:
         raise SystemExit(1)
     output.success(f"{len(scenarios)} scenario(s) passed on {inst.tenant}")
@@ -1411,20 +1419,21 @@ def state_cmd(
     Related: `run` (moves balances) · `diff` (seed drift) · `survey extract`.
     """
     files = _require_data_paths(ctx, files)
-    inst = _resolve_instance(ctx)
     paths = state.expand_view_files(files)
     views = [state.load_view(path) for path in paths]
     dest = out_dir if out_dir is not None else default_out("state")
     if dry_run:
+        # gh #63: offline - no instance resolution, no HTTP
         code = state.run_views(None, views, out_dir=dest, mode="dry")
-    else:
-        mode = "assert" if assert_unchanged else "diff" if do_diff else "write"
-        with AcumaticaClient(inst) as client:
-            code = state.run_views(client, views, out_dir=dest, mode=mode)
+        if code:
+            raise SystemExit(code)
+        return
+    inst = _resolve_instance(ctx)
+    mode = "assert" if assert_unchanged else "diff" if do_diff else "write"
+    with AcumaticaClient(inst) as client:
+        code = state.run_views(client, views, out_dir=dest, mode=mode)
     if code:
         raise SystemExit(code)
-    if dry_run:
-        return
     if assert_unchanged:
         output.success(f"{len(views)} view(s) unchanged on {inst.tenant}")
     elif do_diff:
