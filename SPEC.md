@@ -117,6 +117,7 @@ V61: stock-vs-custom — `acu-config/` holds stock SEED_DIRS + views only; custo
 V62: remote-command-safety — value interpolated into remote PowerShell over SSH ! arrive byte-for-byte; identity strings (`--login`, `ACU_USER`) ! match `^[A-Za-z0-9_-]+$` before any SSH, bad → exit 1 (never click exit 2 — 2 = drift); secrets (`ACU_PASSWORD`) via stdin only — never local `ssh` argv, never remote cmd text, never PS double-quoted string; other free string single-quoted `'`→`''` (closes §B.39) (gh #48)
 V63: invoke-poll-deadline — `invoke` 202 poll ! bounded: deadline from first POST, default 600s; expiry → RuntimeError naming entity + action + elapsed; override via action file `timeout:` / run action step `timeout:`; never unbounded loop (gh #50)
 V64: idempotent-retry — client blip retry ! idempotent requests only: GET (incl 202 status poll) + seed `apply` keyed PUT + inquiry PUT (`run` present/expect, `state`); bounded `retry_tries` 3 total, exp backoff (1s base, x2) + ≤50% jitter, each retry `output.info` stderr line; retry on ConnectError/ReadTimeout/RemoteProtocolError + 502/503/504; login retries ConnectError + 502/503/504 only (timed-out login may hold session, V6); action POST (`invoke`), `run` `put` steps, CustomizationApi POSTs never auto-retry; last failure surfaces unchanged (V45 classes) (gh #52)
+V65: generated-load-idempotence — scenario file ≥1 `---` YAML doc, each doc own scenario + own `once`/`present` gate; per-doc `present.get` `{entity, filter}` row-exists probe on external ref (`$top=1`) ⇒ re-run of a generated load creates 0 documents; report label `<path>#<n>` multi-doc (1-based, empty doc skipped, numbering kept), `<path>` one-doc; not-run tail of one file folds to one range line, JSON keeps every label (gh #73)
 
 ## §T TASKS
 
@@ -190,6 +191,12 @@ T276|x|`client.invoke(..., timeout=600.0)`; monotonic deadline across 202 poll; 
 T277|x|`timeout:` ? on ActionFile + run Step (action op only, else validation error); threaded to invoke; AssignUser keeps default|V63,I.data,I.cmd
 T278|x|offline tests: always-202 MockTransport, poll_interval 0, small timeout → RuntimeError names entity+action+elapsed; action-file + step timeout pass-through; step timeout w/o action rejected|V13,V63,T276,T277
 T279|x|CHANGELOG Unreleased (gh #50); suite green|V19,V63,T276,T277,T278
+T280|x|`load_scenarios` YAML `load_all` (CSafeLoader when built) → Scenario per doc w/ `doc` index + `label`; `load_scenario` one-doc wrapper; `run` cmd loads every doc|V65,I.data,I.cmd
+T281|x|`PresentSpec` exactly one of `inquire` | `get` {entity, filter, endpoint ?}; get forbids when/parameters/match; `_present` list GET `$filter` + `$top=1` → row present; dry-run annotate|V4,V65,I.data
+T282|x|StepError/skip/banner lines use label; `_not_run_lines` folds multi-doc tail `<path>#<a>-#<b> (N documents)`; JSON scenario `doc` ?, `not_run` labels|V65,I.cmd
+T283|x|offline tests: doc split + labels + empty-doc numbering + error names `#n`; present kinds validate; get-present skip + `$top=1`; 5K load then re-run 0 PUT; CLI not-run fold + JSON|V13,V65,T280,T281,T282
+T284|x|README + CHANGELOG Unreleased (gh #73); suite green|V19,V65,T280,T283
+T285|.|live: ACUCLI rebuilt, released acu runs 5K-doc generated scenario; re-run creates 0 (depends #71)|V65,T283
 
 ## §B BUGS
 
