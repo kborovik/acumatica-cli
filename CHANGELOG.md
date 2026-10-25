@@ -2,6 +2,18 @@
 
 ## Unreleased
 
+### Added
+
+- **Generated scenario loads (gh #73):** a scenario file may hold many
+  scenarios split by `---`, one YAML document per ERP document, so a
+  generator can write thousands of documents per file (or a directory of
+  files). `once: true` now takes `present: {get: {entity, filter}}`: a
+  list GET on the document's external reference that skips the document
+  when the tenant already has it, so a re-run creates nothing twice.
+  Report lines name `<file>#<n>`; a stopped run folds the rest of a file
+  into one `not run: <file>#<a>-#<b> (N documents)` line, and `--output
+  json` scenario entries carry `doc`.
+
 ## [v0.36.0] - 2026-10-24
 
 ### Added

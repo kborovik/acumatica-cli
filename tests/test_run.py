@@ -6,6 +6,7 @@ the real client (wrap, invoke poll, _checked).
 """
 
 import json
+import re
 from datetime import date
 from pathlib import Path
 
@@ -739,3 +740,148 @@ def test_package_seed_capital_cold_after_month_change(
     assert all(p == "092026" for p in periods)
     assert len(periods) >= 3
     assert "+ JournalTransaction [GL, 000099].Status = 'Posted'" in out
+
+
+# --- gh #73 generated loads: multi-document files, get-present guard --------
+
+
+def _generated(count: int) -> str:
+    """A generated load: one YAML document per sales order, guarded on ref."""
+    return "".join(
+        f"""\
+---
+scenario: so-LEGACY-{n}
+once: true
+present:
+  get: {{ entity: SalesOrder, filter: "CustomerOrder eq 'LEGACY-{n}'" }}
+steps:
+  - id: order
+    put: SalesOrder
+    record: {{ OrderType: SO, CustomerID: C1, CustomerOrder: LEGACY-{n} }}
+"""
+        for n in range(1, count + 1)
+    )
+
+
+class Tenant:
+    """Fake holding SalesOrders by CustomerOrder: list GET filter + PUT."""
+
+    _REF = re.compile(r"CustomerOrder eq '([^']+)'")
+
+    def __init__(self) -> None:
+        self.refs: set[str] = set()
+        self.puts = 0
+        self.gets: list[httpx.Request] = []
+
+    def __call__(self, request: httpx.Request) -> httpx.Response:
+        if request.url.path.endswith("/SalesOrder") and request.method == "GET":
+            self.gets.append(request)
+            m = self._REF.fullmatch(request.url.params["$filter"])
+            assert m is not None
+            hit = m.group(1) in self.refs
+            return httpx.Response(
+                200, json=[wrap({"CustomerOrder": m.group(1)})] if hit else []
+            )
+        if request.url.path.endswith("/SalesOrder") and request.method == "PUT":
+            self.puts += 1
+            self.refs.add(json.loads(request.content)["CustomerOrder"]["value"])
+            return httpx.Response(200, json=wrap({"OrderNbr": f"{self.puts:06d}"}))
+        return httpx.Response(200, json={})
+
+
+def test_load_scenarios_splits_documents_and_labels_them(tmp_path: Path) -> None:
+    path = _write(tmp_path, _generated(3))
+    scenarios = run.load_scenarios(path)
+    assert [s.scenario for s in scenarios] == [
+        "so-LEGACY-1",
+        "so-LEGACY-2",
+        "so-LEGACY-3",
+    ]
+    assert [s.label for s in scenarios] == [f"{path}#{n}" for n in (1, 2, 3)]
+    assert scenarios[0].present is not None
+    assert scenarios[0].present.get is not None
+
+
+def test_load_scenarios_one_document_keeps_plain_path_label(tmp_path: Path) -> None:
+    path = _write(tmp_path, SCENARIO)
+    (scenario,) = run.load_scenarios(path)
+    assert scenario.doc is None
+    assert scenario.label == str(path)
+
+
+def test_load_scenarios_skips_empty_documents_keeps_numbering(tmp_path: Path) -> None:
+    path = _write(tmp_path, "---\n" + _generated(2).replace("---\n", "---\n---\n", 1))
+    assert [s.doc for s in run.load_scenarios(path)] == [3, 4]
+
+
+def test_load_scenarios_error_names_the_document(tmp_path: Path) -> None:
+    text = _generated(2) + "---\nscenario: bad\nonce: true\nsteps: []\n"
+    with pytest.raises(SystemExit, match=r"scenario\.yaml#3: .*requires present"):
+        run.load_scenarios(_write(tmp_path, text))
+
+
+def test_load_scenario_rejects_multi_document_file(tmp_path: Path) -> None:
+    with pytest.raises(SystemExit, match="expected one scenario, found 2"):
+        run.load_scenario(_write(tmp_path, _generated(2)))
+
+
+@pytest.mark.parametrize(
+    ("present", "error"),
+    [
+        (
+            "{ inquire: X, get: { entity: SalesOrder, filter: a }, when: {} }",
+            "exactly one of inquire, get",
+        ),
+        ("{ when: { A: { eq: 1 } } }", "exactly one of inquire, get"),
+        (
+            "{ get: { entity: SalesOrder, filter: a }, when: { A: { eq: 1 } } }",
+            "get takes entity, filter, endpoint only",
+        ),
+        ("{ inquire: X }", "when must name at least one field"),
+    ],
+)
+def test_load_present_kinds_validate(tmp_path: Path, present: str, error: str) -> None:
+    text = f"scenario: x\nonce: true\npresent: {present}\nsteps: []\n"
+    with pytest.raises(SystemExit, match=error):
+        run.load_scenario(_write(tmp_path, text))
+
+
+def test_get_present_skips_existing_document(
+    tmp_path: Path, instance: Instance, capsys: pytest.CaptureFixture[str]
+) -> None:
+    tenant = Tenant()
+    tenant.refs.add("LEGACY-1")
+    scenario = run.load_scenarios(_write(tmp_path, _generated(2)))[0]
+    client = AcumaticaClient(instance, transport=httpx.MockTransport(tenant))
+    assert run.run(client, scenario) is run.Outcome.SKIPPED
+    assert tenant.puts == 0
+    probe = tenant.gets[0].url.params
+    assert (probe["$filter"], probe["$top"]) == ("CustomerOrder eq 'LEGACY-1'", "1")
+    assert f"skip {scenario.label} (once: already present)" in capsys.readouterr().out
+
+
+def test_get_present_dry_run_annotates(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    scenario = run.load_scenarios(_write(tmp_path, _generated(1)))[0]
+    run.run(None, scenario, dry_run=True)
+    out = capsys.readouterr().out
+    assert "once: present get SalesOrder filter \"CustomerOrder eq 'LEGACY-1'\"" in out
+
+
+def test_generated_5k_load_rerun_creates_nothing(
+    tmp_path: Path, instance: Instance, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """Gh #73 done-when offline: 5K documents load; the re-run skips all."""
+    scenarios = run.load_scenarios(_write(tmp_path, _generated(5000)))
+    tenant = Tenant()
+    client = AcumaticaClient(instance, transport=httpx.MockTransport(tenant))
+
+    first = [run.run(client, s) for s in scenarios]
+    assert first.count(run.Outcome.PASSED) == 5000
+    assert tenant.puts == 5000
+
+    second = [run.run(client, s) for s in scenarios]
+    assert second.count(run.Outcome.SKIPPED) == 5000
+    assert tenant.puts == 5000  # nothing created twice
+    capsys.readouterr()

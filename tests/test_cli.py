@@ -2595,6 +2595,57 @@ def test_run_step_422_names_file_and_step_and_lists_not_run(
     assert "x run: 0 passed, 1 failed, 0 skipped, 1 not run on T1" in result.stderr
 
 
+def test_run_multi_document_failure_folds_not_run_range(
+    wired: Instance, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Gh #73: failure at doc 2 of 5 -> x <file>#2; rest folds to one line."""
+    load = tmp_path / "10-orders.yaml"
+    load.write_text(
+        "".join(
+            f"---\nscenario: so-{n}\nsteps:\n"
+            "  - id: order\n    put: SalesOrder\n    record: {OrderType: SO}\n"
+            for n in range(1, 6)
+        )
+    )
+    later = tmp_path / "20-after.yaml"
+    later.write_text("scenario: after\nsteps: []\n")
+    puts: list[str] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        if request.method == "PUT":
+            puts.append(request.url.path)
+            if len(puts) == 2:
+                return httpx.Response(422, json={"message": "bad order"})
+        if request.url.path.endswith("/Frames/Login.aspx"):
+            return httpx.Response(
+                200, text='<input id="txtSingleCompany" value="T1" />'
+            )
+        return httpx.Response(204 if "/auth/" in request.url.path else 200, json={})
+
+    monkeypatch.setattr(
+        cli,
+        "AcumaticaClient",
+        lambda inst, **kw: RealClient(inst, transport=httpx.MockTransport(handler)),
+    )
+    result = CliRunner().invoke(cli.cli, ["run", str(tmp_path)])
+    puts.clear()
+    json_result = CliRunner().invoke(
+        cli.cli, ["--output", "json", "run", str(tmp_path)]
+    )
+
+    assert result.exit_code == 1
+    assert f"x {load}#2 [order]: PUT " in result.stderr
+    assert f"x not run: {load}#3-#5 (3 documents)" in result.stderr
+    assert f"x not run: {later}" in result.stderr
+    assert "x run: 1 passed, 1 failed, 0 skipped, 4 not run on T1" in result.stderr
+    doc = json.loads(json_result.stdout)
+    assert [(s["doc"], s["outcome"]) for s in doc["scenarios"]] == [
+        (1, "passed"),
+        (2, "failed"),
+    ]
+    assert doc["not_run"] == [f"{load}#3", f"{load}#4", f"{load}#5", str(later)]
+
+
 def test_apply_plan_prints_summary_and_writes_nothing(
     wired: Instance, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
