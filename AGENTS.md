@@ -63,3 +63,25 @@ This seed has no customization YAML under `acu-config/`. QMS apply stays in the 
 
 - GitOps seed: `~/github/acu-gitops-qms` (`kborovik/acu-gitops-qms`)
 - QMS customization: `kborovik/acu-custom-qms`
+
+## Work tracking: Plane
+
+Work items live in Plane project **Acumatica CLI** (key `ACLI`), synced two-way
+with this repo's issues (kborovik/acumatica-cli). Plane is where work is created,
+assigned and moved; GitHub holds the code and a synced copy of each item.
+
+- PR title starts with the work item key in brackets: `[ACLI-12] Short title`.
+  This links the PR and moves the item (open: In Progress, merged: Done). A plain
+  `ACLI-12` only links it; `#N` alone does not link at all.
+- PR body: `Closes #N` for the item's synced GitHub issue, so the merge closes it.
+- Commits mention `ACLI-N`.
+- Create new work in Plane with the `github` label, which creates the GitHub
+  issue; wait for its link (up to a minute) before editing the item. Do not open
+  issues on GitHub; if one appears, add the `plane` label to import it.
+- Change state in Plane. A GitHub reopen does not sync back.
+- Through the Plane MCP, set labels with `workitem update` and the full `labels`
+  list; `manage_label` does not trigger the sync.
+- Related Plane projects: Acumatica Setup (`CORR`, kborovik/acumatica-corriganoil),
+  Windmill Hub (`HUB`, kborovik/acumatica-integration-hub), Acumatica CLI
+  (`ACLI`, kborovik/acumatica-cli), Kronos Infra (`INFRA`, kborovik/kronos-infra).
+  Cross-project dependencies are Plane `blocked_by` relations.
