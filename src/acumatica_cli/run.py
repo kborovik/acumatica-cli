@@ -45,8 +45,12 @@ require hand-editing Period pins. Unknown ``${…}`` is a hard error.
 after the last, comparing the difference - the scenario re-runs safely
 on a warm tenant (document numbers differ, the deltas hold). `get`
 assertions are absolute (statuses of documents created in this run).
-`once: true` + authored `present` inquire-absolute gate skips steps and
-expects when the probe already holds (capital non-stack; V4/gh #19).
+`once: true` + authored `present` gate skips steps and expects when the
+probe already holds: inquire-absolute (capital non-stack; V4/gh #19) or
+`get` filter on an external reference (one migrated document; gh #73).
+A file may hold many scenarios as YAML documents split by `---` - a
+generated load of thousands of documents, each guarded on its own, so a
+re-run skips what already exists and creates nothing twice.
 Exit 0 = every expectation holds or once-skip; 1 = any step error or
 expectation miss (2 stays diff's drift code). A step error stops the
 run: later scenarios are listed as not run (gh #58).
@@ -221,33 +225,73 @@ class WhenPred(Model):
         return self
 
 
-class PresentSpec(Model):
-    """Inquire-absolute presence gate for ``once: true`` (V4/gh #19).
+class PresentGet(Model):
+    """List-GET presence probe: any row matching ``filter`` (gh #73).
 
-    Author-owned inquiry + optional row ``match`` + per-field ``when``
-    (eq|gte). Probe true → skip steps and expects; false → run cold.
-    ``parameters`` (and other ``${var}`` sites) interpolate built-ins such
-    as ``${current_period}`` (V43); capture ``${var}`` is not available
-    pre-steps.
+    The generated-load guard: filter on the document's external
+    reference (e.g. ``CustomerOrder eq 'LEGACY-1042'``) - present when
+    the tenant already holds it.
     """
 
-    inquire: str
+    entity: str
+    filter: str
+    endpoint: str | None = None
+
+
+class PresentSpec(Model):
+    """Presence gate for ``once: true``: exactly one of inquire, get.
+
+    ``inquire`` (V4/gh #19): author-owned inquiry + optional row ``match``
+    + per-field ``when`` (eq|gte), absolute. ``get`` (gh #73): list GET
+    by ``filter``, present when a row matches. Probe true → skip steps
+    and expects; false → run cold. ``parameters`` / ``filter`` (and other
+    ``${var}`` sites) interpolate built-ins such as ``${current_period}``
+    (V43); capture ``${var}`` is not available pre-steps.
+    """
+
+    inquire: str | None = None
+    get: PresentGet | None = None
     parameters: dict[str, Any] | None = None
     match: dict[str, Any] | None = None
-    when: dict[str, WhenPred]
+    when: dict[str, WhenPred] | None = None
     endpoint: str | None = None
 
     @model_validator(mode="after")
-    def _when_nonempty(self) -> PresentSpec:
-        if not self.when:
+    def _one_kind(self) -> PresentSpec:
+        if (self.inquire is None) == (self.get is None):
+            raise ValueError("present: exactly one of inquire, get")
+        if self.inquire is not None and not self.when:
             raise ValueError("present: when must name at least one field")
+        if self.get is not None and (
+            self.when is not None
+            or self.parameters is not None
+            or self.match is not None
+            or self.endpoint is not None
+        ):
+            raise ValueError(
+                "present: get takes entity, filter, endpoint only "
+                "(when, parameters, match ride inquire)"
+            )
         return self
+
+    def label(self) -> str:
+        """Human-readable probe address for dry-run lines."""
+        if self.get is not None:
+            return f"get {self.get.entity} filter {self.get.filter!r}"
+        assert self.when is not None
+        when = ", ".join(
+            f"{field}={'gte ' + str(p.gte) if p.gte is not None else 'eq ' + str(p.eq)}"
+            for field, p in self.when.items()
+        )
+        match = f" match {self.match}" if self.match else ""
+        return f"{self.inquire}{match} when {when}"
 
 
 class Scenario(Model):
     """A parsed scenario YAML: named steps plus expectations."""
 
     path: Path
+    doc: int | None = None  # 1-based YAML document index; None = one-doc file
     scenario: str
     description: str | None = None
     steps: list[Step] = Field(default_factory=list)  # empty ok — stub (V28 30-build)
@@ -272,17 +316,53 @@ class Scenario(Model):
             raise ValueError("present requires once: true")
         return self
 
+    @property
+    def label(self) -> str:
+        """Report address: the path, plus ``#n`` in a multi-document file."""
+        return str(self.path) if self.doc is None else f"{self.path}#{self.doc}"
+
+
+# libyaml when built in: a generated load is thousands of documents (gh #73)
+_Loader = getattr(yaml, "CSafeLoader", yaml.SafeLoader)
+
+
+def load_scenarios(path: Path) -> list[Scenario]:
+    """Parse and validate every scenario in a YAML file (``---`` split).
+
+    A one-document file yields one scenario labelled by its path; a
+    multi-document file labels each ``<path>#<n>`` (1-based). Empty
+    documents (a stray ``---``) are skipped; numbering counts them so
+    ``#n`` still points at the n-th document in the file.
+    """
+    with open(path) as f:
+        docs = list(yaml.load_all(f, Loader=_Loader))  # libyaml safe loader
+    multi = len(docs) > 1
+    scenarios: list[Scenario] = []
+    for n, data in enumerate(docs, start=1):
+        if data is None and multi:
+            continue
+        where = f"{path}#{n}" if multi else str(path)
+        if not isinstance(data, dict):
+            raise SystemExit(f"{where}: expected a mapping at the top level")
+        try:
+            scenarios.append(
+                Scenario.model_validate(
+                    {"path": path, "doc": n if multi else None, **data}
+                )
+            )
+        except ValidationError as exc:
+            raise SystemExit(f"{where}: {validation_summary(exc)}") from exc
+    if not scenarios:
+        raise SystemExit(f"{path}: expected a mapping at the top level")
+    return scenarios
+
 
 def load_scenario(path: Path) -> Scenario:
-    """Parse and validate one scenario YAML file."""
-    with open(path) as f:
-        data = yaml.safe_load(f)
-    if not isinstance(data, dict):
-        raise SystemExit(f"{path}: expected a mapping at the top level")
-    try:
-        return Scenario.model_validate({"path": path, **data})
-    except ValidationError as exc:
-        raise SystemExit(f"{path}: {validation_summary(exc)}") from exc
+    """Parse and validate a one-scenario YAML file."""
+    scenarios = load_scenarios(path)
+    if len(scenarios) != 1:
+        raise SystemExit(f"{path}: expected one scenario, found {len(scenarios)}")
+    return scenarios[0]
 
 
 def _subst(value: Any, variables: dict[str, Any]) -> Any:
@@ -384,7 +464,22 @@ def _inquire(
 def _present(
     client: AcumaticaClient, present: PresentSpec, variables: dict[str, Any]
 ) -> bool:
-    """True when every present.when predicate holds (absolute, not delta)."""
+    """True when the probe holds: a get row matches, or every when holds.
+
+    ``get`` asks for ``$top=1`` - one row proves the document exists. The
+    inquire form is absolute, not delta.
+    """
+    if present.get is not None:
+        rows = client.get_list(
+            present.get.entity,
+            params={
+                "$filter": str(_subst(present.get.filter, variables)),
+                "$top": "1",
+            },
+            endpoint=present.get.endpoint,
+        )
+        return bool(rows)
+    assert present.when is not None
     totals = _inquiry_totals(client, present, list(present.when), variables)
     for field, pred in present.when.items():
         got = totals[field]
@@ -426,15 +521,7 @@ def _dry_run(scenario: Scenario) -> None:
     """List steps and expectations without any HTTP; annotate once gates."""
     if scenario.once:
         assert scenario.present is not None
-        when = ", ".join(
-            f"{field}={'gte ' + str(p.gte) if p.gte is not None else 'eq ' + str(p.eq)}"
-            for field, p in scenario.present.when.items()
-        )
-        output.data(
-            f"  once: present {scenario.present.inquire}"
-            + (f" match {scenario.present.match}" if scenario.present.match else "")
-            + f" when {when}"
-        )
+        output.data(f"  once: present {scenario.present.label()}")
     if not scenario.steps:
         output.data("  (no steps)")
     for step in scenario.steps:
@@ -589,9 +676,9 @@ class StepError(RuntimeError):
     other, so later ones would fail on missing documents.
     """
 
-    def __init__(self, path: Path, step_id: str, message: str) -> None:
-        super().__init__(f"{path} [{step_id}]: {message}")
-        self.path = path
+    def __init__(self, label: str, step_id: str, message: str) -> None:
+        super().__init__(f"{label} [{step_id}]: {message}")
+        self.label = label
         self.step_id = step_id
 
 
@@ -611,7 +698,7 @@ def _guard[**P, T](
     try:
         return fn(*args, **kwargs)
     except _STEP_FAILURES as err:
-        raise StepError(scenario.path, step_id, format_failure(err)) from err
+        raise StepError(scenario.label, step_id, format_failure(err)) from err
 
 
 def run(
@@ -632,16 +719,17 @@ def run(
     params, once.present params). Capture variables layer on top after
     each step.
 
-    ``once: true`` (V4/gh #19): inquire-absolute ``present`` probe first.
-    Probe true → stdout ``skip <path> (once: already present)``, no step
-    HTTP, no expects, exit 0. Probe false → steps + expects as usual.
+    ``once: true`` (V4/gh #19, gh #73): ``present`` probe first (inquire
+    absolute or get filter). Probe true → stdout ``skip <label> (once:
+    already present)``, no step HTTP, no expects, exit 0. Probe false →
+    steps + expects as usual.
 
     A step failure raises StepError naming the file and step id (gh #58);
     a failing once probe or expect probe names ``once`` / ``expect``.
     Expectation misses append their text to ``misses`` (gh #57 JSON).
     """
     missed: list[str] = [] if misses is None else misses
-    output.data(f"{scenario.path} -> {scenario.scenario}")
+    output.data(f"{scenario.label} -> {scenario.scenario}")
     if dry_run:
         _dry_run(scenario)
         return Outcome.PASSED
@@ -651,7 +739,7 @@ def run(
         present = scenario.present
         assert present is not None
         if _guard(scenario, "once", _present, client, present, variables):
-            output.data(f"skip {scenario.path} (once: already present)")
+            output.data(f"skip {scenario.label} (once: already present)")
             return Outcome.SKIPPED
     before = [
         _guard(scenario, "expect", _inquire, client, expect, variables)

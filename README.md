@@ -119,6 +119,20 @@ A dir with SEED_DIRS children (`bootstrap|baseline|setup|master`) expands those 
 `--out` defaults: `state` → `state/`; `survey extract` → `acu-config/` (SEED_DIRS into that root); `survey inventory` → `inventory/`; `survey reconcile` → `findings/`; `schema` → `schemas/`.
 
 Scenario YAML may use `${current_period}` (host-local `MMyyyy`) on steps, expect params, and `once.present` params.
+
+A scenario file may hold many scenarios split by `---` (a generated load: one YAML document per ERP document, reported as `<file>#<n>`). Guard each with its external reference so a re-run creates nothing twice:
+
+```yaml
+---
+scenario: so-LEGACY-1042
+once: true
+present:
+  get: { entity: SalesOrder, filter: "CustomerOrder eq 'LEGACY-1042'" }
+steps:
+  - id: order
+    put: SalesOrder
+    record: { OrderType: SO, CustomerID: C0042, CustomerOrder: LEGACY-1042 }
+```
 `acu-config/views` and `state` keep Period pinned.
 
 `survey extract` writes SEED_DIRS into `--out` (default `acu-config/`).
@@ -183,7 +197,7 @@ Exit codes do not change (`diff` still exits 2 on drift), and other commands ign
 - `source` / `live`: set only for `changed`.
 
 - `apply`: `{command, tenant, mode (all|plan|changed|dry_run), ok, failed, counts, errors, stopped, not_applied, files: [{file, entity, ok, errors}]}`; `counts` keys `create`, `update`, `unchanged`, `invoke`, `put`.
-- `run`: `{command, tenant, counts: {passed, failed, skipped, not_run}, scenarios: [{file, outcome, misses, error?}], not_run}`; `misses` = failed expectation lines.
+- `run`: `{command, tenant, counts: {passed, failed, skipped, not_run}, scenarios: [{file, doc?, outcome, misses, error?}], not_run}`; `doc` = 1-based YAML document index in a multi-document file; `not_run` lists `<file>` or `<file>#<n>`; `misses` = failed expectation lines.
 - `state`: `{command, tenant, mode (write|diff|assert), exit, changed, views: [{view, file, rows, status (wrote|changed|unchanged), differences}]}`.
 
 ## The data repo

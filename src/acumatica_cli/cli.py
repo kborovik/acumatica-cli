@@ -83,6 +83,7 @@ See package README for seed YAML shape.
 """
 
 import functools
+import itertools
 import json
 import os
 from collections import Counter
@@ -1213,6 +1214,22 @@ def _diff_file_doc(
     }
 
 
+def _not_run_lines(scenarios: list[run.Scenario]) -> list[str]:
+    """One line per not-run file; a multi-document tail folds to a range.
+
+    A generated load stopped at document 12 of 1000 lists
+    ``<file>#13-#1000 (988 documents)``, not 988 lines (gh #73).
+    """
+    lines: list[str] = []
+    for _, group in itertools.groupby(scenarios, key=lambda s: s.path):
+        docs = list(group)
+        if len(docs) == 1:
+            lines.append(docs[0].label)
+        else:
+            lines.append(f"{docs[0].label}-#{docs[-1].doc} ({len(docs)} documents)")
+    return lines
+
+
 @cli.command("run")
 @click.argument(
     "files", nargs=-1, required=False, type=click.Path(exists=True, path_type=Path)
@@ -1228,6 +1245,11 @@ def run_cmd(ctx: click.Context, files: tuple[Path, ...], dry_run: bool) -> None:
     before the first step and compare after the last, so re-runs are safe
     on a warm tenant. Built-in `${current_period}` → host-local MMyyyy on
     steps/expect/once (state views stay period-pinned separately).
+
+    A file may hold many scenarios split by `---` (a generated load, one
+    YAML document per ERP document, reported as `<file>#<n>`). Guard each
+    with `once: true` + `present: {get: {entity, filter}}` on its external
+    reference: a re-run skips documents already on the tenant.
 
     A step error prints `x <file> [<step id>]: <error>` and stops: later
     scenarios are listed as not run (they build on earlier ones). An
@@ -1251,7 +1273,7 @@ def run_cmd(ctx: click.Context, files: tuple[Path, ...], dry_run: bool) -> None:
     """
     files = _require_data_paths(ctx, files)
     paths = collapse_same_basename(expand_files(files))
-    scenarios = [run.load_scenario(path) for path in paths]
+    scenarios = [scenario for path in paths for scenario in run.load_scenarios(path)]
     if dry_run:
         # gh #63: offline - no instance resolution, no HTTP
         for scenario in scenarios:
@@ -1261,12 +1283,14 @@ def run_cmd(ctx: click.Context, files: tuple[Path, ...], dry_run: bool) -> None:
     as_json = _json_output(ctx)
     inst = _resolve_instance(ctx)
     counts = dict.fromkeys(run.Outcome, 0)
-    not_run: list[Path] = []
+    not_run: list[run.Scenario] = []
     report: list[dict[str, object]] = []
     with AcumaticaClient(inst) as client:
         for i, scenario in enumerate(scenarios):
             misses: list[str] = []
             entry: dict[str, object] = {"file": str(scenario.path), "misses": misses}
+            if scenario.doc is not None:
+                entry["doc"] = scenario.doc
             report.append(entry)
             try:
                 entry["outcome"] = outcome = run.run(client, scenario, misses=misses)
@@ -1276,10 +1300,10 @@ def run_cmd(ctx: click.Context, files: tuple[Path, ...], dry_run: bool) -> None:
                 output.error(str(err))
                 entry |= {"outcome": run.Outcome.FAILED, "error": str(err)}
                 counts[run.Outcome.FAILED] += 1
-                not_run = [later.path for later in scenarios[i + 1 :]]
+                not_run = scenarios[i + 1 :]
                 break
-    for path in not_run:
-        output.error(f"not run: {path}")
+    for line in _not_run_lines(not_run):
+        output.error(f"not run: {line}")
     if as_json:
         output.document(
             {
@@ -1288,7 +1312,7 @@ def run_cmd(ctx: click.Context, files: tuple[Path, ...], dry_run: bool) -> None:
                 "counts": {str(k): v for k, v in counts.items()}
                 | {"not_run": len(not_run)},
                 "scenarios": report,
-                "not_run": [str(p) for p in not_run],
+                "not_run": [s.label for s in not_run],
             }
         )
     summary = (
