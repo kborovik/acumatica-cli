@@ -10,6 +10,7 @@ import subprocess
 import sys
 import threading
 import time
+from collections import Counter
 from collections.abc import Callable
 from pathlib import Path
 from types import TracebackType
@@ -2335,6 +2336,107 @@ def test_checkpoint_malformed_fails_before_login(
     assert isinstance(result.exception, RuntimeError)
     assert "ckpt.jsonl:1: malformed checkpoint line" in str(result.exception)
     assert log == []
+
+
+def _bulk_handler(
+    log: list[str], done: Counter[str], fail_at: int | None = None
+) -> Callable[[httpx.Request], httpx.Response]:
+    """Thread-safe mock T1: counts each record's successful PUT by UOM key.
+
+    ``fail_at`` = from the k-th PUT on, ConnectError (host gone: a killed load
+    past the gh #52 blip retry, V45 stop).
+    """
+    lock = threading.Lock()
+    puts = itertools.count(1)
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        path = request.url.path
+        with lock:
+            if path.endswith("/auth/login"):
+                log.append("login")
+                return httpx.Response(204)
+            if path.endswith("/auth/logout"):
+                log.append("logout")
+                return httpx.Response(204)
+        if path.endswith("/Frames/Login.aspx"):
+            return httpx.Response(
+                200, text='<input id="txtSingleCompany" value="T1" />'
+            )
+        if request.method == "PUT":
+            with lock:
+                if fail_at is not None and next(puts) >= fail_at:
+                    raise httpx.ConnectError("killed", request=request)
+                done[json.loads(request.content)["UOM"]["value"]] += 1
+        return httpx.Response(200, json={})
+
+    return handler
+
+
+def _bulk_seed(path: Path, count: int) -> None:
+    rows = "".join(f"  - UOM: U{n:05d}\n" for n in range(count))
+    path.write_text(f"entity: UnitsOfMeasure\nkey: UOM\nrecords:\n{rows}")
+
+
+def test_bulk_apply_10k_records_pool_of_8_puts_each_once(
+    wired: Instance, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """V66/gh #71: 10K records over 8 sessions -> each PUT once, 8 in / 8 out."""
+    path = tmp_path / "bulk.yaml"
+    _bulk_seed(path, 10_000)
+    log: list[str] = []
+    done: Counter[str] = Counter()
+    handler = _bulk_handler(log, done)
+    monkeypatch.setattr(
+        cli,
+        "AcumaticaClient",
+        lambda inst, **kw: RealClient(inst, transport=httpx.MockTransport(handler)),
+    )
+    result = CliRunner().invoke(cli.cli, ["apply", "--concurrency", "8", str(path)])
+
+    assert result.exit_code == 0, result.output
+    assert len(done) == 10_000
+    assert set(done.values()) == {1}
+    assert log == ["login"] * 8 + ["logout"] * 8
+
+
+@pytest.mark.parametrize("concurrency", ["1", "4"])
+def test_killed_load_resumes_from_checkpoint_without_duplicates(
+    wired: Instance,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    concurrency: str,
+) -> None:
+    """V67/V45: load dies mid-file -> exit 1 + not-applied; rerun finishes, 0 dup."""
+    path = tmp_path / "bulk.yaml"
+    _bulk_seed(path, 200)
+    ckpt = tmp_path / "ckpt.jsonl"
+    args = ["apply", "--concurrency", concurrency, "--checkpoint", str(ckpt)]
+    log: list[str] = []
+    done: Counter[str] = Counter()
+    handlers = iter([_bulk_handler(log, done, fail_at=120), _bulk_handler(log, done)])
+    handler = next(handlers)
+    monkeypatch.setattr(
+        cli,
+        "AcumaticaClient",
+        lambda inst, **kw: RealClient(
+            inst, transport=httpx.MockTransport(lambda r: handler(r))
+        ),
+    )
+    killed = CliRunner().invoke(cli.cli, [*args, str(path)])
+
+    assert killed.exit_code == 1
+    assert f"not applied: {path}" in killed.output
+    first = sum(done.values())
+    assert 0 < first < 200
+    assert len(ckpt.read_text().splitlines()) == first
+
+    handler = next(handlers)
+    resumed = CliRunner().invoke(cli.cli, ["--output", "json", *args, str(path)])
+
+    assert resumed.exit_code == 0, resumed.output
+    assert len(done) == 200
+    assert set(done.values()) == {1}
+    assert json.loads(resumed.stdout)["checkpoint"] == first
 
 
 def test_apply_422_survives_dead_logout(
