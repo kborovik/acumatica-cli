@@ -1,0 +1,27 @@
+# SalesUnit/PurchaseUnit equal BaseUnit are not returned (B11 class):
+# omitted so diff stays clean.
+entity: NonStockItem
+key: InventoryID
+records:
+- InventoryID: SVC-FREIGHT
+  Description: Freight charge
+  ItemClass: SERVICES
+  ItemType: Service
+  ItemStatus: Active
+  PostingClass: SERVICES
+  TaxCategory: TAXABLE
+  BaseUnit: EA
+  DefaultPrice: 50.00
+  RequireReceipt: false
+  RequireShipment: false
+- InventoryID: SVC-QCTEST
+  Description: QC lab testing service
+  ItemClass: SERVICES
+  ItemType: Service
+  ItemStatus: Active
+  PostingClass: SERVICES
+  TaxCategory: TAXABLE
+  BaseUnit: EA
+  DefaultPrice: 120.00
+  RequireReceipt: false
+  RequireShipment: false

@@ -1,0 +1,9 @@
+entity: TaxReportingSettings
+key: TaxAgency
+detail_keys:
+  ReportingGroups: Name
+records:
+- TaxAgency: STATETAX
+  ReportingGroups:
+  - Name: SALES
+    GroupType: Output

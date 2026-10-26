@@ -1,0 +1,15 @@
+entity: Tax
+key: TaxID
+detail_keys:
+  TaxSchedule: StartDate
+records:
+- TaxID: STATE
+  Description: State sales tax 7%
+  TaxType: Sales
+  TaxAgency: STATETAX
+  TaxPayableAccount: '24000'
+  TaxPayableSubaccount: '000000'
+  TaxSchedule:
+  - StartDate: '2020-01-01'
+    TaxRate: 7
+    ReportingGroup: '1'

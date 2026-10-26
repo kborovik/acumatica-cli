@@ -1,0 +1,25 @@
+entity: NonStockItem
+key: InventoryID
+records:
+- InventoryID: SVC-FREIGHT
+  Description: Freight charge
+  ItemClass: SERVICES
+  ItemType: Service
+  ItemStatus: Active
+  PostingClass: SERVICES
+  TaxCategory: TAXABLE
+  BaseUnit: EA
+  DefaultPrice: 50.00
+  RequireReceipt: false
+  RequireShipment: false
+- InventoryID: SVC-INSTALL
+  Description: Gateway installation service
+  ItemClass: SERVICES
+  ItemType: Service
+  ItemStatus: Active
+  PostingClass: SERVICES
+  TaxCategory: TAXABLE
+  BaseUnit: EA
+  DefaultPrice: 150.00
+  RequireReceipt: false
+  RequireShipment: false

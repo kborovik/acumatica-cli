@@ -308,6 +308,7 @@ entities:
   file: master/53-tax-categories.yaml
   include:
   - Description
+  - ExcludeListedTaxes
 
 - entity: ItemClass
   keys: [ClassID]
@@ -483,6 +484,7 @@ entities:
   - VendorName
   - VendorClass
   - Terms
+  - VendorIsTaxAgency
   - PrintOrders
   - SendOrdersbyEmail
   - MainContact
@@ -494,6 +496,40 @@ entities:
   - CustomerName
   - CustomerClass
   - MainContact
+
+# Tax chain (gh #72 / V68): agency vendor (75) -> reporting group ->
+# tax -> zone. TaxSchedule.ReportingGroup reads back as the group id.
+# TaxClaimableAccount is not returned for a Sales tax (B11 class).
+
+- entity: TaxReportingSettings
+  keys: [TaxAgency]
+  file: master/76-tax-reporting.yaml
+  detail_keys:
+    ReportingGroups: Name
+  include:
+  - ReportingGroups
+
+- entity: Tax
+  keys: [TaxID]
+  file: master/77-taxes.yaml
+  detail_keys:
+    TaxSchedule: StartDate
+  include:
+  - Description
+  - TaxType
+  - TaxAgency
+  - TaxPayableAccount
+  - TaxPayableSubaccount
+  - TaxSchedule
+
+- entity: TaxZone
+  keys: [TaxZoneID]
+  file: master/78-tax-zones.yaml
+  detail_keys:
+    ApplicableTaxes: TaxID
+  include:
+  - Description
+  - ApplicableTaxes
 
 # StockItem filter-split (V34): ItemClass partitions parts vs kits so
 # each numbered file gets its apply-order set only. Include drops the
@@ -509,6 +545,24 @@ entities:
   - ItemClass
   - ItemStatus
   - DefaultWarehouseID
+
+# Non-stock items (gh #72 / V68): SalesUnit/PurchaseUnit equal to
+# BaseUnit are not returned (B11 class), so they stay out.
+
+- entity: NonStockItem
+  keys: [InventoryID]
+  file: master/81-non-stock-items.yaml
+  include:
+  - Description
+  - ItemClass
+  - ItemType
+  - ItemStatus
+  - PostingClass
+  - TaxCategory
+  - BaseUnit
+  - DefaultPrice
+  - RequireReceipt
+  - RequireShipment
 
 - entity: StockItem
   keys: [InventoryID]

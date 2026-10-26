@@ -1,0 +1,19 @@
+# TaxSchedule.ReportingGroup is the server group id, not its name: PUT
+# by name reads back as the id. '1' = the first group on a cold tenant
+# (76-tax-reporting.yaml). TaxClaimableAccount is not returned for a
+# Sales tax, so it stays out.
+entity: Tax
+key: TaxID
+detail_keys:
+  TaxSchedule: StartDate
+records:
+- TaxID: HST
+  Description: Ontario HST 13%
+  TaxType: Sales
+  TaxAgency: VEND-CRA
+  TaxPayableAccount: '24000'
+  TaxPayableSubaccount: '000000'
+  TaxSchedule:
+  - StartDate: '2020-01-01'
+    TaxRate: 13
+    ReportingGroup: '1'

@@ -3,3 +3,7 @@ key: TaxCategoryID
 records:
 - TaxCategoryID: EXEMPT
   Description: Tax exempt
+  ExcludeListedTaxes: false
+- TaxCategoryID: TAXABLE
+  Description: Taxable
+  ExcludeListedTaxes: true # every tax in the zone applies

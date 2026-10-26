@@ -37,3 +37,13 @@ records:
   MainContact:
     Address:
       Country: "NO" # YAML 1.1: unquoted NO is boolean false
+- VendorID: VEND-CRA
+  VendorName: Canada Revenue Agency
+  VendorClass: SUPPLIER
+  Terms: NET30
+  VendorIsTaxAgency: true
+  PrintOrders: false
+  SendOrdersbyEmail: false
+  MainContact:
+    Address:
+      Country: CA

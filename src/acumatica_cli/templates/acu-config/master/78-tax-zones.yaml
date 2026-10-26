@@ -1,0 +1,9 @@
+entity: TaxZone
+key: TaxZoneID
+detail_keys:
+  ApplicableTaxes: TaxID
+records:
+- TaxZoneID: INSTATE
+  Description: In-state sales
+  ApplicableTaxes:
+  - TaxID: STATE
