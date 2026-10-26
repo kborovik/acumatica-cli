@@ -171,8 +171,18 @@ INIT_TEMPLATES = (
     ("acu-config/master/75-vendors.yaml", "acu-config/master/75-vendors.yaml"),
     ("acu-config/master/76-customers.yaml", "acu-config/master/76-customers.yaml"),
     (
+        "acu-config/master/76-tax-reporting.yaml",
+        "acu-config/master/76-tax-reporting.yaml",
+    ),
+    ("acu-config/master/77-taxes.yaml", "acu-config/master/77-taxes.yaml"),
+    ("acu-config/master/78-tax-zones.yaml", "acu-config/master/78-tax-zones.yaml"),
+    (
         "acu-config/master/80-stock-items-parts.yaml",
         "acu-config/master/80-stock-items-parts.yaml",
+    ),
+    (
+        "acu-config/master/81-non-stock-items.yaml",
+        "acu-config/master/81-non-stock-items.yaml",
     ),
     (
         "acu-config/master/82-stock-items-kits.yaml",
@@ -193,6 +203,12 @@ INIT_TEMPLATES = (
     ("acu-scenario/20-buy.yaml", "acu-scenario/20-buy.yaml"),
     ("acu-scenario/30-build.yaml", "acu-scenario/30-build.yaml"),
     ("acu-scenario/40-sell.yaml", "acu-scenario/40-sell.yaml"),
+    ("acu-scenario/50-ar-documents.yaml", "acu-scenario/50-ar-documents.yaml"),
+    ("acu-scenario/60-ap-documents.yaml", "acu-scenario/60-ap-documents.yaml"),
+    (
+        "acu-scenario/70-inventory-receipt.yaml",
+        "acu-scenario/70-inventory-receipt.yaml",
+    ),
     # Default-half overlays (V44): keyed by resolved api_version
     ("overlays/README.md", "overlays/README.md"),
     (

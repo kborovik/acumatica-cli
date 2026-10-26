@@ -1,0 +1,144 @@
+# Migrated AR documents (gh #72 / V68): one scenario per ERP document,
+# each guarded on its external reference (CustomerOrder), so a re-run
+# skips what exists and creates nothing twice. Transactions never get a
+# seed file or catalog row.
+scenario: ar-invoice
+description: Migrated invoice (taxed)
+once: true
+present:
+  get: {entity: SalesInvoice, filter: "CustomerOrder eq 'MIG-AR-INV-0001'"}
+steps:
+- id: put
+  put: SalesInvoice
+  record:
+    Type: Invoice
+    CustomerID: VITALPLUS
+    CustomerOrder: MIG-AR-INV-0001
+    Description: Migrated invoice (taxed)
+    Amount: 271.20
+    Hold: false
+    FinancialDetails: {CustomerTaxZone: ONTARIO}
+    Details:
+    - {InventoryID: SVC-QCTEST, Qty: 2, UnitPrice: 120.00}
+  capture: {ReferenceNbr: doc}
+- id: release
+  action: {entity: SalesInvoice, name: ReleaseSalesInvoice}
+  record: {Type: Invoice, ReferenceNbr: "${doc}"}
+  wait:
+    entity: SalesInvoice
+    keys: [Invoice, "${doc}"]
+    until: {Status: Open}
+expect:
+- get: {entity: SalesInvoice, keys: [Invoice, "${doc}"]}
+  fields: {Status: Open, TaxTotal: 31.2}
+- inquire: AccountSummaryInquiry
+  parameters: {Ledger: ACTUAL, Period: "${current_period}"}
+  match: {Account: '24000'}
+  delta: {EndingBalance: 31.20}
+---
+scenario: ar-debit-memo
+description: Migrated debit memo
+once: true
+present:
+  get: {entity: SalesInvoice, filter: "CustomerOrder eq 'MIG-AR-DM-0001'"}
+steps:
+- id: put
+  put: SalesInvoice
+  record:
+    Type: Debit Memo
+    CustomerID: VITALPLUS
+    CustomerOrder: MIG-AR-DM-0001
+    Description: Migrated debit memo
+    Amount: 50.00
+    Hold: false
+    Details:
+    - {InventoryID: SVC-FREIGHT, Qty: 1, UnitPrice: 50.00}
+  capture: {ReferenceNbr: doc}
+- id: release
+  action: {entity: SalesInvoice, name: ReleaseSalesInvoice}
+  record: {Type: Debit Memo, ReferenceNbr: "${doc}"}
+  wait:
+    entity: SalesInvoice
+    keys: [Debit Memo, "${doc}"]
+    until: {Status: Open}
+---
+scenario: ar-credit-memo
+description: Migrated credit memo
+once: true
+present:
+  get: {entity: SalesInvoice, filter: "CustomerOrder eq 'MIG-AR-CM-0001'"}
+steps:
+- id: put
+  put: SalesInvoice
+  record:
+    Type: Credit Memo
+    CustomerID: VITALPLUS
+    CustomerOrder: MIG-AR-CM-0001
+    Description: Migrated credit memo
+    Amount: 25.00
+    Hold: false
+    Details:
+    - {InventoryID: SVC-FREIGHT, Qty: 1, UnitPrice: 25.00}
+  capture: {ReferenceNbr: doc}
+- id: release
+  action: {entity: SalesInvoice, name: ReleaseSalesInvoice}
+  record: {Type: Credit Memo, ReferenceNbr: "${doc}"}
+  wait:
+    entity: SalesInvoice
+    keys: [Credit Memo, "${doc}"]
+    until: {Status: Open}
+---
+# Finance Charge is not creatable through the contract API (500 "Index
+# was outside the bounds of the array"; AR overdue-charge process only).
+# A migrated finance charge lands as a Debit Memo on the same income
+# account.
+scenario: ar-finance-charge
+description: Migrated finance charge
+once: true
+present:
+  get: {entity: SalesInvoice, filter: "CustomerOrder eq 'MIG-AR-FC-0001'"}
+steps:
+- id: put
+  put: SalesInvoice
+  record:
+    Type: Debit Memo
+    CustomerID: VITALPLUS
+    CustomerOrder: MIG-AR-FC-0001
+    Description: Migrated finance charge
+    Amount: 10.00
+    Hold: false
+    Details:
+    - {TransactionDescr: Overdue charge, Account: '40100', Subaccount: '000000', Qty: 1, UnitPrice: 10.00}
+  capture: {ReferenceNbr: doc}
+- id: release
+  action: {entity: SalesInvoice, name: ReleaseSalesInvoice}
+  record: {Type: Debit Memo, ReferenceNbr: "${doc}"}
+  wait:
+    entity: SalesInvoice
+    keys: [Debit Memo, "${doc}"]
+    until: {Status: Open}
+---
+scenario: ar-prepayment
+description: Migrated customer prepayment
+once: true
+present:
+  get: {entity: Payment, filter: "PaymentRef eq 'MIG-AR-PP-0001'"}
+steps:
+- id: put
+  put: Payment
+  record:
+    Type: Prepayment
+    CustomerID: VITALPLUS
+    PaymentMethod: WIRE
+    CashAccount: '10100'
+    PaymentAmount: 200.00
+    PaymentRef: MIG-AR-PP-0001
+    Hold: false
+  capture: {ReferenceNbr: pmt}
+- id: release
+  action: {entity: Payment, name: ReleasePayment}
+  record: {Type: Prepayment, ReferenceNbr: "${pmt}"}
+  wait:
+    entity: Payment
+    keys: [Prepayment, "${pmt}"]
+    until: {Status: Open}

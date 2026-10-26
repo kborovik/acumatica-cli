@@ -1,0 +1,32 @@
+scenario: inventory-receipt
+description: Migrated opening stock receipt
+once: true
+present:
+  get: {entity: InventoryReceipt, filter: "Description eq 'MIG-IN-RCPT-0001'"}
+steps:
+- id: put
+  put: InventoryReceipt
+  record:
+    Description: MIG-IN-RCPT-0001
+    Hold: false
+    ControlQty: 10
+    ControlCost: 80.00
+    Details:
+    - InventoryID: PSU-12V
+      WarehouseID: WH01
+      Location: MAIN
+      Qty: 10
+      UnitCost: 8.00
+      ReasonCode: INRECEIPT
+  capture: {ReferenceNbr: rcpt}
+- id: release
+  action: {entity: InventoryReceipt, name: ReleaseInventoryReceipt}
+  record: {ReferenceNbr: "${rcpt}"}
+  wait:
+    entity: InventoryReceipt
+    keys: ["${rcpt}"]
+    until: {Status: Released}
+expect:
+- inquire: InventorySummaryInquiry
+  parameters: {InventoryID: PSU-12V, WarehouseID: WH01}
+  delta: {QtyOnHand: 10.0}

@@ -1,0 +1,36 @@
+# Migrated opening stock (gh #72 / V68). InventoryReceipt has no
+# external-reference field, so the guard filters on Description.
+scenario: inventory-receipt
+description: Migrated opening stock receipt
+once: true
+present:
+  get: {entity: InventoryReceipt, filter: "Description eq 'MIG-IN-RCPT-0001'"}
+steps:
+- id: put
+  put: InventoryReceipt
+  record:
+    Description: MIG-IN-RCPT-0001
+    Hold: false
+    ControlQty: 3
+    ControlCost: 930.00
+    Details:
+    - InventoryID: RAW-COQ10-99
+      WarehouseID: WH-MISS-01
+      Location: MAIN
+      Qty: 3
+      UnitCost: 310.00
+      ReasonCode: INRECEIPT
+      LotSerialNbr: MIG-COQ-0001
+      ExpirationDate: '2028-12-31'
+  capture: {ReferenceNbr: rcpt}
+- id: release
+  action: {entity: InventoryReceipt, name: ReleaseInventoryReceipt}
+  record: {ReferenceNbr: "${rcpt}"}
+  wait:
+    entity: InventoryReceipt
+    keys: ["${rcpt}"]
+    until: {Status: Released}
+expect:
+- inquire: InventorySummaryInquiry
+  parameters: {InventoryID: RAW-COQ10-99, WarehouseID: WH-MISS-01}
+  delta: {QtyOnHand: 3.0}

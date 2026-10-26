@@ -928,3 +928,49 @@ def test_scenario_digest_tells_apart_same_body_docs_and_files(
         run.scenario_digest(second),
     }
     assert run.scenario_digest(typed) == run.scenario_digest(copied)
+
+
+_REPO = Path(__file__).resolve().parents[1]
+_MIGRATION_SCENARIOS = [
+    root / name
+    for root in (
+        _REPO / "src/acumatica_cli/templates/acu-scenario",
+        _REPO / "acu-scenario",
+    )
+    for name in (
+        "50-ar-documents.yaml",
+        "60-ap-documents.yaml",
+        "70-inventory-receipt.yaml",
+    )
+]
+
+
+@pytest.mark.parametrize(
+    "path", _MIGRATION_SCENARIOS, ids=lambda p: f"{p.parent.parent.name}/{p.name}"
+)
+def test_migration_scenarios_dry_run_and_rerun_skip(
+    path: Path, instance: Instance, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """V68/gh #72: one once-guarded doc per document; warm re-run PUTs nothing."""
+    scenarios = run.load_scenarios(path)
+    filters = [s.present.get.filter for s in scenarios if s.present and s.present.get]
+    assert len(filters) == len(scenarios)
+    assert len(set(filters)) == len(filters)
+    for scenario in scenarios:
+        assert run.run(None, scenario, dry_run=True) is run.Outcome.PASSED
+    capsys.readouterr()
+
+    puts: list[httpx.Request] = []
+
+    def present(request: httpx.Request) -> httpx.Response:
+        if request.method == "PUT":
+            puts.append(request)
+        if request.method == "GET" and "$filter" in request.url.params:
+            return httpx.Response(200, json=[wrap({"ReferenceNbr": "000001"})])
+        return httpx.Response(200, json={})
+
+    client = AcumaticaClient(instance, transport=httpx.MockTransport(present))
+    assert [run.run(client, s) for s in scenarios] == [run.Outcome.SKIPPED] * len(
+        scenarios
+    )
+    assert puts == []
