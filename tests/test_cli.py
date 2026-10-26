@@ -2418,9 +2418,7 @@ def test_killed_load_resumes_from_checkpoint_without_duplicates(
     monkeypatch.setattr(
         cli,
         "AcumaticaClient",
-        lambda inst, **kw: RealClient(
-            inst, transport=httpx.MockTransport(lambda r: handler(r))
-        ),
+        lambda inst, **kw: RealClient(inst, transport=httpx.MockTransport(handler)),
     )
     killed = CliRunner().invoke(cli.cli, [*args, str(path)])
 
