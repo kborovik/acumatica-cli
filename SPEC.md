@@ -202,7 +202,7 @@ T285|.|live: ACUCLI rebuilt, released acu runs 5K-doc generated scenario; re-run
 T286|x|`--concurrency N` (click IntRange min 1) on apply + run; pool of N sessions opened + tenant-verified pre-write; any login fail → logout opened, exit 1 naming N + license cap, 0 write|V5,V6,V66,I.cmd
 T287|x|apply: parallel records within one BaselineFile; ActionFile + Company file serial; V5 re-login every pooled session after Company PUT; V45 continue + hard-stop drain under pool|V5,V45,V66
 T288|x|run: parallel docs within one multi-doc file; file w/ inquire-delta expect serial + info line; step error → no new dispatch, in-flight finish, rest not run|V65,V66
-T289|.|`--checkpoint PATH` JSONL `{tenant, unit, digest}` on apply + run; skip on match, append+flush on success; × --plan/--dry-run usage error; malformed → exit 1 pre-HTTP; summary + JSON `checkpoint` count|V4,V67,I.cmd
+T289|x|`--checkpoint PATH` JSONL `{tenant, unit, digest}` on apply + run; skip on match, append+flush on success; × --plan/--dry-run usage error; malformed → exit 1 pre-HTTP; summary + JSON `checkpoint` count|V4,V67,I.cmd
 T290|.|offline tests: 10K-record apply N=8 → each PUT once, N login + N logout; license-refused login → 0 PUT exit 1; hard-stop under pool lists not-applied; run pool + delta-file serial; killed load + rerun w/ checkpoint → no duplicate PUT; edited record re-PUTs; other-tenant line ignored|V13,V45,V66,V67,T286,T287,T288,T289
 T291|.|README + help + CHANGELOG Unreleased (gh #71); suite green|V19,V48,V66,V67,T290
 T292|.|live: ACUCLI 10K-record load w/ `--concurrency`; killed load resumes via `--checkpoint`, no duplicates|V66,V67,T290

@@ -2200,6 +2200,143 @@ def test_concurrency_default_is_one_session(
     assert log == ["login", "put", "logout"]
 
 
+def _wire_pool(monkeypatch: pytest.MonkeyPatch, log: list[str]) -> None:
+    handler = _pool_handler(log)
+    monkeypatch.setattr(
+        cli,
+        "AcumaticaClient",
+        lambda inst, **kw: RealClient(inst, transport=httpx.MockTransport(handler)),
+    )
+
+
+@pytest.mark.parametrize("concurrency", ["1", "2"])
+def test_checkpoint_apply_rerun_skips_done_records(
+    wired: Instance,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    concurrency: str,
+) -> None:
+    """V67: run 1 records each PUT; run 2 skips them (no PUT) + counts them."""
+    path = tmp_path / "f.yaml"
+    path.write_text(
+        "entity: UnitsOfMeasure\nkey: UOM\nrecords:\n  - UOM: KG\n  - UOM: LB\n"
+    )
+    ckpt = tmp_path / "ckpt.jsonl"
+    args = ["apply", "--concurrency", concurrency, "--checkpoint", str(ckpt)]
+    log: list[str] = []
+    _wire_pool(monkeypatch, log)
+
+    first = CliRunner().invoke(cli.cli, [*args, str(path)])
+    assert first.exit_code == 0, first.output
+    assert log.count("put") == 2
+    assert len(ckpt.read_text().splitlines()) == 2
+
+    log.clear()
+    second = CliRunner().invoke(cli.cli, ["--output", "json", *args, str(path)])
+    assert second.exit_code == 0, second.output
+    assert "put" not in log
+    assert "skip UnitsOfMeasure [KG] (checkpoint)" in second.output
+    assert json.loads(second.stdout)["checkpoint"] == 2
+
+
+def test_checkpoint_apply_edited_record_reapplies(
+    wired: Instance, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """V67: digest covers content - an edited record PUTs again."""
+    path = tmp_path / "f.yaml"
+    path.write_text("entity: UnitsOfMeasure\nkey: UOM\nrecords:\n  - UOM: KG\n")
+    ckpt = tmp_path / "ckpt.jsonl"
+    args = ["apply", "--checkpoint", str(ckpt), str(path)]
+    log: list[str] = []
+    _wire_pool(monkeypatch, log)
+    assert CliRunner().invoke(cli.cli, args).exit_code == 0
+
+    path.write_text(
+        "entity: UnitsOfMeasure\nkey: UOM\nrecords:\n  - UOM: KG\n    Descr: Kilo\n"
+    )
+    log.clear()
+    result = CliRunner().invoke(cli.cli, args)
+
+    assert result.exit_code == 0, result.output
+    assert log.count("put") == 1
+    assert "apply: 0 from checkpoint" in result.output
+
+
+def test_checkpoint_run_skips_done_scenario(
+    wired: Instance, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """V67: a recorded scenario is skipped on rerun with no step HTTP."""
+    path = tmp_path / "s.yaml"
+    path.write_text(
+        "scenario: s\nsteps:\n"
+        "  - id: s1\n    put: UnitsOfMeasure\n    record: {UOM: KG}\n"
+    )
+    ckpt = tmp_path / "ckpt.jsonl"
+    args = ["run", "--checkpoint", str(ckpt), str(path)]
+    log: list[str] = []
+    _wire_pool(monkeypatch, log)
+    assert CliRunner().invoke(cli.cli, args).exit_code == 0
+    assert log.count("put") == 1
+
+    log.clear()
+    result = CliRunner().invoke(cli.cli, args)
+
+    assert result.exit_code == 0, result.output
+    assert "put" not in log
+    assert "(checkpoint)" in result.output
+    assert "1 from checkpoint" in result.output
+
+
+@pytest.mark.parametrize(
+    "args",
+    [
+        ["apply", "--plan"],
+        ["apply", "--dry-run"],
+        ["run", "--dry-run"],
+    ],
+)
+def test_checkpoint_refuses_read_only_modes(
+    wired: Instance, tmp_path: Path, args: list[str]
+) -> None:
+    """V67: --checkpoint x --plan/--dry-run = usage error (exit 2)."""
+    path = tmp_path / "f.yaml"
+    path.write_text("entity: UnitsOfMeasure\nkey: UOM\nrecords:\n  - UOM: KG\n")
+    ckpt = tmp_path / "ckpt.jsonl"
+    result = CliRunner().invoke(cli.cli, [*args, "--checkpoint", str(ckpt), str(path)])
+
+    assert result.exit_code == 2
+    assert "--checkpoint cannot combine" in result.output
+    assert not ckpt.exists()
+
+
+@pytest.mark.parametrize("command", ["apply", "run"])
+def test_checkpoint_malformed_fails_before_login(
+    wired: Instance,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    command: str,
+) -> None:
+    """V67: a malformed checkpoint line exits 1 with zero HTTP."""
+    path = tmp_path / "f.yaml"
+    path.write_text(
+        "entity: UnitsOfMeasure\nkey: UOM\nrecords:\n  - UOM: KG\n"
+        if command == "apply"
+        else "scenario: s\nsteps:\n"
+        "  - id: s1\n    put: UnitsOfMeasure\n    record: {UOM: KG}\n"
+    )
+    ckpt = tmp_path / "ckpt.jsonl"
+    ckpt.write_text("garbage\n")
+    log: list[str] = []
+    _wire_pool(monkeypatch, log)
+    result = CliRunner().invoke(
+        cli.cli, [command, "--checkpoint", str(ckpt), str(path)]
+    )
+
+    assert isinstance(result.exception, RuntimeError)
+    assert "ckpt.jsonl:1: malformed checkpoint line" in str(result.exception)
+    assert log == []
+
+
 def test_apply_422_survives_dead_logout(
     wired: Instance, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
