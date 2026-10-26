@@ -1035,7 +1035,10 @@ def apply_cmd(
             target = "dry run" if inst is None else f"{inst.tenant} on {inst.base_url}"
             output.data(f"{path} -> {target} ({baseline.entity})")
             try:
-                n, errors = seed.apply(client, baseline, dry_run, mode, counts)
+                workers = () if pool is None else pool.clients
+                n, errors = seed.apply(
+                    client, baseline, dry_run, mode, counts, pool=workers
+                )
             except seed.ApplyStopped as stop:
                 # report now: a dead host can also fail the logout on exit
                 stopped = True

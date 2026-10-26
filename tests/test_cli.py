@@ -1501,7 +1501,7 @@ def test_apply_diff_explicit_config_ignores_inventory_findings(
     monkeypatch.setattr(
         cli.seed,
         "apply",
-        lambda client, baseline, *_: (
+        lambda client, baseline, *_, **__: (
             seen_apply.append(str(baseline.path).replace("\\", "/")) or (1, [])
         ),
     )
@@ -1610,7 +1610,7 @@ def test_apply_acu_config_umbrella_skips_sibling_custom(
     monkeypatch.setattr(
         cli.seed,
         "apply",
-        lambda client, baseline, *_: (
+        lambda client, baseline, *_, **__: (
             seen.append(str(baseline.path).replace("\\", "/")) or (1, [])
         ),
     )
@@ -1642,7 +1642,7 @@ def test_apply_acu_config_then_custom_dir(
     monkeypatch.setattr(
         cli.seed,
         "apply",
-        lambda client, baseline, *_: (
+        lambda client, baseline, *_, **__: (
             seen.append(str(baseline.path).replace("\\", "/")) or (1, [])
         ),
     )

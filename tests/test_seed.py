@@ -5,6 +5,8 @@ apply/diff run through the real client (wrap, $filter, _checked) offline.
 """
 
 import json
+import threading
+import time
 from collections import Counter
 from pathlib import Path
 from typing import Any
@@ -2726,3 +2728,106 @@ def test_detail_drifts_carry_kind_and_values() -> None:
         ("missing", None, None),
         ("extra", None, None),
     ]
+
+
+def _uoms(count: int, entity: str = "UnitsOfMeasure") -> str:
+    rows = "".join(f"  - UOM: U{i:05}\n" for i in range(count))
+    return f"entity: {entity}\nkey: UOM\nrecords:\n{rows}"
+
+
+class _PoolTenant:
+    """Thread-safe PUT log keyed by UOM; per-session counts; optional faults."""
+
+    def __init__(
+        self, fail: str | None = None, stop: str | None = None, delay: float = 0
+    ) -> None:
+        self.lock = threading.Lock()
+        self.puts: list[str] = []
+        self.by_session: Counter[int] = Counter()
+        self.fail, self.stop, self.delay = fail, stop, delay
+
+    def client(self, instance: Instance, session: int) -> AcumaticaClient:
+        def handler(request: httpx.Request) -> httpx.Response:
+            uom = json.loads(request.content)["UOM"]["value"]
+            if uom == self.stop:
+                raise httpx.ConnectError("refused", request=request)
+            time.sleep(self.delay)
+            with self.lock:
+                self.puts.append(uom)
+                self.by_session[session] += 1
+            if uom == self.fail:
+                return httpx.Response(422, json={"message": "bad"})
+            return httpx.Response(200, json={})
+
+        client = AcumaticaClient(instance, transport=httpx.MockTransport(handler))
+        client.retry_backoff = 0
+        return client
+
+
+def test_apply_pool_puts_each_record_once_across_sessions(
+    tmp_path: Path, instance: Instance
+) -> None:
+    """V66/gh #71: N sessions share one file's records; each PUT exactly once."""
+    baseline = seed.load_baseline(_write(tmp_path, _uoms(200)))
+    tenant = _PoolTenant(delay=0.001)
+    pool = [tenant.client(instance, i) for i in range(4)]
+    counts: Counter[str] = Counter()
+
+    n, errors = seed.apply(pool[0], baseline, counts=counts, pool=pool)
+
+    assert (n, errors) == (200, [])
+    assert sorted(tenant.puts) == [f"U{i:05}" for i in range(200)]
+    assert set(tenant.by_session) == {0, 1, 2, 3}
+    assert counts == Counter(put=200)
+
+
+def test_apply_pool_record_failure_continues(
+    tmp_path: Path, instance: Instance, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """V45 under pool: a failed record reports and the rest still PUT."""
+    baseline = seed.load_baseline(_write(tmp_path, _uoms(50)))
+    tenant = _PoolTenant(fail="U00007")
+    pool = [tenant.client(instance, i) for i in range(3)]
+
+    n, errors = seed.apply(pool[0], baseline, pool=pool)
+
+    assert n == 49
+    assert len(errors) == 1
+    assert errors[0].startswith("UnitsOfMeasure [U00007]: ")
+    assert len(tenant.puts) == 50
+    assert "UnitsOfMeasure [U00007]" in capsys.readouterr().err
+
+
+def test_apply_pool_hard_stop_drains_without_new_dispatch(
+    tmp_path: Path, instance: Instance
+) -> None:
+    """V45 under pool: refused connect → no new dispatch; ApplyStopped names it."""
+    baseline = seed.load_baseline(_write(tmp_path, _uoms(100)))
+    tenant = _PoolTenant(stop="U00000", delay=0.01)
+    pool = [tenant.client(instance, i) for i in range(2)]
+
+    with pytest.raises(seed.ApplyStopped) as stopped:
+        seed.apply(pool[0], baseline, pool=pool)
+
+    assert stopped.value.record == "UnitsOfMeasure [U00000]"
+    assert stopped.value.ok == len(tenant.puts)
+    assert len(tenant.puts) < 10  # in-flight finish; the queue never dispatches
+
+
+def test_apply_pool_company_serial_relogins_every_session(
+    tmp_path: Path, instance: Instance, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """V66 + V5: Company file stays on session 1; then every session re-logs in."""
+    baseline = seed.load_baseline(_write(tmp_path, COMPANY_YAML))
+    recorders = [SessionRecorder() for _ in range(3)]
+    pool = [_session_client(instance, r) for r in recorders]
+
+    n, _ = seed.apply(pool[0], baseline, pool=pool)
+
+    assert n == 1
+    assert [r.method for r in recorders[0].requests].count("PUT") == 1
+    for recorder in recorders:
+        paths = [r.url.path for r in recorder.requests]
+        assert paths.count("/AcumaticaERP/entity/auth/login") == 1
+    assert all(r.method != "PUT" for rec in recorders[1:] for r in rec.requests)
+    assert "Company file applies serially" in capsys.readouterr().err

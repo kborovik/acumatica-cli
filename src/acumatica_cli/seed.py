@@ -52,9 +52,13 @@ Default Currency = CM201000 list), so an ambiguous file is a hard error,
 never a silent Default-endpoint PUT.
 """
 
+import queue
 import re
+import threading
 from collections import Counter
 from collections.abc import Sequence
+from concurrent.futures import ThreadPoolExecutor
+from dataclasses import dataclass
 from enum import StrEnum
 from pathlib import Path
 from typing import Any
@@ -536,12 +540,14 @@ def _apply_action(
     return 1, []
 
 
-def apply(
+def apply(  # noqa: PLR0913 — pool keyword-only (gh #71)
     client: AcumaticaClient | None,
     baseline: BaselineFile | ActionFile,
     dry_run: bool = False,
     mode: ApplyMode = ApplyMode.ALL,
     counts: Counter[str] | None = None,
+    *,
+    pool: Sequence[AcumaticaClient] = (),
 ) -> tuple[int, list[str]]:
     """PUT every record (upsert by key); an action file invokes its action.
 
@@ -575,11 +581,110 @@ def apply(
     ``counts``. PLAN writes nothing; CHANGED skips the PUT of an
     unchanged record (Role user assignment still runs: V57 membership is
     not diffable). Default stays PUT-everything (V4).
+
+    ``pool`` (gh #71, V66) holds every ``--concurrency`` session, ``client``
+    first. More than one → records of this file PUT in parallel, one
+    session per worker. Action and Company files stay serial on
+    ``client``; after a Company PUT every pooled session re-logs in (V5).
     """
     tally = counts if counts is not None else Counter[str]()
     if isinstance(baseline, ActionFile):
         plan = mode is ApplyMode.PLAN
         return _apply_action(client, baseline, dry_run, plan, tally)
+    if len(pool) > 1 and not dry_run:
+        if baseline.entity != "Company":
+            return _apply_pooled(pool, baseline, mode, tally)
+        output.info(f"{baseline.path}: Company file applies serially (V5 re-login)")
+        try:
+            return _apply_serial(client, baseline, dry_run, mode, tally)
+        finally:
+            _refresh_pool(pool)
+    return _apply_serial(client, baseline, dry_run, mode, tally)
+
+
+def _refresh_pool(pool: Sequence[AcumaticaClient]) -> None:
+    """V5: once the first session bounced after a Company PUT, bounce the rest."""
+    if not pool[0].refreshed_after_company:
+        return
+    for i, client in enumerate(pool[1:], start=2):
+        try:
+            client.refresh_after_company()
+        except SessionLostError as err:
+            raise ApplyStopped(
+                f"pooled session {i}/{len(pool)}", str(err), 0, []
+            ) from err
+
+
+@dataclass(frozen=True)
+class _Pooled:
+    """One dispatched record's outcome: ok, error message, or stop (at, why)."""
+
+    tally: Counter[str]
+    error: str | None = None
+    stop: tuple[str, str] | None = None
+
+
+def _apply_pooled(
+    pool: Sequence[AcumaticaClient],
+    baseline: BaselineFile,
+    mode: ApplyMode,
+    tally: Counter[str],
+) -> tuple[int, list[str]]:
+    """Records of one file across N sessions; V45 semantics as serial.
+
+    Each worker checks a session out for one record, so no session ever
+    carries two requests at once. A record failure reports and continues.
+    A hard-stop stops new dispatch; in-flight records finish, then the
+    first stop (record order) raises ApplyStopped with what got done.
+    """
+    index = _prefetch(pool[0], baseline) if mode is not ApplyMode.ALL else {}
+    idle: queue.SimpleQueue[AcumaticaClient] = queue.SimpleQueue()
+    for client in pool:
+        idle.put(client)
+    stop = threading.Event()
+
+    def one(record: dict[str, Any]) -> _Pooled | None:
+        if stop.is_set():
+            return None  # not dispatched
+        at = f"{baseline.entity} [{', '.join(str(record[k]) for k in baseline.keys)}]"
+        local = Counter[str]()
+        client = idle.get()
+        try:
+            _apply_record(client, baseline, record, index=index, mode=mode, tally=local)
+        except _STOP_FAILURES as err:
+            stop.set()
+            return _Pooled(local, stop=(at, format_failure(err)))
+        except RECORD_FAILURES as err:
+            msg = f"{at}: {format_failure(err)}"
+            output.error(msg)
+            return _Pooled(local, error=msg)
+        finally:
+            idle.put(client)
+        return _Pooled(local)
+
+    with ThreadPoolExecutor(max_workers=len(pool)) as workers:
+        results = [r for r in workers.map(one, baseline.records) if r is not None]
+    ok = 0
+    errors: list[str] = []
+    for result in results:
+        tally.update(result.tally)
+        ok += result.error is None and result.stop is None
+        if result.error is not None:
+            errors.append(result.error)
+    stops = [r.stop for r in results if r.stop is not None]
+    if stops:
+        raise ApplyStopped(*stops[0], ok, errors)
+    return ok, errors
+
+
+def _apply_serial(
+    client: AcumaticaClient | None,
+    baseline: BaselineFile,
+    dry_run: bool,
+    mode: ApplyMode,
+    tally: Counter[str],
+) -> tuple[int, list[str]]:
+    """The single-session record loop (``--concurrency 1``, Company files)."""
     ok = 0
     errors: list[str] = []
     index = (

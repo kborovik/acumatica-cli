@@ -362,6 +362,11 @@ class AcumaticaClient:
         except RECORD_FAILURES as err:
             raise SessionLostError(f"re-login failed: {format_failure(err)}") from err
 
+    @property
+    def refreshed_after_company(self) -> bool:
+        """True once this session re-logged in after a Company PUT (V5)."""
+        return self._refreshed_after_company
+
     def refresh_after_company(self) -> None:
         """Re-login once after the first successful Company PUT this session.
 
