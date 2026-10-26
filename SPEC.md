@@ -227,7 +227,7 @@ T307|x|`bootstrap_project.xml` add `ExternalFileStorage` (SM202540): Provider, A
 T308|x|test seed `acu-config/setup/40-external-file-storage.yaml` (Provider `Local File Folder`, LocalFolder `F:\AcumaticaFiles\AcumaticaERP`, endpoint bootstrap) + `41-enable-file-storage.yaml` (done_when `IsActive eq true`), `42-switch-file-storage-direction.yaml` (done_when `AllowWrite eq true`)|V4,V22,V70,T307
 T309|x|`seed_catalog.yaml` row ExternalFileStorage (endpoint bootstrap, file `setup/40-external-file-storage.yaml`, include Provider + LocalFolder, `template: false` (V34 exclusion, no packaged template); ! IsActive, AllowWrite, DisableDeleteOnExternalFileStorage); action files ! synth; offline tests: contract parse, catalog completeness (test-seed file exists, ! packaged), extract byte-stable, excluded fields never emitted|V13,V34,V70,T307
 T310|x|live ACUCLI cold: apply acu-config → enable + switch run, IsActive + AllowWrite true; attach 1 file via contract `files` PUT (test harness, not CLI) → `.bin` in folder; apply again → 0 create/update/invoke + no error on active config; diff exit 0; survey extract seed file byte-identical|V4,V12,V70,T308,T309
-T311|.|README + CHANGELOG Unreleased (gh #74)|V19,T310
+T311|x|README + CHANGELOG Unreleased (gh #74)|V19,T310
 
 ## §B BUGS
 
