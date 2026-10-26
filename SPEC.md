@@ -206,7 +206,7 @@ T289|x|`--checkpoint PATH` JSONL `{tenant, unit, digest}` on apply + run; skip o
 T290|x|offline tests: 10K-record apply N=8 → each PUT once, N login + N logout; license-refused login → 0 PUT exit 1; hard-stop under pool lists not-applied; run pool + delta-file serial; killed load + rerun w/ checkpoint → no duplicate PUT; edited record re-PUTs; other-tenant line ignored|V13,V45,V66,V67,T286,T287,T288,T289
 T291|x|README + help + CHANGELOG Unreleased (gh #71); suite green|V19,V48,V66,V67,T290
 T292|.|live: ACUCLI 10K-record load w/ `--concurrency`; killed load resumes via `--checkpoint`, no duplicates|V66,V67,T290
-T293|.|run checkpoint digest adds file basename + doc number; same-name same-body docs (one file or two) both run, rerun skips both|V67,T289
+T293|x|run checkpoint digest adds file basename + doc number; same-name same-body docs (one file or two) both run, rerun skips both|V67,T289
 
 ## §B BUGS
 

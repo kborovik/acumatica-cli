@@ -903,3 +903,28 @@ def test_scenario_digest_adds_period_only_when_referenced(tmp_path: Path) -> Non
 
     assert run.scenario_digest(plain, oct_) == run.scenario_digest(plain, nov)
     assert run.scenario_digest(period, oct_) != run.scenario_digest(period, nov)
+
+
+def test_scenario_digest_tells_apart_same_body_docs_and_files(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """V67: doc number + file basename join the digest; typed path does not."""
+    body = (
+        "scenario: s\nsteps:\n"
+        "  - id: s1\n    put: UnitsOfMeasure\n    record: {UOM: KG}\n"
+    )
+    one = tmp_path / "a.yaml"
+    one.write_text(body + "---\n" + body)
+    copy = tmp_path / "b.yaml"
+    copy.write_text(body)
+    first, second = run.load_scenarios(one)
+    (copied,) = run.load_scenarios(copy)
+    monkeypatch.chdir(tmp_path)
+    (typed,) = run.load_scenarios(Path("./b.yaml"))
+
+    assert run.scenario_digest(first) != run.scenario_digest(second)
+    assert run.scenario_digest(copied) not in {
+        run.scenario_digest(first),
+        run.scenario_digest(second),
+    }
+    assert run.scenario_digest(typed) == run.scenario_digest(copied)

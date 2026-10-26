@@ -89,15 +89,18 @@ def period_mmYYYY(d: date) -> str:  # noqa: N802  # SPEC V43 name (MMyyyy)
 
 
 def scenario_digest(scenario: Scenario, today: date | None = None) -> str:
-    """V67 checkpoint digest: the scenario doc plus the built-ins it uses.
+    """V67 checkpoint digest: doc, file basename, doc number, used built-ins.
 
-    A ``${current_period}`` scenario done in one month is new work in the
+    Basename + doc number keep same-name same-body docs (one file or a
+    copied file) apart, while ``./dir`` vs ``dir`` still resumes. A
+    ``${current_period}`` scenario done in one month is new work in the
     next, so the resolved period joins the digest only when referenced.
     """
     content = scenario.model_dump(mode="json", exclude={"path", "doc"})
     text = json.dumps(content)
     used = {k: v for k, v in _builtin_variables(today).items() if f"${{{k}}}" in text}
-    return digest({"scenario": content, "builtins": used} if used else content)
+    unit = {"scenario": content, "file": scenario.path.name, "doc": scenario.doc}
+    return digest({**unit, "builtins": used} if used else unit)
 
 
 def _builtin_variables(today: date | None = None) -> dict[str, Any]:

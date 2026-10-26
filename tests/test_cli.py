@@ -2288,6 +2288,34 @@ def test_checkpoint_run_skips_done_scenario(
     assert "1 from checkpoint" in result.output
 
 
+def test_checkpoint_run_same_name_same_body_docs_all_run(
+    wired: Instance, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """V67: twin docs (one file + a copy) each run once; rerun skips all."""
+    body = (
+        "scenario: s\nsteps:\n"
+        "  - id: s1\n    put: UnitsOfMeasure\n    record: {UOM: KG}\n"
+    )
+    (tmp_path / "a.yaml").write_text(body + "---\n" + body)
+    (tmp_path / "b.yaml").write_text(body)
+    ckpt = tmp_path / "ckpt.jsonl"
+    args = ["run", "--checkpoint", str(ckpt), str(tmp_path / "a.yaml")]
+    args.append(str(tmp_path / "b.yaml"))
+    log: list[str] = []
+    _wire_pool(monkeypatch, log)
+
+    first = CliRunner().invoke(cli.cli, args)
+    assert first.exit_code == 0, first.output
+    assert log.count("put") == 3
+    assert "0 from checkpoint" in first.output
+
+    log.clear()
+    second = CliRunner().invoke(cli.cli, args)
+    assert second.exit_code == 0, second.output
+    assert "put" not in log
+    assert "3 from checkpoint" in second.output
+
+
 @pytest.mark.parametrize(
     "args",
     [
