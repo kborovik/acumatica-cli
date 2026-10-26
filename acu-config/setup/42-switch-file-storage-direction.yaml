@@ -1,0 +1,7 @@
+action: SwitchDirection
+entity: ExternalFileStorage
+endpoint: bootstrap
+record:
+  Provider: Local File Folder
+done_when:
+  filter: AllowWrite eq true
