@@ -56,6 +56,7 @@ COMMAND MAP (pick by intent)
   seed write   apply [--dry-run] <FILES...>              (sole mutator)
   seed check   diff <FILES...>                           (exit 2 on drift)
   txns         run [--dry-run] <FILES...>
+  bulk load    apply|run --concurrency N --checkpoint PATH  (N API-user slots)
   cold rebuild tenant create then apply then run then diff (no wrap cmd)
   pull seed    survey extract [--only ENTITY]...         (inverse of apply)
   observe      state [--diff|--assert-unchanged] <FILES...>
@@ -86,8 +87,9 @@ import functools
 import itertools
 import json
 import os
+import threading
 from collections import Counter
-from collections.abc import Callable
+from collections.abc import Callable, Iterable, Sequence
 from contextlib import nullcontext
 from importlib.metadata import distribution
 from pathlib import Path
@@ -109,7 +111,8 @@ from . import (
     seed,
     state,
 )
-from .client import AcumaticaClient, format_failure
+from .checkpoint import Checkpoint
+from .client import AcumaticaClient, SessionPool, format_failure, pool_map
 from .config import (
     Instance,
     default_out,
@@ -950,6 +953,19 @@ def collapse_same_basename(paths: list[Path]) -> list[Path]:
     is_flag=True,
     help="Read live first; skip the PUT of records with no drift",
 )
+@click.option(
+    "--concurrency",
+    type=click.IntRange(min=1),
+    default=1,
+    show_default=True,
+    help="Parallel sessions; each takes one API-user license slot",
+)
+@click.option(
+    "--checkpoint",
+    "checkpoint_path",
+    type=click.Path(dir_okay=False, path_type=Path),
+    help="Resume file (JSONL): skip units done on this tenant, append new ones",
+)
 @click.pass_context
 def apply_cmd(
     ctx: click.Context,
@@ -957,6 +973,8 @@ def apply_cmd(
     dry_run: bool,
     plan: bool,
     changed_only: bool,
+    concurrency: int,
+    checkpoint_path: Path | None,
 ) -> None:
     """Push seed YAML into the tenant (idempotent PUT upserts).
 
@@ -979,6 +997,14 @@ def apply_cmd(
     only create / update records. Both end with a count summary. Default
     PUTs every record (idempotent re-PUT).
 
+    --concurrency N opens N sessions (each takes one API-user license
+    slot) before the first write and PUTs the records of each file in
+    parallel; files stay in order, and Company + action files stay serial.
+    Too few slots exits 1 before any write. --checkpoint PATH appends one
+    line per record done; running the same file again skips records done
+    on this tenant with unchanged content (an edited record PUTs again).
+    It cannot combine with --plan or --dry-run.
+
     \b
     Prerequisites
       Tenant exists and is bootstrapped (tenant create or acu bootstrap).
@@ -991,12 +1017,14 @@ def apply_cmd(
       acu --tenant DEV apply --plan acu-config
       acu --tenant DEV apply --changed-only acu-config
       acu --tenant DEV apply acu-config/baseline/20-accounts.yaml
+      acu --tenant DEV apply --concurrency 4 --checkpoint load.jsonl data/
 
     Related: `diff` (drift) · `survey extract` (inverse pull) · `run` (txns).
     """
     files = _require_data_paths(ctx, files)
     if sum((dry_run, plan, changed_only)) > 1:
         raise click.UsageError("--dry-run, --plan, --changed-only are exclusive")
+    _checkpoint_usage(checkpoint_path, dry_run or plan, "--plan/--dry-run")
     mode = (
         seed.ApplyMode.PLAN
         if plan
@@ -1015,13 +1043,30 @@ def apply_cmd(
     stopped = False
     # gh #63: dry-run is offline - no instance resolution, no session
     inst = None if dry_run else _resolve_instance(ctx)
-    session = nullcontext() if inst is None else AcumaticaClient(inst)
-    with session as client:
+    # V67: read + validate the resume file before any login
+    ckpt = None if inst is None else _open_checkpoint(checkpoint_path, inst)
+    # V66: all N sessions log in before the first write
+    session = (
+        nullcontext()
+        if inst is None
+        else SessionPool(inst, concurrency, factory=AcumaticaClient)
+    )
+    with session as pool, ckpt or nullcontext():
+        client = None if pool is None else pool.clients[0]
         for i, (path, baseline) in enumerate(zip(paths, baselines, strict=True)):
             target = "dry run" if inst is None else f"{inst.tenant} on {inst.base_url}"
             output.data(f"{path} -> {target} ({baseline.entity})")
             try:
-                n, errors = seed.apply(client, baseline, dry_run, mode, counts)
+                workers = () if pool is None else pool.clients
+                n, errors = seed.apply(
+                    client,
+                    baseline,
+                    dry_run,
+                    mode,
+                    counts,
+                    pool=workers,
+                    checkpoint=ckpt,
+                )
             except seed.ApplyStopped as stop:
                 # report now: a dead host can also fail the logout on exit
                 stopped = True
@@ -1056,7 +1101,9 @@ def apply_cmd(
                 "not_applied": [str(p) for p in not_applied],
                 "files": report,
             }
+            | _checkpoint_count(ckpt)
         )
+    _checkpoint_tally(ckpt, "apply")
     if stopped:
         raise SystemExit(1)
     if mode is not seed.ApplyMode.ALL:
@@ -1069,6 +1116,32 @@ def apply_cmd(
         for err in all_errors:
             output.error(err)
         raise SystemExit(1)
+
+
+def _checkpoint_usage(path: Path | None, refused: bool, flags: str) -> None:
+    """V67: a checkpoint only records writes, so read-only modes refuse it."""
+    if path is not None and refused:
+        raise click.UsageError(f"--checkpoint cannot combine with {flags}")
+
+
+def _open_checkpoint(path: Path | None, inst: Instance) -> Checkpoint | None:
+    """V67: load + validate before login; a malformed line exits 1 here."""
+    return None if path is None else Checkpoint(path, inst.tenant)
+
+
+def _checkpoint_count(ckpt: Checkpoint | None) -> dict[str, int]:
+    return {} if ckpt is None else {"checkpoint": ckpt.skipped}
+
+
+def _checkpoint_note(ckpt: Checkpoint | None) -> str:
+    """Summary fragment ``N from checkpoint, `` (V67); empty without the flag."""
+    return "" if ckpt is None else f"{ckpt.skipped} from checkpoint, "
+
+
+def _checkpoint_tally(ckpt: Checkpoint | None, command: str) -> None:
+    """V67: ``apply: N from checkpoint PATH`` when the flag was given."""
+    if ckpt is not None:
+        output.data(f"{command}: {ckpt.skipped} from checkpoint {ckpt.path}")
 
 
 def _plan_summary(mode: seed.ApplyMode, counts: Counter[str], failed: int) -> str:
@@ -1087,10 +1160,16 @@ def _plan_summary(mode: seed.ApplyMode, counts: Counter[str], failed: int) -> st
 def _apply_stopped(
     path: Path, stop: seed.ApplyStopped, rest: list[Path], applied: int
 ) -> None:
-    """V45 hard-stop report: stopped-at file/record + not-applied remainder."""
+    """V45 hard-stop report: stopped-at file/record + not-applied remainder.
+
+    Under ``--concurrency`` records after the stopped-at one may have
+    landed in flight, so the file line counts what of it did land.
+    """
     output.error(f"apply: stopped at {path}: {stop}")
     output.error(f"apply: {applied} record(s) applied before the stop")
-    output.error(f"not applied: {path} (from {stop.record})")
+    output.error(
+        f"not applied: {path} (from {stop.record}; {stop.ok} of its records landed)"
+    )
     for later in rest:
         output.error(f"not applied: {later}")
 
@@ -1230,13 +1309,101 @@ def _not_run_lines(scenarios: list[run.Scenario]) -> list[str]:
     return lines
 
 
+def _run_entry(
+    client: AcumaticaClient, scenario: run.Scenario, ckpt: Checkpoint | None
+) -> dict[str, object]:
+    """Run one scenario into its JSON report entry; a step error is kept.
+
+    V67: a scenario done on this tenant with the same content skips with
+    no HTTP (``checkpoint: true``); passed or skipped appends its line.
+    """
+    misses: list[str] = []
+    entry: dict[str, object] = {"file": str(scenario.path), "misses": misses}
+    if scenario.doc is not None:
+        entry["doc"] = scenario.doc
+    unit_digest = run.scenario_digest(scenario)
+    if ckpt is not None and ckpt.done(scenario.scenario, unit_digest):
+        output.data(f"skip {scenario.label} (checkpoint)")
+        return entry | {"outcome": run.Outcome.SKIPPED, "checkpoint": True}
+    try:
+        entry["outcome"] = outcome = run.run(client, scenario, misses=misses)
+    except run.StepError as err:
+        output.error(str(err))
+        entry |= {"outcome": run.Outcome.FAILED, "error": str(err)}
+        return entry
+    if ckpt is not None and outcome is not run.Outcome.FAILED:
+        ckpt.record(scenario.scenario, unit_digest)
+    return entry
+
+
+def _run_group(
+    pool: Sequence[AcumaticaClient],
+    docs: list[run.Scenario],
+    ckpt: Checkpoint | None,
+) -> list[dict[str, object] | None]:
+    """One file's scenarios; ``None`` marks a scenario never started.
+
+    Serial on session 1 unless the file holds many documents and the pool
+    has more than one session (V66): then each document takes a free
+    session. An ``inquire`` delta expect keeps the file serial - parallel
+    documents would land inside each other's pre/post snapshot. A step
+    error stops new dispatch; in-flight documents finish (gh #58, #71).
+    """
+    if len(pool) == 1 or len(docs) == 1:
+        return _run_serial(pool[0], docs, ckpt)
+    if any(e.inquire for scenario in docs for e in scenario.expect):
+        output.info(f"{docs[0].path}: inquire delta expect; documents run serially")
+        return _run_serial(pool[0], docs, ckpt)
+    stop = threading.Event()
+
+    def one(client: AcumaticaClient, scenario: run.Scenario) -> dict[str, object]:
+        entry = _run_entry(client, scenario, ckpt)
+        if "error" in entry:
+            stop.set()
+        return entry
+
+    return pool_map(pool, one, docs, stop)
+
+
+def _run_serial(
+    client: AcumaticaClient, docs: list[run.Scenario], ckpt: Checkpoint | None
+) -> list[dict[str, object] | None]:
+    results: list[dict[str, object] | None] = []
+    for scenario in docs:
+        entry = _run_entry(client, scenario, ckpt)
+        results.append(entry)
+        if "error" in entry:
+            results.extend([None] * (len(docs) - len(results)))
+            break
+    return results
+
+
 @cli.command("run")
 @click.argument(
     "files", nargs=-1, required=False, type=click.Path(exists=True, path_type=Path)
 )
 @click.option("--dry-run", is_flag=True, help="Parse and list steps without any HTTP")
+@click.option(
+    "--concurrency",
+    type=click.IntRange(min=1),
+    default=1,
+    show_default=True,
+    help="Parallel sessions; each takes one API-user license slot",
+)
+@click.option(
+    "--checkpoint",
+    "checkpoint_path",
+    type=click.Path(dir_okay=False, path_type=Path),
+    help="Resume file (JSONL): skip units done on this tenant, append new ones",
+)
 @click.pass_context
-def run_cmd(ctx: click.Context, files: tuple[Path, ...], dry_run: bool) -> None:
+def run_cmd(
+    ctx: click.Context,
+    files: tuple[Path, ...],
+    dry_run: bool,
+    concurrency: int,
+    checkpoint_path: Path | None,
+) -> None:
     """Execute transaction scenario YAML against the live tenant.
 
     REST data plane. Not seed upserts — documents are posted forward (server
@@ -1256,6 +1423,13 @@ def run_cmd(ctx: click.Context, files: tuple[Path, ...], dry_run: bool) -> None:
     expectation miss marks that scenario failed and the run continues.
     Summary: passed / failed / skipped (once) / not run.
 
+    --concurrency N opens N sessions (each takes one API-user license
+    slot) and runs the documents of one multi-document file in parallel;
+    a file with an inquire delta expect runs serially. --checkpoint PATH
+    appends one line per scenario passed or skipped; running again skips
+    those on this tenant with unchanged content. It cannot combine with
+    --dry-run.
+
     \b
     Exit  0 = all expectations hold · 1 = step error or expectation miss
 
@@ -1268,10 +1442,12 @@ def run_cmd(ctx: click.Context, files: tuple[Path, ...], dry_run: bool) -> None:
       acu --tenant DEV run acu-scenario
       acu --tenant DEV run --dry-run acu-scenario/10-seed-capital.yaml
       acu --tenant DEV run acu-scenario overlays/default-24.200.001/acu-scenario
+      acu --tenant DEV run --concurrency 4 --checkpoint load.jsonl loads/
 
     Related: `apply` · `diff` · `state`.
     """
     files = _require_data_paths(ctx, files)
+    _checkpoint_usage(checkpoint_path, dry_run, "--dry-run")
     paths = collapse_same_basename(expand_files(files))
     scenarios = [scenario for path in paths for scenario in run.load_scenarios(path)]
     if dry_run:
@@ -1285,23 +1461,23 @@ def run_cmd(ctx: click.Context, files: tuple[Path, ...], dry_run: bool) -> None:
     counts = dict.fromkeys(run.Outcome, 0)
     not_run: list[run.Scenario] = []
     report: list[dict[str, object]] = []
-    with AcumaticaClient(inst) as client:
-        for i, scenario in enumerate(scenarios):
-            misses: list[str] = []
-            entry: dict[str, object] = {"file": str(scenario.path), "misses": misses}
-            if scenario.doc is not None:
-                entry["doc"] = scenario.doc
-            report.append(entry)
-            try:
-                entry["outcome"] = outcome = run.run(client, scenario, misses=misses)
-                counts[outcome] += 1
-            except run.StepError as err:
-                # gh #58: lifecycle scenarios chain, so stop and list the rest
-                output.error(str(err))
-                entry |= {"outcome": run.Outcome.FAILED, "error": str(err)}
-                counts[run.Outcome.FAILED] += 1
-                not_run = scenarios[i + 1 :]
-                break
+    # V67: read + validate the resume file before any login
+    ckpt = _open_checkpoint(checkpoint_path, inst)
+    # V66: all N sessions log in before the first step
+    stopped = False
+    with (
+        SessionPool(inst, concurrency, factory=AcumaticaClient) as pool,
+        ckpt or nullcontext(),
+    ):
+        for _, group in itertools.groupby(scenarios, key=lambda s: s.path):
+            docs = list(group)
+            if stopped:  # gh #58: lifecycle scenarios chain; list the rest
+                not_run.extend(docs)
+                continue
+            results = _run_group(pool.clients, docs, ckpt)
+            stopped = _tally_group(
+                zip(docs, results, strict=True), counts, report, not_run
+            )
     for line in _not_run_lines(not_run):
         output.error(f"not run: {line}")
     if as_json:
@@ -1310,20 +1486,45 @@ def run_cmd(ctx: click.Context, files: tuple[Path, ...], dry_run: bool) -> None:
                 "command": "run",
                 "tenant": inst.tenant,
                 "counts": {str(k): v for k, v in counts.items()}
-                | {"not_run": len(not_run)},
+                | {"not_run": len(not_run)}
+                | _checkpoint_count(ckpt),
                 "scenarios": report,
                 "not_run": [s.label for s in not_run],
             }
         )
     summary = (
         f"{counts[run.Outcome.PASSED]} passed, {counts[run.Outcome.FAILED]} failed, "
-        f"{counts[run.Outcome.SKIPPED]} skipped, {len(not_run)} not run "
-        f"on {inst.tenant}"
+        f"{counts[run.Outcome.SKIPPED]} skipped, "
+        + _checkpoint_note(ckpt)
+        + f"{len(not_run)} not run on {inst.tenant}"
     )
     if counts[run.Outcome.FAILED]:
         output.error(f"run: {summary}")
         raise SystemExit(1)
     output.success(f"run: {summary}")
+
+
+def _tally_group(
+    results: Iterable[tuple[run.Scenario, dict[str, object] | None]],
+    counts: dict[run.Outcome, int],
+    report: list[dict[str, object]],
+    not_run: list[run.Scenario],
+) -> bool:
+    """Fold one file's entries into the run totals; True when a step errored.
+
+    ``None`` = never started (listed not run). Checkpoint skips (V67) are
+    reported but not counted as an outcome.
+    """
+    errored = False
+    for scenario, entry in results:
+        if entry is None:
+            not_run.append(scenario)
+            continue
+        report.append(entry)
+        if "checkpoint" not in entry:
+            counts[run.Outcome(entry["outcome"])] += 1
+        errored = errored or "error" in entry
+    return errored
 
 
 def _complete_only(

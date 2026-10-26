@@ -3,10 +3,15 @@
 Pins diff's exit-2-on-drift contract (V9) — no live instance, no SSH.
 """
 
+import itertools
 import json
 import os
 import subprocess
 import sys
+import threading
+import time
+from collections import Counter
+from collections.abc import Callable
 from pathlib import Path
 from types import TracebackType
 from typing import Any
@@ -1500,7 +1505,7 @@ def test_apply_diff_explicit_config_ignores_inventory_findings(
     monkeypatch.setattr(
         cli.seed,
         "apply",
-        lambda client, baseline, *_: (
+        lambda client, baseline, *_, **__: (
             seen_apply.append(str(baseline.path).replace("\\", "/")) or (1, [])
         ),
     )
@@ -1609,7 +1614,7 @@ def test_apply_acu_config_umbrella_skips_sibling_custom(
     monkeypatch.setattr(
         cli.seed,
         "apply",
-        lambda client, baseline, *_: (
+        lambda client, baseline, *_, **__: (
             seen.append(str(baseline.path).replace("\\", "/")) or (1, [])
         ),
     )
@@ -1641,7 +1646,7 @@ def test_apply_acu_config_then_custom_dir(
     monkeypatch.setattr(
         cli.seed,
         "apply",
-        lambda client, baseline, *_: (
+        lambda client, baseline, *_, **__: (
             seen.append(str(baseline.path).replace("\\", "/")) or (1, [])
         ),
     )
@@ -2070,9 +2075,394 @@ def test_apply_connect_error_reports_stop_and_not_applied(
     err = result.stderr
     assert f"x apply: stopped at {first}: UnitsOfMeasure [KG]: cannot connect" in err
     assert "x apply: 0 record(s) applied before the stop" in err
-    assert f"x not applied: {first} (from UnitsOfMeasure [KG])" in err
+    assert f"x not applied: {first} (from UnitsOfMeasure [KG]; 0 of" in err
     assert f"x not applied: {second}" in err
     assert f"{second} -> " not in result.output
+
+
+def _pool_handler(
+    log: list[str], refuse_login: int | None = None
+) -> Callable[[httpx.Request], httpx.Response]:
+    """Mock tenant T1 that logs login / logout / PUT and can refuse login k."""
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        path = request.url.path
+        if path.endswith("/auth/login"):
+            log.append("login")
+            if log.count("login") == refuse_login:
+                return httpx.Response(500, json={"exceptionMessage": "API Login Limit"})
+            return httpx.Response(204)
+        if path.endswith("/auth/logout"):
+            log.append("logout")
+            return httpx.Response(204)
+        if path.endswith("/Frames/Login.aspx"):
+            return httpx.Response(
+                200, text='<input id="txtSingleCompany" value="T1" />'
+            )
+        if request.method == "PUT":
+            log.append("put")
+        return httpx.Response(200, json={})
+
+    return handler
+
+
+@pytest.mark.parametrize("command", ["apply", "run"])
+def test_concurrency_opens_n_sessions_before_write(
+    wired: Instance,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    command: str,
+) -> None:
+    """V66/gh #71: N logins (tenant-verified) precede the first write; N logouts."""
+    path = tmp_path / "f.yaml"
+    path.write_text(
+        "entity: UnitsOfMeasure\nkey: UOM\nrecords:\n  - UOM: KG\n"
+        if command == "apply"
+        else "scenario: s\nsteps:\n"
+        "  - id: s1\n    put: UnitsOfMeasure\n    record: {UOM: KG}\n"
+    )
+    log: list[str] = []
+    handler = _pool_handler(log)
+    monkeypatch.setattr(
+        cli,
+        "AcumaticaClient",
+        lambda inst, **kw: RealClient(inst, transport=httpx.MockTransport(handler)),
+    )
+    result = CliRunner().invoke(cli.cli, [command, "--concurrency", "3", str(path)])
+
+    assert result.exit_code == 0, result.output
+    assert log[:3] == ["login"] * 3
+    assert log.count("logout") == 3
+    assert "put" in log
+
+
+@pytest.mark.parametrize("command", ["apply", "run"])
+def test_concurrency_refused_login_logs_out_opened_no_write(
+    wired: Instance,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    command: str,
+) -> None:
+    """V66/V6: login 3/3 refused -> opened sessions logged out, exit 1, 0 writes."""
+    path = tmp_path / "f.yaml"
+    path.write_text(
+        "entity: UnitsOfMeasure\nkey: UOM\nrecords:\n  - UOM: KG\n"
+        if command == "apply"
+        else "scenario: s\nsteps:\n"
+        "  - id: s1\n    put: UnitsOfMeasure\n    record: {UOM: KG}\n"
+    )
+    log: list[str] = []
+    handler = _pool_handler(log, refuse_login=3)
+    monkeypatch.setattr(
+        cli,
+        "AcumaticaClient",
+        lambda inst, **kw: RealClient(inst, transport=httpx.MockTransport(handler)),
+    )
+    result = CliRunner().invoke(cli.cli, [command, "--concurrency", "3", str(path)])
+
+    assert isinstance(result.exception, RuntimeError)
+    assert "put" not in log
+    # 2 opened sessions + the refused one's own V6 cleanup; none left open
+    assert log == ["login"] * 3 + ["logout"] * 3
+    message = str(result.exception)  # main() maps RuntimeError -> x, exit 1
+    assert "session 3/3 login failed" in message
+    assert "--concurrency 3 needs 3 API-user license slots" in message
+
+
+@pytest.mark.parametrize("command", ["apply", "run"])
+def test_concurrency_rejects_zero(
+    wired: Instance, tmp_path: Path, command: str
+) -> None:
+    """V66: --concurrency is IntRange(min=1); 0 is a usage error, no HTTP."""
+    path = tmp_path / "f.yaml"
+    path.write_text("entity: UnitsOfMeasure\nkey: UOM\nrecords:\n  - UOM: KG\n")
+    result = CliRunner().invoke(cli.cli, [command, "--concurrency", "0", str(path)])
+
+    assert result.exit_code == 2
+    assert "--concurrency" in result.output
+
+
+def test_concurrency_default_is_one_session(
+    wired: Instance, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """V66: default --concurrency 1 = the plain single session (one login)."""
+    path = tmp_path / "f.yaml"
+    path.write_text("entity: UnitsOfMeasure\nkey: UOM\nrecords:\n  - UOM: KG\n")
+    log: list[str] = []
+    handler = _pool_handler(log)
+    monkeypatch.setattr(
+        cli,
+        "AcumaticaClient",
+        lambda inst, **kw: RealClient(inst, transport=httpx.MockTransport(handler)),
+    )
+    result = CliRunner().invoke(cli.cli, ["apply", str(path)])
+
+    assert result.exit_code == 0, result.output
+    assert log == ["login", "put", "logout"]
+
+
+def _wire_pool(monkeypatch: pytest.MonkeyPatch, log: list[str]) -> None:
+    handler = _pool_handler(log)
+    monkeypatch.setattr(
+        cli,
+        "AcumaticaClient",
+        lambda inst, **kw: RealClient(inst, transport=httpx.MockTransport(handler)),
+    )
+
+
+@pytest.mark.parametrize("concurrency", ["1", "2"])
+def test_checkpoint_apply_rerun_skips_done_records(
+    wired: Instance,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    concurrency: str,
+) -> None:
+    """V67: run 1 records each PUT; run 2 skips them (no PUT) + counts them."""
+    path = tmp_path / "f.yaml"
+    path.write_text(
+        "entity: UnitsOfMeasure\nkey: UOM\nrecords:\n  - UOM: KG\n  - UOM: LB\n"
+    )
+    ckpt = tmp_path / "ckpt.jsonl"
+    args = ["apply", "--concurrency", concurrency, "--checkpoint", str(ckpt)]
+    log: list[str] = []
+    _wire_pool(monkeypatch, log)
+
+    first = CliRunner().invoke(cli.cli, [*args, str(path)])
+    assert first.exit_code == 0, first.output
+    assert log.count("put") == 2
+    assert len(ckpt.read_text().splitlines()) == 2
+
+    log.clear()
+    second = CliRunner().invoke(cli.cli, ["--output", "json", *args, str(path)])
+    assert second.exit_code == 0, second.output
+    assert "put" not in log
+    assert "skip UnitsOfMeasure [KG] (checkpoint)" in second.output
+    assert json.loads(second.stdout)["checkpoint"] == 2
+
+
+def test_checkpoint_apply_edited_record_reapplies(
+    wired: Instance, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """V67: digest covers content - an edited record PUTs again."""
+    path = tmp_path / "f.yaml"
+    path.write_text("entity: UnitsOfMeasure\nkey: UOM\nrecords:\n  - UOM: KG\n")
+    ckpt = tmp_path / "ckpt.jsonl"
+    args = ["apply", "--checkpoint", str(ckpt), str(path)]
+    log: list[str] = []
+    _wire_pool(monkeypatch, log)
+    assert CliRunner().invoke(cli.cli, args).exit_code == 0
+
+    path.write_text(
+        "entity: UnitsOfMeasure\nkey: UOM\nrecords:\n  - UOM: KG\n    Descr: Kilo\n"
+    )
+    log.clear()
+    result = CliRunner().invoke(cli.cli, args)
+
+    assert result.exit_code == 0, result.output
+    assert log.count("put") == 1
+    assert "apply: 0 from checkpoint" in result.output
+
+
+def test_checkpoint_run_skips_done_scenario(
+    wired: Instance, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """V67: a recorded scenario is skipped on rerun with no step HTTP."""
+    path = tmp_path / "s.yaml"
+    path.write_text(
+        "scenario: s\nsteps:\n"
+        "  - id: s1\n    put: UnitsOfMeasure\n    record: {UOM: KG}\n"
+    )
+    ckpt = tmp_path / "ckpt.jsonl"
+    args = ["run", "--checkpoint", str(ckpt), str(path)]
+    log: list[str] = []
+    _wire_pool(monkeypatch, log)
+    assert CliRunner().invoke(cli.cli, args).exit_code == 0
+    assert log.count("put") == 1
+
+    log.clear()
+    result = CliRunner().invoke(cli.cli, args)
+
+    assert result.exit_code == 0, result.output
+    assert "put" not in log
+    assert "(checkpoint)" in result.output
+    assert "1 from checkpoint" in result.output
+
+
+def test_checkpoint_run_same_name_same_body_docs_all_run(
+    wired: Instance, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """V67: twin docs (one file + a copy) each run once; rerun skips all."""
+    body = (
+        "scenario: s\nsteps:\n"
+        "  - id: s1\n    put: UnitsOfMeasure\n    record: {UOM: KG}\n"
+    )
+    (tmp_path / "a.yaml").write_text(body + "---\n" + body)
+    (tmp_path / "b.yaml").write_text(body)
+    ckpt = tmp_path / "ckpt.jsonl"
+    args = ["run", "--checkpoint", str(ckpt), str(tmp_path / "a.yaml")]
+    args.append(str(tmp_path / "b.yaml"))
+    log: list[str] = []
+    _wire_pool(monkeypatch, log)
+
+    first = CliRunner().invoke(cli.cli, args)
+    assert first.exit_code == 0, first.output
+    assert log.count("put") == 3
+    assert "0 from checkpoint" in first.output
+
+    log.clear()
+    second = CliRunner().invoke(cli.cli, args)
+    assert second.exit_code == 0, second.output
+    assert "put" not in log
+    assert "3 from checkpoint" in second.output
+
+
+@pytest.mark.parametrize(
+    "args",
+    [
+        ["apply", "--plan"],
+        ["apply", "--dry-run"],
+        ["run", "--dry-run"],
+    ],
+)
+def test_checkpoint_refuses_read_only_modes(
+    wired: Instance, tmp_path: Path, args: list[str]
+) -> None:
+    """V67: --checkpoint x --plan/--dry-run = usage error (exit 2)."""
+    path = tmp_path / "f.yaml"
+    path.write_text("entity: UnitsOfMeasure\nkey: UOM\nrecords:\n  - UOM: KG\n")
+    ckpt = tmp_path / "ckpt.jsonl"
+    result = CliRunner().invoke(cli.cli, [*args, "--checkpoint", str(ckpt), str(path)])
+
+    assert result.exit_code == 2
+    assert "--checkpoint cannot combine" in result.output
+    assert not ckpt.exists()
+
+
+@pytest.mark.parametrize("command", ["apply", "run"])
+def test_checkpoint_malformed_fails_before_login(
+    wired: Instance,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    command: str,
+) -> None:
+    """V67: a malformed checkpoint line exits 1 with zero HTTP."""
+    path = tmp_path / "f.yaml"
+    path.write_text(
+        "entity: UnitsOfMeasure\nkey: UOM\nrecords:\n  - UOM: KG\n"
+        if command == "apply"
+        else "scenario: s\nsteps:\n"
+        "  - id: s1\n    put: UnitsOfMeasure\n    record: {UOM: KG}\n"
+    )
+    ckpt = tmp_path / "ckpt.jsonl"
+    ckpt.write_text("garbage\n")
+    log: list[str] = []
+    _wire_pool(monkeypatch, log)
+    result = CliRunner().invoke(
+        cli.cli, [command, "--checkpoint", str(ckpt), str(path)]
+    )
+
+    assert isinstance(result.exception, RuntimeError)
+    assert "ckpt.jsonl:1: malformed checkpoint line" in str(result.exception)
+    assert log == []
+
+
+def _bulk_handler(
+    log: list[str], done: Counter[str], fail_at: int | None = None
+) -> Callable[[httpx.Request], httpx.Response]:
+    """Thread-safe mock T1: counts each record's successful PUT by UOM key.
+
+    ``fail_at`` = from the k-th PUT on, ConnectError (host gone: a killed load
+    past the gh #52 blip retry, V45 stop).
+    """
+    lock = threading.Lock()
+    puts = itertools.count(1)
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        path = request.url.path
+        with lock:
+            if path.endswith("/auth/login"):
+                log.append("login")
+                return httpx.Response(204)
+            if path.endswith("/auth/logout"):
+                log.append("logout")
+                return httpx.Response(204)
+        if path.endswith("/Frames/Login.aspx"):
+            return httpx.Response(
+                200, text='<input id="txtSingleCompany" value="T1" />'
+            )
+        if request.method == "PUT":
+            with lock:
+                if fail_at is not None and next(puts) >= fail_at:
+                    raise httpx.ConnectError("killed", request=request)
+                done[json.loads(request.content)["UOM"]["value"]] += 1
+        return httpx.Response(200, json={})
+
+    return handler
+
+
+def _bulk_seed(path: Path, count: int) -> None:
+    rows = "".join(f"  - UOM: U{n:05d}\n" for n in range(count))
+    path.write_text(f"entity: UnitsOfMeasure\nkey: UOM\nrecords:\n{rows}")
+
+
+def test_bulk_apply_10k_records_pool_of_8_puts_each_once(
+    wired: Instance, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """V66/gh #71: 10K records over 8 sessions -> each PUT once, 8 in / 8 out."""
+    path = tmp_path / "bulk.yaml"
+    _bulk_seed(path, 10_000)
+    log: list[str] = []
+    done: Counter[str] = Counter()
+    handler = _bulk_handler(log, done)
+    monkeypatch.setattr(
+        cli,
+        "AcumaticaClient",
+        lambda inst, **kw: RealClient(inst, transport=httpx.MockTransport(handler)),
+    )
+    result = CliRunner().invoke(cli.cli, ["apply", "--concurrency", "8", str(path)])
+
+    assert result.exit_code == 0, result.output
+    assert len(done) == 10_000
+    assert set(done.values()) == {1}
+    assert log == ["login"] * 8 + ["logout"] * 8
+
+
+@pytest.mark.parametrize("concurrency", ["1", "4"])
+def test_killed_load_resumes_from_checkpoint_without_duplicates(
+    wired: Instance,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    concurrency: str,
+) -> None:
+    """V67/V45: load dies mid-file -> exit 1 + not-applied; rerun finishes, 0 dup."""
+    path = tmp_path / "bulk.yaml"
+    _bulk_seed(path, 200)
+    ckpt = tmp_path / "ckpt.jsonl"
+    args = ["apply", "--concurrency", concurrency, "--checkpoint", str(ckpt)]
+    log: list[str] = []
+    done: Counter[str] = Counter()
+    handlers = iter([_bulk_handler(log, done, fail_at=120), _bulk_handler(log, done)])
+    handler = next(handlers)
+    monkeypatch.setattr(
+        cli,
+        "AcumaticaClient",
+        lambda inst, **kw: RealClient(inst, transport=httpx.MockTransport(handler)),
+    )
+    killed = CliRunner().invoke(cli.cli, [*args, str(path)])
+
+    assert killed.exit_code == 1
+    assert f"not applied: {path}" in killed.output
+    first = sum(done.values())
+    assert 0 < first < 200
+    assert len(ckpt.read_text().splitlines()) == first
+
+    handler = next(handlers)
+    resumed = CliRunner().invoke(cli.cli, ["--output", "json", *args, str(path)])
+
+    assert resumed.exit_code == 0, resumed.output
+    assert len(done) == 200
+    assert set(done.values()) == {1}
+    assert json.loads(resumed.stdout)["checkpoint"] == first
 
 
 def test_apply_422_survives_dead_logout(
@@ -2819,3 +3209,106 @@ def test_state_output_json_reports_views(
     doc = json.loads(result.stdout)
     assert (doc["command"], doc["mode"], doc["changed"]) == ("state", "diff", 1)
     assert doc["views"][0]["differences"] == ["x"]
+
+
+def _multi_doc(count: int, expect: str = "") -> str:
+    return "---\n".join(
+        f"scenario: d{i}\nsteps:\n  - id: s{i}\n    put: UnitsOfMeasure\n"
+        f"    record: {{UOM: U{i:03}}}\n{expect}"
+        for i in range(count)
+    )
+
+
+def _run_pool_tenant(
+    monkeypatch: pytest.MonkeyPatch, fail: str | None = None
+) -> tuple[list[str], set[int]]:
+    """Wire cli.AcumaticaClient to a mock tenant; log PUT UOMs + sessions used."""
+    lock = threading.Lock()
+    puts: list[str] = []
+    sessions: set[int] = set()
+    opened = itertools.count()
+
+    def factory(inst: Instance, **_: object) -> RealClient:
+        session = next(opened)
+
+        def handler(request: httpx.Request) -> httpx.Response:
+            path = request.url.path
+            if path.endswith(("/auth/login", "/auth/logout")):
+                return httpx.Response(204)
+            if path.endswith("/Frames/Login.aspx"):
+                return httpx.Response(
+                    200, text='<input id="txtSingleCompany" value="T1" />'
+                )
+            if request.method == "PUT" and path.endswith("/UnitsOfMeasure"):
+                uom = json.loads(request.content)["UOM"]["value"]
+                time.sleep(0.002)
+                with lock:
+                    puts.append(uom)
+                    sessions.add(session)
+                if uom == fail:
+                    return httpx.Response(422, json={"message": "bad"})
+                return httpx.Response(200, json={"UOM": {"value": uom}})
+            return httpx.Response(200, json={"Results": []})  # inquiry probe
+
+        return RealClient(inst, transport=httpx.MockTransport(handler))
+
+    monkeypatch.setattr(cli, "AcumaticaClient", factory)
+    return puts, sessions
+
+
+def test_run_pool_spreads_documents_across_sessions(
+    wired: Instance, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """V66/gh #71: docs of one multi-doc file run on N sessions, each once."""
+    path = tmp_path / "load.yaml"
+    path.write_text(_multi_doc(40))
+    puts, sessions = _run_pool_tenant(monkeypatch)
+
+    result = CliRunner().invoke(
+        cli.cli, ["--output", "json", "run", "--concurrency", "4", str(path)]
+    )
+
+    assert result.exit_code == 0, result.output
+    assert sorted(puts) == [f"U{i:03}" for i in range(40)]
+    assert sessions == {0, 1, 2, 3}
+    doc = json.loads(result.stdout)
+    assert [s["doc"] for s in doc["scenarios"]] == list(range(1, 41))
+    assert doc["counts"]["passed"] == 40
+
+
+def test_run_pool_inquire_delta_file_stays_serial(
+    wired: Instance, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """V66: an inquire delta expect keeps the file on one session + info line."""
+    path = tmp_path / "load.yaml"
+    expect = (
+        "expect:\n  - inquire: AccountSummaryInquiry\n    delta: {EndingBalance: 0}\n"
+    )
+    path.write_text(_multi_doc(6, expect))
+    puts, sessions = _run_pool_tenant(monkeypatch)
+
+    result = CliRunner().invoke(cli.cli, ["run", "--concurrency", "3", str(path)])
+
+    assert puts == [f"U{i:03}" for i in range(6)]
+    assert sessions == {0}
+    assert "inquire delta expect; documents run" in result.stderr
+
+
+def test_run_pool_step_error_stops_dispatch_lists_not_run(
+    wired: Instance, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """V66 + gh #58: step error under pool → no new dispatch; rest not run."""
+    first, later = tmp_path / "10-load.yaml", tmp_path / "20-next.yaml"
+    first.write_text(_multi_doc(100))
+    later.write_text(_multi_doc(1))
+    puts, _ = _run_pool_tenant(monkeypatch, fail="U000")
+
+    result = CliRunner().invoke(
+        cli.cli, ["run", "--concurrency", "2", str(first), str(later)]
+    )
+
+    assert result.exit_code == 1
+    assert len(puts) < 10  # in-flight finish; nothing new dispatched
+    assert f"x {first}#1 [s0]: " in result.stderr
+    assert f"not run: {first}#" in result.stderr
+    assert f"not run: {later}" in result.stderr

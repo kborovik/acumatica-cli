@@ -5,6 +5,8 @@ end (login through _checked, logout on exit) without a live instance.
 """
 
 import json
+import threading
+import time
 from typing import Any
 
 import httpx
@@ -13,8 +15,10 @@ import pytest
 from acumatica_cli.client import (
     AcumaticaClient,
     SessionLostError,
+    SessionPool,
     parse_entity_list,
     parse_entity_response,
+    pool_map,
     unwrap,
     wrap,
 )
@@ -762,3 +766,52 @@ def test_put_retries_only_when_asked() -> None:
     seen, client = _flaky([503])
     client.put("UnitsOfMeasure", {"UOM": "KG"}, retry=True)
     assert len(seen) == 2
+
+
+def test_pool_map_worker_error_stops_new_dispatch() -> None:
+    """V66: an exception escaping a worker stops dispatch, then propagates."""
+    clients = [AcumaticaClient.__new__(AcumaticaClient) for _ in range(2)]
+    started: list[int] = []
+    lock = threading.Lock()
+
+    def fn(_client: AcumaticaClient, item: int) -> int:
+        with lock:
+            started.append(item)
+        if item == 0:
+            raise ValueError("boom")
+        time.sleep(0.01)
+        return item
+
+    stop = threading.Event()
+    with pytest.raises(ValueError, match="boom"):
+        pool_map(clients, fn, list(range(50)), stop)
+
+    assert stop.is_set()
+    assert len(started) < 10  # queued items were cancelled, not run
+
+
+def test_pool_map_keeps_item_order_and_marks_unstarted_none() -> None:
+    """V66: results line up with items; after stop, unstarted items are None."""
+    clients = [AcumaticaClient.__new__(AcumaticaClient)]
+    stop = threading.Event()
+
+    def fn(_client: AcumaticaClient, item: int) -> int:
+        if item == 2:
+            stop.set()
+        return item * 10
+
+    assert pool_map(clients, fn, [0, 1, 2, 3, 4], stop) == [0, 10, 20, None, None]
+
+
+def test_session_pool_first_login_error_surfaces_unchanged(
+    instance: Instance,
+) -> None:
+    """V66: session 1 failing is not a slot shortfall - no license wording."""
+
+    def factory(_inst: Instance) -> AcumaticaClient:
+        raise RuntimeError("tenant guard: landed on CNBN, expected T1")
+
+    with pytest.raises(RuntimeError) as err:
+        SessionPool(instance, 3, factory=factory).__enter__()
+
+    assert str(err.value) == "tenant guard: landed on CNBN, expected T1"

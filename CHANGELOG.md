@@ -13,6 +13,17 @@
   Report lines name `<file>#<n>`; a stopped run folds the rest of a file
   into one `not run: <file>#<a>-#<b> (N documents)` line, and `--output
   json` scenario entries carry `doc`.
+- **Bulk-load concurrency and resume (gh #71):** `apply` and `run` take
+  `--concurrency N`: N sessions log in before the first write (each takes
+  one API-user license slot; a refused login exits 1 with nothing
+  written), and the records of one seed file or the documents of one
+  multi-document scenario file go out in parallel. Files keep their
+  order; Company files, action files and scenario files with an inquire
+  delta expect stay serial. `--checkpoint PATH` appends one JSON line per
+  record, action or scenario done; a re-run after a killed load skips
+  those on the same tenant with unchanged content, and an edited record
+  applies again. The summary and `--output json` report the
+  `checkpoint` count.
 
 ## [v0.36.0] - 2026-10-24
 

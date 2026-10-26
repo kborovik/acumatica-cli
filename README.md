@@ -93,8 +93,10 @@ acu [--tenant NAME] [--url URL] [--ssh USER@HOST] [--api-version V]
 │
 ├── bootstrap [--export PATH]         publish AcuBootstrap (REST); --export = offline zip
 ├── apply [--dry-run] <FILES...>      push YAML via REST (idempotent PUT upserts)
+│         [--plan|--changed-only] [--concurrency N] [--checkpoint PATH]
 ├── diff  <FILES...>                  drift check vs the live tenant (exit 2 on drift)
 ├── run   [--dry-run] <FILES...>      execute transaction scenario YAML (exit 1 on any miss)
+│         [--concurrency N] [--checkpoint PATH]
 ├── state [--out DIR] [--diff] [--assert-unchanged] [--dry-run] <FILES...>
 │                                     capture derived state into state/ (not seed)
 ├── survey                            existing-tenant dual-reader (never L1 extract/inventory/reconcile)
@@ -134,6 +136,15 @@ steps:
     record: { OrderType: SO, CustomerID: C0042, CustomerOrder: LEGACY-1042 }
 ```
 `acu-config/views` and `state` keep Period pinned.
+
+Bulk loads (thousands of records or documents) take two flags on `apply` and `run`:
+
+- `--concurrency N` opens N sessions before the first write and spreads one file's records (`apply`) or documents (`run`) across them. Each session takes one API-user license slot; if a login is refused, acu logs out the open sessions and exits 1 with nothing written. Files stay in order. Company and action files, and scenario files with an inquire delta expect, stay serial.
+- `--checkpoint PATH` appends one JSON line `{tenant, unit, digest}` per record, action or scenario done, flushed at once. Re-run the same command after a killed load and acu skips what is done on that tenant (`skip <unit> (checkpoint)`); a record whose content changed is applied again. A scenario's key includes its file name and document number, so renaming the file or inserting a document ahead of it runs it again. Not valid with `--plan` or `--dry-run`; a malformed line exits 1 before login.
+
+```sh
+acu --tenant DEV apply --concurrency 4 --checkpoint load.jsonl data/
+```
 
 `survey extract` writes SEED_DIRS into `--out` (default `acu-config/`).
 
@@ -196,8 +207,8 @@ Exit codes do not change (`diff` still exits 2 on drift), and other commands ign
 - `field`: path below the record (e.g. `Details[A].Qty`); `""` when the record itself is missing.
 - `source` / `live`: set only for `changed`.
 
-- `apply`: `{command, tenant, mode (all|plan|changed|dry_run), ok, failed, counts, errors, stopped, not_applied, files: [{file, entity, ok, errors}]}`; `counts` keys `create`, `update`, `unchanged`, `invoke`, `put`.
-- `run`: `{command, tenant, counts: {passed, failed, skipped, not_run}, scenarios: [{file, doc?, outcome, misses, error?}], not_run}`; `doc` = 1-based YAML document index in a multi-document file; `not_run` lists `<file>` or `<file>#<n>`; `misses` = failed expectation lines.
+- `apply`: `{command, tenant, mode (all|plan|changed|dry_run), ok, failed, counts, errors, stopped, not_applied, files: [{file, entity, ok, errors}]}`; `counts` keys `create`, `update`, `unchanged`, `invoke`, `put`; with `--checkpoint`, `counts.checkpoint` and top-level `checkpoint` = units skipped from the file.
+- `run`: `{command, tenant, counts: {passed, failed, skipped, not_run}, scenarios: [{file, doc?, outcome, misses, error?}], not_run}`; `doc` = 1-based YAML document index in a multi-document file; `not_run` lists `<file>` or `<file>#<n>`; `misses` = failed expectation lines; with `--checkpoint`, `counts.checkpoint` = scenarios skipped from the file and those entries carry `checkpoint: true`.
 - `state`: `{command, tenant, mode (write|diff|assert), exit, changed, views: [{view, file, rows, status (wrote|changed|unchanged), differences}]}`.
 
 ## The data repo

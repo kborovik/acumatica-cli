@@ -53,8 +53,10 @@ never a silent Default-endpoint PUT.
 """
 
 import re
+import threading
 from collections import Counter
 from collections.abc import Sequence
+from dataclasses import dataclass
 from enum import StrEnum
 from pathlib import Path
 from typing import Any
@@ -64,12 +66,14 @@ import yaml
 from pydantic import Field, ValidationError, field_validator, model_validator
 
 from . import bootstrap, output
+from .checkpoint import Checkpoint, digest
 from .client import (
     OPTIMIZATION_500,
     RECORD_FAILURES,
     AcumaticaClient,
     SessionLostError,
     format_failure,
+    pool_map,
     unwrap,
 )
 from .config import find_data_root
@@ -487,12 +491,14 @@ class ApplyMode(StrEnum):
     CHANGED = "changed"
 
 
-def _apply_action(
+def _apply_action(  # noqa: PLR0913 — checkpoint keyword-only (gh #71)
     client: AcumaticaClient | None,
     action: ActionFile,
     dry_run: bool = False,
     plan: bool = False,
     counts: Counter[str] | None = None,
+    *,
+    checkpoint: Checkpoint | None = None,
 ) -> tuple[int, list[str]]:
     """Invoke the action unless done_when already verifies the desired state.
 
@@ -507,10 +513,16 @@ def _apply_action(
         output.data(f"  would invoke {action.action}")
         return 1, []
     assert client is not None, "live apply needs a client"
+    unit = f"action {action.action} [{action.entity}]"
+    unit_digest = digest(action.model_dump(mode="json", exclude={"path"}))
+    if _resumed(checkpoint, unit, unit_digest, tally):
+        return 1, []
     try:
         if _probe(client, action):
             output.data(f"  skip {action.action} (already done)")
             tally["unchanged"] += 1
+            if checkpoint is not None:
+                checkpoint.record(unit, unit_digest)
             return 1, []
         if plan:
             output.data(f"  invoke {action.action} [{action.entity}]")
@@ -533,15 +545,31 @@ def _apply_action(
         return 0, [msg]
     output.data(f"  invoke {action.action} [{action.entity}]")
     tally["invoke"] += 1
+    if checkpoint is not None:
+        checkpoint.record(unit, unit_digest)
     return 1, []
 
 
-def apply(
+def _resumed(
+    checkpoint: Checkpoint | None, unit: str, unit_digest: str, tally: Counter[str]
+) -> bool:
+    """V67: unit already done on this tenant with this content → skip line."""
+    if checkpoint is None or not checkpoint.done(unit, unit_digest):
+        return False
+    output.data(f"  skip {unit} (checkpoint)")
+    tally["checkpoint"] += 1
+    return True
+
+
+def apply(  # noqa: PLR0913 — pool keyword-only (gh #71)
     client: AcumaticaClient | None,
     baseline: BaselineFile | ActionFile,
     dry_run: bool = False,
     mode: ApplyMode = ApplyMode.ALL,
     counts: Counter[str] | None = None,
+    *,
+    pool: Sequence[AcumaticaClient] = (),
+    checkpoint: Checkpoint | None = None,
 ) -> tuple[int, list[str]]:
     """PUT every record (upsert by key); an action file invokes its action.
 
@@ -575,11 +603,131 @@ def apply(
     ``counts``. PLAN writes nothing; CHANGED skips the PUT of an
     unchanged record (Role user assignment still runs: V57 membership is
     not diffable). Default stays PUT-everything (V4).
+
+    ``pool`` (gh #71, V66) holds every ``--concurrency`` session, ``client``
+    first. More than one → records of this file PUT in parallel, one
+    session per worker. Action and Company files stay serial on
+    ``client``; after a Company PUT every pooled session re-logs in (V5).
+
+    ``checkpoint`` (V67): a record or action already done on this tenant
+    with the same content skips (``counts["checkpoint"]``, counted ok);
+    each success appends its line. Never under plan or dry run.
     """
     tally = counts if counts is not None else Counter[str]()
     if isinstance(baseline, ActionFile):
         plan = mode is ApplyMode.PLAN
-        return _apply_action(client, baseline, dry_run, plan, tally)
+        return _apply_action(
+            client, baseline, dry_run, plan, tally, checkpoint=checkpoint
+        )
+    if len(pool) > 1 and not dry_run:
+        if baseline.entity != "Company":
+            return _apply_pooled(pool, baseline, mode, tally, checkpoint=checkpoint)
+        output.info(f"{baseline.path}: Company file applies serially (V5 re-login)")
+        done = _apply_serial(
+            client, baseline, dry_run, mode, tally, checkpoint=checkpoint
+        )
+        _refresh_pool(pool, *done)
+        return done
+    return _apply_serial(client, baseline, dry_run, mode, tally, checkpoint=checkpoint)
+
+
+def _refresh_pool(pool: Sequence[AcumaticaClient], ok: int, errors: list[str]) -> None:
+    """V5: once the first session bounced after a Company PUT, bounce the rest.
+
+    Runs only after the file applied; a failed re-login stops the run but
+    keeps the file's ``ok`` / ``errors`` (its records did land).
+    """
+    if not pool[0].refreshed_after_company:
+        return
+    for i, client in enumerate(pool[1:], start=2):
+        try:
+            client.refresh_after_company()
+        except SessionLostError as err:
+            raise ApplyStopped(
+                f"pooled session {i}/{len(pool)}", str(err), ok, errors
+            ) from err
+
+
+def record_digest(record: dict[str, Any]) -> str:
+    """V67 checkpoint digest of one record; password fields stay out of it."""
+    return digest({k: v for k, v in record.items() if k not in PASSWORD_FIELDS})
+
+
+@dataclass(frozen=True)
+class _Pooled:
+    """One dispatched record's outcome: ok, error message, or stop (at, why)."""
+
+    tally: Counter[str]
+    error: str | None = None
+    stop: tuple[str, str] | None = None
+
+
+def _apply_pooled(
+    pool: Sequence[AcumaticaClient],
+    baseline: BaselineFile,
+    mode: ApplyMode,
+    tally: Counter[str],
+    *,
+    checkpoint: Checkpoint | None,
+) -> tuple[int, list[str]]:
+    """Records of one file across N sessions; V45 semantics as serial.
+
+    Each worker checks a session out for one record, so no session ever
+    carries two requests at once. A record failure reports and continues.
+    A hard-stop stops new dispatch; in-flight records finish, then the
+    first stop (record order) raises ApplyStopped with what got done.
+    """
+    index = _prefetch(pool[0], baseline) if mode is not ApplyMode.ALL else {}
+    stop = threading.Event()
+
+    def one(client: AcumaticaClient, record: dict[str, Any]) -> _Pooled:
+        at = f"{baseline.entity} [{', '.join(str(record[k]) for k in baseline.keys)}]"
+        local = Counter[str]()
+        unit_digest = record_digest(record)
+        if _resumed(checkpoint, at, unit_digest, local):
+            return _Pooled(local)
+        try:
+            _apply_record(client, baseline, record, index=index, mode=mode, tally=local)
+            if checkpoint is not None:
+                checkpoint.record(at, unit_digest)
+        except _STOP_FAILURES as err:
+            stop.set()
+            return _Pooled(local, stop=(at, format_failure(err)))
+        except RECORD_FAILURES as err:
+            msg = f"{at}: {format_failure(err)}"
+            output.error(msg)
+            return _Pooled(local, error=msg)
+        return _Pooled(local)
+
+    results = pool_map(pool, one, baseline.records, stop)
+    return _merge_pooled([r for r in results if r is not None], tally)
+
+
+def _merge_pooled(results: list[_Pooled], tally: Counter[str]) -> tuple[int, list[str]]:
+    """Fold dispatched outcomes in record order; first stop raises ApplyStopped."""
+    ok = 0
+    errors: list[str] = []
+    for result in results:
+        tally.update(result.tally)
+        ok += result.error is None and result.stop is None
+        if result.error is not None:
+            errors.append(result.error)
+    stops = [r.stop for r in results if r.stop is not None]
+    if stops:
+        raise ApplyStopped(*stops[0], ok, errors)
+    return ok, errors
+
+
+def _apply_serial(  # noqa: PLR0913 — checkpoint keyword-only (gh #71)
+    client: AcumaticaClient | None,
+    baseline: BaselineFile,
+    dry_run: bool,
+    mode: ApplyMode,
+    tally: Counter[str],
+    *,
+    checkpoint: Checkpoint | None,
+) -> tuple[int, list[str]]:
+    """The single-session record loop (``--concurrency 1``, Company files)."""
     ok = 0
     errors: list[str] = []
     index = (
@@ -601,9 +749,15 @@ def apply(
             continue
         assert client is not None, "live apply needs a client"
         at = f"{baseline.entity} [{label}]"
+        unit_digest = record_digest(record)
+        if _resumed(checkpoint, at, unit_digest, tally):
+            ok += 1
+            continue
         try:
             _apply_record(client, baseline, record, index=index, mode=mode, tally=tally)
             ok += 1
+            if checkpoint is not None:
+                checkpoint.record(at, unit_digest)
         except _STOP_FAILURES as err:
             raise ApplyStopped(at, format_failure(err), ok, errors) from err
         except RECORD_FAILURES as err:

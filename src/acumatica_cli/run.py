@@ -56,6 +56,7 @@ expectation miss (2 stays diff's drift code). A step error stops the
 run: later scenarios are listed as not run (gh #58).
 """
 
+import json
 import re
 import time
 from collections.abc import Callable
@@ -69,6 +70,7 @@ import yaml
 from pydantic import Field, ValidationError, model_validator
 
 from . import output
+from .checkpoint import digest
 from .client import AcumaticaClient, SessionLostError, format_failure, unwrap
 from .models import Model, validation_summary
 from .seed import _norm  # pyright: ignore[reportPrivateUsage]
@@ -84,6 +86,21 @@ def period_mmYYYY(d: date) -> str:  # noqa: N802  # SPEC V43 name (MMyyyy)
     built-in ``${current_period}`` token on ``acu run``.
     """
     return f"{d.month:02d}{d.year:04d}"
+
+
+def scenario_digest(scenario: Scenario, today: date | None = None) -> str:
+    """V67 checkpoint digest: doc, file basename, doc number, used built-ins.
+
+    Basename + doc number keep same-name same-body docs (one file or a
+    copied file) apart, while ``./dir`` vs ``dir`` still resumes. A
+    ``${current_period}`` scenario done in one month is new work in the
+    next, so the resolved period joins the digest only when referenced.
+    """
+    content = scenario.model_dump(mode="json", exclude={"path", "doc"})
+    text = json.dumps(content)
+    used = {k: v for k, v in _builtin_variables(today).items() if f"${{{k}}}" in text}
+    unit = {"scenario": content, "file": scenario.path.name, "doc": scenario.doc}
+    return digest({**unit, "builtins": used} if used else unit)
 
 
 def _builtin_variables(today: date | None = None) -> dict[str, Any]:
