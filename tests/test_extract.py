@@ -1358,6 +1358,38 @@ def test_b9_fallback_selects_keys_then_key_urls(
     assert out.is_file()
 
 
+def test_key_url_read_entity_walks_keys_without_plain_list(
+    instance: Instance,
+) -> None:
+    """V69/B40: Tax plain list GET carries ReportingGroup as surrogate id.
+
+    Extract lists the keys via $select, then reads each record by key URL
+    (the read that answers the group name) - never the plain list GET.
+    """
+    server = FakeServer(
+        {"Tax": [{"TaxID": "STATE", "TaxSchedule": [{"ReportingGroup": "SALES"}]}]},
+        {"Tax": ["TaxID"]},
+    )
+    spec = _spec(
+        entity="Tax",
+        keys=["TaxID"],
+        file="master/77-taxes.yaml",
+        detail_keys={"TaxSchedule": "StartDate"},
+    )
+    records = extract._fetch(  # pyright: ignore[reportPrivateUsage]
+        _client(instance, server), spec
+    )
+    reads = [
+        (r.url.path.split("/entity/", 1)[1], dict(r.url.params))
+        for r in server.requests
+    ]
+    assert reads == [
+        ("Default/25.200.001/Tax", {"$select": "TaxID"}),
+        ("Default/25.200.001/Tax/STATE", {"$expand": "TaxSchedule"}),
+    ]
+    assert unwrap(records[0])["TaxSchedule"] == [{"ReportingGroup": "SALES"}]
+
+
 def test_fetch_filter_narrows_plain_list_get(
     instance: Instance, server: FakeServer
 ) -> None:

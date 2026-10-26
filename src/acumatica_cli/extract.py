@@ -46,6 +46,7 @@ from .client import (
 )
 from .models import Model, validation_summary
 from .seed import (
+    KEY_URL_READ,
     NUMBERING_RUNTIME_FIELDS,
     PASSWORD_FIELDS,
     _calendar_day,  # pyright: ignore[reportPrivateUsage]
@@ -231,6 +232,8 @@ def _fetch(client: AcumaticaClient, spec: EntitySpec) -> list[dict[str, Any]]:
     same record set and the per-key walk only visits filtered keys.
     ``$expand`` rides both paths when the catalog claims detail lists or
     linked entities (T60/T65) — same class of expand as seed.diff.
+    KEY_URL_READ entities take the key walk directly: their plain list
+    GET carries selector surrogate ids, not names (V69).
     """
     endpoint = resolve_endpoint(spec.endpoint, api_version=client.instance.api_version)
     params: dict[str, str] = {}
@@ -239,11 +242,14 @@ def _fetch(client: AcumaticaClient, spec: EntitySpec) -> list[dict[str, Any]]:
     expand = _expand_for(spec)
     if expand:
         params["$expand"] = ",".join(expand)
-    try:
-        return client.get_list(spec.entity, params=params or None, endpoint=endpoint)
-    except RuntimeError as err:
-        if OPTIMIZATION_500 not in str(err):
-            raise
+    if spec.entity not in KEY_URL_READ:
+        try:
+            return client.get_list(
+                spec.entity, params=params or None, endpoint=endpoint
+            )
+        except RuntimeError as err:
+            if OPTIMIZATION_500 not in str(err):
+                raise
     key_rows = client.get_list(
         spec.entity,
         params={"$select": ",".join(spec.keys)}
