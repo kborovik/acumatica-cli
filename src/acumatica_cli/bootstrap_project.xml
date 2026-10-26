@@ -16,7 +16,9 @@
   for Role AssignUser action (PXDatabase UsersInRoles persist);
   T251 bumps 1.10.0 -> 1.11.0 for NumberingSequence Header NewSymbol
   (CS201010 insert requires New Number Symbol or Manual Numbering;
-  gh #44 / V58).
+  gh #44 / V58);
+  T307 bumps 1.11.0 -> 1.12.0 for ExternalFileStorage (SM202540,
+  gh #74 / V70).
 
   package_zip() always loads this packaged contract. Data-repo
   config/bootstrap/project.xml or bootstrap/project.xml is forbidden (V21);
@@ -45,7 +47,7 @@
   GLPreferences, INPreferences, ReasonCode, AP/AR/SO/PO/CA Preferences,
   AvailabilityCalculationRule, PostingClass, VendorClass, StatementCycle,
   Warehouse, OrderType, CashAccount, Role, User (+ UserRole membership detail),
-  NumberingSequence, SegmentedKey.
+  NumberingSequence, SegmentedKey, ExternalFileStorage.
 
   T145 Role/User (gh #24) - Default endpoint has no Role/User surface:
   - Role SM201005 -> RoleAccess, PrimaryView Roles (PX.SM.Roles):
@@ -124,13 +126,33 @@
   - CAPreferences (CA101000 / CASetupRecord): +BatchNumberingID
     +AutoPostOption +ReleaseAP +ReleaseAR (keep HoldEntry/Transit*)
 
+  T307 ExternalFileStorage (gh #74 / V70 / B42) - Default endpoint has no
+  SM202540 surface; PX.SM.BlobStorageMaint External File Storage
+  (T306/T307 probes vs 26.101 PX.Data):
+  - PrimaryView Filter (DAC BlobStorageConfig): Provider, AllowWrite
+    ("Allow Saving Files"), IsActive. No key fields: tables keyed
+    CompanyID only - one singleton per tenant. Provider is stored as the
+    type FullName (PX.SM.PXBlobStorageFileProvider) but GET returns the
+    UI label "Local File Folder"; PUT accepts the label.
+  - LocalFolder -> Settings.Value (DAC BlobProviderSettings, current
+    row). Provider FieldUpdated inserts the provider's settings rows; the
+    file provider has one (Name = LocalFolder). Detail arrays on this
+    screen bind fieldless rows (Settings write no-op), so the setting is
+    a top-level field, not a detail.
+  - Actions: EnableProvider (actionEnableProvider; Init checks the
+    folder exists and is writable, sets IsActive), SwitchDirection
+    (actionSaveFlag; TOGGLES AllowWrite - gate on AllowWrite eq true).
+  - Not mapped: FilesInDatabase / Move Files actions (the tenant view
+    lists System CompanyID 1 shared revisions), Disable Provider,
+    DisableDeleteOnExternalFileStorage.
+
   Contract field names = DAC property names verbatim (no rename layer).
   Features (CS100000) stays OUT of the endpoint - the plugin owns features.
   Shape change requires a version bump (V21).
 -->
-<Customization level="" description="acu bootstrap: CustomizationPlugin enables features on publish; Bootstrap endpoint exposes full company surface (company + credit terms + financial currency + GL chain + module preferences + vendor class + statement cycle + warehouse + order type + cash account + role + user + membership + numbering sequence + segmented key)" product-version="26.101">
+<Customization level="" description="acu bootstrap: CustomizationPlugin enables features on publish; Bootstrap endpoint exposes full company surface (company + credit terms + financial currency + GL chain + module preferences + vendor class + statement cycle + warehouse + order type + cash account + role + user + membership + numbering sequence + segmented key + external file storage)" product-version="26.101">
   <EntityEndpoint>
-    <Endpoint xmlns="http://www.acumatica.com/entity/maintenance/5.31" name="Bootstrap" version="1.11.0" systemContractVersion="4">
+    <Endpoint xmlns="http://www.acumatica.com/entity/maintenance/5.31" name="Bootstrap" version="1.12.0" systemContractVersion="4">
       <TopLevelEntity name="Company" screen="CS101500">
         <Fields>
           <Field name="AcctCD" type="StringValue" />
@@ -1180,6 +1202,32 @@
             <To object="Detail" field="Length" />
           </Mapping>
         </Mappings>
+      </TopLevelEntity>
+      <TopLevelEntity name="ExternalFileStorage" screen="SM202540">
+        <Fields>
+          <Field name="Provider" type="StringValue" />
+          <Field name="AllowWrite" type="BooleanValue" />
+          <Field name="IsActive" type="BooleanValue" />
+          <Field name="LocalFolder" type="StringValue" />
+        </Fields>
+        <Mappings>
+          <Mapping field="Provider">
+            <To object="Filter" field="Provider" />
+          </Mapping>
+          <Mapping field="AllowWrite">
+            <To object="Filter" field="AllowWrite" />
+          </Mapping>
+          <Mapping field="IsActive">
+            <To object="Filter" field="IsActive" />
+          </Mapping>
+          <Mapping field="LocalFolder">
+            <To object="Settings" field="Value" />
+          </Mapping>
+        </Mappings>
+        <Actions>
+          <Action name="EnableProvider" mappedTo="actionEnableProvider" isDefault="false" />
+          <Action name="SwitchDirection" mappedTo="actionSaveFlag" isDefault="false" />
+        </Actions>
       </TopLevelEntity>
     </Endpoint>
   </EntityEndpoint>
