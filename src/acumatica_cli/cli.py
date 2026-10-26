@@ -56,6 +56,7 @@ COMMAND MAP (pick by intent)
   seed write   apply [--dry-run] <FILES...>              (sole mutator)
   seed check   diff <FILES...>                           (exit 2 on drift)
   txns         run [--dry-run] <FILES...>
+  bulk load    apply|run --concurrency N --checkpoint PATH  (N API-user slots)
   cold rebuild tenant create then apply then run then diff (no wrap cmd)
   pull seed    survey extract [--only ENTITY]...         (inverse of apply)
   observe      state [--diff|--assert-unchanged] <FILES...>
@@ -998,6 +999,14 @@ def apply_cmd(
     only create / update records. Both end with a count summary. Default
     PUTs every record (idempotent re-PUT).
 
+    --concurrency N opens N sessions (each takes one API-user license
+    slot) before the first write and PUTs the records of each file in
+    parallel; files stay in order, and Company + action files stay serial.
+    Too few slots exits 1 before any write. --checkpoint PATH appends one
+    line per record done; running the same file again skips records done
+    on this tenant with unchanged content (an edited record PUTs again).
+    It cannot combine with --plan or --dry-run.
+
     \b
     Prerequisites
       Tenant exists and is bootstrapped (tenant create or acu bootstrap).
@@ -1010,6 +1019,7 @@ def apply_cmd(
       acu --tenant DEV apply --plan acu-config
       acu --tenant DEV apply --changed-only acu-config
       acu --tenant DEV apply acu-config/baseline/20-accounts.yaml
+      acu --tenant DEV apply --concurrency 4 --checkpoint load.jsonl data/
 
     Related: `diff` (drift) · `survey extract` (inverse pull) · `run` (txns).
     """
@@ -1419,6 +1429,13 @@ def run_cmd(
     expectation miss marks that scenario failed and the run continues.
     Summary: passed / failed / skipped (once) / not run.
 
+    --concurrency N opens N sessions (each takes one API-user license
+    slot) and runs the documents of one multi-document file in parallel;
+    a file with an inquire delta expect runs serially. --checkpoint PATH
+    appends one line per scenario passed or skipped; running again skips
+    those on this tenant with unchanged content. It cannot combine with
+    --dry-run.
+
     \b
     Exit  0 = all expectations hold · 1 = step error or expectation miss
 
@@ -1431,6 +1448,7 @@ def run_cmd(
       acu --tenant DEV run acu-scenario
       acu --tenant DEV run --dry-run acu-scenario/10-seed-capital.yaml
       acu --tenant DEV run acu-scenario overlays/default-24.200.001/acu-scenario
+      acu --tenant DEV run --concurrency 4 --checkpoint load.jsonl loads/
 
     Related: `apply` · `diff` · `state`.
     """
