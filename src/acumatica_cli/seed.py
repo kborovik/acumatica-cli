@@ -115,6 +115,12 @@ _DIFF_IGNORE_PATHS = frozenset({("LotSerialClass", "Segments", "Value")})
 # empty while UsersInRoles has session-company rows. Extra live members
 # are not drift (AssignUser is additive-only).
 _DIFF_SKIP_DETAILS = frozenset({("Role", "Users"), ("User", "Roles")})
+# Key-URL-read entities (V69/B40): the list GET's optimized export returns
+# a selector's per-tenant surrogate id (Tax TaxSchedule.ReportingGroup
+# '1') where the key-URL GET returns the display name ('HST'). Diff,
+# apply's live read and extract read these by key URL only, so seed holds
+# the name.
+KEY_URL_READ = frozenset({"Tax"})
 
 
 def _diff_ignored(entity: str, *path: str) -> bool:
@@ -943,6 +949,8 @@ def _fetch(
     CuryRecords, B9) 500 on that optimized export; the key-URL
     single-record GET skips the optimizer, so diff falls back to it on
     exactly that error (V4: read-back must survive delegate-view entities).
+    KEY_URL_READ entities skip the list GET and take the key-URL form
+    first (V69: list export returns selector surrogate ids).
 
     Detail arrays and linked entities only travel under $expand
     (T60/T65): without it every GET answers top-level scalars alone,
@@ -958,6 +966,14 @@ def _fetch(
     custom = _custom_param(record)
     if custom:
         params["$custom"] = custom
+    key_params = {k: params[k] for k in ("$expand", "$custom") if k in params} or None
+    if baseline.entity in KEY_URL_READ:
+        return client.get_record(
+            baseline.entity,
+            [record[k] for k in baseline.keys],
+            baseline.endpoint,
+            params=key_params,
+        )
     try:
         live = client.get_list(
             baseline.entity, params=params, endpoint=baseline.endpoint
@@ -965,9 +981,6 @@ def _fetch(
     except RuntimeError as err:
         if OPTIMIZATION_500 not in str(err):
             raise
-        key_params = {
-            k: params[k] for k in ("$expand", "$custom") if k in params
-        } or None
         return client.get_record(
             baseline.entity,
             [record[k] for k in baseline.keys],
@@ -996,9 +1009,10 @@ def _prefetch(
     tuple seen on more than one live row is dropped - callers fall back
     to the per-record ``_fetch`` for every record not indexed here, so
     the result never differs from the per-record path. Single-record
-    files skip it (the filtered read is already one GET).
+    files skip it (the filtered read is already one GET). KEY_URL_READ
+    entities skip it too: the list export would carry surrogate ids (V69).
     """
-    if len(baseline.records) < 2:
+    if len(baseline.records) < 2 or baseline.entity in KEY_URL_READ:
         return {}
     params: dict[str, str] = {}
     expand = sorted({p for r in baseline.records for p in _expand_paths(r)})

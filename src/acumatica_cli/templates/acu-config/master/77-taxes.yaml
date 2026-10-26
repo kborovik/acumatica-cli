@@ -12,4 +12,4 @@ records:
   TaxSchedule:
   - StartDate: '2020-01-01'
     TaxRate: 7
-    ReportingGroup: '1'
+    ReportingGroup: SALES

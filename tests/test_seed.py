@@ -2017,6 +2017,98 @@ def test_diff_non_optimization_500_still_raises(
         seed.diff(_client(instance, recorder), baseline)
 
 
+TAX_YAML = """\
+entity: Tax
+key: TaxID
+detail_keys:
+  TaxSchedule: StartDate
+records:
+  - TaxID: HST
+    TaxSchedule:
+      - StartDate: '2020-01-01'
+        ReportingGroup: HST
+  - TaxID: GST
+    TaxSchedule:
+      - StartDate: '2020-01-01'
+        ReportingGroup: GST
+"""
+
+
+def _tax_live(tax_id: str, group: str) -> httpx.Response:
+    return httpx.Response(
+        200,
+        json=wrap(
+            {
+                "TaxID": tax_id,
+                "TaxSchedule": [
+                    {"StartDate": "2020-01-01T00:00:00-05:00", "ReportingGroup": group}
+                ],
+            }
+        ),
+    )
+
+
+def test_diff_key_url_read_entity_skips_list_get(
+    tmp_path: Path, instance: Instance
+) -> None:
+    """V69/B40: Tax list export returns ReportingGroup as the surrogate id.
+
+    diff reads each Tax record by key URL only (no prefetch, no $filter
+    list GET), where the server answers the group name (verified vs 26r1).
+    """
+    baseline = _baseline(tmp_path, TAX_YAML)
+    recorder = Recorder(
+        {
+            "/Tax": httpx.Response(500, json={"exceptionMessage": "list GET"}),
+            "/Tax/HST": _tax_live("HST", "HST"),
+            "/Tax/GST": _tax_live("GST", "GST"),
+        }
+    )
+
+    assert seed.diff(_client(instance, recorder), baseline) == []
+    reads = [
+        (r.url.path.split("/entity/", 1)[1], dict(r.url.params))
+        for r in recorder.requests
+    ]
+    assert reads == [
+        ("Default/25.200.001/Tax/HST", {"$expand": "TaxSchedule"}),
+        ("Default/25.200.001/Tax/GST", {"$expand": "TaxSchedule"}),
+    ]
+
+
+def test_diff_key_url_read_entity_flags_missing(
+    tmp_path: Path, instance: Instance
+) -> None:
+    baseline = _baseline(tmp_path, TAX_YAML)
+    recorder = Recorder(
+        {"/Tax/HST": _tax_live("HST", "HST"), "/Tax/GST": NO_ENTITY_500}
+    )
+
+    assert seed.diff(_client(instance, recorder), baseline) == [
+        "Tax [GST]: missing on tenant"
+    ]
+
+
+def test_apply_key_url_read_entity_live_read_skips_list_get(
+    tmp_path: Path, instance: Instance
+) -> None:
+    """Apply's detail-id read (V54) takes the key URL for Tax too (V69)."""
+    baseline = _baseline(tmp_path, TAX_YAML)
+    recorder = Recorder(
+        {
+            "/Tax/HST": _tax_live("HST", "HST"),
+            "/Tax/GST": _tax_live("GST", "GST"),
+        }
+    )
+
+    n, errors = seed.apply(_client(instance, recorder), baseline)
+
+    assert (n, errors) == (2, [])
+    calls = [(r.method, r.url.path.rsplit("/", 1)[1]) for r in recorder.requests]
+    assert ("GET", "Tax") not in calls
+    assert [c for c in calls if c[0] == "PUT"] == [("PUT", "Tax"), ("PUT", "Tax")]
+
+
 ACTION_YAML = """\
 action: GenerateCalendar
 entity: MasterCalendar

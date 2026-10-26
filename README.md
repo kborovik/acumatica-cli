@@ -256,6 +256,17 @@ git diff acu-config/                           # review extract delta before com
 acu --tenant DEV apply acu-config             # replay extracted seed
 acu --tenant DEV diff acu-config              # expect exit 0
 ```
+
+### Acumatica API limits
+
+Seed and scenario templates work around these contract-API limits (live-verified on Default/25.200.001, 26r1):
+
+| Limit | Workaround |
+| ----- | ---------- |
+| A `SalesInvoice` of type Finance Charge (or Overdue Charge) cannot be created through the contract API: PUT answers 500 "Index was outside the bounds of the array". Finance charges come only from the AR overdue-charge process. | `50-ar-documents.yaml` loads a migrated finance charge as a Debit Memo with an income account line. |
+| The list GET returns `Tax` `TaxSchedule.ReportingGroup` as a per-tenant group id (`'1'`), while the single-record GET returns the group name. | The CLI reads `Tax` one record at a time by key, so seed holds the group name and `diff` compares names. |
+| A `Tax` schedule row needs a reporting group (422 "'Reporting Group' cannot be empty"). | `76-tax-reporting.yaml` sorts before `77-taxes.yaml`. |
+
 ### Seed `endpoint:` symbols
 
 Dual-served entities (on both Bootstrap and Default) need an explicit `endpoint:` line.
