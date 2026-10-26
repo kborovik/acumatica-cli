@@ -52,12 +52,10 @@ Default Currency = CM201000 list), so an ambiguous file is a hard error,
 never a silent Default-endpoint PUT.
 """
 
-import queue
 import re
 import threading
 from collections import Counter
 from collections.abc import Sequence
-from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
 from enum import StrEnum
 from pathlib import Path
@@ -75,6 +73,7 @@ from .client import (
     AcumaticaClient,
     SessionLostError,
     format_failure,
+    pool_map,
     unwrap,
 )
 from .config import find_data_root
@@ -624,17 +623,20 @@ def apply(  # noqa: PLR0913 — pool keyword-only (gh #71)
         if baseline.entity != "Company":
             return _apply_pooled(pool, baseline, mode, tally, checkpoint=checkpoint)
         output.info(f"{baseline.path}: Company file applies serially (V5 re-login)")
-        try:
-            return _apply_serial(
-                client, baseline, dry_run, mode, tally, checkpoint=checkpoint
-            )
-        finally:
-            _refresh_pool(pool)
+        done = _apply_serial(
+            client, baseline, dry_run, mode, tally, checkpoint=checkpoint
+        )
+        _refresh_pool(pool, *done)
+        return done
     return _apply_serial(client, baseline, dry_run, mode, tally, checkpoint=checkpoint)
 
 
-def _refresh_pool(pool: Sequence[AcumaticaClient]) -> None:
-    """V5: once the first session bounced after a Company PUT, bounce the rest."""
+def _refresh_pool(pool: Sequence[AcumaticaClient], ok: int, errors: list[str]) -> None:
+    """V5: once the first session bounced after a Company PUT, bounce the rest.
+
+    Runs only after the file applied; a failed re-login stops the run but
+    keeps the file's ``ok`` / ``errors`` (its records did land).
+    """
     if not pool[0].refreshed_after_company:
         return
     for i, client in enumerate(pool[1:], start=2):
@@ -642,8 +644,13 @@ def _refresh_pool(pool: Sequence[AcumaticaClient]) -> None:
             client.refresh_after_company()
         except SessionLostError as err:
             raise ApplyStopped(
-                f"pooled session {i}/{len(pool)}", str(err), 0, []
+                f"pooled session {i}/{len(pool)}", str(err), ok, errors
             ) from err
+
+
+def record_digest(record: dict[str, Any]) -> str:
+    """V67 checkpoint digest of one record; password fields stay out of it."""
+    return digest({k: v for k, v in record.items() if k not in PASSWORD_FIELDS})
 
 
 @dataclass(frozen=True)
@@ -671,20 +678,14 @@ def _apply_pooled(
     first stop (record order) raises ApplyStopped with what got done.
     """
     index = _prefetch(pool[0], baseline) if mode is not ApplyMode.ALL else {}
-    idle: queue.SimpleQueue[AcumaticaClient] = queue.SimpleQueue()
-    for client in pool:
-        idle.put(client)
     stop = threading.Event()
 
-    def one(record: dict[str, Any]) -> _Pooled | None:
-        if stop.is_set():
-            return None  # not dispatched
+    def one(client: AcumaticaClient, record: dict[str, Any]) -> _Pooled:
         at = f"{baseline.entity} [{', '.join(str(record[k]) for k in baseline.keys)}]"
         local = Counter[str]()
-        unit_digest = digest(record)
+        unit_digest = record_digest(record)
         if _resumed(checkpoint, at, unit_digest, local):
             return _Pooled(local)
-        client = idle.get()
         try:
             _apply_record(client, baseline, record, index=index, mode=mode, tally=local)
             if checkpoint is not None:
@@ -696,13 +697,10 @@ def _apply_pooled(
             msg = f"{at}: {format_failure(err)}"
             output.error(msg)
             return _Pooled(local, error=msg)
-        finally:
-            idle.put(client)
         return _Pooled(local)
 
-    with ThreadPoolExecutor(max_workers=len(pool)) as workers:
-        results = [r for r in workers.map(one, baseline.records) if r is not None]
-    return _merge_pooled(results, tally)
+    results = pool_map(pool, one, baseline.records, stop)
+    return _merge_pooled([r for r in results if r is not None], tally)
 
 
 def _merge_pooled(results: list[_Pooled], tally: Counter[str]) -> tuple[int, list[str]]:
@@ -751,7 +749,7 @@ def _apply_serial(  # noqa: PLR0913 — checkpoint keyword-only (gh #71)
             continue
         assert client is not None, "live apply needs a client"
         at = f"{baseline.entity} [{label}]"
-        unit_digest = digest(record)
+        unit_digest = record_digest(record)
         if _resumed(checkpoint, at, unit_digest, tally):
             ok += 1
             continue

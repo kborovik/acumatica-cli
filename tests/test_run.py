@@ -885,3 +885,21 @@ def test_generated_5k_load_rerun_creates_nothing(
     assert second.count(run.Outcome.SKIPPED) == 5000
     assert tenant.puts == 5000  # nothing created twice
     capsys.readouterr()
+
+
+def test_scenario_digest_adds_period_only_when_referenced(tmp_path: Path) -> None:
+    """V67: a ${current_period} scenario is new work next month; others stay."""
+    plain, period = (
+        run.load_scenarios(
+            _write(
+                tmp_path,
+                f"scenario: {name}\nsteps:\n  - id: s1\n    put: UnitsOfMeasure\n"
+                f"    record: {{UOM: KG, Descr: {descr}}}\n",
+            )
+        )[0]
+        for name, descr in (("a", "x"), ("b", "'${current_period}'"))
+    )
+    oct_, nov = date(2026, 10, 1), date(2026, 11, 1)
+
+    assert run.scenario_digest(plain, oct_) == run.scenario_digest(plain, nov)
+    assert run.scenario_digest(period, oct_) != run.scenario_digest(period, nov)

@@ -79,3 +79,34 @@ def test_record_appends_and_flushes_each_line(tmp_path: Path) -> None:
         }
         assert len(rows) == 2
         assert ckpt.done("UOM [KG]", digest({"UOM": "KG"}))
+
+
+def test_tenant_match_is_case_insensitive(tmp_path: Path) -> None:
+    """V67: --tenant acucli resumes a file written under ACUCLI (login rule)."""
+    path = tmp_path / "ckpt.jsonl"
+    path.write_text(_line("ACUCLI", "u", {}) + "\n")
+    assert Checkpoint(path, "acucli").done("u", digest({}))
+
+
+def test_torn_last_line_is_dropped_and_next_append_starts_fresh(
+    tmp_path: Path,
+) -> None:
+    """V67: a kill mid-write leaves no newline; resume drops it, no exit 1."""
+    path = tmp_path / "ckpt.jsonl"
+    path.write_text(_line("T1", "a", {}) + "\n" + '{"tenant": "T1", "un')
+    with Checkpoint(path, "T1") as ckpt:
+        assert ckpt.done("a", digest({}))
+        ckpt.record("b", digest({}))
+    lines = path.read_text().splitlines()
+    assert json.loads(lines[-1])["unit"] == "b"
+    assert lines[1] == '{"tenant": "T1", "un'
+
+
+def test_whole_last_line_without_newline_is_kept(tmp_path: Path) -> None:
+    """V67: an unterminated but whole last line still counts as done."""
+    path = tmp_path / "ckpt.jsonl"
+    path.write_text(_line("T1", "a", {}))
+    with Checkpoint(path, "T1") as ckpt:
+        assert ckpt.done("a", digest({}))
+        ckpt.record("b", digest({}))
+    assert len(path.read_text().splitlines()) == 2

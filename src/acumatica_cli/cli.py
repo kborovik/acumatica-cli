@@ -87,11 +87,9 @@ import functools
 import itertools
 import json
 import os
-import queue
 import threading
 from collections import Counter
 from collections.abc import Callable, Iterable, Sequence
-from concurrent.futures import ThreadPoolExecutor
 from contextlib import nullcontext
 from importlib.metadata import distribution
 from pathlib import Path
@@ -113,8 +111,8 @@ from . import (
     seed,
     state,
 )
-from .checkpoint import Checkpoint, digest
-from .client import AcumaticaClient, SessionPool, format_failure
+from .checkpoint import Checkpoint
+from .client import AcumaticaClient, SessionPool, format_failure, pool_map
 from .config import (
     Instance,
     default_out,
@@ -1162,10 +1160,16 @@ def _plan_summary(mode: seed.ApplyMode, counts: Counter[str], failed: int) -> st
 def _apply_stopped(
     path: Path, stop: seed.ApplyStopped, rest: list[Path], applied: int
 ) -> None:
-    """V45 hard-stop report: stopped-at file/record + not-applied remainder."""
+    """V45 hard-stop report: stopped-at file/record + not-applied remainder.
+
+    Under ``--concurrency`` records after the stopped-at one may have
+    landed in flight, so the file line counts what of it did land.
+    """
     output.error(f"apply: stopped at {path}: {stop}")
     output.error(f"apply: {applied} record(s) applied before the stop")
-    output.error(f"not applied: {path} (from {stop.record})")
+    output.error(
+        f"not applied: {path} (from {stop.record}; {stop.ok} of its records landed)"
+    )
     for later in rest:
         output.error(f"not applied: {later}")
 
@@ -1317,7 +1321,7 @@ def _run_entry(
     entry: dict[str, object] = {"file": str(scenario.path), "misses": misses}
     if scenario.doc is not None:
         entry["doc"] = scenario.doc
-    unit_digest = digest(scenario.model_dump(mode="json", exclude={"path", "doc"}))
+    unit_digest = run.scenario_digest(scenario)
     if ckpt is not None and ckpt.done(scenario.scenario, unit_digest):
         output.data(f"skip {scenario.label} (checkpoint)")
         return entry | {"outcome": run.Outcome.SKIPPED, "checkpoint": True}
@@ -1350,25 +1354,15 @@ def _run_group(
     if any(e.inquire for scenario in docs for e in scenario.expect):
         output.info(f"{docs[0].path}: inquire delta expect; documents run serially")
         return _run_serial(pool[0], docs, ckpt)
-    idle: queue.SimpleQueue[AcumaticaClient] = queue.SimpleQueue()
-    for client in pool:
-        idle.put(client)
     stop = threading.Event()
 
-    def one(scenario: run.Scenario) -> dict[str, object] | None:
-        if stop.is_set():
-            return None
-        client = idle.get()
-        try:
-            entry = _run_entry(client, scenario, ckpt)
-        finally:
-            idle.put(client)
+    def one(client: AcumaticaClient, scenario: run.Scenario) -> dict[str, object]:
+        entry = _run_entry(client, scenario, ckpt)
         if "error" in entry:
             stop.set()
         return entry
 
-    with ThreadPoolExecutor(max_workers=len(pool)) as workers:
-        return list(workers.map(one, docs))
+    return pool_map(pool, one, docs, stop)
 
 
 def _run_serial(

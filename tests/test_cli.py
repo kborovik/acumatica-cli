@@ -2075,7 +2075,7 @@ def test_apply_connect_error_reports_stop_and_not_applied(
     err = result.stderr
     assert f"x apply: stopped at {first}: UnitsOfMeasure [KG]: cannot connect" in err
     assert "x apply: 0 record(s) applied before the stop" in err
-    assert f"x not applied: {first} (from UnitsOfMeasure [KG])" in err
+    assert f"x not applied: {first} (from UnitsOfMeasure [KG]; 0 of" in err
     assert f"x not applied: {second}" in err
     assert f"{second} -> " not in result.output
 

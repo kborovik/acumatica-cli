@@ -15,7 +15,7 @@ import httpx
 import pytest
 
 from acumatica_cli import seed
-from acumatica_cli.client import AcumaticaClient, unwrap, wrap
+from acumatica_cli.client import AcumaticaClient, SessionLostError, unwrap, wrap
 from acumatica_cli.config import Instance
 
 BASELINE = """\
@@ -2831,3 +2831,32 @@ def test_apply_pool_company_serial_relogins_every_session(
         assert paths.count("/AcumaticaERP/entity/auth/login") == 1
     assert all(r.method != "PUT" for rec in recorders[1:] for r in rec.requests)
     assert "Company file applies serially" in capsys.readouterr().err
+
+
+def test_apply_pool_company_refresh_failure_keeps_file_counts(
+    tmp_path: Path, instance: Instance, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """V45/V5: pooled re-login fails after Company -> stop keeps the file's ok."""
+    baseline = seed.load_baseline(_write(tmp_path, COMPANY_YAML))
+    recorders = [SessionRecorder() for _ in range(2)]
+    pool = [_session_client(instance, r) for r in recorders]
+
+    def lost() -> None:
+        raise SessionLostError("re-login refused")
+
+    monkeypatch.setattr(pool[1], "refresh_after_company", lost)
+
+    with pytest.raises(seed.ApplyStopped) as stopped:
+        seed.apply(pool[0], baseline, pool=pool)
+
+    assert stopped.value.record == "pooled session 2/2"
+    assert stopped.value.ok == 1
+
+
+def test_record_digest_leaves_out_password_fields() -> None:
+    """V67: no hash of a plaintext password lands in the checkpoint file."""
+    base = {"Username": "ops", "Email": "o@x"}
+    assert seed.record_digest(base | {"Password": "a"}) == seed.record_digest(
+        base | {"Password": "b"}
+    )
+    assert seed.record_digest(base) != seed.record_digest(base | {"Email": "p@x"})
