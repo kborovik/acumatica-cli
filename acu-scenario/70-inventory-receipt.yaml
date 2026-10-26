@@ -12,13 +12,13 @@ steps:
     Description: MIG-IN-RCPT-0001
     Hold: false
     ControlQty: 3
-    ControlCost: 930.00
+    ControlCost: 960.00
     Details:
     - InventoryID: RAW-COQ10-99
       WarehouseID: WH-MISS-01
       Location: MAIN
       Qty: 3
-      UnitCost: 310.00
+      UnitCost: 320.00
       ReasonCode: INRECEIPT
       LotSerialNbr: MIG-COQ-0001
       ExpirationDate: '2028-12-31'

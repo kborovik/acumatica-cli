@@ -10,13 +10,13 @@ steps:
     Description: MIG-IN-RCPT-0001
     Hold: false
     ControlQty: 10
-    ControlCost: 80.00
+    ControlCost: 180.00
     Details:
     - InventoryID: PSU-12V
       WarehouseID: WH01
       Location: MAIN
       Qty: 10
-      UnitCost: 8.00
+      UnitCost: 18.00
       ReasonCode: INRECEIPT
   capture: {ReferenceNbr: rcpt}
 - id: release
