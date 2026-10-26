@@ -235,3 +235,40 @@ def test_docs_survey_group() -> None:
     assert "inventory" in changelog
     assert "reconcile" in changelog
     assert _L1_SURVEY_VERB.search(_unreleased(changelog)) is None
+
+
+def test_cli_test_seed_external_file_storage() -> None:
+    """T308/V70: setup seeds the SM202540 provider, then Enable → Switch.
+
+    Provider is the UI label (GET read-back); IsActive/AllowWrite are never
+    seeded, only gated; no Move Files action file.
+    """
+    from acumatica_cli import seed
+
+    setup = REPO / "acu-config" / "setup"
+    names = sorted(p.name for p in setup.glob("4*.yaml"))
+    assert names == [
+        "40-external-file-storage.yaml",
+        "41-enable-file-storage.yaml",
+        "42-switch-file-storage-direction.yaml",
+    ]
+    provider, enable, switch = (seed.load_baseline(setup / n) for n in names)
+    assert isinstance(provider, seed.BaselineFile)
+    assert provider.entity == "ExternalFileStorage"
+    assert provider.endpoint == seed.BOOTSTRAP_ENDPOINT
+    assert provider.records == [
+        {
+            "Provider": "Local File Folder",
+            "LocalFolder": r"F:\AcumaticaFiles\AcumaticaERP",
+        }
+    ]
+    gates = {}
+    for action in (enable, switch):
+        assert isinstance(action, seed.ActionFile)
+        assert action.entity == "ExternalFileStorage"
+        assert action.done_when is not None
+        gates[action.action] = action.done_when.filter
+    assert gates == {
+        "EnableProvider": "IsActive eq true",
+        "SwitchDirection": "AllowWrite eq true",
+    }

@@ -6,7 +6,7 @@
 #   entity    contract entity name (the GET source and the emitted `entity:`)
 #   endpoint  omitted = the instance Default endpoint; the symbolic name
 #             `bootstrap` stays symbolic in emitted files and resolves to
-#             the packaged full company Bootstrap/1.11.0 at HTTP/load time
+#             the packaged full company Bootstrap/1.12.0 at HTTP/load time
 #             (package SoT - V20/V21/T178; data-repo project.xml forbidden)
 #   keys      key fields: the emitted `key:`, the record sort order, and
 #             the B9 fallback's $select projection; the tuple must
@@ -33,6 +33,8 @@
 #             so audit/server-derived noise never enters seed
 #   features  FeaturesSet gates the entity's screen needs (V22 feature
 #             closure; consumed by the features.yaml synthesis)
+#   template  false = CLI test seed only (repo-root acu-config/): no
+#             packaged template, outside the V34 bijection (B43)
 #
 # Per setup row (setup/ action files are synthesized, not record dumps -
 # an action leaves no keyed record to extract, so each kind reads the
@@ -632,6 +634,20 @@ entities:
     Users: Username
   include:
   - Users
+
+# ExternalFileStorage (T309/V70, gh #74): SM202540 keyless per-tenant
+# singleton; Provider label is the first key (GET returns the UI label).
+# IsActive/AllowWrite are set by the 41/42 actions only, never seeded;
+# DisableDeleteOnExternalFileStorage stays out. The actions are not
+# synthesized (diff covers them via done_when). Server-specific folder
+# path -> CLI test seed only, never a config init template (B43).
+- entity: ExternalFileStorage
+  endpoint: bootstrap
+  keys: [Provider]
+  file: setup/40-external-file-storage.yaml
+  template: false
+  include:
+  - LocalFolder
 
 # setup/ - the GL action chain (T36/T37): financial-year setup,
 # then calendar generation, then period activation; numbered prefixes

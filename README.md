@@ -218,7 +218,7 @@ Your configuration lives in its own git repo.
 
 It does not write a customization tree.
 
-The Bootstrap endpoint contract is package SoT (`bootstrap_project.xml` inside the CLI — `Bootstrap/1.4.0`).
+The Bootstrap endpoint contract is package SoT (`bootstrap_project.xml` inside the CLI — `Bootstrap/1.12.0`).
 `config init` never writes `project.xml`, and data repos must not keep one (a present file hard-errors on bootstrap/publish).
 
 There is no `--flavor`.
@@ -243,6 +243,7 @@ Seed YAML is state: `apply` upserts it, `diff` proves it.
 `acu survey extract` is the inverse of `apply`: GET live tenant rows into seed YAML under `acu-config/{bootstrap,baseline,setup,master}/` (hard-cut).
 
 Packaged `seed_catalog.yaml` is the sole extract registry (entity, endpoint, keys, file, strip/include, filter-split).
+A row marked `template: false` extracts a CLI test-seed file that `config init` never scaffolds (external file storage).
 
 Features synthesize to `acu-config/bootstrap/features.yaml`.
 Existing files skip unless `--force`; empty live sets skip.
@@ -266,6 +267,8 @@ Seed and scenario templates work around these contract-API limits (live-verified
 | A `SalesInvoice` of type Finance Charge (or Overdue Charge) cannot be created through the contract API: PUT answers 500 "Index was outside the bounds of the array". Finance charges come only from the AR overdue-charge process. | `50-ar-documents.yaml` loads a migrated finance charge as a Debit Memo with an income account line. |
 | The list GET returns `Tax` `TaxSchedule.ReportingGroup` as a per-tenant group id (`'1'`), while the single-record GET returns the group name. | The CLI reads `Tax` one record at a time by key, so seed holds the group name and `diff` compares names. |
 | A `Tax` schedule row needs a reporting group (422 "'Reporting Group' cannot be empty"). | `76-tax-reporting.yaml` sorts before `77-taxes.yaml`. |
+| External File Storage (SM202540) detail arrays bind rows with no fields, so a `Settings` write is a no-op. | Bootstrap `ExternalFileStorage` maps a top-level `LocalFolder` to the current settings row. |
+| SM202540 lists System-tenant shared files in each tenant's database-files grid. | Move Files to Storage is not exposed; files stored before the switch stay in the database. |
 
 ### Seed `endpoint:` symbols
 
@@ -447,6 +450,9 @@ This checkout carries a CLI test seed at repo-root `acu-config/` and `acu-scenar
 Soak the live CLI tenant from here with `--tenant ACUCLI`.
 
 Never use tenant `CNBN`. Never `cd` the sibling GitOps repo for CLI soak.
+
+The test seed also turns on external file storage (`acu-config/setup/40-42`): a Local File Folder provider at `F:\AcumaticaFiles\AcumaticaERP`, then Enable Provider and Switch Direction.
+The folder must already exist and be writable on the server; `acu` never creates it.
 
 `gmake e2e` still scaffolds from packaged `config init` templates into a tmp dir.
 That path is not the soak.

@@ -4,6 +4,18 @@
 
 ### Added
 
+- **External file storage (gh #74):** the Bootstrap contract (now
+  `Bootstrap/1.12.0`) adds `ExternalFileStorage` (SM202540): `Provider`,
+  `LocalFolder`, `IsActive`, `AllowWrite`, and the actions
+  `EnableProvider` and `SwitchDirection`. The CLI test seed sets a Local
+  File Folder provider (`acu-config/setup/40-42`); the action files
+  gate on `IsActive eq true` and `AllowWrite eq true`, so a second
+  `apply` invokes nothing. `survey extract` emits the provider file
+  back, and `seed_catalog.yaml` rows marked `template: false` extract
+  test-seed files that `config init` never scaffolds. Move Files to
+  Storage is not exposed: the tenant's database-files grid also lists
+  System-tenant shared files.
+
 - **Acumatica API limits in the README (gh #78):** a new section lists
   contract-API limits the templates work around: Finance Charge
   invoices cannot be created through the API (migrate as a Debit Memo),

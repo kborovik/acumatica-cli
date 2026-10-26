@@ -669,6 +669,17 @@ TABLES: dict[str, list[dict[str, Any]]] = {
             "LastModifiedDateTime": "2026-07-11T00:00:00+00:00",
         }
     ],
+    # T309/V70 SM202540 singleton after enable + switch: IsActive/AllowWrite
+    # are action-set (never seed), DisableDelete... stays out of extract
+    "ExternalFileStorage": [
+        {
+            "Provider": "Local File Folder",
+            "LocalFolder": "F:\\AcumaticaFiles\\AcumaticaERP",
+            "IsActive": True,
+            "AllowWrite": True,
+            "DisableDeleteOnExternalFileStorage": False,
+        }
+    ],
     # -- setup/ synthesis sources (T49): the state the GL action chain left --
     "FinancialYearSettings": [
         {
@@ -702,6 +713,8 @@ for row in extract.load_manifest().entities:
 # commonsetup DecPlQty/WeightUOM/VolumeUOM (BQL delegate); open-periods
 # synth and Company entity extract must survive the unprojected 500.
 DELEGATE_VIEW = frozenset({"Currency", "Company"})
+
+_REPO = Path(__file__).resolve().parents[1]
 
 # Catalog row counts (V34 path set): entity + setup (+ features outside catalog).
 _CATALOG_ENTITY_ROWS = len(extract.load_manifest().entities)
@@ -792,7 +805,50 @@ def test_catalog_completeness_v34() -> None:
     assert "bootstrap/project.xml" not in templates
     catalog = extract.catalog_seed_files()
     assert templates == catalog
-    assert len(templates) == _CATALOG_SEED_ROWS
+    test_seed_only = extract.catalog_test_seed_files()
+    assert len(templates) == _CATALOG_SEED_ROWS - len(test_seed_only)
+
+
+def test_catalog_test_seed_only_rows_b43() -> None:
+    """B43: `template: false` rows live in the CLI test seed, never packaged."""
+    test_seed_only = extract.catalog_test_seed_files()
+    assert test_seed_only == {"setup/40-external-file-storage.yaml"}
+    assert not test_seed_only & extract.packaged_template_seed_files()
+    assert not test_seed_only & extract.catalog_seed_files()
+    for rel in test_seed_only:
+        assert (_REPO / "acu-config" / rel).is_file(), rel
+
+
+def test_catalog_external_file_storage_row() -> None:
+    """T309/V70: Bootstrap singleton row; action-set fields never included."""
+    manifest = extract.load_manifest()
+    by_file = {s.file: s for s in manifest.entities}
+    row = by_file["setup/40-external-file-storage.yaml"]
+    assert row.entity == "ExternalFileStorage"
+    assert row.entity in seed.BOOTSTRAP_ENTITIES
+    assert row.endpoint == "bootstrap"
+    assert row.keys == ["Provider"]
+    assert row.include == ["LocalFolder"]
+    assert not row.template
+    for field in ("IsActive", "AllowWrite", "DisableDeleteOnExternalFileStorage"):
+        assert field not in row.include
+        assert field not in row.keys
+    # the 41/42 actions are not synthesized: diff covers them via done_when
+    setup_files = {s.file for s in manifest.setup}
+    assert not any("file-storage" in f for f in setup_files)
+
+
+def test_extract_external_file_storage_matches_test_seed(
+    instance: Instance, server: FakeServer, tmp_path: Path
+) -> None:
+    """T309/V70: extract emits the CLI test seed file byte-identical."""
+    _run(instance, server, tmp_path, only=frozenset({"ExternalFileStorage"}))
+    rel = "setup/40-external-file-storage.yaml"
+    emitted = (tmp_path / rel).read_text()
+    assert emitted == (_REPO / "acu-config" / rel).read_text()
+    for field in ("IsActive", "AllowWrite", "DisableDeleteOnExternalFileStorage"):
+        assert field not in emitted
+    assert not list((tmp_path / "setup").glob("4[12]-*.yaml"))
 
 
 def test_manifest_keeps_symbolic_bootstrap_endpoint() -> None:
@@ -1340,12 +1396,12 @@ def test_b9_fallback_selects_keys_then_key_urls(
         for r in server.requests
     ]
     assert currency_requests == [
-        ("Bootstrap/1.11.0/Currency", {"$filter": "IsFinancial eq true"}),
+        ("Bootstrap/1.12.0/Currency", {"$filter": "IsFinancial eq true"}),
         (
-            "Bootstrap/1.11.0/Currency",
+            "Bootstrap/1.12.0/Currency",
             {"$select": "CuryID", "$filter": "IsFinancial eq true"},
         ),
-        ("Bootstrap/1.11.0/Currency/EUR", {}),
+        ("Bootstrap/1.12.0/Currency/EUR", {}),
     ]
     text = extract._render(spec, records)  # pyright: ignore[reportPrivateUsage]
     assert "RealGainAcctID" in text

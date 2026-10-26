@@ -1,0 +1,6 @@
+entity: ExternalFileStorage
+key: Provider
+endpoint: bootstrap
+records:
+- Provider: Local File Folder
+  LocalFolder: F:\AcumaticaFiles\AcumaticaERP
