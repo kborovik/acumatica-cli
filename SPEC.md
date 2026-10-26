@@ -213,7 +213,7 @@ T295|x|seed_catalog rows Tax, TaxZone, NonStockItem (keys, endpoint, features, i
 T296|x|packaged + test seed scenarios `50-ar-documents.yaml` (SalesInvoice Invoice + Debit Memo + Credit Memo + Finance Charge; AR Payment Prepayment), `60-ap-documents.yaml` (Bill w/o PO + Bill Prepayment), `70-inventory-receipt.yaml` (InventoryReceipt + release); one doc per ERP document, `once.get` external-ref guard each (ref field live-verified); no catalog row|V12,V65,V68,I.data
 T297|x|offline tests: template=catalog bijection count; Tax/TaxZone/NonStockItem extract mock round-trip; new scenarios parse + dry-run + once.get skip on rerun|V13,V34,V65,V68,T294,T295,T296
 T298|.|live: ACUCLI cold rebuild — apply acu-config + diff exit 0 incl tax/tax-zone/non-stock; survey extract round-trip those rows; run acu-scenario passes, rerun creates 0; API gap (Finance Charge class) → gh friction issue|V4,V12,V14,V65,T297
-T299|.|README templates + CHANGELOG Unreleased (gh #72); suite green|V19,V49,T297
+T299|x|README templates + CHANGELOG Unreleased (gh #72); suite green|V19,V49,T297
 T300|.|release via `make release minor`; release notes name gh #72 entities|V19,T298,T299
 
 ## §B BUGS
