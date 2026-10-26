@@ -220,6 +220,7 @@ for granular /sdd:check runs.
 - every packaged `templates/acu-config/**` seed yaml (except `project.xml`, features synthesis, `acu-config/views/`) ! exactly one `seed_catalog.yaml` row
 - multi-file same entity ! filter-split (one row per numbered file + optional filter/match partition)
 - template file set = catalog file set = extract emit paths
+- exclusion: row `template: false` = CLI test seed only — file ! under repo-root `acu-config/`, ! under packaged templates; out of template=catalog bijection; extract still emits (B43)
 - no hand_only markers
 - golden seed ! claim fields GET never returns (B11 class; packaging UOMs drop until verified read-back)
 
