@@ -45,11 +45,14 @@ apply / diff / run / state require an explicit data path.
 | `acu-config/bootstrap/` | Company, features, credit terms (Bootstrap contract is package SoT — never scaffolded) |
 | `acu-config/baseline/` | GL foundation (COA, ledger, subaccounts, UOMs) |
 | `acu-config/setup/` | Financial year, master calendar, open periods |
-| `acu-config/master/` | Numbering (`05-numbering-sequences`) before module prefs; inventory, warehouse, items, vendors, customers; roles/users (`90-roles` then `91-users` then `92-role-users`) |
+| `acu-config/master/` | Numbering (`05-numbering-sequences`) before module prefs; inventory, warehouse, items, vendors, customers, tax reporting/taxes/tax zones, non-stock items; roles/users (`90-roles` then `91-users` then `92-role-users`) |
 | `acu-scenario/10-seed-capital.yaml` | Once-class owner capital JE (skip-if-present when present); Period = `${current_period}` |
 | `acu-scenario/20-buy.yaml` | Additive component PO → receipt → bill → AP pay |
 | `acu-scenario/30-build.yaml` | Additive kit assembly |
 | `acu-scenario/40-sell.yaml` | Additive SO → ship → invoice → AR pay |
+| `acu-scenario/50-ar-documents.yaml` | Migrated AR invoice (taxed), debit memo, credit memo, finance charge (as a debit memo), prepayment; each guarded on `CustomerOrder` / `PaymentRef` |
+| `acu-scenario/60-ap-documents.yaml` | Migrated AP bill without PO and prepayment; each guarded on `VendorRef` |
+| `acu-scenario/70-inventory-receipt.yaml` | Migrated opening stock receipt; guarded on `Description` |
 | `overlays/` | Default-half rewrites (`default-<api_version>/`); pass as extra explicit paths |
 | `overlays/default-24.200.001/` | Lab 25r1 half: KitAssembly Type Assembly |
 | `acu-config/views/10-trial-balance.yaml` | Observer view (EndingBalance inquire; Period pinned literal; not SEED_DIRS) |

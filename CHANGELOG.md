@@ -24,6 +24,18 @@
   those on the same tenant with unchanged content, and an edited record
   applies again. The summary and `--output json` report the
   `checkpoint` count.
+- **Tax, non-stock and migration document templates (gh #72):** `config
+  init` and the CLI test seed gain master `76-tax-reporting.yaml`,
+  `77-taxes.yaml`, `78-tax-zones.yaml` and `81-non-stock-items.yaml`
+  (with a tax-agency vendor, a TAXABLE tax category and a SERVICES
+  posting and item class), and `survey extract` reads them back. New
+  scenarios `50-ar-documents.yaml` (invoice, debit memo, credit memo,
+  finance charge, AR prepayment), `60-ap-documents.yaml` (bill without
+  PO, AP prepayment) and `70-inventory-receipt.yaml` hold one
+  once-guarded scenario per document, so a re-run creates nothing.
+  The contract API cannot create a Finance Charge, so the template
+  loads it as a debit memo. Transaction documents get no seed file or
+  catalog row.
 
 ## [v0.36.0] - 2026-10-24
 

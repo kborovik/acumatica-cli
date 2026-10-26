@@ -1,0 +1,56 @@
+scenario: ap-bill
+description: Migrated bill without PO
+once: true
+present:
+  get: {entity: Bill, filter: "VendorRef eq 'MIG-AP-BILL-0001'"}
+steps:
+- id: put
+  put: Bill
+  record:
+    Type: Bill
+    Vendor: FREIGHT
+    VendorRef: MIG-AP-BILL-0001
+    Description: Migrated bill without PO
+    Amount: 150.00
+    Hold: false
+    Details:
+    - {InventoryID: SVC-FREIGHT, Qty: 3, UnitCost: 50.00}
+  capture: {ReferenceNbr: bill}
+- id: release
+  action: {entity: Bill, name: ReleaseBill}
+  record: {Type: Bill, ReferenceNbr: "${bill}"}
+  wait:
+    entity: Bill
+    keys: [Bill, "${bill}"]
+    until: {Status: Open}
+expect:
+- inquire: AccountSummaryInquiry
+  parameters: {Ledger: ACTUAL, Period: "${current_period}"}
+  match: {Account: '61000'}
+  delta: {EndingBalance: 150.00}
+---
+scenario: ap-prepayment
+description: Migrated vendor prepayment
+once: true
+present:
+  get: {entity: Bill, filter: "VendorRef eq 'MIG-AP-PP-0001'"}
+steps:
+- id: put
+  put: Bill
+  record:
+    Type: Prepayment
+    Vendor: FREIGHT
+    VendorRef: MIG-AP-PP-0001
+    Description: Migrated prepayment
+    Amount: 300.00
+    Hold: false
+    Details:
+    - {Account: '61000', Subaccount: '000000', Qty: 1, UnitCost: 300.00}
+  capture: {ReferenceNbr: pp}
+- id: release
+  action: {entity: Bill, name: ReleaseBill}
+  record: {Type: Prepayment, ReferenceNbr: "${pp}"}
+  wait:
+    entity: Bill
+    keys: [Prepayment, "${pp}"]
+    until: {Status: Open}

@@ -1,0 +1,9 @@
+entity: TaxZone
+key: TaxZoneID
+detail_keys:
+  ApplicableTaxes: TaxID
+records:
+- TaxZoneID: ONTARIO
+  Description: Ontario
+  ApplicableTaxes:
+  - TaxID: HST

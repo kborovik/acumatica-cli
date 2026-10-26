@@ -21,3 +21,10 @@ records:
   PostingClass: KITS
   TaxCategoryID: EXEMPT
   DefaultWarehouseID: WH01
+- ClassID: SERVICES
+  Description: Services and charges
+  StockItem: false
+  ItemType: Service
+  BaseUOM: EA
+  PostingClass: SERVICES
+  TaxCategoryID: TAXABLE

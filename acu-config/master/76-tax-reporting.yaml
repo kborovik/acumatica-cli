@@ -1,0 +1,12 @@
+# Reporting group per tax agency: a Tax schedule row needs one (422
+# "'Reporting Group' cannot be empty"). Sorts after the agency vendor
+# (75) and before 77-taxes.yaml (V22).
+entity: TaxReportingSettings
+key: TaxAgency
+detail_keys:
+  ReportingGroups: Name
+records:
+- TaxAgency: VEND-CRA
+  ReportingGroups:
+  - Name: HST
+    GroupType: Output

@@ -1145,6 +1145,12 @@ def test_config_init_scaffolds_data_repo(tmp_path: Path) -> None:
         "acu-scenario/20-buy.yaml",
         "acu-scenario/30-build.yaml",
         "acu-scenario/40-sell.yaml",
+        "acu-scenario/50-ar-documents.yaml",
+        "acu-scenario/60-ap-documents.yaml",
+        "acu-scenario/70-inventory-receipt.yaml",
+        "acu-config/master/77-taxes.yaml",
+        "acu-config/master/78-tax-zones.yaml",
+        "acu-config/master/81-non-stock-items.yaml",
         "overlays/README.md",
         "overlays/default-24.200.001/README.md",
         "overlays/default-24.200.001/acu-scenario/30-build.yaml",
@@ -1303,6 +1309,33 @@ def test_config_init_template_set_is_feature_closed(tmp_path: Path) -> None:
         "KitAssemblies",
     ]:
         assert name in features
+
+
+def test_init_templates_cover_every_packaged_file() -> None:
+    # V28/V68: a template file left out of INIT_TEMPLATES never scaffolds
+    root = Path(cli.__file__).parent / "templates"
+    packaged = {
+        p.relative_to(root).as_posix()
+        for p in root.rglob("*")
+        if p.is_file() and "__pycache__" not in p.parts
+    }
+    assert packaged == {resource for resource, _ in INIT_TEMPLATES}
+
+
+def test_config_init_scenarios_guard_each_document(tmp_path: Path) -> None:
+    # V68: migration scenarios = one once-guarded doc per ERP document
+    CliRunner().invoke(cli.cli, ["config", "init", str(tmp_path)])
+
+    for name in [
+        "50-ar-documents.yaml",
+        "60-ap-documents.yaml",
+        "70-inventory-receipt.yaml",
+    ]:
+        docs = list(yaml.safe_load_all((tmp_path / "acu-scenario" / name).read_text()))
+        assert docs, name
+        for doc in docs:
+            assert doc["once"] is True, (name, doc["scenario"])
+            assert "filter" in doc["present"]["get"], (name, doc["scenario"])
 
 
 def test_config_init_template_set_is_reference_closed(tmp_path: Path) -> None:

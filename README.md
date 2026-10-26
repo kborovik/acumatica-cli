@@ -23,7 +23,7 @@ YAML in git is the source of truth; the live tenant is the target. `apply` is th
 | Seed a tenant from YAML | `apply` | Idempotent PUT of `acu-config/` into the live tenant |
 | Detect drift | `diff` | Compare seed YAML to live (exit 2 when they diverge) |
 | Pull live config into YAML | `survey extract` | Inverse of `apply` — GET into `acu-config/{bootstrap,baseline,setup,master}/` |
-| Run transaction scripts | `run` | Forward documents from `acu-scenario/` (capital, buy, build, sell) |
+| Run transaction scripts | `run` | Forward documents from `acu-scenario/` (capital, buy, build, sell, migrated AR/AP/IN documents) |
 | Capture derived balances | `state` | Inquire trial-balance etc. into `state/` (not seed) |
 | Create and destroy tenants | `tenant` | SSH control plane: list / create / delete / recycle |
 | Publish the Bootstrap contract | `bootstrap` | REST publish of AcuBootstrap (or `--export` zip for the UI) |
@@ -228,8 +228,8 @@ There is no `--flavor`.
 | `acu-config/bootstrap/` | virgin-tenant config: features, company, credit terms (no `project.xml`) |
 | `acu-config/baseline/` | reference data: subaccounts, COA, ledger, UOMs |
 | `acu-config/setup/` | one-time actions: financial year, master calendar, open periods |
-| `acu-config/master/` | inventory/distribution masters: numbering (`05-…`) before prefs, warehouse, items, parties + Role/User (`90-roles` then `91-users` then `92-role-users`) |
-| `acu-scenario/` | lifecycle txns for `acu run`: once capital, then buy, build, sell |
+| `acu-config/master/` | inventory/distribution masters: numbering (`05-…`) before prefs, warehouse, items, parties, tax chain (`76-tax-reporting`, `77-taxes`, `78-tax-zones`), non-stock items (`81-…`) + Role/User (`90-roles` then `91-users` then `92-role-users`) |
+| `acu-scenario/` | lifecycle txns for `acu run`: once capital, then buy, build, sell; migration documents (`50-ar-documents`, `60-ap-documents`, `70-inventory-receipt`), one once-guarded scenario per document |
 | `acu-config/views/` | observer views for `acu state` (`inquire:` / `entity:` / `gi:`; not SEED_DIRS) |
 | `state/` | committed derived-state observations (evidence, not seed; money/qty fixed-point) |
 | `inventory/` | engagement: offline snapshot tables from `acu survey inventory` (not seed; not SEED_DIRS) |

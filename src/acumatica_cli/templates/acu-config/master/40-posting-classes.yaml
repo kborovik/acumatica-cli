@@ -30,3 +30,17 @@ records:
   PPVSubID: '000000'
   LCVarianceAcctID: '50200'
   LCVarianceSubID: '000000'
+- PostClassID: SERVICES
+  Descr: Services and charges
+  InvtAcctID: '61000'
+  InvtSubID: '000000'
+  SalesAcctID: '40100'
+  SalesSubID: '000000'
+  COGSAcctID: '61000'
+  COGSSubID: '000000'
+  POAccrualAcctID: '20200'
+  POAccrualSubID: '000000'
+  PPVAcctID: '50100'
+  PPVSubID: '000000'
+  LCVarianceAcctID: '50200'
+  LCVarianceSubID: '000000'

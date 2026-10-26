@@ -545,6 +545,50 @@ TABLES: dict[str, list[dict[str, Any]]] = {
             "LastModifiedDateTime": "2026-07-11T00:00:00+00:00",
         }
     ],
+    "TaxReportingSettings": [
+        {
+            "TaxAgency": "STATETAX",
+            "ReportingGroups": [{"Name": "SALES", "GroupType": "Output"}],
+        }
+    ],
+    "Tax": [
+        {
+            "TaxID": "STATE",
+            "Description": "State sales tax 7%",
+            "TaxType": "Sales",
+            "TaxAgency": "STATETAX",
+            "TaxPayableAccount": "24000",
+            "TaxPayableSubaccount": "000000",
+            "TaxSchedule": [
+                {"StartDate": "2020-01-01", "TaxRate": 7.0, "ReportingGroup": "1"}
+            ],
+            "LastModifiedDateTime": "2026-07-11T00:00:00+00:00",
+        }
+    ],
+    "TaxZone": [
+        {
+            "TaxZoneID": "INSTATE",
+            "Description": "In-state sales",
+            "ApplicableTaxes": [{"TaxID": "STATE"}],
+        }
+    ],
+    "NonStockItem": [
+        {
+            "InventoryID": "SVC-FREIGHT",
+            "Description": "Freight charge",
+            "ItemClass": "SERVICES",
+            "ItemType": "Service",
+            "ItemStatus": "Active",
+            "PostingClass": "SERVICES",
+            "TaxCategory": "TAXABLE",
+            "BaseUnit": "EA",
+            "DefaultPrice": 50.0,
+            "RequireReceipt": False,
+            "RequireShipment": False,
+            # equal to BaseUnit - not returned live (B11 class), never claim
+            "LastModifiedDateTime": "2026-07-11T00:00:00+00:00",
+        }
+    ],
     "StockItem": [
         {
             "InventoryID": "ENCL-STD",
