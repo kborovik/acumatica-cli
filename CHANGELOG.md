@@ -4,6 +4,11 @@
 
 ### Added
 
+- **Acumatica API limits in the README (gh #78):** a new section lists
+  contract-API limits the templates work around: Finance Charge
+  invoices cannot be created through the API (migrate as a Debit Memo),
+  and the `Tax` list GET returns the reporting group id, not its name.
+
 - **Generated scenario loads (gh #73):** a scenario file may hold many
   scenarios split by `---`, one YAML document per ERP document, so a
   generator can write thousands of documents per file (or a directory of
@@ -36,6 +41,15 @@
   The contract API cannot create a Finance Charge, so the template
   loads it as a debit memo. Transaction documents get no seed file or
   catalog row.
+
+### Changed
+
+- **Tax reporting group by name (gh #78):** `diff`, `apply` and `survey
+  extract` read `Tax` one record at a time by key, which returns
+  `TaxSchedule.ReportingGroup` as the group name; the list GET returned
+  the per-tenant group id. Seed holds the name (`ReportingGroup: SALES`).
+  A seed that still holds the id (`'1'`) now shows drift: replace it
+  with the group name from `76-tax-reporting.yaml`.
 
 ## [v0.36.0] - 2026-10-24
 
