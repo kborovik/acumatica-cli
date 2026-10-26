@@ -78,6 +78,9 @@ class EntitySpec(Model):
     # {ListField: RowKeyField} — emitted into seed so load_baseline accepts
     # detail arrays (T60); required when include/strip keeps a list field.
     detail_keys: dict[str, str] | None = None
+    # False = CLI test seed only (repo-root acu-config/): no packaged
+    # template, so the row sits outside the V34 bijection (B43)
+    template: bool = True
 
     @model_validator(mode="after")
     def _strip_include_exclusive(self) -> EntitySpec:
@@ -179,9 +182,20 @@ def packaged_template_seed_files() -> frozenset[str]:
 
 
 def catalog_seed_files(manifest: Manifest | None = None) -> frozenset[str]:
-    """Catalog entity + setup emit paths (features synthesis is not a catalog row)."""
+    """Catalog entity + setup emit paths with a packaged template (V34).
+
+    Features synthesis is not a catalog row; ``template: false`` rows are
+    CLI test seed only (B43) and stay out of the bijection.
+    """
     m = manifest if manifest is not None else load_manifest()
-    return frozenset(s.file for s in m.entities) | frozenset(s.file for s in m.setup)
+    entities = frozenset(s.file for s in m.entities if s.template)
+    return entities | frozenset(s.file for s in m.setup)
+
+
+def catalog_test_seed_files(manifest: Manifest | None = None) -> frozenset[str]:
+    """``template: false`` emit paths: CLI test seed only, never packaged (B43)."""
+    m = manifest if manifest is not None else load_manifest()
+    return frozenset(s.file for s in m.entities if not s.template)
 
 
 def catalog_completeness_gap(
