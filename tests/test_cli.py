@@ -3,10 +3,13 @@
 Pins diff's exit-2-on-drift contract (V9) — no live instance, no SSH.
 """
 
+import itertools
 import json
 import os
 import subprocess
 import sys
+import threading
+import time
 from collections.abc import Callable
 from pathlib import Path
 from types import TracebackType
@@ -2941,3 +2944,106 @@ def test_state_output_json_reports_views(
     doc = json.loads(result.stdout)
     assert (doc["command"], doc["mode"], doc["changed"]) == ("state", "diff", 1)
     assert doc["views"][0]["differences"] == ["x"]
+
+
+def _multi_doc(count: int, expect: str = "") -> str:
+    return "---\n".join(
+        f"scenario: d{i}\nsteps:\n  - id: s{i}\n    put: UnitsOfMeasure\n"
+        f"    record: {{UOM: U{i:03}}}\n{expect}"
+        for i in range(count)
+    )
+
+
+def _run_pool_tenant(
+    monkeypatch: pytest.MonkeyPatch, fail: str | None = None
+) -> tuple[list[str], set[int]]:
+    """Wire cli.AcumaticaClient to a mock tenant; log PUT UOMs + sessions used."""
+    lock = threading.Lock()
+    puts: list[str] = []
+    sessions: set[int] = set()
+    opened = itertools.count()
+
+    def factory(inst: Instance, **_: object) -> RealClient:
+        session = next(opened)
+
+        def handler(request: httpx.Request) -> httpx.Response:
+            path = request.url.path
+            if path.endswith(("/auth/login", "/auth/logout")):
+                return httpx.Response(204)
+            if path.endswith("/Frames/Login.aspx"):
+                return httpx.Response(
+                    200, text='<input id="txtSingleCompany" value="T1" />'
+                )
+            if request.method == "PUT" and path.endswith("/UnitsOfMeasure"):
+                uom = json.loads(request.content)["UOM"]["value"]
+                time.sleep(0.002)
+                with lock:
+                    puts.append(uom)
+                    sessions.add(session)
+                if uom == fail:
+                    return httpx.Response(422, json={"message": "bad"})
+                return httpx.Response(200, json={"UOM": {"value": uom}})
+            return httpx.Response(200, json={"Results": []})  # inquiry probe
+
+        return RealClient(inst, transport=httpx.MockTransport(handler))
+
+    monkeypatch.setattr(cli, "AcumaticaClient", factory)
+    return puts, sessions
+
+
+def test_run_pool_spreads_documents_across_sessions(
+    wired: Instance, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """V66/gh #71: docs of one multi-doc file run on N sessions, each once."""
+    path = tmp_path / "load.yaml"
+    path.write_text(_multi_doc(40))
+    puts, sessions = _run_pool_tenant(monkeypatch)
+
+    result = CliRunner().invoke(
+        cli.cli, ["--output", "json", "run", "--concurrency", "4", str(path)]
+    )
+
+    assert result.exit_code == 0, result.output
+    assert sorted(puts) == [f"U{i:03}" for i in range(40)]
+    assert sessions == {0, 1, 2, 3}
+    doc = json.loads(result.stdout)
+    assert [s["doc"] for s in doc["scenarios"]] == list(range(1, 41))
+    assert doc["counts"]["passed"] == 40
+
+
+def test_run_pool_inquire_delta_file_stays_serial(
+    wired: Instance, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """V66: an inquire delta expect keeps the file on one session + info line."""
+    path = tmp_path / "load.yaml"
+    expect = (
+        "expect:\n  - inquire: AccountSummaryInquiry\n    delta: {EndingBalance: 0}\n"
+    )
+    path.write_text(_multi_doc(6, expect))
+    puts, sessions = _run_pool_tenant(monkeypatch)
+
+    result = CliRunner().invoke(cli.cli, ["run", "--concurrency", "3", str(path)])
+
+    assert puts == [f"U{i:03}" for i in range(6)]
+    assert sessions == {0}
+    assert "inquire delta expect; documents run" in result.stderr
+
+
+def test_run_pool_step_error_stops_dispatch_lists_not_run(
+    wired: Instance, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """V66 + gh #58: step error under pool → no new dispatch; rest not run."""
+    first, later = tmp_path / "10-load.yaml", tmp_path / "20-next.yaml"
+    first.write_text(_multi_doc(100))
+    later.write_text(_multi_doc(1))
+    puts, _ = _run_pool_tenant(monkeypatch, fail="U000")
+
+    result = CliRunner().invoke(
+        cli.cli, ["run", "--concurrency", "2", str(first), str(later)]
+    )
+
+    assert result.exit_code == 1
+    assert len(puts) < 10  # in-flight finish; nothing new dispatched
+    assert f"x {first}#1 [s0]: " in result.stderr
+    assert f"not run: {first}#" in result.stderr
+    assert f"not run: {later}" in result.stderr

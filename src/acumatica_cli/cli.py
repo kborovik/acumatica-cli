@@ -86,8 +86,11 @@ import functools
 import itertools
 import json
 import os
+import queue
+import threading
 from collections import Counter
-from collections.abc import Callable
+from collections.abc import Callable, Sequence
+from concurrent.futures import ThreadPoolExecutor
 from contextlib import nullcontext
 from importlib.metadata import distribution
 from pathlib import Path
@@ -1247,6 +1250,70 @@ def _not_run_lines(scenarios: list[run.Scenario]) -> list[str]:
     return lines
 
 
+def _run_entry(client: AcumaticaClient, scenario: run.Scenario) -> dict[str, object]:
+    """Run one scenario into its JSON report entry; a step error is kept."""
+    misses: list[str] = []
+    entry: dict[str, object] = {"file": str(scenario.path), "misses": misses}
+    if scenario.doc is not None:
+        entry["doc"] = scenario.doc
+    try:
+        entry["outcome"] = run.run(client, scenario, misses=misses)
+    except run.StepError as err:
+        output.error(str(err))
+        entry |= {"outcome": run.Outcome.FAILED, "error": str(err)}
+    return entry
+
+
+def _run_group(
+    pool: Sequence[AcumaticaClient], docs: list[run.Scenario]
+) -> list[dict[str, object] | None]:
+    """One file's scenarios; ``None`` marks a scenario never started.
+
+    Serial on session 1 unless the file holds many documents and the pool
+    has more than one session (V66): then each document takes a free
+    session. An ``inquire`` delta expect keeps the file serial - parallel
+    documents would land inside each other's pre/post snapshot. A step
+    error stops new dispatch; in-flight documents finish (gh #58, #71).
+    """
+    if len(pool) == 1 or len(docs) == 1:
+        return _run_serial(pool[0], docs)
+    if any(e.inquire for scenario in docs for e in scenario.expect):
+        output.info(f"{docs[0].path}: inquire delta expect; documents run serially")
+        return _run_serial(pool[0], docs)
+    idle: queue.SimpleQueue[AcumaticaClient] = queue.SimpleQueue()
+    for client in pool:
+        idle.put(client)
+    stop = threading.Event()
+
+    def one(scenario: run.Scenario) -> dict[str, object] | None:
+        if stop.is_set():
+            return None
+        client = idle.get()
+        try:
+            entry = _run_entry(client, scenario)
+        finally:
+            idle.put(client)
+        if "error" in entry:
+            stop.set()
+        return entry
+
+    with ThreadPoolExecutor(max_workers=len(pool)) as workers:
+        return list(workers.map(one, docs))
+
+
+def _run_serial(
+    client: AcumaticaClient, docs: list[run.Scenario]
+) -> list[dict[str, object] | None]:
+    results: list[dict[str, object] | None] = []
+    for scenario in docs:
+        entry = _run_entry(client, scenario)
+        results.append(entry)
+        if "error" in entry:
+            results.extend([None] * (len(docs) - len(results)))
+            break
+    return results
+
+
 @cli.command("run")
 @click.argument(
     "files", nargs=-1, required=False, type=click.Path(exists=True, path_type=Path)
@@ -1312,24 +1379,21 @@ def run_cmd(
     not_run: list[run.Scenario] = []
     report: list[dict[str, object]] = []
     # V66: all N sessions log in before the first step
+    stopped = False
     with SessionPool(inst, concurrency, factory=AcumaticaClient) as pool:
-        client = pool.clients[0]
-        for i, scenario in enumerate(scenarios):
-            misses: list[str] = []
-            entry: dict[str, object] = {"file": str(scenario.path), "misses": misses}
-            if scenario.doc is not None:
-                entry["doc"] = scenario.doc
-            report.append(entry)
-            try:
-                entry["outcome"] = outcome = run.run(client, scenario, misses=misses)
-                counts[outcome] += 1
-            except run.StepError as err:
-                # gh #58: lifecycle scenarios chain, so stop and list the rest
-                output.error(str(err))
-                entry |= {"outcome": run.Outcome.FAILED, "error": str(err)}
-                counts[run.Outcome.FAILED] += 1
-                not_run = scenarios[i + 1 :]
-                break
+        for _, group in itertools.groupby(scenarios, key=lambda s: s.path):
+            docs = list(group)
+            if stopped:  # gh #58: lifecycle scenarios chain; list the rest
+                not_run.extend(docs)
+                continue
+            results = _run_group(pool.clients, docs)
+            for scenario, entry in zip(docs, results, strict=True):
+                if entry is None:
+                    not_run.append(scenario)
+                    continue
+                report.append(entry)
+                counts[run.Outcome(entry["outcome"])] += 1
+                stopped = stopped or "error" in entry
     for line in _not_run_lines(not_run):
         output.error(f"not run: {line}")
     if as_json:
