@@ -1,7 +1,6 @@
-# TaxSchedule.ReportingGroup is the server group id, not its name: PUT
-# by name reads back as the id. '1' = the first group on a cold tenant
-# (76-tax-reporting.yaml). TaxClaimableAccount is not returned for a
-# Sales tax, so it stays out.
+# TaxSchedule.ReportingGroup holds the group name (76-tax-reporting.yaml);
+# the CLI reads Tax by key URL, which answers the name (V69).
+# TaxClaimableAccount is not returned for a Sales tax, so it stays out.
 entity: Tax
 key: TaxID
 detail_keys:
@@ -16,4 +15,4 @@ records:
   TaxSchedule:
   - StartDate: '2020-01-01'
     TaxRate: 13
-    ReportingGroup: '1'
+    ReportingGroup: HST

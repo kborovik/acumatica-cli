@@ -218,7 +218,7 @@ T299|x|README templates + CHANGELOG Unreleased (gh #72); suite green|V19,V49,T29
 T300|.|release via `make release minor`; release notes name gh #72 entities|V19,T298,T299
 T301|x|live probe: TaxReportingSettings GET (ReportingGroups) exposes group id beside Name; Tax TaxSchedule.ReportingGroup PUT by id round-trips; record agency-scoped vs global id; not exposed → V69 fallback, T302..T305 drop|V12,V14,V69
 T302|x|seed.py `KEY_URL_READ` entity table (Tax first): `_fetch` key-URL GET only, `_prefetch` skip; extract same entities via `$select` keys then key-URL per row|V4,V69,T301
-T303|.|packaged + test seed `77-taxes.yaml` ReportingGroup by name `HST`, drop id comment; offline tests: Tax read uses key-URL not list, prefetch skipped, extract emits name, non-table entity unchanged|V13,V34,V69,T302
+T303|x|packaged + test seed `77-taxes.yaml` ReportingGroup by name `HST`, drop id comment; offline tests: Tax read uses key-URL not list, prefetch skipped, extract emits name, non-table entity unchanged|V13,V34,V69,T302
 T304|.|README "API limits": Finance Charge not creatable via contract API (500 index out of bounds; AR overdue-charge process only; migrate as Debit Memo); list export returns selector ids (key-URL read); CHANGELOG Unreleased (gh #78)|V14,V19,V69
 T305|.|live: ACUCLI apply + diff exit 0 on name seed; survey extract Tax round-trip emits name; re-apply no drift|V4,V12,V69,T303
 

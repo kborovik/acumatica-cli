@@ -498,7 +498,8 @@ entities:
   - MainContact
 
 # Tax chain (gh #72 / V68): agency vendor (75) -> reporting group ->
-# tax -> zone. TaxSchedule.ReportingGroup reads back as the group id.
+# tax -> zone. Tax reads by key URL (seed.KEY_URL_READ, V69): the list
+# export returns TaxSchedule.ReportingGroup as the group id, not its name.
 # TaxClaimableAccount is not returned for a Sales tax (B11 class).
 
 - entity: TaxReportingSettings
