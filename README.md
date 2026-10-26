@@ -140,7 +140,7 @@ steps:
 Bulk loads (thousands of records or documents) take two flags on `apply` and `run`:
 
 - `--concurrency N` opens N sessions before the first write and spreads one file's records (`apply`) or documents (`run`) across them. Each session takes one API-user license slot; if a login is refused, acu logs out the open sessions and exits 1 with nothing written. Files stay in order. Company and action files, and scenario files with an inquire delta expect, stay serial.
-- `--checkpoint PATH` appends one JSON line `{tenant, unit, digest}` per record, action or scenario done, flushed at once. Re-run the same command after a killed load and acu skips what is done on that tenant (`skip <unit> (checkpoint)`); a record whose content changed is applied again. Not valid with `--plan` or `--dry-run`; a malformed line exits 1 before login.
+- `--checkpoint PATH` appends one JSON line `{tenant, unit, digest}` per record, action or scenario done, flushed at once. Re-run the same command after a killed load and acu skips what is done on that tenant (`skip <unit> (checkpoint)`); a record whose content changed is applied again. A scenario's key includes its file name and document number, so renaming the file or inserting a document ahead of it runs it again. Not valid with `--plan` or `--dry-run`; a malformed line exits 1 before login.
 
 ```sh
 acu --tenant DEV apply --concurrency 4 --checkpoint load.jsonl data/
