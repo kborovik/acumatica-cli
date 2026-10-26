@@ -7,6 +7,7 @@ import json
 import os
 import subprocess
 import sys
+from collections.abc import Callable
 from pathlib import Path
 from types import TracebackType
 from typing import Any
@@ -2073,6 +2074,127 @@ def test_apply_connect_error_reports_stop_and_not_applied(
     assert f"x not applied: {first} (from UnitsOfMeasure [KG])" in err
     assert f"x not applied: {second}" in err
     assert f"{second} -> " not in result.output
+
+
+def _pool_handler(
+    log: list[str], refuse_login: int | None = None
+) -> Callable[[httpx.Request], httpx.Response]:
+    """Mock tenant T1 that logs login / logout / PUT and can refuse login k."""
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        path = request.url.path
+        if path.endswith("/auth/login"):
+            log.append("login")
+            if log.count("login") == refuse_login:
+                return httpx.Response(500, json={"exceptionMessage": "API Login Limit"})
+            return httpx.Response(204)
+        if path.endswith("/auth/logout"):
+            log.append("logout")
+            return httpx.Response(204)
+        if path.endswith("/Frames/Login.aspx"):
+            return httpx.Response(
+                200, text='<input id="txtSingleCompany" value="T1" />'
+            )
+        if request.method == "PUT":
+            log.append("put")
+        return httpx.Response(200, json={})
+
+    return handler
+
+
+@pytest.mark.parametrize("command", ["apply", "run"])
+def test_concurrency_opens_n_sessions_before_write(
+    wired: Instance,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    command: str,
+) -> None:
+    """V66/gh #71: N logins (tenant-verified) precede the first write; N logouts."""
+    path = tmp_path / "f.yaml"
+    path.write_text(
+        "entity: UnitsOfMeasure\nkey: UOM\nrecords:\n  - UOM: KG\n"
+        if command == "apply"
+        else "scenario: s\nsteps:\n"
+        "  - id: s1\n    put: UnitsOfMeasure\n    record: {UOM: KG}\n"
+    )
+    log: list[str] = []
+    handler = _pool_handler(log)
+    monkeypatch.setattr(
+        cli,
+        "AcumaticaClient",
+        lambda inst, **kw: RealClient(inst, transport=httpx.MockTransport(handler)),
+    )
+    result = CliRunner().invoke(cli.cli, [command, "--concurrency", "3", str(path)])
+
+    assert result.exit_code == 0, result.output
+    assert log[:3] == ["login"] * 3
+    assert log.count("logout") == 3
+    assert "put" in log
+
+
+@pytest.mark.parametrize("command", ["apply", "run"])
+def test_concurrency_refused_login_logs_out_opened_no_write(
+    wired: Instance,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    command: str,
+) -> None:
+    """V66/V6: login 3/3 refused -> opened sessions logged out, exit 1, 0 writes."""
+    path = tmp_path / "f.yaml"
+    path.write_text(
+        "entity: UnitsOfMeasure\nkey: UOM\nrecords:\n  - UOM: KG\n"
+        if command == "apply"
+        else "scenario: s\nsteps:\n"
+        "  - id: s1\n    put: UnitsOfMeasure\n    record: {UOM: KG}\n"
+    )
+    log: list[str] = []
+    handler = _pool_handler(log, refuse_login=3)
+    monkeypatch.setattr(
+        cli,
+        "AcumaticaClient",
+        lambda inst, **kw: RealClient(inst, transport=httpx.MockTransport(handler)),
+    )
+    result = CliRunner().invoke(cli.cli, [command, "--concurrency", "3", str(path)])
+
+    assert isinstance(result.exception, RuntimeError)
+    assert "put" not in log
+    # 2 opened sessions + the refused one's own V6 cleanup; none left open
+    assert log == ["login"] * 3 + ["logout"] * 3
+    message = str(result.exception)  # main() maps RuntimeError -> x, exit 1
+    assert "session 3/3 login failed" in message
+    assert "--concurrency 3 needs 3 API-user license slots" in message
+
+
+@pytest.mark.parametrize("command", ["apply", "run"])
+def test_concurrency_rejects_zero(
+    wired: Instance, tmp_path: Path, command: str
+) -> None:
+    """V66: --concurrency is IntRange(min=1); 0 is a usage error, no HTTP."""
+    path = tmp_path / "f.yaml"
+    path.write_text("entity: UnitsOfMeasure\nkey: UOM\nrecords:\n  - UOM: KG\n")
+    result = CliRunner().invoke(cli.cli, [command, "--concurrency", "0", str(path)])
+
+    assert result.exit_code == 2
+    assert "--concurrency" in result.output
+
+
+def test_concurrency_default_is_one_session(
+    wired: Instance, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """V66: default --concurrency 1 = the plain single session (one login)."""
+    path = tmp_path / "f.yaml"
+    path.write_text("entity: UnitsOfMeasure\nkey: UOM\nrecords:\n  - UOM: KG\n")
+    log: list[str] = []
+    handler = _pool_handler(log)
+    monkeypatch.setattr(
+        cli,
+        "AcumaticaClient",
+        lambda inst, **kw: RealClient(inst, transport=httpx.MockTransport(handler)),
+    )
+    result = CliRunner().invoke(cli.cli, ["apply", str(path)])
+
+    assert result.exit_code == 0, result.output
+    assert log == ["login", "put", "logout"]
 
 
 def test_apply_422_survives_dead_logout(

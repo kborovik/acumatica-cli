@@ -5,7 +5,8 @@ import html
 import random
 import re
 import time
-from collections.abc import Sequence
+from collections.abc import Callable, Sequence
+from contextlib import ExitStack
 from types import TracebackType
 from typing import Any
 from urllib.parse import quote
@@ -792,3 +793,58 @@ class AcumaticaClient:
         return self._checked(
             self._send("GET", f"{self._odata_gi_root()}/{gi}", params=params)
         ).json()
+
+
+class SessionPool:
+    """N logged-in sessions for ``--concurrency N`` (V66, gh #71).
+
+    The server serializes requests per cookie session, so N parallel
+    workers need N sessions - each holds one API-user license slot. All N
+    log in (and pass the V5 tenant guard) before the caller writes
+    anything: a refused login logs out the sessions already open (V6) and
+    raises naming N and the license cap, so a partial pool never starts.
+    N=1 is the plain single session; its login error surfaces unchanged.
+
+    ``factory`` builds each client (the CLI passes its own name so tests
+    can swap the transport).
+    """
+
+    def __init__(
+        self,
+        instance: Instance,
+        size: int = 1,
+        factory: Callable[[Instance], AcumaticaClient] = AcumaticaClient,
+    ) -> None:
+        if size < 1:
+            raise ValueError(f"session pool size must be >= 1, got {size}")
+        self.instance = instance
+        self.size = size
+        self._factory = factory
+        self._stack = ExitStack()
+        self.clients: list[AcumaticaClient] = []
+
+    def __enter__(self) -> SessionPool:
+        with ExitStack() as opening:
+            for k in range(1, self.size + 1):
+                try:
+                    client = opening.enter_context(self._factory(self.instance))
+                except (RuntimeError, httpx.HTTPError) as err:
+                    if self.size == 1:
+                        raise
+                    raise RuntimeError(
+                        f"session {k}/{self.size} login failed: "
+                        f"{format_failure(err)} - --concurrency {self.size} "
+                        f"needs {self.size} API-user license slots; lower "
+                        "--concurrency or free slots (acu tenant recycle)"
+                    ) from err
+                self.clients.append(client)
+            self._stack = opening.pop_all()
+        return self
+
+    def __exit__(
+        self,
+        exc_type: type[BaseException] | None = None,
+        exc: BaseException | None = None,
+        tb: TracebackType | None = None,
+    ) -> None:
+        self._stack.__exit__(exc_type, exc, tb)

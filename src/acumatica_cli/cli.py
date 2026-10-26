@@ -109,7 +109,7 @@ from . import (
     seed,
     state,
 )
-from .client import AcumaticaClient, format_failure
+from .client import AcumaticaClient, SessionPool, format_failure
 from .config import (
     Instance,
     default_out,
@@ -950,6 +950,13 @@ def collapse_same_basename(paths: list[Path]) -> list[Path]:
     is_flag=True,
     help="Read live first; skip the PUT of records with no drift",
 )
+@click.option(
+    "--concurrency",
+    type=click.IntRange(min=1),
+    default=1,
+    show_default=True,
+    help="Parallel sessions; each takes one API-user license slot",
+)
 @click.pass_context
 def apply_cmd(
     ctx: click.Context,
@@ -957,6 +964,7 @@ def apply_cmd(
     dry_run: bool,
     plan: bool,
     changed_only: bool,
+    concurrency: int,
 ) -> None:
     """Push seed YAML into the tenant (idempotent PUT upserts).
 
@@ -1015,8 +1023,14 @@ def apply_cmd(
     stopped = False
     # gh #63: dry-run is offline - no instance resolution, no session
     inst = None if dry_run else _resolve_instance(ctx)
-    session = nullcontext() if inst is None else AcumaticaClient(inst)
-    with session as client:
+    # V66: all N sessions log in before the first write
+    session = (
+        nullcontext()
+        if inst is None
+        else SessionPool(inst, concurrency, factory=AcumaticaClient)
+    )
+    with session as pool:
+        client = None if pool is None else pool.clients[0]
         for i, (path, baseline) in enumerate(zip(paths, baselines, strict=True)):
             target = "dry run" if inst is None else f"{inst.tenant} on {inst.base_url}"
             output.data(f"{path} -> {target} ({baseline.entity})")
@@ -1235,8 +1249,17 @@ def _not_run_lines(scenarios: list[run.Scenario]) -> list[str]:
     "files", nargs=-1, required=False, type=click.Path(exists=True, path_type=Path)
 )
 @click.option("--dry-run", is_flag=True, help="Parse and list steps without any HTTP")
+@click.option(
+    "--concurrency",
+    type=click.IntRange(min=1),
+    default=1,
+    show_default=True,
+    help="Parallel sessions; each takes one API-user license slot",
+)
 @click.pass_context
-def run_cmd(ctx: click.Context, files: tuple[Path, ...], dry_run: bool) -> None:
+def run_cmd(
+    ctx: click.Context, files: tuple[Path, ...], dry_run: bool, concurrency: int
+) -> None:
     """Execute transaction scenario YAML against the live tenant.
 
     REST data plane. Not seed upserts — documents are posted forward (server
@@ -1285,7 +1308,9 @@ def run_cmd(ctx: click.Context, files: tuple[Path, ...], dry_run: bool) -> None:
     counts = dict.fromkeys(run.Outcome, 0)
     not_run: list[run.Scenario] = []
     report: list[dict[str, object]] = []
-    with AcumaticaClient(inst) as client:
+    # V66: all N sessions log in before the first step
+    with SessionPool(inst, concurrency, factory=AcumaticaClient) as pool:
+        client = pool.clients[0]
         for i, scenario in enumerate(scenarios):
             misses: list[str] = []
             entry: dict[str, object] = {"file": str(scenario.path), "misses": misses}
