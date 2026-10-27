@@ -233,7 +233,7 @@ T312|x|live probe 26R1 SM202540 detail bind (read-only): why `Settings` + `Files
 T313|x|live probe 26R1 SM202540 Move Files tenant scope (read-only; ! invoke Move Files on any tenant): `FilesInDatabase` + UploadFileRevision rows per CompanyID (CompanyMask / shared-System flag) on ACUCLI; tenant-only filter exists → tenant-scoped done gate candidate for Move Files, V70 patch via /sdd:spec; none → V70 Move Files exclusion stays, recorded on gh #82|V12,V14,V17,V70
 T314|x|README "API limits" SM202540 (detail arrays fieldless, Provider GET = UI label, Move Files out of acu scope) per T312 + T313 outcome; CHANGELOG Unreleased (gh #82)|V19,T312,T313
 T315|x|`seed.py`: `depends_on` ? top-level on BaselineFile + ActionFile (list[str]; relative POSIX, ! absolute, ! `..`); resolve vs seed-tree root; stable Kahn sort (ready set → lowest expansion index); unknown / ∉ expanded set / cycle errors collected w/ `load_all` failures, exit 1 pre-session|V22,V45,V71
-T316|.|`cli.py` apply + diff (all modes incl `--plan`/`--changed-only`/`--dry-run`) order via T315 after `expand_files`; offline tests: topo order, tie-break stability, cycle msg names path, unknown dep, dep ∉ set, self-dep, dry-run opens no session|V30,V59,V71,T315
+T316|x|`cli.py` apply + diff (all modes incl `--plan`/`--changed-only`/`--dry-run`) order via T315 after `expand_files`; offline tests: topo order, tie-break stability, cycle msg names path, unknown dep, dep ∉ set, self-dep, dry-run opens no session|V30,V59,V71,T315
 T317|.|regression: `apply --dry-run acu-config` + `diff` file order byte-identical to pre-gh-#80 (test seed has no `depends_on`)|V22,V71,T316
 T318|.|README seed-format `depends_on` + CHANGELOG Unreleased (gh #80)|V19,T316
 
