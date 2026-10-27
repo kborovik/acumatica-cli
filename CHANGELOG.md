@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## [v0.37.0] - 2026-10-27
+
 ### Added
 
 - **Seed `depends_on:` (gh #80):** a seed file may list the files it
