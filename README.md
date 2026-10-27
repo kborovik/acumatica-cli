@@ -305,6 +305,8 @@ records:
 `apply` and `diff` (including `--plan`, `--changed-only` and `--dry-run`) run files in a stable topological order over `depends_on`.
 Files with no constraint keep the directory order (SEED_DIRS, then alphabetical), so a tree without `depends_on` runs exactly as before.
 
+When a dependency sorts later, the file that declares it moves down; the dependency stays where it was.
+
 These stop the run with exit 1 before any session opens, listed with any other seed-file errors:
 
 - a `depends_on` entry that names no file

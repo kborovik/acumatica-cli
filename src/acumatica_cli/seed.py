@@ -206,6 +206,11 @@ def _check_depends_on(value: list[str] | None) -> list[str] | None:
                 f"depends_on '{dep}' must be a relative path under the seed-tree "
                 "root, e.g. master/77-taxes.yaml"
             )
+        if rel.name == "features.yaml":
+            raise ValueError(
+                f"depends_on '{dep}': features.yaml configures the bootstrap "
+                "package, it is not a seed file"
+            )
     return value
 
 
@@ -389,8 +394,17 @@ def load_all(paths: Sequence[Path]) -> list[BaselineFile | ActionFile]:
 
 def _seed_tree_root(path: Path) -> Path | None:
     """Parent of the SEED_DIRS dir holding ``path`` (V71), else None."""
-    parent = path.resolve().parent
+    parent = path.absolute().parent  # the typed location, not a symlink target
     return parent.parent if parent.name in SEED_DIRS else None
+
+
+def _file_id(path: Path) -> tuple[int, int] | None:
+    """Filesystem identity: same file across case, symlinks, hard links."""
+    try:
+        st = path.stat()
+    except OSError:
+        return None
+    return (st.st_dev, st.st_ino)
 
 
 def order_by_depends_on(
@@ -404,9 +418,8 @@ def order_by_depends_on(
     failure already, not a second "not in this run" error.
     Returns (ordered files, error lines); errors mean nothing is applied.
     """
+    # unresolved deps add no edge; cycles among the rest still report (V45)
     needs, errors = _depends_on_edges(loaded, expanded)
-    if errors:
-        return list(loaded), errors
     # Kahn: always take the lowest-index ready file (stable tie-break)
     waiting = [len(n) for n in needs]
     users: list[list[int]] = [[] for _ in loaded]
@@ -426,7 +439,9 @@ def order_by_depends_on(
     if len(order) < len(loaded):
         cycle = _find_cycle(needs, {i for i, w in enumerate(waiting) if w})
         names = " -> ".join(str(loaded[i].path) for i in cycle)
-        return list(loaded), [f"depends_on cycle: {names}"]
+        errors.append(f"depends_on cycle: {names}")
+    if errors:
+        return list(loaded), errors
     return [loaded[i] for i in order], []
 
 
@@ -434,10 +449,10 @@ def _depends_on_edges(
     loaded: Sequence[BaselineFile | ActionFile], expanded: Sequence[Path]
 ) -> tuple[list[set[int]], list[str]]:
     """Per file, the indexes it must follow; plus unresolvable-dep errors."""
-    in_run = {p.resolve() for p in expanded}
-    index: dict[Path, list[int]] = {}
+    in_run = {_file_id(p) for p in expanded} - {None}
+    index: dict[tuple[int, int] | None, list[int]] = {}
     for i, f in enumerate(loaded):
-        index.setdefault(f.path.resolve(), []).append(i)
+        index.setdefault(_file_id(f.path), []).append(i)
     needs: list[set[int]] = [set() for _ in loaded]
     errors: list[str] = []
     for i, f in enumerate(loaded):
@@ -450,16 +465,17 @@ def _depends_on_edges(
         if root is None:
             continue
         for dep in f.depends_on or ():
-            target = (root / dep).resolve()
-            if not target.is_file():
+            target = root / dep
+            ident = _file_id(target) if target.is_file() else None
+            if ident is None:
                 errors.append(f"{f.path}: depends_on '{dep}': no such file {target}")
-            elif target not in in_run:
+            elif ident not in in_run:
                 errors.append(
                     f"{f.path}: depends_on '{dep}' is not in this run - "
                     "add it to the paths"
                 )
             else:
-                needs[i].update(index.get(target, ()))
+                needs[i].update(index.get(ident, ()))
     return needs, errors
 
 

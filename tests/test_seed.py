@@ -2792,6 +2792,38 @@ def test_depends_on_entry_must_be_tree_relative(tmp_path: Path, dep: str) -> Non
         seed.load_baseline(a)
 
 
+def test_depends_on_cycle_reported_with_unknown_dep(tmp_path: Path) -> None:
+    a = _seed_file(tmp_path, "master/10-a.yaml", "A", ["master/20-b.yaml"])
+    b = _seed_file(
+        tmp_path, "master/20-b.yaml", "B", ["master/10-a.yaml", "master/99-gone.yaml"]
+    )
+    with pytest.raises(SystemExit) as info:
+        seed.load_all([a, b])
+    message = str(info.value.code)
+    assert "99-gone.yaml': no such file" in message
+    assert "depends_on cycle:" in message
+
+
+def test_depends_on_features_yaml_rejected(tmp_path: Path) -> None:
+    a = _seed_file(tmp_path, "master/10-a.yaml", "A", ["bootstrap/features.yaml"])
+    with pytest.raises(SystemExit, match=r"features\.yaml configures the bootstrap"):
+        seed.load_baseline(a)
+
+
+def test_depends_on_symlinked_seed_file_uses_typed_tree(tmp_path: Path) -> None:
+    real = tmp_path / "elsewhere" / "20-o.yaml"
+    real.parent.mkdir()
+    real.write_text(
+        "entity: UnitsOfMeasure\nkey: UOM\nrecords:\n  - UOM: O\n"
+        "depends_on: [master/30-m.yaml]\n"
+    )
+    link = tmp_path / "overlay" / "master" / "20-o.yaml"
+    link.parent.mkdir(parents=True)
+    link.symlink_to(real)
+    m = _seed_file(tmp_path / "overlay", "master/30-m.yaml", "M")
+    assert [f.path for f in seed.load_all([link, m])] == [m, link]
+
+
 def test_action_file_accepts_depends_on(tmp_path: Path) -> None:
     m = _seed_file(tmp_path, "master/10-m.yaml", "M")
     act = tmp_path / "setup/10-act.yaml"
