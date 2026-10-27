@@ -3433,3 +3433,19 @@ def test_depends_on_cycle_exits_1_before_session(
     assert "depends_on cycle:" in result.output
     assert opens == 0  # V45/V71: no session, no PUT
 
+def test_stock_acu_config_order_unchanged(monkeypatch: pytest.MonkeyPatch) -> None:
+    """T317: the CLI test seed has no depends_on - order is pure expansion."""
+    repo = Path(__file__).resolve().parents[1]
+    monkeypatch.chdir(repo)
+    expanded = cli.expand_files((Path("acu-config"),))
+    assert not any(cli.seed.load_baseline(p).depends_on for p in expanded)
+
+    result = CliRunner().invoke(cli.cli, ["apply", "--dry-run", "acu-config"])
+
+    assert result.exit_code == 0, result.output
+    banners = [
+        line.split(" -> ")[0]
+        for line in result.output.splitlines()
+        if " -> dry run (" in line
+    ]
+    assert banners == [str(p) for p in expanded]
