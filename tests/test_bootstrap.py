@@ -317,8 +317,8 @@ def test_package_zip_carries_the_bootstrap_endpoint() -> None:
                 "DueType",
                 "DayDue00",
                 "DiscType",
-                "DiscPercent",
                 "DayDisc",
+                "DiscPercent",
             ),
             "TermsDef",
         ),
@@ -459,6 +459,10 @@ def test_credit_terms_day_disc_maps_terms_def() -> None:
         f.get("name"): f.get("type") for f in terms.findall(f"{ns}Fields/{ns}Field")
     }
     assert fields["DayDisc"] == "ShortValue"
+    # mappings assign in list order; keep them in field order
+    assert [m.get("field") for m in terms.findall(f"{ns}Mappings/{ns}Mapping")] == list(
+        fields
+    )
     assert "DayDisc00" not in fields
     to = {
         m.get("field"): m.find(f"{ns}To")
