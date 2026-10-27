@@ -8,8 +8,9 @@
   needs first, as paths relative to the seed-tree root (for example
   `master/77-taxes.yaml`). `apply` and `diff` order files by a stable
   topological sort; files without `depends_on` keep today's order. An
-  unknown file, a file missing from the run, or a cycle exits 1 before
-  any session opens.
+  unknown file or a cycle exits 1 before any session opens; a named file
+  left out of the run is warned about and assumed already applied.
+  Action checkpoints ignore `depends_on`, so editing it keeps a resume.
 
 - **External file storage (gh #74):** the Bootstrap contract (now
   `Bootstrap/1.12.0`) adds `ExternalFileStorage` (SM202540): `Provider`,

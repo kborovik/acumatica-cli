@@ -15,6 +15,7 @@ import httpx
 import pytest
 
 from acumatica_cli import seed
+from acumatica_cli.checkpoint import digest
 from acumatica_cli.client import AcumaticaClient, SessionLostError, unwrap, wrap
 from acumatica_cli.config import Instance
 
@@ -2136,6 +2137,20 @@ def test_load_baseline_dispatches_on_action_key(tmp_path: Path) -> None:
     assert parsed.done_when.filter == "FinancialYear eq '2026'"
 
 
+def testaction_digest_ignores_depends_on(tmp_path: Path) -> None:
+    # V67/V71: a pre-depends_on checkpoint and a depends_on edit still resume
+    plain = seed.load_baseline(_write(tmp_path, ACTION_YAML))
+    ordered = seed.load_baseline(
+        _write(tmp_path, ACTION_YAML + "depends_on: [master/10-a.yaml]\n")
+    )
+    assert isinstance(plain, seed.ActionFile)
+    assert isinstance(ordered, seed.ActionFile)
+    assert seed.action_digest(plain) == seed.action_digest(ordered)
+    legacy = plain.model_dump(mode="json", exclude={"path"})
+    del legacy["depends_on"]
+    assert seed.action_digest(plain) == digest(legacy)
+
+
 def test_load_action_file_rejects_unknown_field(tmp_path: Path) -> None:
     # V10: frozen models, extra="forbid" - typos surface at the parse boundary
     with pytest.raises(SystemExit, match="typo"):
@@ -2756,13 +2771,28 @@ def test_depends_on_unknown_file(tmp_path: Path) -> None:
         seed.load_all([a])
 
 
-def test_depends_on_outside_run_is_named_not_added(tmp_path: Path) -> None:
+def test_depends_on_outside_run_is_named_not_added(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
     a = _seed_file(tmp_path, "master/10-a.yaml", "A", ["baseline/10-x.yaml"])
     _seed_file(tmp_path, "baseline/10-x.yaml", "X")
-    with pytest.raises(SystemExit) as info:
-        seed.load_all([a])
-    message = str(info.value.code)
-    assert "depends_on 'baseline/10-x.yaml' is not in this run" in message
+    # single-file run: dep assumed applied, warned, never pulled in
+    assert [f.path for f in seed.load_all([a])] == [a]
+    err = " ".join(capsys.readouterr().err.split())  # rich wraps stderr
+    assert "depends_on 'baseline/10-x.yaml' is not in this run" in err
+
+
+def test_depends_on_unused_skips_stat(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    paths = [_seed_file(tmp_path, f"master/{n}.yaml", n.upper()) for n in "ab"]
+    loaded = [seed.load_baseline(p) for p in paths]
+
+    def boom(_: Path) -> None:
+        raise AssertionError("stat without depends_on")
+
+    monkeypatch.setattr(seed, "_file_id", boom)
+    assert seed.order_by_depends_on(loaded, paths) == (loaded, [])
 
 
 def test_depends_on_reported_with_load_failures(tmp_path: Path) -> None:

@@ -310,9 +310,11 @@ When a dependency sorts later, the file that declares it moves down; the depende
 These stop the run with exit 1 before any session opens, listed with any other seed-file errors:
 
 - a `depends_on` entry that names no file
-- a named file that is not in this run (add it to the paths; it is never pulled in for you)
 - a cycle, printed as `depends_on cycle: a.yaml -> b.yaml -> a.yaml`
 - `depends_on` in a file outside a seed directory
+
+A named file that exists but is not in this run is not pulled in for you.
+The run prints a warning and assumes it is already applied, so `acu diff acu-config/master/90-roles.yaml` or re-running a stopped run's `not applied:` files still works.
 
 `--concurrency` is unchanged: files still run one after another.
 `survey extract` does not write `depends_on`, so `--force` re-extract drops it from that file.

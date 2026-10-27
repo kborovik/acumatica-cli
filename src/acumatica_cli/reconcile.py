@@ -41,11 +41,11 @@ from pydantic import Field, ValidationError, field_validator
 from . import extract, inventory, output
 from .config import find_data_root
 from .models import Model, validation_summary
+from .seed import SEED_DIRS
 
 DEFAULT_INVENTORY = "inventory"
 DEFAULT_OUT = "findings"
 SUMMARY_NAME = "summary.yaml"
-SEED_DIRS = ("bootstrap", "baseline", "setup", "master")
 _MAP_NAME = "snapshot_map.yaml"
 _SKIP_SEED_NAMES = frozenset({"features.yaml", "project.xml"})
 

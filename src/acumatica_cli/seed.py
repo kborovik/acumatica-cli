@@ -61,6 +61,7 @@ files with no constraint keep the expansion order (SEED_DIRS, then alpha).
 
 import heapq
 import re
+import stat
 import threading
 from collections import Counter
 from collections.abc import Sequence
@@ -399,12 +400,15 @@ def _seed_tree_root(path: Path) -> Path | None:
 
 
 def _file_id(path: Path) -> tuple[int, int] | None:
-    """Filesystem identity: same file across case, symlinks, hard links."""
+    """Filesystem identity: same file across case, symlinks, hard links.
+
+    None for anything that is not a regular file (missing, dir, ...).
+    """
     try:
         st = path.stat()
     except OSError:
         return None
-    return (st.st_dev, st.st_ino)
+    return (st.st_dev, st.st_ino) if stat.S_ISREG(st.st_mode) else None
 
 
 def order_by_depends_on(
@@ -418,6 +422,8 @@ def order_by_depends_on(
     failure already, not a second "not in this run" error.
     Returns (ordered files, error lines); errors mean nothing is applied.
     """
+    if not any(f.depends_on for f in loaded):
+        return list(loaded), []  # nothing to order: skip the stat calls
     # unresolved deps add no edge; cycles among the rest still report (V45)
     needs, errors = _depends_on_edges(loaded, expanded)
     # Kahn: always take the lowest-index ready file (stable tie-break)
@@ -466,13 +472,15 @@ def _depends_on_edges(
             continue
         for dep in f.depends_on or ():
             target = root / dep
-            ident = _file_id(target) if target.is_file() else None
+            ident = _file_id(target)
             if ident is None:
                 errors.append(f"{f.path}: depends_on '{dep}': no such file {target}")
             elif ident not in in_run:
-                errors.append(
+                # a partial run (one file, a stopped run's remainder): the
+                # dep is assumed already on the tenant; never auto-included
+                output.warn(
                     f"{f.path}: depends_on '{dep}' is not in this run - "
-                    "add it to the paths"
+                    "assuming it is already applied"
                 )
             else:
                 needs[i].update(index.get(ident, ()))
@@ -658,7 +666,7 @@ def _apply_action(  # noqa: PLR0913 — checkpoint keyword-only (gh #71)
         return 1, []
     assert client is not None, "live apply needs a client"
     unit = f"action {action.action} [{action.entity}]"
-    unit_digest = digest(action.model_dump(mode="json", exclude={"path"}))
+    unit_digest = action_digest(action)
     if _resumed(checkpoint, unit, unit_digest, tally):
         return 1, []
     try:
@@ -692,6 +700,11 @@ def _apply_action(  # noqa: PLR0913 — checkpoint keyword-only (gh #71)
     if checkpoint is not None:
         checkpoint.record(unit, unit_digest)
     return 1, []
+
+
+def action_digest(action: ActionFile) -> str:
+    """V67 content digest; depends_on is order, not payload (V71)."""
+    return digest(action.model_dump(mode="json", exclude={"path", "depends_on"}))
 
 
 def _resumed(
