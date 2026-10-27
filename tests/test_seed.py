@@ -15,6 +15,7 @@ import httpx
 import pytest
 
 from acumatica_cli import seed
+from acumatica_cli.checkpoint import digest
 from acumatica_cli.client import AcumaticaClient, SessionLostError, unwrap, wrap
 from acumatica_cli.config import Instance
 
@@ -2136,6 +2137,20 @@ def test_load_baseline_dispatches_on_action_key(tmp_path: Path) -> None:
     assert parsed.done_when.filter == "FinancialYear eq '2026'"
 
 
+def testaction_digest_ignores_depends_on(tmp_path: Path) -> None:
+    # V67/V71: a pre-depends_on checkpoint and a depends_on edit still resume
+    plain = seed.load_baseline(_write(tmp_path, ACTION_YAML))
+    ordered = seed.load_baseline(
+        _write(tmp_path, ACTION_YAML + "depends_on: [master/10-a.yaml]\n")
+    )
+    assert isinstance(plain, seed.ActionFile)
+    assert isinstance(ordered, seed.ActionFile)
+    assert seed.action_digest(plain) == seed.action_digest(ordered)
+    legacy = plain.model_dump(mode="json", exclude={"path"})
+    del legacy["depends_on"]
+    assert seed.action_digest(plain) == digest(legacy)
+
+
 def test_load_action_file_rejects_unknown_field(tmp_path: Path) -> None:
     # V10: frozen models, extra="forbid" - typos surface at the parse boundary
     with pytest.raises(SystemExit, match="typo"):
@@ -2691,6 +2706,163 @@ def test_load_all_returns_in_order(tmp_path: Path) -> None:
         paths.append(path)
     loaded = seed.load_all(paths)
     assert [b.path for b in loaded] == paths
+
+
+# -- gh #80 / V71: depends_on orders the run (stable topological sort) --
+
+
+def _seed_file(root: Path, rel: str, uom: str, deps: list[str] | None = None) -> Path:
+    path = root / rel
+    path.parent.mkdir(parents=True, exist_ok=True)
+    text = f"entity: UnitsOfMeasure\nkey: UOM\nrecords:\n  - UOM: {uom}\n"
+    if deps is not None:
+        text += f"depends_on: {deps}\n"
+    path.write_text(text)
+    return path
+
+
+def test_depends_on_moves_file_after_its_dependency(tmp_path: Path) -> None:
+    a = _seed_file(tmp_path, "master/10-a.yaml", "A", ["master/30-c.yaml"])
+    b = _seed_file(tmp_path, "master/20-b.yaml", "B")
+    c = _seed_file(tmp_path, "master/30-c.yaml", "C")
+    loaded = seed.load_all([a, b, c])
+    # b keeps its slot ahead of a: only the constrained file moves
+    assert [f.path for f in loaded] == [b, c, a]
+
+
+def test_depends_on_across_seed_dirs(tmp_path: Path) -> None:
+    a = _seed_file(tmp_path, "baseline/10-a.yaml", "A", ["master/10-m.yaml"])
+    m = _seed_file(tmp_path, "master/10-m.yaml", "M")
+    assert [f.path for f in seed.load_all([a, m])] == [m, a]
+
+
+def test_no_depends_on_keeps_expansion_order(tmp_path: Path) -> None:
+    paths = [
+        _seed_file(tmp_path, f"master/{n}.yaml", n.upper()) for n in ("c", "a", "b")
+    ]
+    assert [f.path for f in seed.load_all(paths)] == paths
+
+
+def test_satisfied_depends_on_keeps_order(tmp_path: Path) -> None:
+    a = _seed_file(tmp_path, "master/10-a.yaml", "A")
+    b = _seed_file(tmp_path, "master/20-b.yaml", "B", ["master/10-a.yaml"])
+    assert [f.path for f in seed.load_all([a, b])] == [a, b]
+
+
+def test_depends_on_cycle_names_path(tmp_path: Path) -> None:
+    a = _seed_file(tmp_path, "master/10-a.yaml", "A", ["master/20-b.yaml"])
+    b = _seed_file(tmp_path, "master/20-b.yaml", "B", ["master/10-a.yaml"])
+    with pytest.raises(SystemExit) as info:
+        seed.load_all([a, b])
+    message = str(info.value.code)
+    assert "nothing sent to the tenant" in message
+    assert f"depends_on cycle: {b} -> {a} -> {b}" in message
+
+
+def test_depends_on_self_is_cycle(tmp_path: Path) -> None:
+    a = _seed_file(tmp_path, "master/10-a.yaml", "A", ["master/10-a.yaml"])
+    with pytest.raises(SystemExit, match=r"depends_on cycle: .*10-a\.yaml -> .*10-a"):
+        seed.load_all([a])
+
+
+def test_depends_on_unknown_file(tmp_path: Path) -> None:
+    a = _seed_file(tmp_path, "master/10-a.yaml", "A", ["master/99-gone.yaml"])
+    with pytest.raises(SystemExit, match=r"depends_on 'master/99-gone\.yaml': no such"):
+        seed.load_all([a])
+
+
+def test_depends_on_outside_run_is_named_not_added(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    a = _seed_file(tmp_path, "master/10-a.yaml", "A", ["baseline/10-x.yaml"])
+    _seed_file(tmp_path, "baseline/10-x.yaml", "X")
+    # single-file run: dep assumed applied, warned, never pulled in
+    assert [f.path for f in seed.load_all([a])] == [a]
+    err = " ".join(capsys.readouterr().err.split())  # rich wraps stderr
+    assert "depends_on 'baseline/10-x.yaml' is not in this run" in err
+
+
+def test_depends_on_unused_skips_stat(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    paths = [_seed_file(tmp_path, f"master/{n}.yaml", n.upper()) for n in "ab"]
+    loaded = [seed.load_baseline(p) for p in paths]
+
+    def boom(_: Path) -> None:
+        raise AssertionError("stat without depends_on")
+
+    monkeypatch.setattr(seed, "_file_id", boom)
+    assert seed.order_by_depends_on(loaded, paths) == (loaded, [])
+
+
+def test_depends_on_reported_with_load_failures(tmp_path: Path) -> None:
+    a = _seed_file(tmp_path, "master/10-a.yaml", "A", ["master/99-gone.yaml"])
+    broken = tmp_path / "master/20-broken.yaml"
+    broken.write_text("entity: [\n")
+    with pytest.raises(SystemExit) as info:
+        seed.load_all([a, broken])
+    message = str(info.value.code)
+    assert message.startswith("1 of 2 seed file(s) failed validation")
+    assert "20-broken.yaml: invalid YAML" in message
+    assert "99-gone.yaml': no such file" in message
+
+
+def test_depends_on_outside_seed_dir_is_error(tmp_path: Path) -> None:
+    a = _seed_file(tmp_path, "loose/10-a.yaml", "A", ["master/10-m.yaml"])
+    with pytest.raises(
+        SystemExit, match=r"depends_on needs the file inside a seed dir"
+    ):
+        seed.load_all([a])
+
+
+@pytest.mark.parametrize("dep", ["/abs/x.yaml", "../x.yaml", "master\\x.yaml", ""])
+def test_depends_on_entry_must_be_tree_relative(tmp_path: Path, dep: str) -> None:
+    a = _seed_file(tmp_path, "master/10-a.yaml", "A", [dep])
+    with pytest.raises(SystemExit, match=r"relative path under the seed-tree root"):
+        seed.load_baseline(a)
+
+
+def test_depends_on_cycle_reported_with_unknown_dep(tmp_path: Path) -> None:
+    a = _seed_file(tmp_path, "master/10-a.yaml", "A", ["master/20-b.yaml"])
+    b = _seed_file(
+        tmp_path, "master/20-b.yaml", "B", ["master/10-a.yaml", "master/99-gone.yaml"]
+    )
+    with pytest.raises(SystemExit) as info:
+        seed.load_all([a, b])
+    message = str(info.value.code)
+    assert "99-gone.yaml': no such file" in message
+    assert "depends_on cycle:" in message
+
+
+def test_depends_on_features_yaml_rejected(tmp_path: Path) -> None:
+    a = _seed_file(tmp_path, "master/10-a.yaml", "A", ["bootstrap/features.yaml"])
+    with pytest.raises(SystemExit, match=r"features\.yaml configures the bootstrap"):
+        seed.load_baseline(a)
+
+
+def test_depends_on_symlinked_seed_file_uses_typed_tree(tmp_path: Path) -> None:
+    real = tmp_path / "elsewhere" / "20-o.yaml"
+    real.parent.mkdir()
+    real.write_text(
+        "entity: UnitsOfMeasure\nkey: UOM\nrecords:\n  - UOM: O\n"
+        "depends_on: [master/30-m.yaml]\n"
+    )
+    link = tmp_path / "overlay" / "master" / "20-o.yaml"
+    link.parent.mkdir(parents=True)
+    link.symlink_to(real)
+    m = _seed_file(tmp_path / "overlay", "master/30-m.yaml", "M")
+    assert [f.path for f in seed.load_all([link, m])] == [m, link]
+
+
+def test_action_file_accepts_depends_on(tmp_path: Path) -> None:
+    m = _seed_file(tmp_path, "master/10-m.yaml", "M")
+    act = tmp_path / "setup/10-act.yaml"
+    act.parent.mkdir()
+    act.write_text(
+        "action: Go\nentity: UnitsOfMeasure\nrecord: {UOM: M}\n"
+        "done_when: {}\ndepends_on: [master/10-m.yaml]\n"
+    )
+    assert [f.path for f in seed.load_all([act, m])] == [m, act]
 
 
 def test_load_baseline_non_utf8_is_systemexit(tmp_path: Path) -> None:

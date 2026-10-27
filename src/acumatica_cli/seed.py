@@ -50,15 +50,24 @@ Bootstrap endpoint serves (V20): the same name can mean different screens
 per endpoint (B8 - Bootstrap Currency = CM202000 financial currency,
 Default Currency = CM201000 list), so an ambiguous file is a hard error,
 never a silent Default-endpoint PUT.
+
+Either file kind may name the seed files it needs applied first (V71):
+
+    depends_on: [master/77-taxes.yaml]   # relative to the seed-tree root
+
+load_all orders the run by a stable topological sort over depends_on;
+files with no constraint keep the expansion order (SEED_DIRS, then alpha).
 """
 
+import heapq
 import re
+import stat
 import threading
 from collections import Counter
 from collections.abc import Sequence
 from dataclasses import dataclass
 from enum import StrEnum
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 from typing import Any
 
 import httpx
@@ -186,6 +195,26 @@ def resolve_endpoint(
     return endpoint
 
 
+SEED_DIRS = ("bootstrap", "baseline", "setup", "master")
+
+
+def _check_depends_on(value: list[str] | None) -> list[str] | None:
+    # V71: entries are seed-tree-relative POSIX paths (catalog `file` form)
+    for dep in value or ():
+        rel = PurePosixPath(dep)
+        if not dep or rel.is_absolute() or ".." in rel.parts or "\\" in dep:
+            raise ValueError(
+                f"depends_on '{dep}' must be a relative path under the seed-tree "
+                "root, e.g. master/77-taxes.yaml"
+            )
+        if rel.name == "features.yaml":
+            raise ValueError(
+                f"depends_on '{dep}': features.yaml configures the bootstrap "
+                "package, it is not a seed file"
+            )
+    return value
+
+
 class BaselineFile(Model):
     """A parsed baseline YAML: one entity, its key fields, its records."""
 
@@ -195,6 +224,9 @@ class BaselineFile(Model):
     records: list[dict[str, Any]]
     endpoint: str | None = None  # bootstrap YAML targets the custom endpoint
     detail_keys: dict[str, str] | None = None  # {ListField: RowKeyField} (T60)
+    depends_on: list[str] | None = None  # V71 apply-order constraint
+
+    _depends_on = field_validator("depends_on")(_check_depends_on)
 
     @field_validator("keys", mode="before")
     @classmethod
@@ -287,6 +319,9 @@ class ActionFile(Model):
     endpoint: str | None = None
     timeout: float | None = Field(default=None, gt=0)  # 202 poll ceiling (V63)
     done_when: DoneProbe
+    depends_on: list[str] | None = None  # V71 apply-order constraint
+
+    _depends_on = field_validator("depends_on")(_check_depends_on)
 
 
 def load_baseline(
@@ -344,17 +379,128 @@ def load_all(paths: Sequence[Path]) -> list[BaselineFile | ActionFile]:
             loaded.append(load_baseline(path, contract))
         except SystemExit as exc:
             failures.append(str(exc.code))
-    if failures:
-        raise SystemExit(
-            "\n".join(
-                [
-                    f"{len(failures)} of {len(paths)} seed file(s) failed "
-                    "validation - nothing sent to the tenant",
-                    *failures,
-                ]
-            )
+    ordered, order_failures = order_by_depends_on(loaded, paths)
+    if failures or order_failures:
+        header = (
+            [
+                f"{len(failures)} of {len(paths)} seed file(s) failed "
+                "validation - nothing sent to the tenant"
+            ]
+            if failures
+            else ["seed file order failed - nothing sent to the tenant"]
         )
-    return loaded
+        raise SystemExit("\n".join([*header, *failures, *order_failures]))
+    return ordered
+
+
+def _seed_tree_root(path: Path) -> Path | None:
+    """Parent of the SEED_DIRS dir holding ``path`` (V71), else None."""
+    parent = path.absolute().parent  # the typed location, not a symlink target
+    return parent.parent if parent.name in SEED_DIRS else None
+
+
+def _file_id(path: Path) -> tuple[int, int] | None:
+    """Filesystem identity: same file across case, symlinks, hard links.
+
+    None for anything that is not a regular file (missing, dir, ...).
+    """
+    try:
+        st = path.stat()
+    except OSError:
+        return None
+    return (st.st_dev, st.st_ino) if stat.S_ISREG(st.st_mode) else None
+
+
+def order_by_depends_on(
+    loaded: Sequence[BaselineFile | ActionFile], expanded: Sequence[Path]
+) -> tuple[list[BaselineFile | ActionFile], list[str]]:
+    """Stable topological sort over ``depends_on`` (V71).
+
+    Tie-break is the given order (V30 expansion), so a run with no
+    depends_on keeps its order. ``expanded`` is the full path set,
+    including files that failed to load: a dep on one of those is a load
+    failure already, not a second "not in this run" error.
+    Returns (ordered files, error lines); errors mean nothing is applied.
+    """
+    if not any(f.depends_on for f in loaded):
+        return list(loaded), []  # nothing to order: skip the stat calls
+    # unresolved deps add no edge; cycles among the rest still report (V45)
+    needs, errors = _depends_on_edges(loaded, expanded)
+    # Kahn: always take the lowest-index ready file (stable tie-break)
+    waiting = [len(n) for n in needs]
+    users: list[list[int]] = [[] for _ in loaded]
+    for i, deps in enumerate(needs):
+        for d in deps:
+            users[d].append(i)
+    ready = [i for i, w in enumerate(waiting) if w == 0]
+    heapq.heapify(ready)
+    order: list[int] = []
+    while ready:
+        i = heapq.heappop(ready)
+        order.append(i)
+        for u in users[i]:
+            waiting[u] -= 1
+            if waiting[u] == 0:
+                heapq.heappush(ready, u)
+    if len(order) < len(loaded):
+        cycle = _find_cycle(needs, {i for i, w in enumerate(waiting) if w})
+        names = " -> ".join(str(loaded[i].path) for i in cycle)
+        errors.append(f"depends_on cycle: {names}")
+    if errors:
+        return list(loaded), errors
+    return [loaded[i] for i in order], []
+
+
+def _depends_on_edges(
+    loaded: Sequence[BaselineFile | ActionFile], expanded: Sequence[Path]
+) -> tuple[list[set[int]], list[str]]:
+    """Per file, the indexes it must follow; plus unresolvable-dep errors."""
+    in_run = {_file_id(p) for p in expanded} - {None}
+    index: dict[tuple[int, int] | None, list[int]] = {}
+    for i, f in enumerate(loaded):
+        index.setdefault(_file_id(f.path), []).append(i)
+    needs: list[set[int]] = [set() for _ in loaded]
+    errors: list[str] = []
+    for i, f in enumerate(loaded):
+        root = _seed_tree_root(f.path) if f.depends_on else None
+        if f.depends_on and root is None:
+            errors.append(
+                f"{f.path}: depends_on needs the file inside a seed dir "
+                f"({'|'.join(SEED_DIRS)})"
+            )
+        if root is None:
+            continue
+        for dep in f.depends_on or ():
+            target = root / dep
+            ident = _file_id(target)
+            if ident is None:
+                errors.append(f"{f.path}: depends_on '{dep}': no such file {target}")
+            elif ident not in in_run:
+                # a partial run (one file, a stopped run's remainder): the
+                # dep is assumed already on the tenant; never auto-included
+                output.warn(
+                    f"{f.path}: depends_on '{dep}' is not in this run - "
+                    "assuming it is already applied"
+                )
+            else:
+                needs[i].update(index.get(ident, ()))
+    return needs, errors
+
+
+def _find_cycle(needs: list[set[int]], stuck: set[int]) -> list[int]:
+    """One cycle among ``stuck`` nodes, first node repeated at the end."""
+    # every stuck node has a stuck dep, so walking deps must revisit a node
+    node = min(stuck)
+    seen: dict[int, int] = {}
+    walk: list[int] = []
+    while node not in seen:
+        seen[node] = len(walk)
+        walk.append(node)
+        node = min(d for d in needs[node] if d in stuck)
+    cycle = walk[seen[node] :]
+    # report in apply direction: dependency before its dependent
+    cycle.reverse()
+    return [*cycle, cycle[0]]
 
 
 # ISO date or DateTimeValue: calendar-day prefix only (V55). Random strings
@@ -520,7 +666,7 @@ def _apply_action(  # noqa: PLR0913 — checkpoint keyword-only (gh #71)
         return 1, []
     assert client is not None, "live apply needs a client"
     unit = f"action {action.action} [{action.entity}]"
-    unit_digest = digest(action.model_dump(mode="json", exclude={"path"}))
+    unit_digest = action_digest(action)
     if _resumed(checkpoint, unit, unit_digest, tally):
         return 1, []
     try:
@@ -554,6 +700,11 @@ def _apply_action(  # noqa: PLR0913 — checkpoint keyword-only (gh #71)
     if checkpoint is not None:
         checkpoint.record(unit, unit_digest)
     return 1, []
+
+
+def action_digest(action: ActionFile) -> str:
+    """V67 content digest; depends_on is order, not payload (V71)."""
+    return digest(action.model_dump(mode="json", exclude={"path", "depends_on"}))
 
 
 def _resumed(

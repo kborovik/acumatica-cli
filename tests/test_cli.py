@@ -3345,3 +3345,108 @@ def test_run_pool_step_error_stops_dispatch_lists_not_run(
     assert f"x {first}#1 [s0]: " in result.stderr
     assert f"not run: {first}#" in result.stderr
     assert f"not run: {later}" in result.stderr
+
+
+# -- gh #80 / V71: apply + diff follow the depends_on order --
+
+
+def _depends_tree(root: Path) -> None:
+    """master/10-a needs master/20-b: b must run first."""
+    (root / "master").mkdir(parents=True)
+    (root / "master" / "10-a.yaml").write_text(
+        "entity: UnitsOfMeasure\nkey: UnitID\nrecords:\n- UnitID: A\n"
+        "depends_on: [master/20-b.yaml]\n"
+    )
+    (root / "master" / "20-b.yaml").write_text(
+        "entity: UnitsOfMeasure\nkey: UnitID\nrecords:\n- UnitID: B\n"
+    )
+
+
+@pytest.mark.parametrize("flags", [["--dry-run"], ["--plan"], ["--changed-only"], []])
+def test_apply_follows_depends_on(
+    wired: Instance, tmp_path: Path, monkeypatch: pytest.MonkeyPatch, flags: list[str]
+) -> None:
+    _depends_tree(tmp_path / "acu-config")
+    monkeypatch.chdir(tmp_path)
+    seen: list[str] = []
+    monkeypatch.setattr(
+        cli.seed,
+        "apply",
+        lambda client, baseline, *_, **__: (
+            seen.append(str(baseline.path).replace("\\", "/")) or (1, [])
+        ),
+    )
+
+    result = CliRunner().invoke(cli.cli, ["apply", *flags, "acu-config"])
+
+    assert result.exit_code == 0, result.output
+    assert seen == ["acu-config/master/20-b.yaml", "acu-config/master/10-a.yaml"]
+    banners = [line for line in result.output.splitlines() if " -> " in line]
+    assert [b.split(" -> ")[0].replace("\\", "/") for b in banners] == seen
+
+
+def test_diff_follows_depends_on(
+    wired: Instance, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _depends_tree(tmp_path / "acu-config")
+    monkeypatch.chdir(tmp_path)
+    seen: list[str] = []
+    monkeypatch.setattr(
+        cli.seed,
+        "diff",
+        lambda client, baseline: seen.append(str(baseline.path)) or [],
+    )
+
+    result = CliRunner().invoke(cli.cli, ["diff", "acu-config"])
+
+    assert result.exit_code == 0, result.output
+    assert [s.replace("\\", "/") for s in seen] == [
+        "acu-config/master/20-b.yaml",
+        "acu-config/master/10-a.yaml",
+    ]
+
+
+@pytest.mark.parametrize("command", [["apply"], ["apply", "--dry-run"], ["diff"]])
+def test_depends_on_cycle_exits_1_before_session(
+    wired: Instance, tmp_path: Path, monkeypatch: pytest.MonkeyPatch, command: list[str]
+) -> None:
+    root = tmp_path / "acu-config"
+    _depends_tree(root)
+    (root / "master" / "20-b.yaml").write_text(
+        "entity: UnitsOfMeasure\nkey: UnitID\nrecords:\n- UnitID: B\n"
+        "depends_on: [master/10-a.yaml]\n"
+    )
+    monkeypatch.chdir(tmp_path)
+    opens = 0
+
+    class TrackingClient(DummyClient):
+        def __enter__(self) -> DummyClient:
+            nonlocal opens
+            opens += 1
+            return self
+
+    monkeypatch.setattr(cli, "AcumaticaClient", TrackingClient)
+
+    result = CliRunner().invoke(cli.cli, [*command, "acu-config"])
+
+    assert result.exit_code == 1
+    assert "depends_on cycle:" in result.output
+    assert opens == 0  # V45/V71: no session, no PUT
+
+
+def test_stock_acu_config_order_unchanged(monkeypatch: pytest.MonkeyPatch) -> None:
+    """T317: the CLI test seed has no depends_on - order is pure expansion."""
+    repo = Path(__file__).resolve().parents[1]
+    monkeypatch.chdir(repo)
+    expanded = cli.expand_files((Path("acu-config"),))
+    assert not any(cli.seed.load_baseline(p).depends_on for p in expanded)
+
+    result = CliRunner().invoke(cli.cli, ["apply", "--dry-run", "acu-config"])
+
+    assert result.exit_code == 0, result.output
+    banners = [
+        line.split(" -> ")[0]
+        for line in result.output.splitlines()
+        if " -> dry run (" in line
+    ]
+    assert banners == [str(p) for p in expanded]

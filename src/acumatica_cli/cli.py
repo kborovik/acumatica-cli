@@ -867,7 +867,7 @@ def _probe_endpoints(endpoints: list[tuple[str, str]], inst: Instance) -> bool:
     return False
 
 
-SEED_DIRS = ("bootstrap", "baseline", "setup", "master")
+SEED_DIRS = seed.SEED_DIRS
 
 
 def _seed_child_dirs(parent: Path) -> list[Path]:
@@ -1038,8 +1038,8 @@ def apply_cmd(
     all_errors: list[str] = []
     report: list[dict[str, object]] = []
     not_applied: list[Path] = []
-    paths = expand_files(files)
-    baselines = seed.load_all(paths)  # V45: every file valid before login
+    baselines = seed.load_all(expand_files(files))  # V45: valid before login
+    paths = [b.path for b in baselines]  # V71: depends_on order
     stopped = False
     # gh #63: dry-run is offline - no instance resolution, no session
     inst = None if dry_run else _resolve_instance(ctx)
@@ -1236,10 +1236,10 @@ def diff_cmd(ctx: click.Context, files: tuple[Path, ...]) -> None:
     files = _require_data_paths(ctx, files)
     as_json = _json_output(ctx)
     inst = _resolve_instance(ctx)
-    paths = expand_files(files)
     drifts: list[str] = []
     report: list[dict[str, object]] = []
-    baselines = seed.load_all(paths)
+    baselines = seed.load_all(expand_files(files))
+    paths = [b.path for b in baselines]  # V71: depends_on order
     with AcumaticaClient(inst) as client:
         for path, baseline in zip(paths, baselines, strict=True):
             # same file banner as apply so a long multi-file diff shows

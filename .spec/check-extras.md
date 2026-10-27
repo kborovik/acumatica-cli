@@ -101,7 +101,7 @@ for granular /sdd:check runs.
 - extract-derived files strip server-derived fields — PUT-tolerated, server keeps own derivation, sourced value = permanent drift (ChartOfAccountsOrder/CashAccount class, Translation* sibling)
 - shipped init template set self-closing: templates' `features.yaml` enables every feature the shipped baseline templates require (closes §B.15)
 - template set ships every recorded dependency-chain link its own verify chain needs — GL-posting chain = ledger + org-ledger link + GL prefs + calendar + open periods (closes §B.16)
-- dir expansion alphabetical = sole ordering mechanism within a seed dir; umbrella expands SEED_DIRS order first; filename prefixes encode order
+- dir expansion alphabetical = default order within a seed dir; umbrella expands SEED_DIRS order first; filename prefixes encode default order; `depends_on` (V71) overrides via stable topo sort, tie-break = expansion order
 - feature file resolve: `acu-config/bootstrap/features.yaml`
 
 ## §V.2 — bootstrap source closure (extracted from SPEC.md §V.2)
