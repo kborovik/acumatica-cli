@@ -237,6 +237,8 @@ There is no `--flavor`.
 | `.env` | secrets + where (`ACU_BASE_URL`) + pin (`ACU_API_VERSION`) |
 
 Files in each directory apply alphabetically; the numbered prefixes (`10-`, `20-`, and so on) encode dependency order.
+
+A file can also name what it needs first with `depends_on:` (see [Seed `depends_on:`](#seed-depends_on)).
 Commit seed YAML; keep `.env` out of git (scaffold `.gitignore` already lists it).
 
 Seed YAML is state: `apply` upserts it, `diff` proves it.
@@ -286,6 +288,32 @@ Dual-served entities (on both Bootstrap and Default) need an explicit `endpoint:
 `base_url` resolves as `--url`, else `ACU_BASE_URL` (required).
 
 Prefer symbolic `default` over a pinned `Default/25.200.001` so the seed tree travels with the dataset pin.
+
+### Seed `depends_on:`
+
+Any seed file (records or action) may list the files that must run before it.
+Paths are relative to the seed-tree root, the directory that holds `bootstrap/`, `baseline/`, `setup/` and `master/`:
+
+```yaml
+entity: Customer
+key: CustomerID
+depends_on: [master/77-taxes.yaml]
+records:
+  - CustomerID: C001
+```
+
+`apply` and `diff` (including `--plan`, `--changed-only` and `--dry-run`) run files in a stable topological order over `depends_on`.
+Files with no constraint keep the directory order (SEED_DIRS, then alphabetical), so a tree without `depends_on` runs exactly as before.
+
+These stop the run with exit 1 before any session opens, listed with any other seed-file errors:
+
+- a `depends_on` entry that names no file
+- a named file that is not in this run (add it to the paths; it is never pulled in for you)
+- a cycle, printed as `depends_on cycle: a.yaml -> b.yaml -> a.yaml`
+- `depends_on` in a file outside a seed directory
+
+`--concurrency` is unchanged: files still run one after another.
+`survey extract` does not write `depends_on`, so `--force` re-extract drops it from that file.
 
 ## Installation
 

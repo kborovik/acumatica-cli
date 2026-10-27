@@ -4,6 +4,13 @@
 
 ### Added
 
+- **Seed `depends_on:` (gh #80):** a seed file may list the files it
+  needs first, as paths relative to the seed-tree root (for example
+  `master/77-taxes.yaml`). `apply` and `diff` order files by a stable
+  topological sort; files without `depends_on` keep today's order. An
+  unknown file, a file missing from the run, or a cycle exits 1 before
+  any session opens.
+
 - **External file storage (gh #74):** the Bootstrap contract (now
   `Bootstrap/1.12.0`) adds `ExternalFileStorage` (SM202540): `Provider`,
   `LocalFolder`, `IsActive`, `AllowWrite`, and the actions
