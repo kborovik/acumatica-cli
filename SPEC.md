@@ -240,7 +240,7 @@ T319|x|`bootstrap_project.xml` CreditTerms add `DayDisc` (ShortValue → `TermsD
 T320|x|`seed_catalog.yaml` CreditTerms include + `DayDisc`; template `bootstrap/credit-terms.yaml` NET30 `DayDisc: 0` + new row `2P10NET30` (2% 10, Net 30); test seed `acu-config/bootstrap/credit-terms.yaml` same (NET45/NET60 `DayDisc: 0`); extract byte-stable vs template (0 ! elided)|V4,V34,T319
 T321|x|offline tests: contract parse CreditTerms DayDisc ShortValue + Bootstrap 1.13.0; catalog include DayDisc; template 2P10NET30 row shape|V13,T319,T320
 T322|x|live soak ACUCLI: `bootstrap` → `apply acu-config` ×2 → 2nd run CreditTerms 0 create/update; `diff acu-config` exit 0|V4,V12,T320
-T323|.|README contract field list (if listed) + CHANGELOG Unreleased (gh #90); release via release skill|V19,T322
+T323|x|README contract field list (if listed) + CHANGELOG Unreleased (gh #90); release via release skill|V19,T322
 
 ## §B BUGS
 

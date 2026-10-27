@@ -218,7 +218,7 @@ Your configuration lives in its own git repo.
 
 It does not write a customization tree.
 
-The Bootstrap endpoint contract is package SoT (`bootstrap_project.xml` inside the CLI — `Bootstrap/1.12.0`).
+The Bootstrap endpoint contract is package SoT (`bootstrap_project.xml` inside the CLI — `Bootstrap/1.13.0`).
 `config init` never writes `project.xml`, and data repos must not keep one (a present file hard-errors on bootstrap/publish).
 
 There is no `--flavor`.
