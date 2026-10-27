@@ -867,7 +867,7 @@ def _probe_endpoints(endpoints: list[tuple[str, str]], inst: Instance) -> bool:
     return False
 
 
-SEED_DIRS = ("bootstrap", "baseline", "setup", "master")
+SEED_DIRS = seed.SEED_DIRS
 
 
 def _seed_child_dirs(parent: Path) -> list[Path]:
