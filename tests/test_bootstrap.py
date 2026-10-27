@@ -446,6 +446,28 @@ def test_package_zip_carries_the_bootstrap_endpoint() -> None:
     }
 
 
+def test_credit_terms_day_disc_maps_terms_def() -> None:
+    """T319/gh #90: CreditTerms discount days = TermsDef.DayDisc (ShortValue).
+
+    The DAC field is DayDisc, not DayDisc00 (B44): a mapping to an absent
+    field binds nothing - PUT drops the value, GET omits the field.
+    """
+    ns, endpoint, entities = _packaged_endpoint()
+    assert endpoint.get("version") == "1.13.0"
+    terms = entities["CreditTerms"]
+    fields = {
+        f.get("name"): f.get("type") for f in terms.findall(f"{ns}Fields/{ns}Field")
+    }
+    assert fields["DayDisc"] == "ShortValue"
+    assert "DayDisc00" not in fields
+    to = {
+        m.get("field"): m.find(f"{ns}To")
+        for m in terms.findall(f"{ns}Mappings/{ns}Mapping")
+    }["DayDisc"]
+    assert to is not None
+    assert (to.get("object"), to.get("field")) == ("TermsDef", "DayDisc")
+
+
 def test_user_roles_maps_to_roles_by_user() -> None:
     """T225/V53: User.Roles maps RolesByUser.Rolename, not AllowedRoles.
 
