@@ -228,6 +228,9 @@ T308|x|test seed `acu-config/setup/40-external-file-storage.yaml` (Provider `Loc
 T309|x|`seed_catalog.yaml` row ExternalFileStorage (endpoint bootstrap, file `setup/40-external-file-storage.yaml`, include Provider + LocalFolder, `template: false` (V34 exclusion, no packaged template); ! IsActive, AllowWrite, DisableDeleteOnExternalFileStorage); action files ! synth; offline tests: contract parse, catalog completeness (test-seed file exists, ! packaged), extract byte-stable, excluded fields never emitted|V13,V34,V70,T307
 T310|x|live ACUCLI cold: apply acu-config → enable + switch run, IsActive + AllowWrite true; attach 1 file via contract `files` PUT (test harness, not CLI) → `.bin` in folder; apply again → 0 create/update/invoke + no error on active config; diff exit 0; survey extract seed file byte-identical|V4,V12,V70,T308,T309
 T311|x|README + CHANGELOG Unreleased (gh #74)|V19,T310
+T312|x|live probe 26R1 SM202540 detail bind (read-only): why `Settings` + `FilesInDatabase` detail arrays emit fieldless rows + Settings detail PUT no-op — candidates: object/view name in `bootstrap_project.xml` vs graph view, `$expand` vs `$custom`, key field missing from detail map; root cause found → detail map candidate, V70 patch via /sdd:spec; none → dead end recorded on gh #82|V12,V14,V17,V70
+T313|x|live probe 26R1 SM202540 Move Files tenant scope (read-only; ! invoke Move Files on any tenant): `FilesInDatabase` + UploadFileRevision rows per CompanyID (CompanyMask / shared-System flag) on ACUCLI; tenant-only filter exists → tenant-scoped done gate candidate for Move Files, V70 patch via /sdd:spec; none → V70 Move Files exclusion stays, recorded on gh #82|V12,V14,V17,V70
+T314|x|README "API limits" SM202540 (detail arrays fieldless, Provider GET = UI label, Move Files out of acu scope) per T312 + T313 outcome; CHANGELOG Unreleased (gh #82)|V19,T312,T313
 
 ## §B BUGS
 
