@@ -8,4 +8,13 @@ records:
   DueType: Fixed Number of Days
   DayDue00: 30
   DiscType: Fixed Number of Days
+  DayDisc: 0
   DiscPercent: 0
+- TermsID: 2P10NET30
+  Descr: 2% 10, Net 30
+  VisibleTo: All
+  DueType: Fixed Number of Days
+  DayDue00: 30
+  DiscType: Fixed Number of Days
+  DayDisc: 10
+  DiscPercent: 2

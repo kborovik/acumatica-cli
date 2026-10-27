@@ -70,6 +70,7 @@ entities:
   - DueType
   - DayDue00
   - DiscType
+  - DayDisc
   - DiscPercent
 
 # SegmentedKey (T205/gh #30 / V50): V22 bootstrap/ sorts before master
