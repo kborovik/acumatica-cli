@@ -236,6 +236,11 @@ T315|x|`seed.py`: `depends_on` ? top-level on BaselineFile + ActionFile (list[st
 T316|x|`cli.py` apply + diff (all modes incl `--plan`/`--changed-only`/`--dry-run`) order via T315 after `expand_files`; offline tests: topo order, tie-break stability, cycle msg names path, unknown dep, dep ∉ set, self-dep, dry-run opens no session|V30,V59,V71,T315
 T317|x|regression: `apply --dry-run acu-config` + `diff` file order byte-identical to pre-gh-#80 (test seed has no `depends_on`)|V22,V71,T316
 T318|x|README seed-format `depends_on` + CHANGELOG Unreleased (gh #80)|V19,T316
+T319|x|`bootstrap_project.xml` CreditTerms add `DayDisc` (ShortValue → `TermsDef.DayDisc`); version 1.12.0→1.13.0; extend description (credit terms + discount days); live probe post-publish acu-26r1-dev1: PUT `2P10NET30` (DiscType `Fixed Number of Days`, DayDisc 10, DiscPercent 2, DayDue00 30) → GET DayDisc 10 + CS206500 discount day 10; DayDisc > DayDue00 server reject → record on gh #90|V12,V21,I.data
+T320|x|`seed_catalog.yaml` CreditTerms include + `DayDisc`; template `bootstrap/credit-terms.yaml` NET30 `DayDisc: 0` + new row `2P10NET30` (2% 10, Net 30); test seed `acu-config/bootstrap/credit-terms.yaml` same (NET45/NET60 `DayDisc: 0`); extract byte-stable vs template (0 ! elided)|V4,V34,T319
+T321|x|offline tests: contract parse CreditTerms DayDisc ShortValue + Bootstrap 1.13.0; catalog include DayDisc; template 2P10NET30 row shape|V13,T319,T320
+T322|x|live soak ACUCLI: `bootstrap` → `apply acu-config` ×2 → 2nd run CreditTerms 0 create/update; `diff acu-config` exit 0|V4,V12,T320
+T323|x|README contract field list (if listed) + CHANGELOG Unreleased (gh #90); release via release skill|V19,T322
 
 ## §B BUGS
 
@@ -277,3 +282,5 @@ B40|2026-10-26|contract list GET (optimized export) returns selector surrogate i
 B41|2026-10-26|V70 authored from issue prose pre-probe: SM202540 = keyless per-tenant singleton (not per-company keyed provider), label 'Local File Folder', Switch Direction toggles AllowWrite, Move Files done = zero DB rows (done_when non-empty=done only) (gh #74)|V70
 B42|2026-10-26|T307 probe: SM202540 contract detail arrays bind fieldless rows (Settings write no-op); tenant FilesInDatabase lists System CompanyID 1 shared files → Move Files empty gate unreachable; Provider GET returns UI label (gh #74)|V70
 B43|2026-10-26|T309 plan: V34 template=catalog bijection blocks test-seed-only catalog row; SM202540 folder path server-specific → ! `config init` scaffold (gh #74)|V34
+B44|2026-10-27|T319 probe: CS206500 discount days DAC field = `TermsDef.DayDisc` (no `DayDisc00`; `$adHocSchema` TermsDef lists DayDisc, DayDue01, DayFrom/To00/01); contract map to absent field binds silently — PUT drops value, GET omits field, diff "not returned by endpoint" (gh #90)|V12
+B45|2026-10-27|T319 probe: CreditTerms TermsID mask `>aaaaaaaaaa` (≤10 alnum, upper) — `2-10NET30` 422 (gh #90)|V12

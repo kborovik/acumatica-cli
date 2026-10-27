@@ -2,6 +2,19 @@
 
 ## Unreleased
 
+### Added
+
+- **Credit terms discount days (gh #90):** the Bootstrap contract (now
+  `Bootstrap/1.13.0`) adds `CreditTerms.DayDisc` (CS206500 discount
+  day, `TermsDef.DayDisc`), so a cash-discount term such as 2% 10, Net
+  30 loads with its discount days instead of a discount date equal to
+  the document date. `diff`, `apply --changed-only` and `survey extract`
+  read it back. The `credit-terms.yaml` template adds `2P10NET30` and
+  sets `DayDisc: 0` on net terms. The field is `DayDisc`, not
+  `DayDisc00`: CS206500 has no `DayDisc00`. A TermsID allows at most 10
+  letters or digits (no `-`), and a discount day after the due day is
+  rejected (422).
+
 ## [v0.37.0] - 2026-10-27
 
 ### Added

@@ -152,9 +152,22 @@ TABLES: dict[str, list[dict[str, Any]]] = {
             "DueType": "Fixed Number of Days",
             "DayDue00": 30,
             "DiscType": "Fixed Number of Days",
+            "DayDisc": 0,
             "DiscPercent": 0.0,
             "LastModifiedDateTime": "2026-07-11T00:00:00+00:00",
-        }
+        },
+        # gh #90: cash-discount term (TermsID mask >aaaaaaaaaa, B45)
+        {
+            "TermsID": "2P10NET30",
+            "Descr": "2% 10, Net 30",
+            "VisibleTo": "All",
+            "DueType": "Fixed Number of Days",
+            "DayDue00": 30,
+            "DiscType": "Fixed Number of Days",
+            "DayDisc": 10,
+            "DiscPercent": 2.0,
+            "LastModifiedDateTime": "2026-07-11T00:00:00+00:00",
+        },
     ],
     # T206 SegmentedKey (gh #30 / V50). Canned live includes ACCOUNT+INSITE
     # Length 10 so extract --force round-trips INVENTORY/BIZACCT Length 30
@@ -1396,12 +1409,12 @@ def test_b9_fallback_selects_keys_then_key_urls(
         for r in server.requests
     ]
     assert currency_requests == [
-        ("Bootstrap/1.12.0/Currency", {"$filter": "IsFinancial eq true"}),
+        ("Bootstrap/1.13.0/Currency", {"$filter": "IsFinancial eq true"}),
         (
-            "Bootstrap/1.12.0/Currency",
+            "Bootstrap/1.13.0/Currency",
             {"$select": "CuryID", "$filter": "IsFinancial eq true"},
         ),
-        ("Bootstrap/1.12.0/Currency/EUR", {}),
+        ("Bootstrap/1.13.0/Currency/EUR", {}),
     ]
     text = extract._render(spec, records)  # pyright: ignore[reportPrivateUsage]
     assert "RealGainAcctID" in text
@@ -1766,6 +1779,41 @@ def test_extract_force_round_trips_segmented_key_lengths(
         assert rec["SegmentID"] == 1
         assert "LastModifiedDateTime" not in rec
         assert set(rec) == {"DimensionID", "Length", "SegmentID"}
+
+
+def test_catalog_credit_terms_includes_day_disc() -> None:
+    """T320/gh #90: diff, --changed-only and extract read DayDisc back."""
+    manifest = extract.load_manifest()
+    row = {s.file: s for s in manifest.entities}["bootstrap/credit-terms.yaml"]
+    assert row.entity == "CreditTerms"
+    assert "DayDisc" in row.include
+    assert "DayDisc00" not in row.include
+
+
+def test_extract_credit_terms_matches_template(
+    instance: Instance, server: FakeServer, tmp_path: Path
+) -> None:
+    """T320/V34: extracted CreditTerms records equal the packaged template.
+
+    DayDisc 0 on net terms is emitted (0 is never elided) and the
+    2P10NET30 discount term carries DayDisc 10.
+    """
+    failed = _run(instance, server, tmp_path, only=frozenset({"CreditTerms"}))
+    assert failed == 0
+    extracted = seed.load_baseline(tmp_path / "bootstrap/credit-terms.yaml")
+    template = seed.load_baseline(
+        Path(__file__).resolve().parents[1]
+        / "src/acumatica_cli/templates/acu-config/bootstrap/credit-terms.yaml"
+    )
+    assert isinstance(extracted, seed.BaselineFile)
+    assert isinstance(template, seed.BaselineFile)
+
+    def by_id(f: seed.BaselineFile) -> dict[str, dict[str, Any]]:
+        return {r["TermsID"]: r for r in f.records}
+
+    assert by_id(extracted) == by_id(template)
+    assert by_id(extracted)["NET30"]["DayDisc"] == 0
+    assert by_id(extracted)["2P10NET30"]["DayDisc"] == 10
 
 
 def test_extract_tax_emits_reporting_group_name(
