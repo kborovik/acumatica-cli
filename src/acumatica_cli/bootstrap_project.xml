@@ -17,7 +17,7 @@
   T251 bumps 1.10.0 -> 1.11.0 for NumberingSequence Header NewSymbol
   (CS201010 insert requires New Number Symbol or Manual Numbering;
   gh #44 / V58);
-  T307 bumps 1.11.0 -> 1.12.0 for ExternalFileStorage (SM202540,
+  T307 bumps 1.11.0 -> 1.13.0 for ExternalFileStorage (SM202540,
   gh #74 / V70).
 
   package_zip() always loads this packaged contract. Data-repo
@@ -150,9 +150,9 @@
   Features (CS100000) stays OUT of the endpoint - the plugin owns features.
   Shape change requires a version bump (V21).
 -->
-<Customization level="" description="acu bootstrap: CustomizationPlugin enables features on publish; Bootstrap endpoint exposes full company surface (company + credit terms + financial currency + GL chain + module preferences + vendor class + statement cycle + warehouse + order type + cash account + role + user + membership + numbering sequence + segmented key + external file storage)" product-version="26.101">
+<Customization level="" description="acu bootstrap: CustomizationPlugin enables features on publish; Bootstrap endpoint exposes full company surface (company + credit terms (discount days) + financial currency + GL chain + module preferences + vendor class + statement cycle + warehouse + order type + cash account + role + user + membership + numbering sequence + segmented key + external file storage)" product-version="26.101">
   <EntityEndpoint>
-    <Endpoint xmlns="http://www.acumatica.com/entity/maintenance/5.31" name="Bootstrap" version="1.12.0" systemContractVersion="4">
+    <Endpoint xmlns="http://www.acumatica.com/entity/maintenance/5.31" name="Bootstrap" version="1.13.0" systemContractVersion="4">
       <TopLevelEntity name="Company" screen="CS101500">
         <Fields>
           <Field name="AcctCD" type="StringValue" />
@@ -199,6 +199,7 @@
           <Field name="DueType" type="StringValue" />
           <Field name="DayDue00" type="ShortValue" />
           <Field name="DiscType" type="StringValue" />
+          <Field name="DayDisc" type="ShortValue" />
           <Field name="DiscPercent" type="DecimalValue" />
         </Fields>
         <Mappings>
@@ -222,6 +223,9 @@
           </Mapping>
           <Mapping field="DiscPercent">
             <To object="TermsDef" field="DiscPercent" />
+          </Mapping>
+          <Mapping field="DayDisc">
+            <To object="TermsDef" field="DayDisc" />
           </Mapping>
         </Mappings>
       </TopLevelEntity>
