@@ -56,6 +56,12 @@
 
 ### Changed
 
+- **External file storage API limits (gh #82):** the README "Acumatica
+  API limits" table now records that SM202540 detail arrays come back
+  empty, that `Provider` reads back as its UI label, and that a tenant
+  cannot tell its own database files from shared System files, so Move
+  Files to Storage stays out of `acu`.
+
 - **Tax reporting group by name (gh #78):** `diff`, `apply` and `survey
   extract` read `Tax` one record at a time by key, which returns
   `TaxSchedule.ReportingGroup` as the group name; the list GET returned

@@ -267,8 +267,9 @@ Seed and scenario templates work around these contract-API limits (live-verified
 | A `SalesInvoice` of type Finance Charge (or Overdue Charge) cannot be created through the contract API: PUT answers 500 "Index was outside the bounds of the array". Finance charges come only from the AR overdue-charge process. | `50-ar-documents.yaml` loads a migrated finance charge as a Debit Memo with an income account line. |
 | The list GET returns `Tax` `TaxSchedule.ReportingGroup` as a per-tenant group id (`'1'`), while the single-record GET returns the group name. | The CLI reads `Tax` one record at a time by key, so seed holds the group name and `diff` compares names. |
 | A `Tax` schedule row needs a reporting group (422 "'Reporting Group' cannot be empty"). | `76-tax-reporting.yaml` sorts before `77-taxes.yaml`. |
-| External File Storage (SM202540) detail arrays bind rows with no fields, so a `Settings` write is a no-op. | Bootstrap `ExternalFileStorage` maps a top-level `LocalFolder` to the current settings row. |
-| SM202540 lists System-tenant shared files in each tenant's database-files grid. | Move Files to Storage is not exposed; files stored before the switch stay in the database. |
+| External File Storage (SM202540) detail arrays (`Settings`, `FilesInDatabase`) come back empty on GET and PUT, so a `Settings` detail write does nothing. `$custom` reaches only the current row. | Bootstrap `ExternalFileStorage` maps a top-level `LocalFolder` to the current settings row. |
+| SM202540 `Provider` reads back as the UI label `Local File Folder`; the database stores `PX.SM.PXBlobStorageFileProvider`. | Seed holds the label; PUT accepts it. |
+| SM202540 lists System-tenant shared files (CompanyMask) in each tenant's database-files grid, and the API cannot filter them out. | Move Files to Storage is not exposed; files stored before the switch stay in the database. |
 
 ### Seed `endpoint:` symbols
 

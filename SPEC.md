@@ -230,7 +230,7 @@ T310|x|live ACUCLI cold: apply acu-config → enable + switch run, IsActive + Al
 T311|x|README + CHANGELOG Unreleased (gh #74)|V19,T310
 T312|x|live probe 26R1 SM202540 detail bind (read-only): why `Settings` + `FilesInDatabase` detail arrays emit fieldless rows + Settings detail PUT no-op — candidates: object/view name in `bootstrap_project.xml` vs graph view, `$expand` vs `$custom`, key field missing from detail map; root cause found → detail map candidate, V70 patch via /sdd:spec; none → dead end recorded on gh #82|V12,V14,V17,V70
 T313|x|live probe 26R1 SM202540 Move Files tenant scope (read-only; ! invoke Move Files on any tenant): `FilesInDatabase` + UploadFileRevision rows per CompanyID (CompanyMask / shared-System flag) on ACUCLI; tenant-only filter exists → tenant-scoped done gate candidate for Move Files, V70 patch via /sdd:spec; none → V70 Move Files exclusion stays, recorded on gh #82|V12,V14,V17,V70
-T314|.|README "API limits" SM202540 (detail arrays fieldless, Provider GET = UI label, Move Files out of acu scope) per T312 + T313 outcome; CHANGELOG Unreleased (gh #82)|V19,T312,T313
+T314|x|README "API limits" SM202540 (detail arrays fieldless, Provider GET = UI label, Move Files out of acu scope) per T312 + T313 outcome; CHANGELOG Unreleased (gh #82)|V19,T312,T313
 
 ## §B BUGS
 
