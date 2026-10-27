@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## [v0.38.0] - 2026-10-27
+
 ### Added
 
 - **Credit terms discount days (gh #90):** the Bootstrap contract (now
