@@ -118,8 +118,15 @@ _DIFF_IGNORE_FIELDS = PASSWORD_FIELDS | NUMBERING_RUNTIME_FIELDS
 # Path-qualified write-only GET-omit (V56): (entity, detail, field).
 # Diff ignores; extract strips; apply still PUTs when present in YAML.
 # Do not add bare ``Value`` to _DIFF_IGNORE_FIELDS — that would hide
-# real drift on unrelated fields.
-_DIFF_IGNORE_PATHS = frozenset({("LotSerialClass", "Segments", "Value")})
+# real drift on unrelated fields. Tax TaxSchedule.RevisionID is a server
+# revision counter bumped on every schedule save (B11 class): bare
+# ``RevisionID`` is a real KitSpecification key, so it stays path-qualified.
+_DIFF_IGNORE_PATHS = frozenset(
+    {
+        ("LotSerialClass", "Segments", "Value"),
+        ("Tax", "TaxSchedule", "RevisionID"),
+    }
+)
 # Whole-detail skip (V57/B37): mapped GET Role.Users / User.Roles may be
 # empty while UsersInRoles has session-company rows. Extra live members
 # are not drift (AssignUser is additive-only).

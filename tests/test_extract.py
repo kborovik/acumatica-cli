@@ -2057,6 +2057,29 @@ def test_extract_strips_lotserial_segments_value() -> None:
     assert shaped[0]["Segments"][0]["SegmentID"] == 1
 
 
+def test_extract_strips_tax_schedule_revision_id() -> None:
+    """Tax TaxSchedule.RevisionID (server save counter) never enters seed."""
+    spec = extract.EntitySpec(
+        entity="Tax",
+        keys=["TaxID"],
+        file="master/77-taxes.yaml",
+        detail_keys={"TaxSchedule": "StartDate"},
+        include=["TaxSchedule"],
+    )
+    live = [
+        wrap(
+            {
+                "TaxID": "STATE",
+                "TaxSchedule": [
+                    {"StartDate": "2020-01-01", "TaxRate": 7.0, "RevisionID": 11}
+                ],
+            }
+        )
+    ]
+    shaped = extract._shape(spec, live)  # pyright: ignore[reportPrivateUsage]
+    assert shaped[0]["TaxSchedule"] == [{"StartDate": "2020-01-01", "TaxRate": 7.0}]
+
+
 def test_package_role_user_templates_prebuild_roles() -> None:
     """T146: package roles = full pre-build set; soadmin membership on SO Admin."""
     root = (

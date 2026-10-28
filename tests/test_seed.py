@@ -2091,6 +2091,42 @@ def test_diff_key_url_read_entity_flags_missing(
     ]
 
 
+def test_diff_ignores_tax_schedule_revision_id(
+    tmp_path: Path, instance: Instance
+) -> None:
+    """Tax TaxSchedule.RevisionID is a server save counter, not drift.
+
+    A seed carrying a stale RevisionID (pre-fix extract) still diffs clean.
+    """
+    baseline = _baseline(
+        tmp_path,
+        TAX_YAML.replace(
+            "        ReportingGroup: HST\n",
+            "        ReportingGroup: HST\n        RevisionID: 11\n",
+        ),
+    )
+    live = wrap(
+        {
+            "TaxID": "HST",
+            "TaxSchedule": [
+                {
+                    "StartDate": "2020-01-01T00:00:00-05:00",
+                    "ReportingGroup": "HST",
+                    "RevisionID": 12,
+                }
+            ],
+        }
+    )
+    recorder = Recorder(
+        {
+            "/Tax/HST": httpx.Response(200, json=live),
+            "/Tax/GST": _tax_live("GST", "GST"),
+        }
+    )
+
+    assert seed.diff(_client(instance, recorder), baseline) == []
+
+
 def test_apply_key_url_read_entity_live_read_skips_list_get(
     tmp_path: Path, instance: Instance
 ) -> None:
