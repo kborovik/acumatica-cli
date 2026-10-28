@@ -54,6 +54,8 @@ for granular /sdd:check runs.
 - file/dir inputs positional variadic; dirs expand `*.yaml`
 - `--dry-run` lines `would <VERB> …`, summary suffixed `(dry run)`
 - long flags kebab-case; no short flags (`-t` retired, last short form; `-o` retired @ T9)
+- `--dry-run` scope: tenant record write (`apply`, `run`) + seed/inventory/findings emit (`survey extract|inventory|reconcile`); exempt: tenant lifecycle (`tenant create|delete|recycle`), `bootstrap` publish, `config init` scaffold
+- enum-domain option value = click.Choice @ parse over V12-verified set, free string never forwarded to remote accepting any value (closes §B.20)
 
 ## §V.21 — endpoint-version parity (T33 sweep mechanized)
 
@@ -299,12 +301,14 @@ for granular /sdd:check runs.
 - never matrix `erp` match
 - format tag "XML dump" ? for ingress only — never identity side name (table owns identity)
 
-## §V.40 — numbering-runtime (extracted from SPEC.md §V.40)
+## §V.40 — runtime-counters (extracted from SPEC.md §V.40)
 
 - seed bounds + NewSymbol fields: `NumberingID`, `StartNbr`, `EndNbr`, `WarnNbr`, `NbrStep` + StartDate? if screen requires
 - NewSymbol insert-required per numbering-new-symbol invariant
 - `LastNbr` (+ advanced counter) = runtime state — extract strips; diff ignores; apply never requires
 - ! reset live counters every apply (gh #25)
+- NumberingSequence seed ! bounds + NewSymbol, `LastNbr` (+ advanced counter)
+- Tax `TaxSchedule.RevisionID` (bumped every schedule save) = counter under `include`d detail → path-qualified `_DIFF_IGNORE_PATHS`, ! bare field-name deny (`RevisionID` = KitSpecification key) (closes §B.46)
 
 ## §V.44 — pin-overlay (extracted from SPEC.md §V.44)
 
@@ -378,5 +382,83 @@ for granular /sdd:check runs.
 - re-apply existing id succeeds (no NewSymbol mask 422 on update)
 - NewSymbol seed; mapped GET returns it
 - GET-omit → `not returned by endpoint` drift (mapping-miss per segmented-key-seed invariant; not write-only-get-omit ignore)
-- LastNbr strip per numbering-runtime invariant
+- LastNbr strip per runtime-counters invariant
 - closes §B.38 (gh #44)
+
+## §V.62 — remote-command-safety (extracted from SPEC.md §V.62)
+
+- identity strings (`--login`, `ACU_USER`) ! match `^[A-Za-z0-9_-]+$` before any SSH, bad → exit 1 (never click exit 2 — 2 = drift)
+- secrets (`ACU_PASSWORD`) via stdin only — never local `ssh` argv, never remote cmd text, never PS double-quoted string
+- other free string single-quoted `'`→`''`
+- closes §B.39 (gh #48)
+
+## §V.64 — idempotent-retry (extracted from SPEC.md §V.64)
+
+- idempotent set: GET (incl 202 status poll) + seed `apply` keyed PUT + inquiry PUT (`run` present/expect, `state`)
+- bounded `retry_tries` 3 total, exp backoff (1s base, x2) + ≤50% jitter, each retry `output.info` stderr line
+- retry on ConnectError/ReadTimeout/RemoteProtocolError + 502/503/504
+- login retries ConnectError + 502/503/504 only (timed-out login may hold session, V6)
+- never auto-retry: action POST (`invoke`), `run` `put` steps, CustomizationApi POSTs
+- last failure surfaces unchanged (V45 classes) (gh #52)
+
+## §V.65 — generated-load-idempotence (extracted from SPEC.md §V.65)
+
+- per-doc `present.get` `{entity, filter}` row-exists probe on external ref (`$top=1`)
+- report label `<path>#<n>` multi-doc (1-based, empty doc skipped, numbering kept), `<path>` one-doc
+- not-run tail of one file folds to one range line, JSON keeps every label (gh #73)
+
+## §V.66 — bulk-load-concurrency (extracted from SPEC.md §V.66)
+
+- N=1 = pre-gh-#71 behavior
+- server serializes per session; each session = 1 API-user license slot
+- login fail → logout opened ones (V6), exit 1 naming N + license cap, no write (fail fast, never degrade)
+- files stay sequential in order (V22 apply order, run lifecycle chain)
+- serial-only: ActionFile, Company file (+ V5 re-login every pooled session after Company PUT), scenario file w/ any `inquire` delta expect (concurrent docs corrupt pre/post snapshot) → `output.info` line naming file
+- V45 under pool: record fail → continue; hard-stop (ApplyStopped) | run step error → no new dispatch, in-flight finish, report stopped-at + not-applied|not-run
+- summary + JSON counts same as N=1 for same outcomes; result lines self-labelled (interleave ok) (gh #71)
+
+## §V.67 — resume-checkpoint (extracted from SPEC.md §V.67)
+
+- JSONL append, flush per line (kill-safe); line `{tenant, unit, digest}`
+- unit = `<entity> [<keys>]` | `action <name> [<entity>]` (apply) | scenario name (run)
+- digest = sha256 canonical JSON of record (password fields excluded) | action file | {scenario doc, file basename, doc number} + referenced built-ins (`${current_period}` value) (run)
+- written after success only (apply PUT/invoke ok; run passed|skipped)
+- load: same tenant (case-insensitive) + unit + digest → skip, stdout `skip <label> (checkpoint)`, no HTTP; digest or tenant differ → normal path (edited record re-applies)
+- summary + JSON `checkpoint` count
+- absent file → created; malformed line → exit 1 before any HTTP; torn last line (no newline, unparseable) dropped, unit re-runs
+- `--checkpoint` × `--plan`|`--dry-run` → usage error (gh #71)
+
+## §V.68 — migration-entity split (extracted from SPEC.md §V.68)
+
+- transaction document: one doc per ERP document, `once.get` external-ref guard per V65
+- transaction ! catalog row, ! `acu-config/` seed, ! extract (gh #72)
+
+## §V.69 — key-URL-read entities (extracted from SPEC.md §V.69)
+
+- seed display value (name), never per-tenant surrogate id
+- diff + apply live-read + extract read via key-URL GET only (no list `$filter`, no `_prefetch`; extract lists keys via `$select` then key-URL per row, B9 path)
+- opt-in = code table in seed.py (apply/diff never load seed_catalog)
+- key-URL miss = missing on tenant (gh #78)
+
+## §V.70 — external-file-storage (extracted from SPEC.md §V.70)
+
+- SM202540 tables keyed CompanyID only; Corrigan company = tenant
+- `Provider` as UI label `Local File Folder` (DB stores `PX.SM.PXBlobStorageFileProvider`; GET returns label; PUT accepts label)
+- top-level `LocalFolder` → `Settings.Value` current row (file provider has one setting; folder ! pre-exist + writable; acu never creates it)
+- contract detail arrays on SM202540 bind fieldless rows → ! map `Settings` or `FilesInDatabase` as details
+- setup action files order Enable Provider → Switch Direction, `done_when` `IsActive eq true`, `AllowWrite eq true` (Switch Direction toggles — ungated re-run reverses direction)
+- Move Files to Storage + Move to Database ! map, ! invoke (tenant `FilesInDatabase` lists System CompanyID 1 shared revisions → no tenant-scoped done gate, move risks shared rows)
+- pre-enable DB files stay in DB, new files → folder
+- second `apply` → 0 invoke, seed PUT on active (read-only) config ! error
+- `DisableDeleteOnExternalFileStorage` ! seed, ! catalog include, ! extract
+- `diff` + `survey extract` read `Provider` + `LocalFolder` back via Bootstrap; `diff` covers actions via `done_when` probe only (gh #74)
+
+## §V.71 — seed-depends-on (extracted from SPEC.md §V.71)
+
+- `depends_on` = list of paths relative to seed-tree root (dir holding SEED_DIRS, e.g. `acu-config/`; catalog `file` form, e.g. `master/77-taxes.yaml`); tree root = parent of file's SEED_DIRS dir
+- `depends_on` on file outside SEED_DIRS dir → load error
+- topo sort covers `apply`/`diff` incl `--plan`, `--changed-only`, `--dry-run`; tie-break = V30 expansion order (SEED_DIRS, alpha, typed-arg order)
+- hard error exit 1 before session/PUT, reported w/ load failures (V45): unknown dep (no such file), cycle (print cycle path; self-dep = cycle)
+- dep ∉ expanded set → warn (named), no edge, assumed applied, never auto-include (single-file diff, stopped-run remainder)
+- `--concurrency` (V66) + `--checkpoint` (V67) unchanged — files sequential, order only; action checkpoint digest excludes `depends_on`
+- `survey extract` ! emit `depends_on` (`--force` re-extract drops hand-authored) (gh #80)

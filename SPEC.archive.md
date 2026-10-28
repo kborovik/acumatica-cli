@@ -215,6 +215,66 @@ T209|x|drop ControlAccountModule IN on package `config/baseline/20-accounts.yaml
 T210|x|offline tests: 12300/12400 no ControlAccountModule IN; 12100/12200 still IN; INPreferences still 12300/12400|V13,V51,T209
 T211|x|e2e: package INPreferences apply succeeds after accounts; drop 15000 workaround in `test_segmented_key_length.py`|V4,V13,V51,B29,T209
 T212|x|docs/demo-seed — IN control on posting-class inventory assets only; WIP/transit not control; CHANGELOG Unreleased (gh #32)|V12,V19,V51,T209
+T213|x|drop `matrix.py` + `--cell`; Instance resolve `api_version` from `ACU_API_VERSION` env (flag > env > code default)|V27,I.cfg,I.env
+T214|x|config init/show/check: no matrix surface; `.env` scaffolds `ACU_BASE_URL` + `ACU_API_VERSION`; drop `--strict`|V27,V28,I.cmd
+T215|x|`acu check` single-instance from `.env`; drop `--all` cell walk|V47,I.cmd
+T216|x|overlays keyed by resolved `api_version`; drop inventory erp-match vs matrix cell|V37,V44,I.data
+T217|x|sweep remaining `matrix.yaml`/`--cell`/`load_matrix` sites (scope: `matrix\.yaml|--cell|load_matrix|DatasetMatrix|MATRIX_FILENAME`)|V27,V13
+T218|x|offline tests: env pin; no matrix loader; check no `--all`; init no matrix.yaml|V13,V27,T213,T214,T215
+T219|x|docs README+templates+CHANGELOG `.env` sole config; drop matrix.yaml; suite green|V12,V19,V49,T213,T218
+T220|x|bootstrap contract Company DecPlQty (ShortValue) + WeightUOM/VolumeUOM map commonsetup; version bump 1.6.0→1.7.0|V21,V52,I.data
+T221|x|seed_catalog include DecPlQty+WeightUOM+VolumeUOM; package company.yaml seed DecPlQty: 3 + persist UOMs|V34,V52,I.data,T220
+T222|x|offline tests apply body + extract include + catalog row + commonsetup mapping asserts; StockItem still omit UOMs (B26)|V13,V34,V52,T221
+T223|x|live/e2e GET DecPlQty after Company PUT; kit ComponentQty 0.012 round-trips after republish + Company PUT + kit apply|V4,V13,V52,B30,T221
+T224|x|docs/demo-seed Company DecPlQty CS101500 commonsetup; kit BOM precision 3; persist UOMs vs B26 extract; CHANGELOG Unreleased (gh #34)|V12,V19,V52,T220,T221
+T225|x|remap User.Roles AllowedRoles→RolesByUser.Rolename; drop Selected; Bootstrap 1.7.0→1.8.0|V21,V53,I.data
+T226|x|package 91-users.yaml + catalog/comments drop Selected; seed Roles: [{Rolename}]|V53,I.data,T225
+T227|x|offline tests apply body RolesByUser mapping + no Selected; bootstrap field asserts|V13,V53,T225,T226
+T228|x|wire UsersInRoles persist via RoleProvider or PXDatabase (not mapped detail PUT); live SQL proof session CompanyID|V4,V13,V53,B31,B32,B33,T226
+T229|x|docs replace T189 + RolesByUser-persist claim w/ actual persist path; CHANGELOG Unreleased (gh #35)|V12,V19,V53,T228
+T230|x|drop `acu check` CLI + lifecycle helpers + offline tests; keep `config check`|V47,I.cmd,V13
+T231|x|sweep remaining lifecycle-check sites (scope: `check_cmd|_run_lifecycle|_lifecycle_|_resolve_check_tenant`)|V47,V13,V17,T230
+T232|x|README+templates+help+CHANGELOG Unreleased drop `acu check`; compose tenant create→apply→run→diff; suite green|V12,V19,V48,V47,T230
+T233|x|add extras-hook V47 (`check_cmd|_run_lifecycle|_lifecycle_|_resolve_check_tenant` in src/) + tests; suite green|V47,V13,T231
+T234|x|click group `survey`; move extract/inventory/reconcile under it; drop L1 those cmds (no aliases); src help+error strings; offline tests help+invoke+completion|V15,I.cmd,V13
+T235|x|sweep remaining `acu extract`/`acu inventory`/`acu reconcile` CLI invocations (scope: `README.md|docs/*.md|src/acumatica_cli/templates|CHANGELOG.md` Unreleased)|V15,V48,V19,V49,I.cmd,T234
+T236|x|extras-hook V15 never L1 `@cli.command("extract"|"inventory"|"reconcile")` (scope: `src/`; pattern `@cli.command\("(extract|inventory|reconcile)"\)`); tests; suite green|V15,V13,T234
+T237|x|unwrap keep `id`+`delete` on value-field rows (record + detail); elide files-style id-only; wrap already bare|V54,I.api
+T238|x|`_checked` append innerException.exceptionMessage when present (not only when top empty)|V46,I.cmd
+T239|x|offline tests: unwrap id round-trip + files elide; 500 Operation failed + innerException Components text both in detail|V13,V46,V54,T237,T238
+T240|x|live/e2e: KitAssembly alloc PUT after GET capture of StockComponents[0].id updates existing line (no second Components row)|V4,V13,V54,B34,T237
+T241|x|docs/CHANGELOG Unreleased — unwrap keeps row id; innerException append (gh #38)|V12,V19,V54,T237,T238
+T242|x|_norm calendar-day: date-only vs DateTimeValue same day ! drift; different day still|V55,I.cmd,B35
+T243|x|extract date-strip DateTimeValue seed emit (StartDate; BegFinYear synth already)|V55,I.cmd,T242
+T244|x|LotSerialClass Auto-Incremental Segments.Value join `_DIFF_IGNORE_FIELDS`; apply still PUT when present; extract strip if present|V56,I.cmd,B36
+T245|x|offline tests: StartDate date vs datetime + different-day drift; Segments.Value GET-omit ! drift; field-not-returned still flags non-ignore fields|V13,V55,V56,T242,T244
+T246|x|docs/CHANGELOG Unreleased — datetime calendar-day + write-only GET-omit Value; no YAML ISO-hack (gh #40)|V12,V19,V55,V56,T242,T244
+T247|x|diff Role.Users / User.Roles: skip empty mapped GET or live-source compare; ! flag missing when UsersInRoles has session-company rows|V57,I.cmd,B37
+T248|x|offline tests: empty mapped Users/Roles ! drift after AssignUser-shaped seed; non-membership details still flag missing|V13,V57,T247
+T249|x|live/e2e: after `92-role-users.yaml` AssignUser, `acu diff` exit 0 on Role.Users / User.Roles (SQL-proven UsersInRoles)|V4,V13,V57,B37,T247
+T250|x|docs/CHANGELOG Unreleased — membership GET empty ! diff fail; extract skip stands (gh #39)|V12,V19,V57,T247
+T251|x|bootstrap contract NumberingSequence map Header NewSymbol (+ UserNumbering if screen requires pair); version bump 1.10.0→1.11.0|V21,V58,I.data,B38
+T252|x|seed_catalog include NewSymbol; package seed `NewSymbol: <NEW>`; extract emit when GET returns (not LastNbr strip); apply insert new NumberingID + re-apply existing|V34,V40,V56,V58,I.data,I.cmd,T251
+T253|x|offline tests: contract field+mapping; apply body includes NewSymbol; extract/diff LastNbr strip stands; NewSymbol GET-omit ! not-returned drift; existing numbering tests green|V13,V40,V56,V58,T251,T252
+T254|x|live/e2e: insert new NumberingID (QORD-class) w/ NewSymbol; re-apply existing BATCH; no 422|V4,V13,V58,B38,T252
+T255|x|docs/demo-seed + CHANGELOG Unreleased — NumberingSequence NewSymbol insert (gh #44)|V12,V19,V58,T251,T252
+T256|x|e2e: 3 pipeline files (provision, scenario, extract); fold qty/kit-alloc/numbering/segmented-key/roles onto those tenants; shared conftest `bracket_tenant` + `joined_output`; drop per-bug files|V4,V13
+T257|x|copy sibling GitOps `config/{bootstrap,baseline,setup,master,views}` + `scenario/` → repo root (exclude `qms/`, live `.env`, `state/`, customization, Makefile, schemas)|V2,I.data
+T258|x|AGENTS.md + README: ACUCLI soak from this checkout `--tenant ACUCLI`; never CNBN; never sibling `cd` for CLI soak; e2e still packaged templates|V2,V12
+T259|x|offline test: repo-root seed trees present; no `config/qms/`; e2e still 3 pipeline files|V2,V13
+T260|x|drop `docs/` tree; sweep remaining `docs/` cites (scope: `docs/`)|V12,V49
+T261|x|sweep host + retired-sibling literals (scope: `acu-dev1|vm\.internal|acumatica-infra|acumatica-blog|acumatica-devops`); live instance from `.env` only|V12,V27
+T262|x|extras-hook V49 + check-md-prose drop `docs/*.md` glob; README/help/CHANGELOG Unreleased no `docs/` links; suite green|V49,V12,V19
+T263|x|CLI: apply/diff/run/state require data path; zero args → that cmd help exit non-zero, no HTTP; drop `default_seed_dirs`|V59,V30,I.cmd
+T264|x|rename committed seed + packaged templates `config/`→`acu-config/`, `scenario/`→`acu-scenario/`; no customization YAML under `acu-config/`|V60,V61,V2,I.data
+T265|x|extract `--out` default `acu-config/` emit SEED_DIRS into tree root; bootstrap features `acu-config/bootstrap/features.yaml` only|V60,V30,I.cmd
+T266|x|`config init` scaffold `acu-config/`+`acu-scenario/`+views into `<dir>` or cwd; no customization tree; next-step cmds explicit paths|V28,V60,V61,I.cmd
+T267|x|`survey reconcile --config` no default path; emit `--out` defaults stay `state/` `inventory/` `findings/` `schemas/`|V59,I.cmd
+T268|x|sweep remaining implicit data-path defaults (scope: `src/`; pattern `default_seed_dirs`)|V59,V60,V13
+T269|x|offline tests: bare apply/diff/run/state help; `apply acu-config` umbrella; `run acu-scenario`; init names; extract `--out`; bootstrap features; reconcile omit `--config`|V13,V59,V60,T263,T264,T265,T266,T267
+T270|x|README+AGENTS.md+help PATHS+CHANGELOG Unreleased: `acu-config/` `acu-scenario/`; soak `apply acu-config`; suite green|V12,V19,V48,V49,V60,T264
+T271|x|`--login` (create + delete) + `ACU_USER` check `^[A-Za-z0-9_-]+$` before any SSH; bad → error naming value class, exit 1, no subprocess call (gh #48)|V62,V16,I.cmd
+T272|x|`_ssh` takes optional stdin; create sends password on stdin, remote reads `[Console]::In.ReadLine()` into `$p` → `-aup:$p`; password never in local argv nor remote cmd text; `exit $LASTEXITCODE` choke point kept|V62,V18,V7,I.ssh
 
 ## §B BUGS
 
