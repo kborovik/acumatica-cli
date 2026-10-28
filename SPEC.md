@@ -92,7 +92,7 @@ V36: seed authority — v1 writers into `acu-config/` = REST extract + human onl
 V37: tenant-snapshot artifact — accept SM203520 XML ZIP or `ac.exe export xml` folder; both normalize one IR → inventory/; binary `.adb` fail-closed; format recipe → `.spec/check-extras.md` §V.37
 V38: reconcile-normalize — pad-trim both sides; snapshot_map aliases + FK CD↔ID + enum label→code; never silent promote `acu-config/` (V36); full audit recipe → `.spec/check-extras.md` §V.38
 V39: password-seed — User seed Password write-only @ apply when present in YAML; extract strips `Password` + `b64__Password` (never seed hashes); diff ignores password fields
-V40: numbering-runtime — NumberingSequence seed ! bounds + NewSymbol; `LastNbr` (+ advanced counter) = runtime state — extract strips; diff ignores; apply never requires; ! reset live counters every apply; audit recipe → `.spec/check-extras.md` §V.40
+V40: runtime-counters — server counter = runtime state ! desired config — extract strips; diff ignores; apply never requires; ! reset live counters every apply; NumberingSequence seed ! bounds + NewSymbol, `LastNbr` (+ advanced counter); Tax `TaxSchedule.RevisionID` (bumped every schedule save) = counter under `include`d detail → path-qualified `_DIFF_IGNORE_PATHS`, ! bare field-name deny (`RevisionID` = KitSpecification key) (closes §B.46); audit recipe → `.spec/check-extras.md` §V.40
 V41: prefs-field-depth — Bootstrap *Preferences field lists ! curated subset (demo seed need or ERP-default rebuild risk); ! full DAC mirror; each field ! seed/catalog reason; server-derived/runtime ! seed (B11 class); contract shape change ! version bump (V21) (gh #26)
 V42: inventory-map-coverage — dual-reader masters ! snapshot_map table→entity so findings = real gaps; intentional unmapped ! named in snapshot_map or findings, never silent; never docs/ table; full audit recipe → `.spec/check-extras.md` §V.42
 V43: period-token — `acu run` `${current_period}` → host-local `MMyyyy` @ process start every `${var}` site; views/state ! expand; full audit recipe → `.spec/check-extras.md` §V.43
@@ -241,6 +241,8 @@ T320|x|`seed_catalog.yaml` CreditTerms include + `DayDisc`; template `bootstrap/
 T321|x|offline tests: contract parse CreditTerms DayDisc ShortValue + Bootstrap 1.13.0; catalog include DayDisc; template 2P10NET30 row shape|V13,T319,T320
 T322|x|live soak ACUCLI: `bootstrap` → `apply acu-config` ×2 → 2nd run CreditTerms 0 create/update; `diff acu-config` exit 0|V4,V12,T320
 T323|x|README contract field list (if listed) + CHANGELOG Unreleased (gh #90); release via release skill|V19,T322
+T324|.|`("Tax","TaxSchedule","RevisionID")` join `_DIFF_IGNORE_PATHS`; offline tests: extract strips, diff stale RevisionID ! drift|V40,V56,B46
+T325|.|live `gmake e2e FILE=test_extract_roundtrip`: diff over extract exit 0; re-extract byte-identical|V4,V40,T324
 
 ## §B BUGS
 
@@ -284,3 +286,4 @@ B42|2026-10-26|T307 probe: SM202540 contract detail arrays bind fieldless rows (
 B43|2026-10-26|T309 plan: V34 template=catalog bijection blocks test-seed-only catalog row; SM202540 folder path server-specific → ! `config init` scaffold (gh #74)|V34
 B44|2026-10-27|T319 probe: CS206500 discount days DAC field = `TermsDef.DayDisc` (no `DayDisc00`; `$adHocSchema` TermsDef lists DayDisc, DayDue01, DayFrom/To00/01); contract map to absent field binds silently — PUT drops value, GET omits field, diff "not returned by endpoint" (gh #90)|V12
 B45|2026-10-27|T319 probe: CreditTerms TermsID mask `>aaaaaaaaaa` (≤10 alnum, upper) — `2-10NET30` 422 (gh #90)|V12
+B46|2026-10-27|`include`d detail Tax `TaxSchedule` kept server save counter `RevisionID` → extract round-trip diff drift + re-extract byte diff|V40
