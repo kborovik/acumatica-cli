@@ -242,7 +242,7 @@ T321|x|offline tests: contract parse CreditTerms DayDisc ShortValue + Bootstrap 
 T322|x|live soak ACUCLI: `bootstrap` → `apply acu-config` ×2 → 2nd run CreditTerms 0 create/update; `diff acu-config` exit 0|V4,V12,T320
 T323|x|README contract field list (if listed) + CHANGELOG Unreleased (gh #90); release via release skill|V19,T322
 T324|x|`("Tax","TaxSchedule","RevisionID")` join `_DIFF_IGNORE_PATHS`; offline tests: extract strips, diff stale RevisionID ! drift|V40,V56,B46
-T325|.|live `gmake e2e FILE=test_extract_roundtrip`: diff over extract exit 0; re-extract byte-identical|V4,V40,T324
+T325|x|live `gmake e2e FILE=test_extract_roundtrip`: diff over extract exit 0; re-extract byte-identical|V4,V40,T324
 
 ## §B BUGS
 
