@@ -184,8 +184,8 @@ T322|x|live soak ACUCLI: `bootstrap` → `apply acu-config` ×2 → 2nd run Cred
 T323|x|README contract field list (if listed) + CHANGELOG Unreleased (gh #90); release via release skill|V19,T322
 T324|x|`("Tax","TaxSchedule","RevisionID")` join `_DIFF_IGNORE_PATHS`; offline tests: extract strips, diff stale RevisionID ! drift|V40,V56,B46
 T325|x|live `gmake e2e FILE=test_extract_roundtrip`: diff over extract exit 0; re-extract byte-identical|V4,V40,T324
-T326|.|seed.py: shared compare used by `diff` + `_classify`; key-URL re-read on not_returned; key-URL error/miss keeps list verdict|V4,V72
-T327|.|offline tests: equal → no drift; different → changed; key URL omits too → not returned; key-URL 500 keeps verdict; no missing field → no extra GET; `--changed-only` → unchanged, no PUT|V13,V72,T326
+T326|x|seed.py: shared compare used by `diff` + `_classify`; key-URL re-read on not_returned; key-URL error/miss keeps list verdict|V4,V72
+T327|x|offline tests: equal → no drift; different → changed; key URL omits too → not returned; key-URL 500 keeps verdict; no missing field → no extra GET; `--changed-only` → unchanged, no PUT|V13,V72,T326
 T328|.|live soak ACUCLI: apply + diff exit 0 on Vendor seed; 2nd `apply --changed-only` 0 Vendor updates|V4,V72,T326
 T329|.|README API limits row + CHANGELOG Unreleased (gh #92); release via release skill|V19,T328
 
