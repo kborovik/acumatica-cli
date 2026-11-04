@@ -80,6 +80,7 @@ from .client import (
     OPTIMIZATION_500,
     RECORD_FAILURES,
     AcumaticaClient,
+    RestError,
     SessionLostError,
     format_failure,
     pool_map,
@@ -137,6 +138,9 @@ _DIFF_SKIP_DETAILS = frozenset({("Role", "Users"), ("User", "Roles")})
 # apply's live read and extract read these by key URL only, so seed holds
 # the name.
 KEY_URL_READ = frozenset({"Tax"})
+
+# Key-URL GET statuses that mean "cannot answer", not a failed run (V72, B14).
+KEY_URL_UNANSWERED = frozenset({404, 500})
 
 
 def _diff_ignored(entity: str, *path: str) -> bool:
@@ -1117,21 +1121,12 @@ def _fetch(
     derives from the record's own shape - a list field expands by name,
     a dict field by its slash path (`MainContact/Address`).
     """
-    params: dict[str, str] = {"$filter": _filter_for(record, baseline.keys[:1])}
-    expand = _expand_paths(record)
-    if expand:
-        params["$expand"] = ",".join(expand)
-    custom = _custom_param(record)
-    if custom:
-        params["$custom"] = custom
-    key_params = {k: params[k] for k in ("$expand", "$custom") if k in params} or None
     if baseline.entity in KEY_URL_READ:
-        return client.get_record(
-            baseline.entity,
-            [record[k] for k in baseline.keys],
-            baseline.endpoint,
-            params=key_params,
-        )
+        return _read_by_key(client, baseline, record)
+    params = {
+        "$filter": _filter_for(record, baseline.keys[:1]),
+        **_shape_params(record),
+    }
     try:
         live = client.get_list(
             baseline.entity, params=params, endpoint=baseline.endpoint
@@ -1139,12 +1134,7 @@ def _fetch(
     except RuntimeError as err:
         if OPTIMIZATION_500 not in str(err):
             raise
-        return client.get_record(
-            baseline.entity,
-            [record[k] for k in baseline.keys],
-            baseline.endpoint,
-            params=key_params,
-        )
+        return _read_by_key(client, baseline, record)
     for row in live:
         actual = unwrap(row)
         if all(
@@ -1153,6 +1143,30 @@ def _fetch(
         ):
             return row
     return None
+
+
+def _shape_params(record: dict[str, Any]) -> dict[str, str]:
+    """The $expand / $custom params the source record's shape demands."""
+    params: dict[str, str] = {}
+    expand = _expand_paths(record)
+    if expand:
+        params["$expand"] = ",".join(expand)
+    custom = _custom_param(record)
+    if custom:
+        params["$custom"] = custom
+    return params
+
+
+def _read_by_key(
+    client: AcumaticaClient, baseline: BaselineFile, record: dict[str, Any]
+) -> dict[str, Any] | None:
+    """The record's key-URL GET: the full record, no list optimizer (B9, V69)."""
+    return client.get_record(
+        baseline.entity,
+        [record[k] for k in baseline.keys],
+        baseline.endpoint,
+        params=_shape_params(record) or None,
+    )
 
 
 def _prefetch(
@@ -1221,15 +1235,15 @@ def _classify(
 ) -> tuple[str, list[str]]:
     """``create`` / ``update`` + drifted top-level fields / ``unchanged`` (gh #55).
 
-    Same live read and compare as ``diff``; a field the endpoint does not
-    return counts as an update (conservative: it is PUT).
+    Same live read and compare as ``diff``; a field neither GET form
+    returns counts as an update (conservative: it is PUT).
     """
     live = _live_for(client, baseline, index, record)
     if live is None:
         return "create", []
     label = f"{baseline.entity} [{', '.join(str(record[k]) for k in baseline.keys)}]"
     fields: list[str] = []
-    for drift in _record_drifts(baseline, label, record, live):
+    for drift in _compare(client, baseline, label, record, live):
         name = re.split(r"[.\[]", drift.where[len(label) + 1 :], maxsplit=1)[0]
         if name not in fields:
             fields.append(name)
@@ -1300,13 +1314,81 @@ def diff(client: AcumaticaClient, baseline: BaselineFile | ActionFile) -> list[D
         found = (
             [Drift(label, "missing")]
             if live is None
-            else _record_drifts(baseline, label, record, live)
+            else _compare(client, baseline, label, record, live)
         )
         for drift in found:
             drift.keys = {k: record[k] for k in baseline.keys}
             drift.field = drift.where[len(label) + 1 :]
         drifts.extend(found)
     return drifts
+
+
+def _under(path: str, root: str) -> bool:
+    """True when drift path ``path`` is ``root`` or sits below it."""
+    return path == root or path.startswith((f"{root}.", f"{root}["))
+
+
+def _compare(
+    client: AcumaticaClient,
+    baseline: BaselineFile,
+    label: str,
+    record: dict[str, Any],
+    live: dict[str, Any],
+) -> list[Drift]:
+    """Drift for one record; a list-read gap is settled by key URL (V72).
+
+    The list GET can omit fields the record holds (B47, Vendor remittance
+    override flags), so ``not_returned`` from it is not yet a verdict: one
+    key-URL re-read settles those paths. Every other verdict stays the
+    list's, so the re-read can never open a new drift elsewhere.
+    """
+    found = _record_drifts(baseline, label, record, live)
+    if baseline.entity in KEY_URL_READ or not any(
+        drift.kind == "not_returned" for drift in found
+    ):
+        return found
+    full = _reread(client, baseline, label, record)
+    if full is None:
+        return found
+    reread = _record_drifts(baseline, label, record, full)
+    settled: list[Drift] = []
+    for drift in found:
+        if drift.kind != "not_returned":
+            settled.append(drift)
+            continue
+        answers = [r for r in reread if _under(r.where, drift.where)]
+        # No answer = equal on key URL, unless the path's parent is gone there.
+        gone = any(_under(drift.where, r.where) for r in reread)
+        settled.extend(answers or ([drift] if gone else []))
+    return settled
+
+
+def _reread(
+    client: AcumaticaClient,
+    baseline: BaselineFile,
+    label: str,
+    record: dict[str, Any],
+) -> dict[str, Any] | None:
+    """The record's key-URL GET for ``_compare``, None if it cannot answer.
+
+    Some composite-key entities 500 on the key URL (B14), so 404 and 500
+    leave the list verdict standing. Any other REST error (expired session,
+    throttling) and transport failures propagate: they are not field drift.
+    """
+    try:
+        full: Any = _read_by_key(client, baseline, record)
+    except RestError as err:
+        if err.status not in KEY_URL_UNANSWERED:
+            raise
+        output.info(f"{label}: key-URL re-read failed, list result kept: {err}")
+        return None
+    except ValueError as err:  # 200 with a body that is not JSON
+        output.info(f"{label}: key-URL re-read failed, list result kept: {err}")
+        return None
+    if not isinstance(full, dict):
+        output.info(f"{label}: key-URL re-read found no record, list result kept")
+        return None
+    return full
 
 
 def _record_drifts(

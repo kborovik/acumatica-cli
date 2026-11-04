@@ -2,6 +2,20 @@
 
 ## Unreleased
 
+### Fixed
+
+- **False drift on fields the list GET omits (gh #92):** the list GET can
+  leave out fields a record holds, such as `RemittanceAddressOverride`
+  and `RemittanceContactOverride` on `Vendor`. `diff` reported these as
+  `not returned by endpoint` and exited 2, and `apply --changed-only`
+  re-PUT the record on every run. Both now re-read that record by key
+  URL and compare the value it returns. A field neither read returns
+  still reports `not returned by endpoint`, as does a field whose
+  re-read answers 404 or 500 (with an info line naming the error).
+  Other REST errors, such as an expired session, now fail the run
+  rather than appear as drift. Each affected record costs one extra
+  GET; files with no missing fields make none.
+
 ## [v0.38.0] - 2026-10-27
 
 ### Added

@@ -124,6 +124,7 @@ V68: migration-entity split — reference entity (NonStockItem, Tax, TaxZone cla
 V69: key-URL-read entities — entity whose list export returns selector surrogate id where key-URL GET returns display value (Tax `TaxSchedule.ReportingGroup` first) ! seed display value, read via key-URL GET only; read recipe → `.spec/check-extras.md` §V.69 (gh #78)
 V70: external-file-storage — SM202540 (`PX.SM.BlobStorageMaint`) = one keyless singleton per tenant; Bootstrap `ExternalFileStorage` seed = `Provider` UI label `Local File Folder` + `LocalFolder`; `IsActive` + `AllowWrite` ! seed — set by actions only (Enable Provider → Switch Direction, `done_when` gated); Move Files actions ! map, ! invoke; second `apply` → 0 invoke; full recipe → `.spec/check-extras.md` §V.70 (gh #74)
 V71: seed-depends-on — seed file (BaselineFile + ActionFile) top-level `depends_on` ? = paths relative to seed-tree root; `apply`/`diff` (all modes) order by stable topo sort, tie-break V30 expansion order (no `depends_on` anywhere ≡ pre-gh-#80 order); unknown dep / cycle → exit 1 before session/PUT; dep ∉ expanded set → warn, never auto-include; `survey extract` ! emit; `run`/`state` ! read; resolution recipe → `.spec/check-extras.md` §V.71 (gh #80)
+V72: not-returned-verdict — `not returned by endpoint` ! only after key-URL GET omits field too or re-read failed; record w/ not-returned field → one key-URL re-read (same `$expand`/`$custom`) settles those paths only: key-URL drift at or under path → reported, none → dropped, ancestor gone on key URL → kept; every other verdict stays list; re-read 404/500, miss, or non-record → list verdict stands + info line (§B.14); other REST errors (401/403/429) propagate; no not-returned field → no extra GET; `diff` + apply classify share compare; `KEY_URL_READ` entities no second read (closes §B.47) (gh #92)
 
 ## §T TASKS
 
@@ -183,6 +184,10 @@ T322|x|live soak ACUCLI: `bootstrap` → `apply acu-config` ×2 → 2nd run Cred
 T323|x|README contract field list (if listed) + CHANGELOG Unreleased (gh #90); release via release skill|V19,T322
 T324|x|`("Tax","TaxSchedule","RevisionID")` join `_DIFF_IGNORE_PATHS`; offline tests: extract strips, diff stale RevisionID ! drift|V40,V56,B46
 T325|x|live `gmake e2e FILE=test_extract_roundtrip`: diff over extract exit 0; re-extract byte-identical|V4,V40,T324
+T326|x|seed.py: shared compare used by `diff` + `_classify`; key-URL re-read on not_returned; key-URL error/miss keeps list verdict|V4,V72
+T327|x|offline tests: equal → no drift; different → changed; key URL omits too → not returned; key-URL 500 keeps verdict; no missing field → no extra GET; `--changed-only` → unchanged, no PUT|V13,V72,T326
+T328|x|live soak ACUCLI: apply + diff exit 0 on Vendor seed; 2nd `apply --changed-only` 0 Vendor updates|V4,V72,T326
+T329|.|README API limits row + CHANGELOG Unreleased (gh #92); release via release skill|V19,T328
 
 ## §B BUGS
 
@@ -227,3 +232,4 @@ B43|2026-10-26|T309 plan: V34 template=catalog bijection blocks test-seed-only c
 B44|2026-10-27|T319 probe: CS206500 discount days DAC field = `TermsDef.DayDisc` (no `DayDisc00`; `$adHocSchema` TermsDef lists DayDisc, DayDue01, DayFrom/To00/01); contract map to absent field binds silently — PUT drops value, GET omits field, diff "not returned by endpoint" (gh #90)|V12
 B45|2026-10-27|T319 probe: CreditTerms TermsID mask `>aaaaaaaaaa` (≤10 alnum, upper) — `2-10NET30` 422 (gh #90)|V12
 B46|2026-10-27|`include`d detail Tax `TaxSchedule` kept server save counter `RevisionID` → extract round-trip diff drift + re-extract byte diff|V40
+B47|2026-11-04|list GET omits fields key-URL GET returns (Vendor `RemittanceAddressOverride`, `RemittanceContactOverride`) → false `not returned by endpoint`, diff exit 2, re-PUT every `apply --changed-only` (gh #92)|V72

@@ -277,7 +277,8 @@ def test_apply_and_diff_target_endpoint_override(
     seed.diff(_client(instance, recorder), baseline)
 
     paths = {r.url.path for r in recorder.requests}
-    assert paths == {"/AcumaticaERP/entity/Bootstrap/1.13.0/UnitsOfMeasure"}
+    base = "/AcumaticaERP/entity/Bootstrap/1.13.0/UnitsOfMeasure"
+    assert paths == {base, f"{base}/KG", f"{base}/HOUR"}
 
 
 def test_norm_folds_booleans_and_strips() -> None:
@@ -3161,3 +3162,439 @@ def test_record_digest_leaves_out_password_fields() -> None:
         base | {"Password": "b"}
     )
     assert seed.record_digest(base) != seed.record_digest(base | {"Email": "p@x"})
+
+
+GAP_VENDOR_YAML = """\
+entity: Vendor
+key: VendorID
+records:
+  - VendorID: V1
+    RemittanceAddressOverride: true
+  - VendorID: V2
+    RemittanceAddressOverride: true
+"""
+FLAG_DRIFT = "Vendor [V1].RemittanceAddressOverride"
+V2_FULL = {"VendorID": "V2", "RemittanceAddressOverride": True}
+
+
+def _vendor_routes(key_url: httpx.Response) -> Recorder:
+    """List GET omits the V1 flag; V1's key-URL GET answers ``key_url``."""
+    return Recorder(
+        {"/Vendor": _live({"VendorID": "V1"}, V2_FULL), "/Vendor/V1": key_url}
+    )
+
+
+def _record_response(record: dict[str, Any]) -> httpx.Response:
+    return httpx.Response(200, json=wrap(record))
+
+
+def _paths(recorder: Recorder) -> list[str]:
+    return [
+        r.url.path.rsplit("/entity/", 1)[1].split("/", 2)[2] for r in recorder.requests
+    ]
+
+
+def test_diff_list_gap_equal_on_key_url_no_drift(
+    tmp_path: Path, instance: Instance
+) -> None:
+    """V72/B47: list omits a field, key URL holds it: compare, only V1 re-read."""
+    baseline = seed.load_baseline(_write(tmp_path, GAP_VENDOR_YAML))
+    recorder = _vendor_routes(
+        _record_response({"VendorID": "V1", "RemittanceAddressOverride": True})
+    )
+
+    assert seed.diff(_client(instance, recorder), baseline) == []
+    assert _paths(recorder) == ["Vendor", "Vendor/V1"]
+
+
+def test_diff_list_gap_different_on_key_url_is_changed(
+    tmp_path: Path, instance: Instance
+) -> None:
+    """V72: the key-URL value is compared, so a real difference still drifts."""
+    baseline = seed.load_baseline(_write(tmp_path, GAP_VENDOR_YAML))
+    recorder = _vendor_routes(
+        _record_response({"VendorID": "V1", "RemittanceAddressOverride": False})
+    )
+
+    drifts = seed.diff(_client(instance, recorder), baseline)
+
+    assert drifts == [f"{FLAG_DRIFT}: source=True live=False"]
+    assert drifts[0].kind == "changed"
+
+
+def test_diff_gap_on_both_reads_stays_not_returned(
+    tmp_path: Path, instance: Instance
+) -> None:
+    """V72/V50: neither GET form returns the field: still a mapping-miss flag."""
+    baseline = seed.load_baseline(_write(tmp_path, GAP_VENDOR_YAML))
+    recorder = _vendor_routes(_record_response({"VendorID": "V1"}))
+
+    drifts = seed.diff(_client(instance, recorder), baseline)
+
+    assert drifts == [f"{FLAG_DRIFT}: not returned by endpoint"]
+
+
+@pytest.mark.parametrize(
+    "key_url",
+    [
+        httpx.Response(500, json={"exceptionMessage": "composite key"}),
+        httpx.Response(404, json={"message": "no route"}),
+        httpx.Response(200, json=[]),
+        httpx.Response(200, text="<html>not json</html>"),
+        httpx.Response(
+            500,
+            json={"exceptionType": "NoEntitySatisfiesTheConditionException"},
+        ),
+    ],
+    ids=["error-b14", "not-found", "miss", "non-record", "not-json"],
+)
+def test_diff_key_url_failure_keeps_list_verdict(
+    tmp_path: Path, instance: Instance, key_url: httpx.Response
+) -> None:
+    """V72/B14: a key-URL error or miss must not fail or hide the record."""
+    baseline = seed.load_baseline(_write(tmp_path, GAP_VENDOR_YAML))
+
+    drifts = seed.diff(_client(instance, _vendor_routes(key_url)), baseline)
+
+    assert drifts == [f"{FLAG_DRIFT}: not returned by endpoint"]
+
+
+def test_diff_key_url_host_loss_propagates(tmp_path: Path, instance: Instance) -> None:
+    """V72/V45: only REST errors keep the list verdict, host loss still raises."""
+    baseline = seed.load_baseline(_write(tmp_path, GAP_VENDOR_YAML))
+    listing = _live({"VendorID": "V1"}, V2_FULL)
+
+    def respond(request: httpx.Request) -> httpx.Response:
+        if request.url.path.endswith("/Vendor"):
+            return listing
+        raise httpx.ConnectError("host down", request=request)
+
+    client = AcumaticaClient(instance, transport=httpx.MockTransport(respond))
+    with pytest.raises(httpx.ConnectError):
+        seed.diff(client, baseline)
+
+
+def test_diff_no_gap_makes_no_extra_get(tmp_path: Path, instance: Instance) -> None:
+    """V72: a file whose fields all come back stays at one list GET."""
+    baseline = seed.load_baseline(_write(tmp_path, GAP_VENDOR_YAML))
+    recorder = Recorder(
+        {
+            "/Vendor": _live(
+                {"VendorID": "V1", "RemittanceAddressOverride": True}, V2_FULL
+            )
+        }
+    )
+
+    assert seed.diff(_client(instance, recorder), baseline) == []
+    assert _paths(recorder) == ["Vendor"]
+
+
+def test_diff_changed_field_alone_makes_no_extra_get(
+    tmp_path: Path, instance: Instance
+) -> None:
+    """V72: only a missing field re-reads; a returned, different value does not."""
+    baseline = seed.load_baseline(_write(tmp_path, GAP_VENDOR_YAML))
+    recorder = Recorder(
+        {
+            "/Vendor": _live(
+                {"VendorID": "V1", "RemittanceAddressOverride": False}, V2_FULL
+            )
+        }
+    )
+
+    drifts = seed.diff(_client(instance, recorder), baseline)
+
+    assert drifts == [f"{FLAG_DRIFT}: source=True live=False"]
+    assert _paths(recorder) == ["Vendor"]
+
+
+def test_diff_sparse_key_url_keeps_list_fields(
+    tmp_path: Path, instance: Instance
+) -> None:
+    """V72: the re-read fills a gap; a field only the list returned still compares."""
+    text = GAP_VENDOR_YAML.replace(
+        "  - VendorID: V1\n", "  - VendorID: V1\n    VendorName: Acme\n"
+    )
+    baseline = seed.load_baseline(_write(tmp_path, text))
+    recorder = Recorder(
+        {
+            "/Vendor": _live({"VendorID": "V1", "VendorName": "Acme"}, V2_FULL),
+            "/Vendor/V1": _record_response(
+                {"VendorID": "V1", "RemittanceAddressOverride": True}
+            ),
+        }
+    )
+
+    assert seed.diff(_client(instance, recorder), baseline) == []
+
+
+def test_diff_filtered_read_gap_uses_key_url(
+    tmp_path: Path, instance: Instance
+) -> None:
+    """V72: a single-record file reads by $filter (no prefetch); same fallback."""
+    text = GAP_VENDOR_YAML.replace(
+        "  - VendorID: V2\n    RemittanceAddressOverride: true\n", ""
+    )
+    baseline = seed.load_baseline(_write(tmp_path, text))
+    recorder = _vendor_routes(
+        _record_response({"VendorID": "V1", "RemittanceAddressOverride": True})
+    )
+
+    assert seed.diff(_client(instance, recorder), baseline) == []
+    assert recorder.requests[0].url.params["$filter"] == "VendorID eq 'V1'"
+    assert _paths(recorder) == ["Vendor", "Vendor/V1"]
+
+
+def test_diff_key_url_reread_carries_expand(tmp_path: Path, instance: Instance) -> None:
+    """V72: the re-read asks for the record's shape, or nested fields would drift."""
+    text = GAP_VENDOR_YAML.replace(
+        "  - VendorID: V1\n",
+        "  - VendorID: V1\n    MainContact:\n      Email: a@example.com\n",
+    )
+    baseline = seed.load_baseline(_write(tmp_path, text))
+    contact = {"MainContact": {"Email": "a@example.com"}}
+    recorder = Recorder(
+        {
+            "/Vendor": _live({"VendorID": "V1", **contact}, V2_FULL),
+            "/Vendor/V1": _record_response(
+                {"VendorID": "V1", "RemittanceAddressOverride": True, **contact}
+            ),
+        }
+    )
+
+    assert seed.diff(_client(instance, recorder), baseline) == []
+    assert recorder.requests[1].url.params["$expand"] == "MainContact"
+
+
+def test_diff_key_url_read_entity_gets_no_second_read(
+    tmp_path: Path, instance: Instance
+) -> None:
+    """V72/V69: a KEY_URL_READ entity already read by key URL; no repeat GET."""
+    text = "entity: Tax\nkey: TaxID\nrecords:\n  - TaxID: T1\n    Description: x\n"
+    baseline = seed.load_baseline(_write(tmp_path, text))
+    recorder = Recorder({"/Tax/T1": _record_response({"TaxID": "T1"})})
+
+    drifts = seed.diff(_client(instance, recorder), baseline)
+
+    assert drifts == ["Tax [T1].Description: not returned by endpoint"]
+    assert _paths(recorder) == ["Tax/T1"]
+
+
+def test_apply_changed_only_list_gap_is_unchanged_no_put(
+    tmp_path: Path, instance: Instance
+) -> None:
+    """V72/B47: apply agrees with diff, so these vendors are not re-PUT every run."""
+    baseline = seed.load_baseline(_write(tmp_path, GAP_VENDOR_YAML))
+    recorder = _vendor_routes(
+        _record_response({"VendorID": "V1", "RemittanceAddressOverride": True})
+    )
+    counts = Counter[str]()
+
+    n, errors = seed.apply(
+        _client(instance, recorder),
+        baseline,
+        mode=seed.ApplyMode.CHANGED,
+        counts=counts,
+    )
+
+    assert (n, errors) == (2, [])
+    assert counts == Counter(unchanged=2)
+    assert not [r for r in recorder.requests if r.method == "PUT"]
+
+
+def test_apply_changed_only_real_key_url_difference_is_put(
+    tmp_path: Path, instance: Instance
+) -> None:
+    """V72: a key-URL value that differs is an update, same answer as diff."""
+    baseline = seed.load_baseline(_write(tmp_path, GAP_VENDOR_YAML))
+    recorder = _vendor_routes(
+        _record_response({"VendorID": "V1", "RemittanceAddressOverride": False})
+    )
+    counts = Counter[str]()
+
+    seed.apply(
+        _client(instance, recorder),
+        baseline,
+        mode=seed.ApplyMode.CHANGED,
+        counts=counts,
+    )
+
+    assert counts == Counter(update=1, unchanged=1)
+    assert len([r for r in recorder.requests if r.method == "PUT"]) == 1
+
+
+def _gap_seed(tmp_path: Path, extra: str, *, header: str = "") -> seed.BaselineFile:
+    """GAP_VENDOR_YAML with ``extra`` YAML lines added to record V1."""
+    text = GAP_VENDOR_YAML.replace("  - VendorID: V1\n", f"  - VendorID: V1\n{extra}")
+    return _baseline(tmp_path, header + text)
+
+
+FLAG_ON = {"RemittanceAddressOverride": True}
+
+
+def test_diff_key_url_failure_prints_info_line(
+    tmp_path: Path, instance: Instance, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """V72: a kept list verdict names the failed read, or it reads as a mapping miss."""
+    lines: list[str] = []
+    monkeypatch.setattr(seed.output, "info", lines.append)
+    baseline = seed.load_baseline(_write(tmp_path, GAP_VENDOR_YAML))
+    recorder = _vendor_routes(httpx.Response(500, json={"exceptionMessage": "boom"}))
+
+    seed.diff(_client(instance, recorder), baseline)
+
+    assert len(lines) == 1
+    assert "Vendor [V1]" in lines[0]
+    assert "boom" in lines[0]
+
+
+@pytest.mark.parametrize("status", [401, 403, 429])
+def test_diff_key_url_other_rest_error_propagates(
+    tmp_path: Path, instance: Instance, status: int
+) -> None:
+    """V72: an expired session or throttling is a failed run, not field drift."""
+    baseline = seed.load_baseline(_write(tmp_path, GAP_VENDOR_YAML))
+    recorder = _vendor_routes(httpx.Response(status, json={"message": "denied"}))
+
+    with pytest.raises(RuntimeError, match=f"-> {status}"):
+        seed.diff(_client(instance, recorder), baseline)
+
+
+def test_diff_sparser_nested_key_url_keeps_list_verdict(
+    tmp_path: Path, instance: Instance
+) -> None:
+    """V72: a sparser nested answer cannot open a gap the list had answered."""
+    baseline = _gap_seed(
+        tmp_path, "    MainContact:\n      Email: a@x.com\n      Phone1: '1'\n"
+    )
+    contact = {"Email": "a@x.com", "Phone1": "1"}
+    recorder = Recorder(
+        {
+            "/Vendor": _live({"VendorID": "V1", "MainContact": contact}, V2_FULL),
+            "/Vendor/V1": _record_response(
+                {
+                    "VendorID": "V1",
+                    "MainContact": {"Email": "a@x.com"},
+                    **FLAG_ON,
+                }
+            ),
+        }
+    )
+
+    assert seed.diff(_client(instance, recorder), baseline) == []
+
+
+def test_diff_empty_detail_key_url_keeps_list_verdict(
+    tmp_path: Path, instance: Instance
+) -> None:
+    """V72: an empty detail array on the key URL cannot drop list-answered rows."""
+    baseline = _gap_seed(
+        tmp_path,
+        "    Lines:\n      - { LineID: L1 }\n",
+        header="detail_keys: { Lines: LineID }\n",
+    )
+    recorder = Recorder(
+        {
+            "/Vendor": _live({"VendorID": "V1", "Lines": [{"LineID": "L1"}]}, V2_FULL),
+            "/Vendor/V1": _record_response({"VendorID": "V1", "Lines": [], **FLAG_ON}),
+        }
+    )
+
+    assert seed.diff(_client(instance, recorder), baseline) == []
+
+
+def test_diff_list_answered_field_keeps_list_verdict(
+    tmp_path: Path, instance: Instance
+) -> None:
+    """V72: the re-read settles gaps only; a list verdict elsewhere stands."""
+    baseline = _gap_seed(tmp_path, "    VendorName: Acme\n")
+    recorder = Recorder(
+        {
+            "/Vendor": _live({"VendorID": "V1", "VendorName": "Other"}, V2_FULL),
+            "/Vendor/V1": _record_response(
+                {"VendorID": "V1", "VendorName": "Acme", **FLAG_ON}
+            ),
+        }
+    )
+
+    drifts = seed.diff(_client(instance, recorder), baseline)
+
+    assert drifts == ["Vendor [V1].VendorName: source='Acme' live='Other'"]
+
+
+@pytest.mark.parametrize(
+    ("email", "expected"),
+    [
+        ("a@x.com", []),
+        (
+            "b@x.com",
+            ["Vendor [V1].MainContact.Email: source='a@x.com' live='b@x.com'"],
+        ),
+    ],
+    ids=["equal", "different"],
+)
+def test_diff_whole_nested_gap_compares_below_it(
+    tmp_path: Path, instance: Instance, email: str, expected: list[str]
+) -> None:
+    """V72: the list omits the parent; the verdict sits below that path."""
+    baseline = _gap_seed(tmp_path, "    MainContact:\n      Email: a@x.com\n")
+    recorder = Recorder(
+        {
+            "/Vendor": _live({"VendorID": "V1", **FLAG_ON}, V2_FULL),
+            "/Vendor/V1": _record_response(
+                {"VendorID": "V1", "MainContact": {"Email": email}, **FLAG_ON}
+            ),
+        }
+    )
+
+    assert seed.diff(_client(instance, recorder), baseline) == expected
+
+
+def test_diff_parent_gone_on_key_url_stays_not_returned(
+    tmp_path: Path, instance: Instance
+) -> None:
+    """V72: no key-URL answer because the parent is gone is not an equal answer."""
+    baseline = _gap_seed(tmp_path, "    MainContact:\n      Email: a@x.com\n")
+    recorder = Recorder(
+        {
+            "/Vendor": _live(
+                {"VendorID": "V1", "MainContact": {"Phone1": "1"}, **FLAG_ON}, V2_FULL
+            ),
+            "/Vendor/V1": _record_response({"VendorID": "V1", **FLAG_ON}),
+        }
+    )
+
+    drifts = seed.diff(_client(instance, recorder), baseline)
+
+    assert drifts == ["Vendor [V1].MainContact.Email: not returned by endpoint"]
+
+
+def test_diff_key_url_reread_carries_custom(tmp_path: Path, instance: Instance) -> None:
+    """V72: the re-read asks for the seed's custom fields too."""
+    baseline = _gap_seed(
+        tmp_path, "    custom:\n      AccountRecords:\n        Module: AR\n"
+    )
+    recorder = _vendor_routes(_record_response({"VendorID": "V1", **FLAG_ON}))
+
+    seed.diff(_client(instance, recorder), baseline)
+
+    assert recorder.requests[1].url.path.endswith("/Vendor/V1")
+    assert recorder.requests[1].url.params["$custom"] == "AccountRecords.Module"
+
+
+def test_apply_pooled_changed_only_list_gap_is_unchanged(
+    tmp_path: Path, instance: Instance
+) -> None:
+    """V72: pooled apply workers settle a gap the same way, so no re-PUT."""
+    baseline = seed.load_baseline(_write(tmp_path, GAP_VENDOR_YAML))
+    recorder = _vendor_routes(_record_response({"VendorID": "V1", **FLAG_ON}))
+    pool = [_client(instance, recorder), _client(instance, recorder)]
+    counts = Counter[str]()
+
+    n, errors = seed.apply(
+        pool[0], baseline, mode=seed.ApplyMode.CHANGED, counts=counts, pool=pool
+    )
+
+    assert (n, errors) == (2, [])
+    assert counts == Counter(unchanged=2)
+    assert not [r for r in recorder.requests if r.method == "PUT"]
