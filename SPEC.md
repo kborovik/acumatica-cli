@@ -187,7 +187,7 @@ T325|x|live `gmake e2e FILE=test_extract_roundtrip`: diff over extract exit 0; r
 T326|x|seed.py: shared compare used by `diff` + `_classify`; key-URL re-read on not_returned; key-URL error/miss keeps list verdict|V4,V72
 T327|x|offline tests: equal → no drift; different → changed; key URL omits too → not returned; key-URL 500 keeps verdict; no missing field → no extra GET; `--changed-only` → unchanged, no PUT|V13,V72,T326
 T328|x|live soak ACUCLI: apply + diff exit 0 on Vendor seed; 2nd `apply --changed-only` 0 Vendor updates|V4,V72,T326
-T329|.|README API limits row + CHANGELOG Unreleased (gh #92); release via release skill|V19,T328
+T329|x|README API limits row + CHANGELOG Unreleased (gh #92); release via release skill|V19,T328
 
 ## §B BUGS
 

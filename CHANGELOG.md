@@ -15,6 +15,10 @@
   Other REST errors, such as an expired session, now fail the run
   rather than appear as drift. Each affected record costs one extra
   GET; files with no missing fields make none.
+- **Tax `TaxSchedule.RevisionID` drift:** this server counter rises on
+  every schedule save, so an `extract` round trip reported drift and
+  re-extracting changed the file. `extract` now strips the field and
+  `diff` ignores it.
 
 ## [v0.38.0] - 2026-10-27
 
