@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## [v0.38.1] - 2026-11-04
+
 ### Fixed
 
 - **False drift on fields the list GET omits (gh #92):** the list GET can
