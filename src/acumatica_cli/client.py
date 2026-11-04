@@ -79,6 +79,15 @@ def format_failure(exc: BaseException, *, target: str | None = None) -> str:
 RECORD_FAILURES: tuple[type[Exception], ...] = (RuntimeError, httpx.TransportError)
 
 
+class RestError(RuntimeError):
+    """A REST error answer; ``status`` is its HTTP status code."""
+
+    def __init__(self, message: str, status: int) -> None:
+        """Keep the message text callers already match, plus the status."""
+        super().__init__(message)
+        self.status = status
+
+
 class SessionLostError(Exception):
     """A mid-run re-login failed: the session is gone, later calls cannot work.
 
@@ -492,9 +501,10 @@ class AcumaticaClient:
                     detail = str(body[0])[:500]
             except Exception:
                 detail = (r.text or "")[:500]
-            raise RuntimeError(
+            raise RestError(
                 f"{r.request.method} {r.request.url.path} -> {r.status_code}"
-                + (f": {detail}" if detail else "")
+                + (f": {detail}" if detail else ""),
+                r.status_code,
             )
         return r
 

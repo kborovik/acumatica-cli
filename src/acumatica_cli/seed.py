@@ -80,6 +80,7 @@ from .client import (
     OPTIMIZATION_500,
     RECORD_FAILURES,
     AcumaticaClient,
+    RestError,
     SessionLostError,
     format_failure,
     pool_map,
@@ -137,6 +138,9 @@ _DIFF_SKIP_DETAILS = frozenset({("Role", "Users"), ("User", "Roles")})
 # apply's live read and extract read these by key URL only, so seed holds
 # the name.
 KEY_URL_READ = frozenset({"Tax"})
+
+# Key-URL GET statuses that mean "cannot answer", not a failed run (V72, B14).
+KEY_URL_UNANSWERED = frozenset({404, 500})
 
 
 def _diff_ignored(entity: str, *path: str) -> bool:
@@ -1319,6 +1323,11 @@ def diff(client: AcumaticaClient, baseline: BaselineFile | ActionFile) -> list[D
     return drifts
 
 
+def _under(path: str, root: str) -> bool:
+    """True when drift path ``path`` is ``root`` or sits below it."""
+    return path == root or path.startswith((f"{root}.", f"{root}["))
+
+
 def _compare(
     client: AcumaticaClient,
     baseline: BaselineFile,
@@ -1330,23 +1339,56 @@ def _compare(
 
     The list GET can omit fields the record holds (B47, Vendor remittance
     override flags), so ``not_returned`` from it is not yet a verdict: one
-    key-URL re-read overlays the list row, its fields winning, so the
-    re-read can only fill a gap, never open one. A re-read that errors or
-    finds nothing keeps the list verdict; some composite-key entities 500
-    on the key URL (B14). Session and host loss still propagate.
+    key-URL re-read settles those paths. Every other verdict stays the
+    list's, so the re-read can never open a new drift elsewhere.
     """
     found = _record_drifts(baseline, label, record, live)
     if baseline.entity in KEY_URL_READ or not any(
         drift.kind == "not_returned" for drift in found
     ):
         return found
-    try:
-        full = _read_by_key(client, baseline, record)
-    except RuntimeError:
-        return found
+    full = _reread(client, baseline, label, record)
     if full is None:
         return found
-    return _record_drifts(baseline, label, record, {**live, **full})
+    reread = _record_drifts(baseline, label, record, full)
+    settled: list[Drift] = []
+    for drift in found:
+        if drift.kind != "not_returned":
+            settled.append(drift)
+            continue
+        answers = [r for r in reread if _under(r.where, drift.where)]
+        # No answer = equal on key URL, unless the path's parent is gone there.
+        gone = any(_under(drift.where, r.where) for r in reread)
+        settled.extend(answers or ([drift] if gone else []))
+    return settled
+
+
+def _reread(
+    client: AcumaticaClient,
+    baseline: BaselineFile,
+    label: str,
+    record: dict[str, Any],
+) -> dict[str, Any] | None:
+    """The record's key-URL GET for ``_compare``, None if it cannot answer.
+
+    Some composite-key entities 500 on the key URL (B14), so 404 and 500
+    leave the list verdict standing. Any other REST error (expired session,
+    throttling) and transport failures propagate: they are not field drift.
+    """
+    try:
+        full: Any = _read_by_key(client, baseline, record)
+    except RestError as err:
+        if err.status not in KEY_URL_UNANSWERED:
+            raise
+        output.info(f"{label}: key-URL re-read failed, list result kept: {err}")
+        return None
+    except ValueError as err:  # 200 with a body that is not JSON
+        output.info(f"{label}: key-URL re-read failed, list result kept: {err}")
+        return None
+    if not isinstance(full, dict):
+        output.info(f"{label}: key-URL re-read found no record, list result kept")
+        return None
+    return full
 
 
 def _record_drifts(
