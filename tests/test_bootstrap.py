@@ -144,7 +144,7 @@ def test_load_contract_xml_rejects_data_repo_project_xml(tmp_path: Path) -> None
 def test_load_contract_xml_package_only(tmp_path: Path) -> None:
     # No data-repo project.xml → always packaged full company surface
     name, entities = bootstrap.parse_endpoint(bootstrap.load_contract_xml(tmp_path))
-    assert name == "Bootstrap/1.13.0"
+    assert name == "Bootstrap/1.14.0"
     assert "Company" in entities
     assert "OnlyInDataRepo" not in entities
 
@@ -172,11 +172,11 @@ def test_package_zip_carries_the_bootstrap_endpoint() -> None:
     Verified vs 26.101.0225 by live import round-trip: the <Endpoint> child
     is the XmlSerializer form of Model.Endpoint in the entity/maintenance/5.31
     namespace; no .endpoint file is involved. Packaged contract is the single
-    full company surface (Bootstrap/1.13.0 package SoT — V2/V21/T178).
+    full company surface (Bootstrap/1.14.0 package SoT — V2/V21/T178).
     """
     ns, endpoint, entities = _packaged_endpoint()
     assert endpoint.get("name") == "Bootstrap"
-    assert endpoint.get("version") == "1.13.0"
+    assert endpoint.get("version") == "1.14.0"
     # SystemContracts.V4 is the build's only IsCurrent implementation
     assert endpoint.get("systemContractVersion") == "4"
     company_fields = {
@@ -218,6 +218,7 @@ def test_package_zip_carries_the_bootstrap_endpoint() -> None:
         "NumberingSequence",
         "SegmentedKey",
         "ExternalFileStorage",
+        "FileUploadPreferences",
     }
     # features stay OUT: contract-endpoint writes to CS100000 do not
     # persist (T3 verdict) - the CustomizationPlugin owns features
@@ -453,7 +454,7 @@ def test_credit_terms_day_disc_maps_terms_def() -> None:
     field binds nothing - PUT drops the value, GET omits the field.
     """
     ns, endpoint, entities = _packaged_endpoint()
-    assert endpoint.get("version") == "1.13.0"
+    assert endpoint.get("version") == "1.14.0"
     terms = entities["CreditTerms"]
     fields = {
         f.get("name"): f.get("type") for f in terms.findall(f"{ns}Fields/{ns}Field")
@@ -479,7 +480,7 @@ def test_user_roles_maps_to_roles_by_user() -> None:
     with empty UsersInRoles is a mapping miss (B31/B28 class).
     """
     ns, endpoint, entities = _packaged_endpoint()
-    assert endpoint.get("version") == "1.13.0"
+    assert endpoint.get("version") == "1.14.0"
     mappings = {
         m.get("field"): m.find(f"{ns}To")
         for m in entities["User"].findall(f"{ns}Mappings/{ns}Mapping")
@@ -507,7 +508,7 @@ def test_role_users_maps_to_users_by_role() -> None:
     mapped UsersByRole PUT.
     """
     ns, endpoint, entities = _packaged_endpoint()
-    assert endpoint.get("version") == "1.13.0"
+    assert endpoint.get("version") == "1.14.0"
     mappings = {
         m.get("field"): m.find(f"{ns}To")
         for m in entities["Role"].findall(f"{ns}Mappings/{ns}Mapping")
@@ -566,7 +567,7 @@ def test_numbering_newsymbol_maps_to_header() -> None:
     alternative, not a required pair.
     """
     ns, endpoint, entities = _packaged_endpoint()
-    assert endpoint.get("version") == "1.13.0"
+    assert endpoint.get("version") == "1.14.0"
     entity = entities["NumberingSequence"]
     fields = {
         f.get("name"): f.get("type") for f in entity.findall(f"{ns}Fields/{ns}Field")
@@ -591,7 +592,7 @@ def test_segmented_key_maps_length_to_detail_view() -> None:
     DimensionID only, so the InventoryID mask stays 10 chars.
     """
     ns, endpoint, entities = _packaged_endpoint()
-    assert endpoint.get("version") == "1.13.0"
+    assert endpoint.get("version") == "1.14.0"
     entity = entities["SegmentedKey"]
     mappings = {
         m.get("field"): m.find(f"{ns}To")
@@ -614,7 +615,7 @@ def test_external_file_storage_contract() -> None:
     actions, no DisableDeleteOnExternalFileStorage.
     """
     ns, endpoint, entities = _packaged_endpoint()
-    assert endpoint.get("version") == "1.13.0"
+    assert endpoint.get("version") == "1.14.0"
     entity = entities["ExternalFileStorage"]
     assert entity.get("screen") == "SM202540"
     types = {
@@ -654,10 +655,57 @@ def test_external_file_storage_contract() -> None:
         assert absent not in xml
 
 
+def test_file_upload_preferences_contract() -> None:
+    """T330/V73: SM202550 singleton + AllowedFileTypes detail (gh #94).
+
+    Header MaxUploadSize on Prefs (PreferencesGeneral, keyless); detail
+    rows on PrefsDetail (UploadAllowedFileTypes, key FileExt). No actions.
+    """
+    ns, endpoint, entities = _packaged_endpoint()
+    assert endpoint.get("version") == "1.14.0"
+    entity = entities["FileUploadPreferences"]
+    assert entity.get("screen") == "SM202550"
+    types = {
+        f.get("name"): f.get("type") for f in entity.findall(f"{ns}Fields/{ns}Field")
+    }
+    assert types == {
+        "MaxUploadSize": "IntValue",
+        "AllowedFileTypes": "AllowedFileType[]",
+    }
+    targets = {
+        m.get("field"): (to.get("object"), to.get("field"))
+        for m in entity.findall(f"{ns}Mappings/{ns}Mapping")
+        if (to := m.find(f"{ns}To")) is not None
+    }
+    assert targets == {
+        "MaxUploadSize": ("Prefs", "MaxUploadSize"),
+        "AllowedFileTypes": ("PrefsDetail", ""),
+    }
+    assert entity.find(f"{ns}Actions") is None
+    details = {d.get("name"): d for d in endpoint.findall(f"{ns}Detail")}
+    row = details["AllowedFileType"]
+    row_types = {
+        f.get("name"): f.get("type") for f in row.findall(f"{ns}Fields/{ns}Field")
+    }
+    assert row_types == {
+        "FileExt": "StringValue",
+        "Forbidden": "BooleanValue",
+        "IsImage": "BooleanValue",
+        "IconUrl": "StringValue",
+        "DefApplication": "StringValue",
+    }
+    row_targets = {
+        m.get("field"): (to.get("object"), to.get("field"))
+        for m in row.findall(f"{ns}Mappings/{ns}Mapping")
+        if (to := m.find(f"{ns}To")) is not None
+    }
+    assert row_targets == {name: ("PrefsDetail", name) for name in row_types}
+
+
 def test_package_prefs_field_depth_curated_not_full_dac() -> None:
     """T154/T155/V41: curated *Preferences deepen (gh #26) — not full DAC."""
     ns, endpoint, entities = _packaged_endpoint()
-    assert endpoint.get("version") == "1.13.0"
+    assert endpoint.get("version") == "1.14.0"
     gl_types = {
         f.get("name"): f.get("type")
         for f in entities["GLPreferences"].findall(f"{ns}Fields/{ns}Field")

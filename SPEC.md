@@ -190,7 +190,7 @@ T326|x|seed.py: shared compare used by `diff` + `_classify`; key-URL re-read on 
 T327|x|offline tests: equal → no drift; different → changed; key URL omits too → not returned; key-URL 500 keeps verdict; no missing field → no extra GET; `--changed-only` → unchanged, no PUT|V13,V72,T326
 T328|x|live soak ACUCLI: apply + diff exit 0 on Vendor seed; 2nd `apply --changed-only` 0 Vendor updates|V4,V72,T326
 T329|x|README API limits row + CHANGELOG Unreleased (gh #92); release via release skill|V19,T328
-T330|.|`bootstrap_project.xml` add `FileUploadPreferences` (SM202550): MaxUploadSize (Prefs) + detail AllowedFileTypes (PrefsDetail: FileExt, Forbidden, IsImage, IconUrl, DefApplication); version 1.13.0 → 1.14.0|V21,V73
+T330|x|`bootstrap_project.xml` add `FileUploadPreferences` (SM202550): MaxUploadSize (Prefs) + detail AllowedFileTypes (PrefsDetail: FileExt, Forbidden, IsImage, IconUrl, DefApplication); version 1.13.0 → 1.14.0|V21,V73
 T331|.|live probe post-publish: GET returns header + stock rows on tenant; PUT 1 `.webp` row → stock intact, `.webp` persists; FileExt dot form on read-back; `MaxUploadSize` `$filter`; gap → gh friction issue|V12,V73,T330
 T332|.|seed.py `detail_merge`: load validate ⊆ `detail_keys`; apply no delete rows for named fields; diff no `extra` for named fields; extract emits from catalog row|V4,V74
 T333|.|`seed_catalog.yaml` row FileUploadPreferences (`template: false`, keys MaxUploadSize, detail_keys AllowedFileTypes: FileExt, detail_merge [AllowedFileTypes]); test seed `acu-config/setup/50-file-upload-preferences.yaml` `.webp` Forbidden false IsImage true|V34,V73,T331,T332

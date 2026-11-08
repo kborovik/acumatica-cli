@@ -38,7 +38,7 @@ records:
 
 BOOTSTRAP_YAML = """\
 entity: CreditTerms
-endpoint: Bootstrap/1.13.0
+endpoint: Bootstrap/1.14.0
 key: TermsID
 records:
   - TermsID: NET30
@@ -47,7 +47,7 @@ records:
 SETUP_YAML = """\
 action: GenerateCalendar
 entity: MasterCalendar
-endpoint: Bootstrap/1.13.0
+endpoint: Bootstrap/1.14.0
 record:
   FinancialYear: 2026
 done_when:

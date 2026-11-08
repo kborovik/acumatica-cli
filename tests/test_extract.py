@@ -1409,12 +1409,12 @@ def test_b9_fallback_selects_keys_then_key_urls(
         for r in server.requests
     ]
     assert currency_requests == [
-        ("Bootstrap/1.13.0/Currency", {"$filter": "IsFinancial eq true"}),
+        ("Bootstrap/1.14.0/Currency", {"$filter": "IsFinancial eq true"}),
         (
-            "Bootstrap/1.13.0/Currency",
+            "Bootstrap/1.14.0/Currency",
             {"$select": "CuryID", "$filter": "IsFinancial eq true"},
         ),
-        ("Bootstrap/1.13.0/Currency/EUR", {}),
+        ("Bootstrap/1.14.0/Currency/EUR", {}),
     ]
     text = extract._render(spec, records)  # pyright: ignore[reportPrivateUsage]
     assert "RealGainAcctID" in text
