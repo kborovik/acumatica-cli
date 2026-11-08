@@ -28,6 +28,10 @@ record owns its list:
         StockComponents:
           - { ComponentID: MB-CM4, ComponentQty: 1 }
 
+A list named in `detail_merge: [Field]` (V74) is not owned: apply upserts
+the seeded rows and never deletes unclaimed live rows, and diff does not
+flag them extra (SM202550 stock file types shared by the tenant).
+
 Action file format (setup/*.yaml) - desired state realized by a contract
 action plus a done_when live-state probe, for setup verbs a keyed PUT
 cannot express (calendar generation and the like):
@@ -235,6 +239,7 @@ class BaselineFile(Model):
     records: list[dict[str, Any]]
     endpoint: str | None = None  # bootstrap YAML targets the custom endpoint
     detail_keys: dict[str, str] | None = None  # {ListField: RowKeyField} (T60)
+    detail_merge: list[str] | None = None  # V74: lists the seed does not own
     depends_on: list[str] | None = None  # V71 apply-order constraint
 
     _depends_on = field_validator("depends_on")(_check_depends_on)
@@ -243,6 +248,24 @@ class BaselineFile(Model):
     @classmethod
     def _key_as_list(cls, v: object) -> object:
         return v if isinstance(v, list) else [v]
+
+    @model_validator(mode="after")
+    def _merge_fields_have_keys(self) -> BaselineFile:
+        # V74: detail_merge names detail lists only - a field without a
+        # detail_keys entry has no row identity to upsert by (gh #94)
+        unknown = [
+            f for f in self.detail_merge or [] if f not in (self.detail_keys or {})
+        ]
+        if unknown:
+            raise ValueError(
+                f"entity '{self.entity}': detail_merge field(s) "
+                f"{', '.join(unknown)} have no detail_keys entry"
+            )
+        return self
+
+    def merges(self, field: str) -> bool:
+        """True when the seed upserts ``field`` rows without owning the list."""
+        return field in (self.detail_merge or [])
 
     @model_validator(mode="after")
     def _keys_identify_records(self) -> BaselineFile:
@@ -1074,7 +1097,9 @@ def _merge_detail_ids(
     500 "Component Item must be unique"). Matched source rows gain the
     live ``id``; live rows the source no longer claims ride as
     ``{id, delete: true}`` — the record owns its list (V4 detail
-    semantics). Caller supplies the already-fetched live entity.
+    semantics). A ``detail_merge`` field (V74) does not own its list:
+    unclaimed live rows are left alone, never deleted. Caller supplies the
+    already-fetched live entity.
     """
     out = dict(record)
     for field, rows in record.items():
@@ -1090,7 +1115,10 @@ def _merge_detail_ids(
         for row in rows:
             row_id = live_ids.pop(_norm(row[key]), None)
             merged.append({**row, "id": row_id} if row_id is not None else row)
-        merged.extend({"id": row_id, "delete": True} for row_id in live_ids.values())
+        if not baseline.merges(field):
+            merged.extend(
+                {"id": row_id, "delete": True} for row_id in live_ids.values()
+            )
         out[field] = merged
     return out
 
@@ -1407,7 +1435,12 @@ def _record_drifts(
             live_rows = _drop_path_ignored(
                 baseline.entity, field, actual.get(field, [])
             )
-            drifts.extend(_diff_details(label, field, key, want_rows, live_rows))
+            rows = _diff_details(label, field, key, want_rows, live_rows)
+            if baseline.merges(field):
+                # V74: the source does not own the list - extra live
+                # rows (stock rows) are not drift
+                rows = [d for d in rows if d.kind != "extra"]
+            drifts.extend(rows)
         elif isinstance(expected, dict):
             drifts.extend(_diff_nested(f"{label}.{field}", expected, actual.get(field)))
         elif field not in actual:

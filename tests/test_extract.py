@@ -693,6 +693,16 @@ TABLES: dict[str, list[dict[str, Any]]] = {
             "DisableDeleteOnExternalFileStorage": False,
         }
     ],
+    # T333/V73 SM202550 singleton: stock rows ride alongside the seeded .webp
+    "FileUploadPreferences": [
+        {
+            "MaxUploadSize": 25000,
+            "AllowedFileTypes": [
+                {"FileExt": ".pdf", "Forbidden": False, "IsImage": False},
+                {"FileExt": ".webp", "Forbidden": False, "IsImage": True},
+            ],
+        }
+    ],
     # -- setup/ synthesis sources (T49): the state the GL action chain left --
     "FinancialYearSettings": [
         {
@@ -825,7 +835,10 @@ def test_catalog_completeness_v34() -> None:
 def test_catalog_test_seed_only_rows_b43() -> None:
     """B43: `template: false` rows live in the CLI test seed, never packaged."""
     test_seed_only = extract.catalog_test_seed_files()
-    assert test_seed_only == {"setup/40-external-file-storage.yaml"}
+    assert test_seed_only == {
+        "setup/40-external-file-storage.yaml",
+        "setup/50-file-upload-preferences.yaml",
+    }
     assert not test_seed_only & extract.packaged_template_seed_files()
     assert not test_seed_only & extract.catalog_seed_files()
     for rel in test_seed_only:
@@ -862,6 +875,37 @@ def test_extract_external_file_storage_matches_test_seed(
     for field in ("IsActive", "AllowWrite", "DisableDeleteOnExternalFileStorage"):
         assert field not in emitted
     assert not list((tmp_path / "setup").glob("4[12]-*.yaml"))
+
+
+def test_catalog_file_upload_preferences_row() -> None:
+    """T333/V73/V74: SM202550 test-seed row merges AllowedFileTypes."""
+    manifest = extract.load_manifest()
+    row = {s.file: s for s in manifest.entities}[
+        "setup/50-file-upload-preferences.yaml"
+    ]
+    assert row.entity == "FileUploadPreferences"
+    assert row.entity in seed.BOOTSTRAP_ENTITIES
+    assert row.endpoint == "bootstrap"
+    assert row.keys == ["MaxUploadSize"]
+    assert row.detail_keys == {"AllowedFileTypes": "FileExt"}
+    assert row.detail_merge == ["AllowedFileTypes"]
+    assert not row.template
+
+
+def test_extract_file_upload_preferences_emits_detail_merge(
+    instance: Instance, server: FakeServer, tmp_path: Path
+) -> None:
+    """V74: extract carries detail_merge and every live row; load accepts it."""
+    _run(instance, server, tmp_path, only=frozenset({"FileUploadPreferences"}))
+    path = tmp_path / "setup/50-file-upload-preferences.yaml"
+    doc = yaml.safe_load(path.read_text())
+    assert doc["detail_keys"] == {"AllowedFileTypes": "FileExt"}
+    assert doc["detail_merge"] == ["AllowedFileTypes"]
+    exts = [r["FileExt"] for r in doc["records"][0]["AllowedFileTypes"]]
+    assert exts == [".pdf", ".webp"]
+    baseline = seed.load_baseline(path)
+    assert isinstance(baseline, seed.BaselineFile)
+    assert baseline.merges("AllowedFileTypes")
 
 
 def test_manifest_keeps_symbolic_bootstrap_endpoint() -> None:

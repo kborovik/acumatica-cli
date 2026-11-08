@@ -1,0 +1,13 @@
+entity: FileUploadPreferences
+key: MaxUploadSize
+endpoint: bootstrap
+detail_keys:
+  AllowedFileTypes: FileExt
+detail_merge:
+- AllowedFileTypes
+records:
+- MaxUploadSize: 25000
+  AllowedFileTypes:
+  - FileExt: .webp
+    Forbidden: false
+    IsImage: true

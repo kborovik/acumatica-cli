@@ -33,6 +33,9 @@
 #             so audit/server-derived noise never enters seed
 #   features  FeaturesSet gates the entity's screen needs (V22 feature
 #             closure; consumed by the features.yaml synthesis)
+#   detail_merge  detail_keys fields the seed upserts without owning the
+#             list: unclaimed live rows (stock rows) are never deleted and
+#             never diff as extra (V74)
 #   template  false = CLI test seed only (repo-root acu-config/): no
 #             packaged template, outside the V34 bijection (B43)
 #
@@ -649,6 +652,22 @@ entities:
   template: false
   include:
   - LocalFolder
+
+# FileUploadPreferences (T333/V73, gh #94): SM202550 keyless singleton;
+# MaxUploadSize is the pseudo-key. AllowedFileTypes holds ~stock rows
+# shared by the whole tenant -> detail_merge (V74): the seed adds rows
+# (.webp for Hub AP intake), never deletes stock ones. Extract returns
+# every live row -> CLI test seed only, never a config init template.
+- entity: FileUploadPreferences
+  endpoint: bootstrap
+  keys: [MaxUploadSize]
+  file: setup/50-file-upload-preferences.yaml
+  template: false
+  detail_keys:
+    AllowedFileTypes: FileExt
+  detail_merge: [AllowedFileTypes]
+  include:
+  - AllowedFileTypes
 
 # setup/ - the GL action chain (T36/T37): financial-year setup,
 # then calendar generation, then period activation; numbered prefixes

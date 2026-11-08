@@ -192,9 +192,9 @@ T328|x|live soak ACUCLI: apply + diff exit 0 on Vendor seed; 2nd `apply --change
 T329|x|README API limits row + CHANGELOG Unreleased (gh #92); release via release skill|V19,T328
 T330|x|`bootstrap_project.xml` add `FileUploadPreferences` (SM202550): MaxUploadSize (Prefs) + detail AllowedFileTypes (PrefsDetail: FileExt, Forbidden, IsImage, IconUrl, DefApplication); version 1.13.0 → 1.14.0|V21,V73
 T331|.|live probe post-publish: GET returns header + stock rows on tenant; PUT 1 `.webp` row → stock intact, `.webp` persists; FileExt dot form on read-back; `MaxUploadSize` `$filter`; gap → gh friction issue|V12,V73,T330
-T332|.|seed.py `detail_merge`: load validate ⊆ `detail_keys`; apply no delete rows for named fields; diff no `extra` for named fields; extract emits from catalog row|V4,V74
-T333|.|`seed_catalog.yaml` row FileUploadPreferences (`template: false`, keys MaxUploadSize, detail_keys AllowedFileTypes: FileExt, detail_merge [AllowedFileTypes]); test seed `acu-config/setup/50-file-upload-preferences.yaml` `.webp` Forbidden false IsImage true|V34,V73,T331,T332
-T334|.|offline tests: contract parse Bootstrap 1.14.0 + FileUploadPreferences fields; catalog completeness; merge body no delete; diff extra ignored on merge field; `detail_merge` ∉ `detail_keys` → load error|V13,T332,T333
+T332|x|seed.py `detail_merge`: load validate ⊆ `detail_keys`; apply no delete rows for named fields; diff no `extra` for named fields; extract emits from catalog row|V4,V74
+T333|x|`seed_catalog.yaml` row FileUploadPreferences (`template: false`, keys MaxUploadSize, detail_keys AllowedFileTypes: FileExt, detail_merge [AllowedFileTypes]); test seed `acu-config/setup/50-file-upload-preferences.yaml` `.webp` Forbidden false IsImage true|V34,V73,T331,T332
+T334|x|offline tests: contract parse Bootstrap 1.14.0 + FileUploadPreferences fields; catalog completeness; merge body no delete; diff extra ignored on merge field; `detail_merge` ∉ `detail_keys` → load error|V13,T332,T333
 T335|.|live soak ACUCLI: bootstrap → apply acu-config → SM202550 lists `.webp` allowed, stock row count unchanged; `.webp` PUT to Default Bill `files/x.webp` 2xx; apply ×2 → 0 update; diff exit 0|V4,V12,V73,T333
 T336|.|README seed-format `detail_merge` + API limits row (SM202550 stock rows shared) + CHANGELOG Unreleased (gh #94); release via release skill|V19,T335
 

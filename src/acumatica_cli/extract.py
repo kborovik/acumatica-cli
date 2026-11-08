@@ -78,6 +78,8 @@ class EntitySpec(Model):
     # {ListField: RowKeyField} — emitted into seed so load_baseline accepts
     # detail arrays (T60); required when include/strip keeps a list field.
     detail_keys: dict[str, str] | None = None
+    # V74: detail lists the seed upserts without owning (stock rows stay)
+    detail_merge: list[str] | None = None
     # False = CLI test seed only (repo-root acu-config/): no packaged
     # template, so the row sits outside the V34 bijection (B43)
     template: bool = True
@@ -415,6 +417,8 @@ def _render(spec: EntitySpec, records: list[dict[str, Any]]) -> str:
         doc["endpoint"] = spec.endpoint
     if spec.detail_keys:
         doc["detail_keys"] = dict(spec.detail_keys)
+    if spec.detail_merge:
+        doc["detail_merge"] = list(spec.detail_merge)
     doc["records"] = records
     return yaml.safe_dump(doc, sort_keys=False, default_flow_style=False)
 

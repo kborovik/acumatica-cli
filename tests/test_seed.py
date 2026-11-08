@@ -479,6 +479,76 @@ def test_apply_injects_live_detail_row_ids(tmp_path: Path, instance: Instance) -
     assert deletes == [{"id": "guid-old", "delete": True}]
 
 
+MERGE_KIT_YAML = KIT_YAML.replace(
+    "detail_keys: { StockComponents: ComponentID }\n",
+    "detail_keys: { StockComponents: ComponentID }\ndetail_merge: [StockComponents]\n",
+)
+
+
+def test_load_baseline_rejects_detail_merge_without_detail_key(
+    tmp_path: Path,
+) -> None:
+    """V74: detail_merge names detail_keys fields only - load error, exit 1."""
+    text = MERGE_KIT_YAML.replace(
+        "detail_merge: [StockComponents]", "detail_merge: [StockComponents, Bogus]"
+    )
+    with pytest.raises(SystemExit, match=r"detail_merge field\(s\) Bogus"):
+        seed.load_baseline(_write(tmp_path, text))
+
+
+def test_apply_detail_merge_never_deletes_unclaimed_rows(
+    tmp_path: Path, instance: Instance
+) -> None:
+    """V74: a merge field upserts seeded rows; unclaimed live rows stay."""
+    baseline = seed.load_baseline(_write(tmp_path, MERGE_KIT_YAML))
+    live_record = {
+        "KitInventoryID": {"value": "GW-EDGE"},
+        "RevisionID": {"value": "V1"},
+        "StockComponents": [
+            {
+                "ComponentID": {"value": "MB-CM4"},
+                "ComponentQty": {"value": 1.0},
+                "id": "guid-mb",
+            },
+            {
+                "ComponentID": {"value": "STOCK"},
+                "ComponentQty": {"value": 1.0},
+                "id": "guid-stock",
+            },
+        ],
+    }
+    recorder = Recorder({"/KitSpecification": httpx.Response(200, json=[live_record])})
+    seed.apply(_client(instance, recorder), baseline)
+    body = json.loads(recorder.requests[-1].content)
+    rows = body["StockComponents"]
+    assert not [r for r in rows if r.get("delete") is True]
+    assert "guid-stock" not in {r.get("id") for r in rows}
+    by_id = {r["ComponentID"]["value"]: r for r in rows}
+    assert by_id["MB-CM4"]["id"] == "guid-mb"  # matched -> update
+    assert "id" not in by_id["PSU-12V"]  # new row -> insert
+
+
+def test_diff_detail_merge_ignores_extra_live_rows(
+    tmp_path: Path, instance: Instance
+) -> None:
+    """V74: extra live rows are not drift on a merge field; missing/changed are."""
+    baseline = seed.load_baseline(_write(tmp_path, MERGE_KIT_YAML))
+    recorder = Recorder(
+        {
+            "/KitSpecification": _kit_live(
+                {"ComponentID": "MB-CM4", "ComponentQty": 2.0},
+                {"ComponentID": "SD-32GB", "ComponentQty": 1.0},
+            )
+        }
+    )
+    drifts = seed.diff(_client(instance, recorder), baseline)
+    assert drifts == [
+        "KitSpecification [GW-EDGE, V1].StockComponents[MB-CM4].ComponentQty: "
+        "source=1 live=2.0",
+        "KitSpecification [GW-EDGE, V1].StockComponents[PSU-12V]: missing on tenant",
+    ]
+
+
 def test_filter_for_key_literals_follow_scalar_type() -> None:
     """T61: filter literals type by YAML scalar - never string-quote non-strings.
 
