@@ -193,7 +193,7 @@ T327|x|offline tests: equal → no drift; different → changed; key URL omits t
 T328|x|live soak ACUCLI: apply + diff exit 0 on Vendor seed; 2nd `apply --changed-only` 0 Vendor updates|V4,V72,T326
 T329|x|README API limits row + CHANGELOG Unreleased (gh #92); release via release skill|V19,T328
 T330|x|`bootstrap_project.xml` add `FileUploadPreferences` (SM202550): MaxUploadSize (Prefs) + detail AllowedFileTypes (PrefsDetail: FileExt, Forbidden, IsImage, IconUrl, DefApplication); version 1.13.0 → 1.14.0|V21,V73
-T331|.|live probe ACUCLI: 1.14.0 FileUploadPreferences GET 500 every form + detail PUT no-op (§B.48); prototype 1.15.0 UploadAllowedFileType PUT persists + idempotent, `.webp` Bill file PUT 204; DAC OData read returns `.webp` + stock rows|V12,V73,V75,T330
+T331|x|live probe ACUCLI: 1.14.0 FileUploadPreferences GET 500 every form + detail PUT no-op (§B.48); prototype 1.15.0 UploadAllowedFileType PUT persists + idempotent, `.webp` Bill file PUT 204; DAC OData read returns `.webp` + stock rows|V12,V73,V75,T330
 T332|x|seed.py `detail_merge`: load validate ⊆ `detail_keys`; apply no delete rows for named fields; diff no `extra` for named fields; extract emits from catalog row|V4,V74
 T333|x|`seed_catalog.yaml` row FileUploadPreferences (`template: false`, keys MaxUploadSize, detail_keys AllowedFileTypes: FileExt, detail_merge [AllowedFileTypes]); test seed `acu-config/setup/50-file-upload-preferences.yaml` `.webp` Forbidden false IsImage true|V34,V73,T331,T332
 T334|x|offline tests: contract parse Bootstrap 1.14.0 + FileUploadPreferences fields; catalog completeness; merge body no delete; diff extra ignored on merge field; `detail_merge` ∉ `detail_keys` → load error|V13,T332,T333
