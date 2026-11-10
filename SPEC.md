@@ -201,7 +201,7 @@ T335|x|`bootstrap_project.xml`: drop `FileUploadPreferences` + Detail `AllowedFi
 T336|x|client.py `odata_dac(dac, filter)` basic-auth GET; seed.py `ODATA_DAC_READ = {UploadAllowedFileType: PX_SM_UploadAllowedFileTypes}` → per-record read + prefetch + apply classify via it, no contract GET|V73,V75
 T337|x|drop catalog row FileUploadPreferences; seed `setup/50-file-upload-preferences.yaml` → `setup/50-allowed-file-types.yaml` (entity UploadAllowedFileType, key FileExt, `.webp` Forbidden false IsImage true)|V34,V73
 T338|x|offline tests: contract parse 1.15.0 + UploadAllowedFileType fields, no FileUploadPreferences; OData URL + basic auth + key `$filter` (mock transport); diff + classify via OData, no contract GET; OData 401/500 → error naming DAC|V13,V75,T335,T336
-T339|.|live soak ACUCLI: bootstrap → apply acu-config → OData lists `.webp` allowed, stock row count unchanged; `.webp` PUT to Default Bill `files/x.webp` 2xx; apply ×2 → 0 update; diff exit 0|V4,V12,V73,V75,T337
+T339|x|live soak ACUCLI: bootstrap → apply acu-config → OData lists `.webp` allowed, stock row count unchanged; `.webp` PUT to Default Bill `files/x.webp` 2xx; apply ×2 → 0 update; diff exit 0|V4,V12,V73,V75,T337
 T340|.|README seed-format `detail_merge` + API limits row (SM202550 contract GET 500 → DAC OData read; stock rows shared) + CHANGELOG Unreleased (gh #94); release via release skill|V19,T339
 
 ## §B BUGS
