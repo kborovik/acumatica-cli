@@ -825,7 +825,9 @@ def test_catalog_completeness_v34() -> None:
 def test_catalog_test_seed_only_rows_b43() -> None:
     """B43: `template: false` rows live in the CLI test seed, never packaged."""
     test_seed_only = extract.catalog_test_seed_files()
-    assert test_seed_only == {"setup/40-external-file-storage.yaml"}
+    assert test_seed_only == {
+        "setup/40-external-file-storage.yaml",
+    }
     assert not test_seed_only & extract.packaged_template_seed_files()
     assert not test_seed_only & extract.catalog_seed_files()
     for rel in test_seed_only:
@@ -862,6 +864,19 @@ def test_extract_external_file_storage_matches_test_seed(
     for field in ("IsActive", "AllowWrite", "DisableDeleteOnExternalFileStorage"):
         assert field not in emitted
     assert not list((tmp_path / "setup").glob("4[12]-*.yaml"))
+
+
+def test_catalog_has_no_upload_allowed_file_type_row() -> None:
+    """T337/V73: SM202550 rows never extracted (stock rows are shared)."""
+    manifest = extract.load_manifest()
+    entities = {s.entity for s in manifest.entities}
+    assert "UploadAllowedFileType" in seed.BOOTSTRAP_ENTITIES
+    assert "UploadAllowedFileType" not in entities
+    assert "FileUploadPreferences" not in entities
+    path = _REPO / "acu-config/setup/50-allowed-file-types.yaml"
+    baseline = seed.load_baseline(path)
+    assert isinstance(baseline, seed.BaselineFile)
+    assert baseline.entity == "UploadAllowedFileType"
 
 
 def test_manifest_keeps_symbolic_bootstrap_endpoint() -> None:
@@ -1409,12 +1424,12 @@ def test_b9_fallback_selects_keys_then_key_urls(
         for r in server.requests
     ]
     assert currency_requests == [
-        ("Bootstrap/1.13.0/Currency", {"$filter": "IsFinancial eq true"}),
+        ("Bootstrap/1.15.0/Currency", {"$filter": "IsFinancial eq true"}),
         (
-            "Bootstrap/1.13.0/Currency",
+            "Bootstrap/1.15.0/Currency",
             {"$select": "CuryID", "$filter": "IsFinancial eq true"},
         ),
-        ("Bootstrap/1.13.0/Currency/EUR", {}),
+        ("Bootstrap/1.15.0/Currency/EUR", {}),
     ]
     text = extract._render(spec, records)  # pyright: ignore[reportPrivateUsage]
     assert "RealGainAcctID" in text

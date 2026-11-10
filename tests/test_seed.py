@@ -16,7 +16,13 @@ import pytest
 
 from acumatica_cli import seed
 from acumatica_cli.checkpoint import digest
-from acumatica_cli.client import AcumaticaClient, SessionLostError, unwrap, wrap
+from acumatica_cli.client import (
+    AcumaticaClient,
+    RestError,
+    SessionLostError,
+    unwrap,
+    wrap,
+)
 from acumatica_cli.config import Instance
 
 BASELINE = """\
@@ -72,14 +78,14 @@ def test_load_baseline_rejects_record_without_key(tmp_path: Path) -> None:
 
 
 def test_load_baseline_parses_endpoint_override(tmp_path: Path) -> None:
-    text = BASELINE + "endpoint: Bootstrap/1.13.0\n"
-    assert seed.load_baseline(_write(tmp_path, text)).endpoint == "Bootstrap/1.13.0"
+    text = BASELINE + "endpoint: Bootstrap/1.15.0\n"
+    assert seed.load_baseline(_write(tmp_path, text)).endpoint == "Bootstrap/1.15.0"
 
 
 LEDGER_LINK_YAML = """\
 entity: LedgerCompany
 key: [LedgerCD, OrganizationID]
-endpoint: Bootstrap/1.13.0
+endpoint: Bootstrap/1.15.0
 records:
   - LedgerCD: ACTUAL
     OrganizationID: PRODUCTS
@@ -131,7 +137,7 @@ def test_bootstrap_entities_parsed_from_packaged_template() -> None:
     # V2/T81: the ambiguous set comes from the active contract (packaged
     # full company fallback), never a hand-list - parity pinned so a
     # template edit surfaces offline.
-    assert seed.BOOTSTRAP_ENDPOINT == "Bootstrap/1.13.0"
+    assert seed.BOOTSTRAP_ENDPOINT == "Bootstrap/1.15.0"
     assert {
         "Company",
         "CreditTerms",
@@ -162,6 +168,7 @@ def test_bootstrap_entities_parsed_from_packaged_template() -> None:
         "NumberingSequence",
         "SegmentedKey",
         "ExternalFileStorage",
+        "UploadAllowedFileType",
     } == seed.BOOTSTRAP_ENTITIES
 
 
@@ -175,7 +182,7 @@ def test_load_baseline_rejects_bootstrap_entity_without_endpoint(
     """
     with pytest.raises(
         SystemExit,
-        match=r"endpoint: default.*Bootstrap/1\.13\.0.*'bootstrap' \| 'default'",
+        match=r"endpoint: default.*Bootstrap/1\.15\.0.*'bootstrap' \| 'default'",
     ):
         seed.load_baseline(_write(tmp_path, AMBIGUOUS_YAML))
 
@@ -184,7 +191,7 @@ def test_load_baseline_bootstrap_entity_explicit_endpoint_passes(
     tmp_path: Path,
 ) -> None:
     # V20: explicit endpoint: disambiguates - either target is legitimate
-    for endpoint in ("Bootstrap/1.13.0", "Default/25.200.001", "default"):
+    for endpoint in ("Bootstrap/1.15.0", "Default/25.200.001", "default"):
         text = AMBIGUOUS_YAML + f"endpoint: {endpoint}\n"
         assert seed.load_baseline(_write(tmp_path, text)).endpoint == endpoint
 
@@ -192,7 +199,7 @@ def test_load_baseline_bootstrap_entity_explicit_endpoint_passes(
 def test_load_baseline_resolves_symbolic_bootstrap(tmp_path: Path) -> None:
     """Symbolic endpoint: bootstrap resolves to the active package version."""
     text = AMBIGUOUS_YAML + "endpoint: bootstrap\n"
-    assert seed.load_baseline(_write(tmp_path, text)).endpoint == "Bootstrap/1.13.0"
+    assert seed.load_baseline(_write(tmp_path, text)).endpoint == "Bootstrap/1.15.0"
 
 
 def test_load_baseline_keeps_symbolic_default(tmp_path: Path) -> None:
@@ -257,19 +264,19 @@ def test_active_bootstrap_package_only(
     (tmp_path / ".env").write_text("ACU_BASE_URL=https://example.com\n")
     monkeypatch.chdir(tmp_path)
     name, entities = seed.active_bootstrap()
-    assert name == "Bootstrap/1.13.0"
+    assert name == "Bootstrap/1.15.0"
     assert entities == seed.BOOTSTRAP_ENTITIES
     text = (
         "entity: Company\nkey: AcctCD\nendpoint: bootstrap\n"
         "records:\n  - AcctCD: MAIN\n"
     )
-    assert seed.load_baseline(_write(tmp_path, text)).endpoint == "Bootstrap/1.13.0"
+    assert seed.load_baseline(_write(tmp_path, text)).endpoint == "Bootstrap/1.15.0"
 
 
 def test_apply_and_diff_target_endpoint_override(
     tmp_path: Path, instance: Instance
 ) -> None:
-    text = BASELINE + "endpoint: Bootstrap/1.13.0\n"
+    text = BASELINE + "endpoint: Bootstrap/1.15.0\n"
     baseline = seed.load_baseline(_write(tmp_path, text))
     recorder = Recorder({"/UnitsOfMeasure": _live({"UOM": "KG"})})
 
@@ -277,7 +284,7 @@ def test_apply_and_diff_target_endpoint_override(
     seed.diff(_client(instance, recorder), baseline)
 
     paths = {r.url.path for r in recorder.requests}
-    base = "/AcumaticaERP/entity/Bootstrap/1.13.0/UnitsOfMeasure"
+    base = "/AcumaticaERP/entity/Bootstrap/1.15.0/UnitsOfMeasure"
     assert paths == {base, f"{base}/KG", f"{base}/HOUR"}
 
 
@@ -478,6 +485,76 @@ def test_apply_injects_live_detail_row_ids(tmp_path: Path, instance: Instance) -
     assert deletes == [{"id": "guid-old", "delete": True}]
 
 
+MERGE_KIT_YAML = KIT_YAML.replace(
+    "detail_keys: { StockComponents: ComponentID }\n",
+    "detail_keys: { StockComponents: ComponentID }\ndetail_merge: [StockComponents]\n",
+)
+
+
+def test_load_baseline_rejects_detail_merge_without_detail_key(
+    tmp_path: Path,
+) -> None:
+    """V74: detail_merge names detail_keys fields only - load error, exit 1."""
+    text = MERGE_KIT_YAML.replace(
+        "detail_merge: [StockComponents]", "detail_merge: [StockComponents, Bogus]"
+    )
+    with pytest.raises(SystemExit, match=r"detail_merge field\(s\) Bogus"):
+        seed.load_baseline(_write(tmp_path, text))
+
+
+def test_apply_detail_merge_never_deletes_unclaimed_rows(
+    tmp_path: Path, instance: Instance
+) -> None:
+    """V74: a merge field upserts seeded rows; unclaimed live rows stay."""
+    baseline = seed.load_baseline(_write(tmp_path, MERGE_KIT_YAML))
+    live_record = {
+        "KitInventoryID": {"value": "GW-EDGE"},
+        "RevisionID": {"value": "V1"},
+        "StockComponents": [
+            {
+                "ComponentID": {"value": "MB-CM4"},
+                "ComponentQty": {"value": 1.0},
+                "id": "guid-mb",
+            },
+            {
+                "ComponentID": {"value": "STOCK"},
+                "ComponentQty": {"value": 1.0},
+                "id": "guid-stock",
+            },
+        ],
+    }
+    recorder = Recorder({"/KitSpecification": httpx.Response(200, json=[live_record])})
+    seed.apply(_client(instance, recorder), baseline)
+    body = json.loads(recorder.requests[-1].content)
+    rows = body["StockComponents"]
+    assert not [r for r in rows if r.get("delete") is True]
+    assert "guid-stock" not in {r.get("id") for r in rows}
+    by_id = {r["ComponentID"]["value"]: r for r in rows}
+    assert by_id["MB-CM4"]["id"] == "guid-mb"  # matched -> update
+    assert "id" not in by_id["PSU-12V"]  # new row -> insert
+
+
+def test_diff_detail_merge_ignores_extra_live_rows(
+    tmp_path: Path, instance: Instance
+) -> None:
+    """V74: extra live rows are not drift on a merge field; missing/changed are."""
+    baseline = seed.load_baseline(_write(tmp_path, MERGE_KIT_YAML))
+    recorder = Recorder(
+        {
+            "/KitSpecification": _kit_live(
+                {"ComponentID": "MB-CM4", "ComponentQty": 2.0},
+                {"ComponentID": "SD-32GB", "ComponentQty": 1.0},
+            )
+        }
+    )
+    drifts = seed.diff(_client(instance, recorder), baseline)
+    assert drifts == [
+        "KitSpecification [GW-EDGE, V1].StockComponents[MB-CM4].ComponentQty: "
+        "source=1 live=2.0",
+        "KitSpecification [GW-EDGE, V1].StockComponents[PSU-12V]: missing on tenant",
+    ]
+
+
 def test_filter_for_key_literals_follow_scalar_type() -> None:
     """T61: filter literals type by YAML scalar - never string-quote non-strings.
 
@@ -644,7 +721,7 @@ class EchoStore:
 COMPANY_YAML = """\
 entity: Company
 key: AcctCD
-endpoint: Bootstrap/1.13.0
+endpoint: Bootstrap/1.15.0
 records:
   - AcctCD: LAB5
     OrganizationName: Lab Five
@@ -667,11 +744,11 @@ def test_apply_company_relogins_once_per_session(
     assert methods_paths == [
         ("POST", "/AcumaticaERP/entity/auth/login"),
         ("GET", "/AcumaticaERP/Frames/Login.aspx"),
-        ("PUT", "/AcumaticaERP/entity/Bootstrap/1.13.0/Company"),
+        ("PUT", "/AcumaticaERP/entity/Bootstrap/1.15.0/Company"),
         ("POST", "/AcumaticaERP/entity/auth/logout"),
         ("POST", "/AcumaticaERP/entity/auth/login"),
         ("GET", "/AcumaticaERP/Frames/Login.aspx"),
-        ("PUT", "/AcumaticaERP/entity/Bootstrap/1.13.0/Company"),
+        ("PUT", "/AcumaticaERP/entity/Bootstrap/1.15.0/Company"),
         ("POST", "/AcumaticaERP/entity/auth/logout"),
     ]
 
@@ -694,7 +771,7 @@ def test_apply_retries_once_on_branch_empty(
     text = """\
 entity: INPreferences
 key: HoldEntry
-endpoint: Bootstrap/1.13.0
+endpoint: Bootstrap/1.15.0
 records:
   - HoldEntry: false
     TransitBranchID: LAB5
@@ -1689,7 +1766,7 @@ def test_package_company_apply_body_includes_decplqty_and_persist_uoms(
     assert body["DecPlQty"] == {"value": 3}
     assert body["WeightUOM"] == {"value": "KG"}
     assert body["VolumeUOM"] == {"value": "LITER"}
-    assert puts[0].url.path.endswith("/Bootstrap/1.13.0/Company")
+    assert puts[0].url.path.endswith("/Bootstrap/1.15.0/Company")
 
 
 def test_company_packaging_round_trip(instance: Instance) -> None:
@@ -1928,7 +2005,7 @@ def test_diff_multi_key_single_org_no_phantom_drift(
     text = """\
 entity: LedgerCompany
 key: [LedgerCD, OrganizationID]
-endpoint: Bootstrap/1.13.0
+endpoint: Bootstrap/1.15.0
 records:
   - LedgerCD: ACTUAL
     OrganizationID: COMPANY
@@ -1964,7 +2041,7 @@ NO_ENTITY_500 = httpx.Response(
 CURRENCY_YAML = """\
 entity: Currency
 key: CuryID
-endpoint: Bootstrap/1.13.0
+endpoint: Bootstrap/1.15.0
 records:
   - CuryID: EUR
     Description: Euro
@@ -1992,8 +2069,8 @@ def test_diff_falls_back_to_key_url_on_optimization_500(
     assert seed.diff(_client(instance, recorder), baseline) == []
     paths = [r.url.path for r in recorder.requests]
     assert [p.split("/entity/", 1)[1] for p in paths] == [
-        "Bootstrap/1.13.0/Currency",
-        "Bootstrap/1.13.0/Currency/EUR",
+        "Bootstrap/1.15.0/Currency",
+        "Bootstrap/1.15.0/Currency/EUR",
     ]
 
 
@@ -2148,10 +2225,141 @@ def test_apply_key_url_read_entity_live_read_skips_list_get(
     assert [c for c in calls if c[0] == "PUT"] == [("PUT", "Tax"), ("PUT", "Tax")]
 
 
+FILE_TYPES_YAML = """\
+entity: UploadAllowedFileType
+key: FileExt
+endpoint: bootstrap
+records:
+  - FileExt: .webp
+    Forbidden: false
+    IsImage: true
+  - FileExt: .heic
+    Forbidden: false
+    IsImage: true
+"""
+
+ODATA_PATH = "/AcumaticaERP/t/T1/api/odata/dac/PX_SM_UploadAllowedFileTypes"
+
+
+def _odata(*rows: dict[str, Any]) -> httpx.Response:
+    return httpx.Response(
+        200,
+        json={
+            "@odata.context": "$metadata#PX_SM_UploadAllowedFileTypes",
+            "value": [{"@odata.etag": "W/1", "CompanyID": 3, **r} for r in rows],
+        },
+    )
+
+
+WEBP = {"FileExt": ".webp", "Forbidden": False, "IsImage": True}
+HEIC = {"FileExt": ".heic", "Forbidden": False, "IsImage": True}
+PNG = {"FileExt": ".png", "Forbidden": False, "IsImage": True}
+
+
+def _contract_gets(recorder: Recorder) -> list[str]:
+    return [
+        r.url.path
+        for r in recorder.requests
+        if r.method == "GET" and "/entity/" in r.url.path
+    ]
+
+
+def test_odata_dac_basic_auth_url_and_filter(instance: Instance) -> None:
+    """V75: DAC OData GET, basic auth <user>@<tenant>, plain rows unwrapped."""
+    recorder = Recorder({ODATA_PATH: _odata(WEBP)})
+    client = _client(instance, recorder)
+
+    rows = client.odata_dac("PX_SM_UploadAllowedFileTypes", "FileExt eq '.webp'")
+
+    assert rows == [{"CompanyID": 3, **WEBP}]
+    (request,) = recorder.requests
+    assert request.url.path == ODATA_PATH
+    assert dict(request.url.params) == {"$filter": "FileExt eq '.webp'"}
+    expected = httpx.BasicAuth("admin@T1", "pw")._auth_header  # pyright: ignore
+    assert request.headers["Authorization"] == expected
+    assert "pw" not in str(request.url)
+    assert "cookie" not in request.headers
+
+
+@pytest.mark.parametrize("status", [401, 500])
+def test_odata_dac_error_names_dac(instance: Instance, status: int) -> None:
+    """V75: an OData 401/500 surfaces as an error naming the DAC."""
+    recorder = Recorder({ODATA_PATH: httpx.Response(status, json={"message": "nope"})})
+    client = _client(instance, recorder)
+
+    with pytest.raises(RestError, match="DAC OData PX_SM_UploadAllowedFileTypes"):
+        client.odata_dac("PX_SM_UploadAllowedFileTypes")
+
+
+def test_diff_odata_dac_read_entity_never_contract_get(
+    tmp_path: Path, instance: Instance
+) -> None:
+    """V75/B48: diff reads UploadAllowedFileType through DAC OData only.
+
+    Two records -> one unfiltered prefetch; stock rows (.png) are extra
+    live rows of a shared table, never drift.
+    """
+    baseline = _baseline(tmp_path, FILE_TYPES_YAML)
+    recorder = Recorder(
+        {
+            "/UploadAllowedFileType": httpx.Response(500, json={"message": "NRE"}),
+            ODATA_PATH: _odata(PNG, WEBP, HEIC),
+        }
+    )
+
+    assert seed.diff(_client(instance, recorder), baseline) == []
+    assert _contract_gets(recorder) == []
+    assert [r.url.path for r in recorder.requests] == [ODATA_PATH]
+
+
+def test_diff_odata_dac_read_entity_flags_missing_and_changed(
+    tmp_path: Path, instance: Instance
+) -> None:
+    """V75: per-record OData read by key $filter; changed + missing drift."""
+    webp_only = FILE_TYPES_YAML.split("  - FileExt: .heic", maxsplit=1)[0]
+    baseline = _baseline(tmp_path, webp_only)
+    recorder = Recorder({ODATA_PATH: _odata({**WEBP, "Forbidden": True})})
+
+    assert seed.diff(_client(instance, recorder), baseline) == [
+        "UploadAllowedFileType [.webp].Forbidden: source=False live=True"
+    ]
+    (request,) = recorder.requests
+    assert dict(request.url.params) == {"$filter": "FileExt eq '.webp'"}
+
+    recorder = Recorder({ODATA_PATH: _odata()})
+    assert seed.diff(_client(instance, recorder), baseline) == [
+        "UploadAllowedFileType [.webp]: missing on tenant"
+    ]
+
+
+def test_apply_plan_classifies_via_odata_dac(
+    tmp_path: Path, instance: Instance
+) -> None:
+    """V75: apply --plan / --changed-only classify through OData, PUT stays contract."""
+    baseline = _baseline(tmp_path, FILE_TYPES_YAML)
+    recorder = Recorder({ODATA_PATH: _odata(PNG, WEBP)})
+
+    counts: Counter[str] = Counter()
+    _, errors = seed.apply(
+        _client(instance, recorder),
+        baseline,
+        mode=seed.ApplyMode.CHANGED,
+        counts=counts,
+    )
+
+    assert errors == []
+    assert _contract_gets(recorder) == []
+    puts = [r for r in recorder.requests if r.method == "PUT"]
+    assert [r.url.path for r in puts] == [
+        "/AcumaticaERP/entity/Bootstrap/1.15.0/UploadAllowedFileType"
+    ]
+    assert json.loads(puts[0].content)["FileExt"] == {"value": ".heic"}
+
+
 ACTION_YAML = """\
 action: GenerateCalendar
 entity: MasterCalendar
-endpoint: Bootstrap/1.13.0
+endpoint: Bootstrap/1.15.0
 record:
   FinancialYear: 2026
 parameters:
@@ -2239,8 +2447,8 @@ def test_apply_action_invokes_on_204_never_following_location(
     assert [
         (r.method, r.url.path.split("/entity/", 1)[1]) for r in recorder.requests
     ] == [
-        ("GET", "Bootstrap/1.13.0/MasterCalendar"),
-        ("POST", "Bootstrap/1.13.0/MasterCalendar/GenerateCalendar"),
+        ("GET", "Bootstrap/1.15.0/MasterCalendar"),
+        ("POST", "Bootstrap/1.15.0/MasterCalendar/GenerateCalendar"),
     ]
     assert "invoke GenerateCalendar [MasterCalendar]" in capsys.readouterr().out
 
@@ -2269,7 +2477,7 @@ def test_apply_action_polls_202_location_to_completion(
     """202 = long-running: poll the Location status URL until it answers 204."""
     action = _action(tmp_path)
     status_path = (
-        "/AcumaticaERP/entity/Bootstrap/1.13.0/MasterCalendar"
+        "/AcumaticaERP/entity/Bootstrap/1.15.0/MasterCalendar"
         "/GenerateCalendar/status/abc"
     )
     polls: list[str] = []
@@ -2369,7 +2577,7 @@ def test_probe_routes_filter_and_defaults(tmp_path: Path, instance: Instance) ->
     seed.diff(_client(instance, recorder), action)
 
     (request,) = recorder.requests
-    assert request.url.path.endswith("/Bootstrap/1.13.0/MasterCalendar")
+    assert request.url.path.endswith("/Bootstrap/1.15.0/MasterCalendar")
     assert request.url.params["$filter"] == "FinancialYear eq '2026'"
 
 

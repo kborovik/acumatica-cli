@@ -28,6 +28,10 @@ record owns its list:
         StockComponents:
           - { ComponentID: MB-CM4, ComponentQty: 1 }
 
+A list named in `detail_merge: [Field]` (V74) is not owned: apply upserts
+the seeded rows and never deletes unclaimed live rows, and diff does not
+flag them extra (SM202550 stock file types shared by the tenant).
+
 Action file format (setup/*.yaml) - desired state realized by a contract
 action plus a done_when live-state probe, for setup verbs a keyed PUT
 cannot express (calendar generation and the like):
@@ -85,6 +89,7 @@ from .client import (
     format_failure,
     pool_map,
     unwrap,
+    wrap,
 )
 from .config import find_data_root
 from .models import Model, validation_summary
@@ -138,6 +143,13 @@ _DIFF_SKIP_DETAILS = frozenset({("Role", "Users"), ("User", "Roles")})
 # apply's live read and extract read these by key URL only, so seed holds
 # the name.
 KEY_URL_READ = frozenset({"Tax"})
+# DAC-OData-read entities (V75/B48): every contract GET form 500s (SM202550
+# export builds PreferencesGeneral without DAC extensions -> NRE). Diff,
+# apply's live read and --plan read the DAC through OData instead; the
+# write stays the contract PUT. entity -> DAC OData name.
+ODATA_DAC_READ: dict[str, str] = {
+    "UploadAllowedFileType": "PX_SM_UploadAllowedFileTypes",
+}
 
 # Key-URL GET statuses that mean "cannot answer", not a failed run (V72, B14).
 KEY_URL_UNANSWERED = frozenset({404, 500})
@@ -235,6 +247,7 @@ class BaselineFile(Model):
     records: list[dict[str, Any]]
     endpoint: str | None = None  # bootstrap YAML targets the custom endpoint
     detail_keys: dict[str, str] | None = None  # {ListField: RowKeyField} (T60)
+    detail_merge: list[str] | None = None  # V74: lists the seed does not own
     depends_on: list[str] | None = None  # V71 apply-order constraint
 
     _depends_on = field_validator("depends_on")(_check_depends_on)
@@ -243,6 +256,24 @@ class BaselineFile(Model):
     @classmethod
     def _key_as_list(cls, v: object) -> object:
         return v if isinstance(v, list) else [v]
+
+    @model_validator(mode="after")
+    def _merge_fields_have_keys(self) -> BaselineFile:
+        # V74: detail_merge names detail lists only - a field without a
+        # detail_keys entry has no row identity to upsert by (gh #94)
+        unknown = [
+            f for f in self.detail_merge or [] if f not in (self.detail_keys or {})
+        ]
+        if unknown:
+            raise ValueError(
+                f"entity '{self.entity}': detail_merge field(s) "
+                f"{', '.join(unknown)} have no detail_keys entry"
+            )
+        return self
+
+    def merges(self, field: str) -> bool:
+        """True when the seed upserts ``field`` rows without owning the list."""
+        return field in (self.detail_merge or [])
 
     @model_validator(mode="after")
     def _keys_identify_records(self) -> BaselineFile:
@@ -1074,7 +1105,9 @@ def _merge_detail_ids(
     500 "Component Item must be unique"). Matched source rows gain the
     live ``id``; live rows the source no longer claims ride as
     ``{id, delete: true}`` — the record owns its list (V4 detail
-    semantics). Caller supplies the already-fetched live entity.
+    semantics). A ``detail_merge`` field (V74) does not own its list:
+    unclaimed live rows are left alone, never deleted. Caller supplies the
+    already-fetched live entity.
     """
     out = dict(record)
     for field, rows in record.items():
@@ -1090,7 +1123,10 @@ def _merge_detail_ids(
         for row in rows:
             row_id = live_ids.pop(_norm(row[key]), None)
             merged.append({**row, "id": row_id} if row_id is not None else row)
-        merged.extend({"id": row_id, "delete": True} for row_id in live_ids.values())
+        if not baseline.merges(field):
+            merged.extend(
+                {"id": row_id, "delete": True} for row_id in live_ids.values()
+            )
         out[field] = merged
     return out
 
@@ -1121,6 +1157,8 @@ def _fetch(
     derives from the record's own shape - a list field expands by name,
     a dict field by its slash path (`MainContact/Address`).
     """
+    if baseline.entity in ODATA_DAC_READ:
+        return _read_odata(client, baseline, record)
     if baseline.entity in KEY_URL_READ:
         return _read_by_key(client, baseline, record)
     params = {
@@ -1169,6 +1207,28 @@ def _read_by_key(
     )
 
 
+def _odata_rows(
+    client: AcumaticaClient, baseline: BaselineFile, filter: str | None = None
+) -> list[dict[str, Any]]:
+    """The entity's DAC OData rows, contract-wrapped for diff and apply (V75)."""
+    rows = client.odata_dac(ODATA_DAC_READ[baseline.entity], filter)
+    return [wrap(row) for row in rows]
+
+
+def _read_odata(
+    client: AcumaticaClient, baseline: BaselineFile, record: dict[str, Any]
+) -> dict[str, Any] | None:
+    """The record's DAC OData row by key ``$filter``, or None (V75)."""
+    rows = _odata_rows(client, baseline, _filter_for(record, baseline.keys))
+    for row in rows:
+        actual = unwrap(row)
+        if all(
+            k in actual and _norm(actual[k]) == _norm(record[k]) for k in baseline.keys
+        ):
+            return row
+    return None
+
+
 def _prefetch(
     client: AcumaticaClient, baseline: BaselineFile
 ) -> dict[tuple[str, ...], dict[str, Any]]:
@@ -1186,6 +1246,8 @@ def _prefetch(
     """
     if len(baseline.records) < 2 or baseline.entity in KEY_URL_READ:
         return {}
+    if baseline.entity in ODATA_DAC_READ:
+        return _index(baseline, _odata_rows(client, baseline))
     params: dict[str, str] = {}
     expand = sorted({p for r in baseline.records for p in _expand_paths(r)})
     if expand:
@@ -1201,6 +1263,13 @@ def _prefetch(
         )
     except RuntimeError:
         return {}
+    return _index(baseline, rows)
+
+
+def _index(
+    baseline: BaselineFile, rows: list[dict[str, Any]]
+) -> dict[tuple[str, ...], dict[str, Any]]:
+    """Live rows by normalized key tuple; a duplicated key tuple is dropped."""
     index: dict[tuple[str, ...], dict[str, Any]] = {}
     dups: set[tuple[str, ...]] = set()
     for row in rows:
@@ -1343,8 +1412,10 @@ def _compare(
     list's, so the re-read can never open a new drift elsewhere.
     """
     found = _record_drifts(baseline, label, record, live)
-    if baseline.entity in KEY_URL_READ or not any(
-        drift.kind == "not_returned" for drift in found
+    if (
+        baseline.entity in KEY_URL_READ
+        or baseline.entity in ODATA_DAC_READ  # V75: no contract GET, ever
+        or not any(drift.kind == "not_returned" for drift in found)
     ):
         return found
     full = _reread(client, baseline, label, record)
@@ -1407,7 +1478,12 @@ def _record_drifts(
             live_rows = _drop_path_ignored(
                 baseline.entity, field, actual.get(field, [])
             )
-            drifts.extend(_diff_details(label, field, key, want_rows, live_rows))
+            rows = _diff_details(label, field, key, want_rows, live_rows)
+            if baseline.merges(field):
+                # V74: the source does not own the list - extra live
+                # rows (stock rows) are not drift
+                rows = [d for d in rows if d.kind != "extra"]
+            drifts.extend(rows)
         elif isinstance(expected, dict):
             drifts.extend(_diff_nested(f"{label}.{field}", expected, actual.get(field)))
         elif field not in actual:

@@ -1,0 +1,7 @@
+entity: UploadAllowedFileType
+key: FileExt
+endpoint: bootstrap
+records:
+- FileExt: .webp
+  Forbidden: false
+  IsImage: true
