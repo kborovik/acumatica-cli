@@ -89,6 +89,7 @@ from .client import (
     format_failure,
     pool_map,
     unwrap,
+    wrap,
 )
 from .config import find_data_root
 from .models import Model, validation_summary
@@ -142,6 +143,13 @@ _DIFF_SKIP_DETAILS = frozenset({("Role", "Users"), ("User", "Roles")})
 # apply's live read and extract read these by key URL only, so seed holds
 # the name.
 KEY_URL_READ = frozenset({"Tax"})
+# DAC-OData-read entities (V75/B48): every contract GET form 500s (SM202550
+# export builds PreferencesGeneral without DAC extensions -> NRE). Diff,
+# apply's live read and --plan read the DAC through OData instead; the
+# write stays the contract PUT. entity -> DAC OData name.
+ODATA_DAC_READ: dict[str, str] = {
+    "UploadAllowedFileType": "PX_SM_UploadAllowedFileTypes",
+}
 
 # Key-URL GET statuses that mean "cannot answer", not a failed run (V72, B14).
 KEY_URL_UNANSWERED = frozenset({404, 500})
@@ -1149,6 +1157,8 @@ def _fetch(
     derives from the record's own shape - a list field expands by name,
     a dict field by its slash path (`MainContact/Address`).
     """
+    if baseline.entity in ODATA_DAC_READ:
+        return _read_odata(client, baseline, record)
     if baseline.entity in KEY_URL_READ:
         return _read_by_key(client, baseline, record)
     params = {
@@ -1197,6 +1207,28 @@ def _read_by_key(
     )
 
 
+def _odata_rows(
+    client: AcumaticaClient, baseline: BaselineFile, filter: str | None = None
+) -> list[dict[str, Any]]:
+    """The entity's DAC OData rows, contract-wrapped for diff and apply (V75)."""
+    rows = client.odata_dac(ODATA_DAC_READ[baseline.entity], filter)
+    return [wrap(row) for row in rows]
+
+
+def _read_odata(
+    client: AcumaticaClient, baseline: BaselineFile, record: dict[str, Any]
+) -> dict[str, Any] | None:
+    """The record's DAC OData row by key ``$filter``, or None (V75)."""
+    rows = _odata_rows(client, baseline, _filter_for(record, baseline.keys))
+    for row in rows:
+        actual = unwrap(row)
+        if all(
+            k in actual and _norm(actual[k]) == _norm(record[k]) for k in baseline.keys
+        ):
+            return row
+    return None
+
+
 def _prefetch(
     client: AcumaticaClient, baseline: BaselineFile
 ) -> dict[tuple[str, ...], dict[str, Any]]:
@@ -1214,6 +1246,8 @@ def _prefetch(
     """
     if len(baseline.records) < 2 or baseline.entity in KEY_URL_READ:
         return {}
+    if baseline.entity in ODATA_DAC_READ:
+        return _index(baseline, _odata_rows(client, baseline))
     params: dict[str, str] = {}
     expand = sorted({p for r in baseline.records for p in _expand_paths(r)})
     if expand:
@@ -1229,6 +1263,13 @@ def _prefetch(
         )
     except RuntimeError:
         return {}
+    return _index(baseline, rows)
+
+
+def _index(
+    baseline: BaselineFile, rows: list[dict[str, Any]]
+) -> dict[tuple[str, ...], dict[str, Any]]:
+    """Live rows by normalized key tuple; a duplicated key tuple is dropped."""
     index: dict[tuple[str, ...], dict[str, Any]] = {}
     dups: set[tuple[str, ...]] = set()
     for row in rows:
@@ -1371,8 +1412,10 @@ def _compare(
     list's, so the re-read can never open a new drift elsewhere.
     """
     found = _record_drifts(baseline, label, record, live)
-    if baseline.entity in KEY_URL_READ or not any(
-        drift.kind == "not_returned" for drift in found
+    if (
+        baseline.entity in KEY_URL_READ
+        or baseline.entity in ODATA_DAC_READ  # V75: no contract GET, ever
+        or not any(drift.kind == "not_returned" for drift in found)
     ):
         return found
     full = _reread(client, baseline, label, record)

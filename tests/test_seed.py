@@ -16,7 +16,13 @@ import pytest
 
 from acumatica_cli import seed
 from acumatica_cli.checkpoint import digest
-from acumatica_cli.client import AcumaticaClient, SessionLostError, unwrap, wrap
+from acumatica_cli.client import (
+    AcumaticaClient,
+    RestError,
+    SessionLostError,
+    unwrap,
+    wrap,
+)
 from acumatica_cli.config import Instance
 
 BASELINE = """\
@@ -2217,6 +2223,137 @@ def test_apply_key_url_read_entity_live_read_skips_list_get(
     calls = [(r.method, r.url.path.rsplit("/", 1)[1]) for r in recorder.requests]
     assert ("GET", "Tax") not in calls
     assert [c for c in calls if c[0] == "PUT"] == [("PUT", "Tax"), ("PUT", "Tax")]
+
+
+FILE_TYPES_YAML = """\
+entity: UploadAllowedFileType
+key: FileExt
+endpoint: bootstrap
+records:
+  - FileExt: .webp
+    Forbidden: false
+    IsImage: true
+  - FileExt: .heic
+    Forbidden: false
+    IsImage: true
+"""
+
+ODATA_PATH = "/AcumaticaERP/t/T1/api/odata/dac/PX_SM_UploadAllowedFileTypes"
+
+
+def _odata(*rows: dict[str, Any]) -> httpx.Response:
+    return httpx.Response(
+        200,
+        json={
+            "@odata.context": "$metadata#PX_SM_UploadAllowedFileTypes",
+            "value": [{"@odata.etag": "W/1", "CompanyID": 3, **r} for r in rows],
+        },
+    )
+
+
+WEBP = {"FileExt": ".webp", "Forbidden": False, "IsImage": True}
+HEIC = {"FileExt": ".heic", "Forbidden": False, "IsImage": True}
+PNG = {"FileExt": ".png", "Forbidden": False, "IsImage": True}
+
+
+def _contract_gets(recorder: Recorder) -> list[str]:
+    return [
+        r.url.path
+        for r in recorder.requests
+        if r.method == "GET" and "/entity/" in r.url.path
+    ]
+
+
+def test_odata_dac_basic_auth_url_and_filter(instance: Instance) -> None:
+    """V75: DAC OData GET, basic auth <user>@<tenant>, plain rows unwrapped."""
+    recorder = Recorder({ODATA_PATH: _odata(WEBP)})
+    client = _client(instance, recorder)
+
+    rows = client.odata_dac("PX_SM_UploadAllowedFileTypes", "FileExt eq '.webp'")
+
+    assert rows == [{"CompanyID": 3, **WEBP}]
+    (request,) = recorder.requests
+    assert request.url.path == ODATA_PATH
+    assert dict(request.url.params) == {"$filter": "FileExt eq '.webp'"}
+    expected = httpx.BasicAuth("admin@T1", "pw")._auth_header  # pyright: ignore
+    assert request.headers["Authorization"] == expected
+    assert "pw" not in str(request.url)
+    assert "cookie" not in request.headers
+
+
+@pytest.mark.parametrize("status", [401, 500])
+def test_odata_dac_error_names_dac(instance: Instance, status: int) -> None:
+    """V75: an OData 401/500 surfaces as an error naming the DAC."""
+    recorder = Recorder({ODATA_PATH: httpx.Response(status, json={"message": "nope"})})
+    client = _client(instance, recorder)
+
+    with pytest.raises(RestError, match="DAC OData PX_SM_UploadAllowedFileTypes"):
+        client.odata_dac("PX_SM_UploadAllowedFileTypes")
+
+
+def test_diff_odata_dac_read_entity_never_contract_get(
+    tmp_path: Path, instance: Instance
+) -> None:
+    """V75/B48: diff reads UploadAllowedFileType through DAC OData only.
+
+    Two records -> one unfiltered prefetch; stock rows (.png) are extra
+    live rows of a shared table, never drift.
+    """
+    baseline = _baseline(tmp_path, FILE_TYPES_YAML)
+    recorder = Recorder(
+        {
+            "/UploadAllowedFileType": httpx.Response(500, json={"message": "NRE"}),
+            ODATA_PATH: _odata(PNG, WEBP, HEIC),
+        }
+    )
+
+    assert seed.diff(_client(instance, recorder), baseline) == []
+    assert _contract_gets(recorder) == []
+    assert [r.url.path for r in recorder.requests] == [ODATA_PATH]
+
+
+def test_diff_odata_dac_read_entity_flags_missing_and_changed(
+    tmp_path: Path, instance: Instance
+) -> None:
+    """V75: per-record OData read by key $filter; changed + missing drift."""
+    webp_only = FILE_TYPES_YAML.split("  - FileExt: .heic", maxsplit=1)[0]
+    baseline = _baseline(tmp_path, webp_only)
+    recorder = Recorder({ODATA_PATH: _odata({**WEBP, "Forbidden": True})})
+
+    assert seed.diff(_client(instance, recorder), baseline) == [
+        "UploadAllowedFileType [.webp].Forbidden: source=False live=True"
+    ]
+    (request,) = recorder.requests
+    assert dict(request.url.params) == {"$filter": "FileExt eq '.webp'"}
+
+    recorder = Recorder({ODATA_PATH: _odata()})
+    assert seed.diff(_client(instance, recorder), baseline) == [
+        "UploadAllowedFileType [.webp]: missing on tenant"
+    ]
+
+
+def test_apply_plan_classifies_via_odata_dac(
+    tmp_path: Path, instance: Instance
+) -> None:
+    """V75: apply --plan / --changed-only classify through OData, PUT stays contract."""
+    baseline = _baseline(tmp_path, FILE_TYPES_YAML)
+    recorder = Recorder({ODATA_PATH: _odata(PNG, WEBP)})
+
+    counts: Counter[str] = Counter()
+    _, errors = seed.apply(
+        _client(instance, recorder),
+        baseline,
+        mode=seed.ApplyMode.CHANGED,
+        counts=counts,
+    )
+
+    assert errors == []
+    assert _contract_gets(recorder) == []
+    puts = [r for r in recorder.requests if r.method == "PUT"]
+    assert [r.url.path for r in puts] == [
+        "/AcumaticaERP/entity/Bootstrap/1.15.0/UploadAllowedFileType"
+    ]
+    assert json.loads(puts[0].content)["FileExt"] == {"value": ".heic"}
 
 
 ACTION_YAML = """\

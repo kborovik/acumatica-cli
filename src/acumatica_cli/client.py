@@ -272,6 +272,11 @@ class AcumaticaClient:
         self._http = httpx.Client(
             base_url=instance.base_url, timeout=timeout, transport=transport
         )
+        # V75: DAC OData answers basic auth only (the session cookie -> 401);
+        # its own cookie-less client, built on first use
+        self._timeout = timeout
+        self._transport = transport
+        self._odata: httpx.Client | None = None
         # V5/B24: first successful Company PUT this session → one re-login
         # so later branch selectors resolve; warm re-PUT is re-login-safe
         self._refreshed_after_company = False
@@ -318,6 +323,8 @@ class AcumaticaClient:
             failure = format_failure(err)
         finally:
             self._http.close()
+            if self._odata is not None:
+                self._odata.close()
         if failure:
             output.warn(
                 f"logout failed: {failure} - the session may hold an API "
@@ -553,6 +560,45 @@ class AcumaticaClient:
                 return None
         return self._checked(r).json()
 
+    def odata_dac(self, dac: str, filter: str | None = None) -> list[dict[str, Any]]:
+        """Read DAC rows through DAC OData: plain JSON rows, never wrapped (V75).
+
+        ``GET /t/<tenant>/api/odata/dac/<DAC>`` with HTTP basic auth as
+        ``<user>@<tenant>``; the contract session cookie answers 401. Read
+        path for entities whose every contract GET 500s (B48, SM202550).
+        ``filter`` is an OData ``$filter`` on the key fields. ``@odata.*``
+        annotations are dropped. Credentials ride the Authorization header
+        only, never a URL or a log line. Any error names the DAC.
+        """
+        if self._odata is None:
+            self._odata = httpx.Client(
+                base_url=self.instance.base_url,
+                timeout=self._timeout,
+                transport=self._transport,
+                auth=httpx.BasicAuth(
+                    f"{self.instance.user}@{self.instance.tenant}",
+                    self.instance.password,
+                ),
+            )
+        tenant = quote(self.instance.tenant, safe="")
+        url = f"/t/{tenant}/api/odata/dac/{quote(dac, safe='')}"
+        params = {"$filter": filter} if filter else None
+        try:
+            r = self._checked(self._send("GET", url, params=params, via=self._odata))
+            rows = r.json().get("value")
+        except RestError as err:
+            raise RestError(f"DAC OData {dac}: {err}", err.status) from err
+        except (ValueError, AttributeError) as err:
+            msg = f"DAC OData {dac}: response is not an OData feed"
+            raise RuntimeError(msg) from err
+        if not isinstance(rows, list):
+            raise RuntimeError(f"DAC OData {dac}: response has no value list")
+        return [
+            {k: v for k, v in row.items() if not k.startswith("@odata")}
+            for row in rows
+            if isinstance(row, dict)
+        ]
+
     def swagger(self) -> bytes:
         """GET the endpoint's OpenAPI schema (swagger.json), raw bytes."""
         return self._checked(self._send("GET", self._url("swagger.json"))).content
@@ -604,9 +650,12 @@ class AcumaticaClient:
         *,
         retry: bool = True,
         errors: tuple[type[httpx.TransportError], ...] = RETRY_ERRORS,
+        via: httpx.Client | None = None,
         **kwargs: Any,
     ) -> httpx.Response:
         """One request, retried with backoff on a blip when ``retry`` (gh #52).
+
+        ``via`` sends it on another httpx client (DAC OData basic auth, V75).
 
         Retries ``errors`` (transport) and 502/503/504 up to ``retry_tries``
         total; the last failure surfaces unchanged (exception or response).
@@ -616,7 +665,7 @@ class AcumaticaClient:
         attempt = 1
         while True:
             try:
-                r = self._http.request(method, url, **kwargs)
+                r = (via or self._http).request(method, url, **kwargs)
             except errors as err:
                 if attempt >= tries:
                     raise
