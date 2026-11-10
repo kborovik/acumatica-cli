@@ -693,16 +693,6 @@ TABLES: dict[str, list[dict[str, Any]]] = {
             "DisableDeleteOnExternalFileStorage": False,
         }
     ],
-    # T333/V73 SM202550 singleton: stock rows ride alongside the seeded .webp
-    "FileUploadPreferences": [
-        {
-            "MaxUploadSize": 25000,
-            "AllowedFileTypes": [
-                {"FileExt": ".pdf", "Forbidden": False, "IsImage": False},
-                {"FileExt": ".webp", "Forbidden": False, "IsImage": True},
-            ],
-        }
-    ],
     # -- setup/ synthesis sources (T49): the state the GL action chain left --
     "FinancialYearSettings": [
         {
@@ -837,7 +827,6 @@ def test_catalog_test_seed_only_rows_b43() -> None:
     test_seed_only = extract.catalog_test_seed_files()
     assert test_seed_only == {
         "setup/40-external-file-storage.yaml",
-        "setup/50-file-upload-preferences.yaml",
     }
     assert not test_seed_only & extract.packaged_template_seed_files()
     assert not test_seed_only & extract.catalog_seed_files()
@@ -877,35 +866,17 @@ def test_extract_external_file_storage_matches_test_seed(
     assert not list((tmp_path / "setup").glob("4[12]-*.yaml"))
 
 
-def test_catalog_file_upload_preferences_row() -> None:
-    """T333/V73/V74: SM202550 test-seed row merges AllowedFileTypes."""
+def test_catalog_has_no_upload_allowed_file_type_row() -> None:
+    """T337/V73: SM202550 rows never extracted (stock rows are shared)."""
     manifest = extract.load_manifest()
-    row = {s.file: s for s in manifest.entities}[
-        "setup/50-file-upload-preferences.yaml"
-    ]
-    assert row.entity == "FileUploadPreferences"
-    assert row.entity in seed.BOOTSTRAP_ENTITIES
-    assert row.endpoint == "bootstrap"
-    assert row.keys == ["MaxUploadSize"]
-    assert row.detail_keys == {"AllowedFileTypes": "FileExt"}
-    assert row.detail_merge == ["AllowedFileTypes"]
-    assert not row.template
-
-
-def test_extract_file_upload_preferences_emits_detail_merge(
-    instance: Instance, server: FakeServer, tmp_path: Path
-) -> None:
-    """V74: extract carries detail_merge and every live row; load accepts it."""
-    _run(instance, server, tmp_path, only=frozenset({"FileUploadPreferences"}))
-    path = tmp_path / "setup/50-file-upload-preferences.yaml"
-    doc = yaml.safe_load(path.read_text())
-    assert doc["detail_keys"] == {"AllowedFileTypes": "FileExt"}
-    assert doc["detail_merge"] == ["AllowedFileTypes"]
-    exts = [r["FileExt"] for r in doc["records"][0]["AllowedFileTypes"]]
-    assert exts == [".pdf", ".webp"]
+    entities = {s.entity for s in manifest.entities}
+    assert "UploadAllowedFileType" in seed.BOOTSTRAP_ENTITIES
+    assert "UploadAllowedFileType" not in entities
+    assert "FileUploadPreferences" not in entities
+    path = _REPO / "acu-config/setup/50-allowed-file-types.yaml"
     baseline = seed.load_baseline(path)
     assert isinstance(baseline, seed.BaselineFile)
-    assert baseline.merges("AllowedFileTypes")
+    assert baseline.entity == "UploadAllowedFileType"
 
 
 def test_manifest_keeps_symbolic_bootstrap_endpoint() -> None:
@@ -1453,12 +1424,12 @@ def test_b9_fallback_selects_keys_then_key_urls(
         for r in server.requests
     ]
     assert currency_requests == [
-        ("Bootstrap/1.14.0/Currency", {"$filter": "IsFinancial eq true"}),
+        ("Bootstrap/1.15.0/Currency", {"$filter": "IsFinancial eq true"}),
         (
-            "Bootstrap/1.14.0/Currency",
+            "Bootstrap/1.15.0/Currency",
             {"$select": "CuryID", "$filter": "IsFinancial eq true"},
         ),
-        ("Bootstrap/1.14.0/Currency/EUR", {}),
+        ("Bootstrap/1.15.0/Currency/EUR", {}),
     ]
     text = extract._render(spec, records)  # pyright: ignore[reportPrivateUsage]
     assert "RealGainAcctID" in text

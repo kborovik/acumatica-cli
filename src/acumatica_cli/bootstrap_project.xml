@@ -22,7 +22,8 @@
   T319 bumps 1.12.0 -> 1.13.0 for CreditTerms DayDisc (CS206500
   TermsDef.DayDisc - no DayDisc00 on the DAC; gh #90 / B44);
   T330 bumps 1.13.0 -> 1.14.0 for FileUploadPreferences (SM202550,
-  gh #94 / V73).
+  gh #94 / V73); T335 bumps 1.14.0 -> 1.15.0: drops FileUploadPreferences
+  + Detail AllowedFileType for top-level UploadAllowedFileType (B48).
 
   package_zip() always loads this packaged contract. Data-repo
   config/bootstrap/project.xml or bootstrap/project.xml is forbidden (V21);
@@ -52,7 +53,7 @@
   AvailabilityCalculationRule, PostingClass, VendorClass, StatementCycle,
   Warehouse, OrderType, CashAccount, Role, User (+ UserRole membership detail),
   NumberingSequence, SegmentedKey, ExternalFileStorage,
-  FileUploadPreferences.
+  UploadAllowedFileType.
 
   T145 Role/User (gh #24) - Default endpoint has no Role/User surface:
   - Role SM201005 -> RoleAccess, PrimaryView Roles (PX.SM.Roles):
@@ -151,25 +152,29 @@
     lists System CompanyID 1 shared revisions), Disable Provider,
     DisableDeleteOnExternalFileStorage.
 
-  T330 FileUploadPreferences (gh #94 / V73) - Default endpoint has no
+  T335 UploadAllowedFileType (gh #94 / V73 / V75) - Default endpoint has no
   SM202550 surface; PX.SM.UploadAllowedFileTypesMaint File Upload
-  Preferences (probe vs 26.101 PX.Data, acu-26r1-dev1):
-  - PrimaryView Prefs (DAC PreferencesGeneral): MaxUploadSize. No key
-    fields: keyed CompanyID only - one singleton per tenant, shared with
-    SM200505 site preferences (only MaxUploadSize is mapped here).
+  Preferences (probe vs 26.101 PX.Data, ACUCLI):
   - Grid PrefsDetail (DAC UploadAllowedFileTypes): key FileExt, stored
     with the leading dot (".png"); Forbidden, IsImage, IconUrl,
     DefApplication. Stock rows live in System CompanyID 1, shared to
-    tenants by CompanyMask.
-  - Seed upserts its rows only (detail_merge, V74): stock rows stay.
+    tenants by CompanyMask; a tenant PUT adds its own row, stock unchanged.
+  - Top-level entity on PrefsDetail, not a detail array under the keyless
+    PreferencesGeneral header (view Prefs): PrefsDetail is not linked to
+    Prefs, so a detail array binds fieldless rows and the PUT writes
+    nothing (B48, B42 class). Name must differ from any Detail name
+    (publish error "An item with the same key has already been added").
+  - Every contract GET 500s (export builds PreferencesGeneral without
+    DAC extensions -> NRE); acu reads these rows through DAC OData
+    PX_SM_UploadAllowedFileTypes instead (V75).
 
   Contract field names = DAC property names verbatim (no rename layer).
   Features (CS100000) stays OUT of the endpoint - the plugin owns features.
   Shape change requires a version bump (V21).
 -->
-<Customization level="" description="acu bootstrap: CustomizationPlugin enables features on publish; Bootstrap endpoint exposes full company surface (company + credit terms (discount days) + financial currency + GL chain + module preferences + vendor class + statement cycle + warehouse + order type + cash account + role + user + membership + numbering sequence + segmented key + external file storage + file upload preferences)" product-version="26.101">
+<Customization level="" description="acu bootstrap: CustomizationPlugin enables features on publish; Bootstrap endpoint exposes full company surface (company + credit terms (discount days) + financial currency + GL chain + module preferences + vendor class + statement cycle + warehouse + order type + cash account + role + user + membership + numbering sequence + segmented key + external file storage + allowed file types)" product-version="26.101">
   <EntityEndpoint>
-    <Endpoint xmlns="http://www.acumatica.com/entity/maintenance/5.31" name="Bootstrap" version="1.14.0" systemContractVersion="4">
+    <Endpoint xmlns="http://www.acumatica.com/entity/maintenance/5.31" name="Bootstrap" version="1.15.0" systemContractVersion="4">
       <TopLevelEntity name="Company" screen="CS101500">
         <Fields>
           <Field name="AcctCD" type="StringValue" />
@@ -1250,21 +1255,7 @@
           <Action name="SwitchDirection" mappedTo="actionSaveFlag" isDefault="false" />
         </Actions>
       </TopLevelEntity>
-      <TopLevelEntity name="FileUploadPreferences" screen="SM202550">
-        <Fields>
-          <Field name="MaxUploadSize" type="IntValue" />
-          <Field name="AllowedFileTypes" type="AllowedFileType[]" />
-        </Fields>
-        <Mappings>
-          <Mapping field="MaxUploadSize">
-            <To object="Prefs" field="MaxUploadSize" />
-          </Mapping>
-          <Mapping field="AllowedFileTypes">
-            <To object="PrefsDetail" field="" />
-          </Mapping>
-        </Mappings>
-      </TopLevelEntity>
-      <Detail name="AllowedFileType">
+      <TopLevelEntity name="UploadAllowedFileType" screen="SM202550">
         <Fields>
           <Field name="FileExt" type="StringValue" />
           <Field name="Forbidden" type="BooleanValue" />
@@ -1289,7 +1280,7 @@
             <To object="PrefsDetail" field="DefApplication" />
           </Mapping>
         </Mappings>
-      </Detail>
+      </TopLevelEntity>
     </Endpoint>
   </EntityEndpoint>
 </Customization>

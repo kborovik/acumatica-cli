@@ -6,7 +6,7 @@
 #   entity    contract entity name (the GET source and the emitted `entity:`)
 #   endpoint  omitted = the instance Default endpoint; the symbolic name
 #             `bootstrap` stays symbolic in emitted files and resolves to
-#             the packaged full company Bootstrap/1.14.0 at HTTP/load time
+#             the packaged full company Bootstrap/1.15.0 at HTTP/load time
 #             (package SoT - V20/V21/T178; data-repo project.xml forbidden)
 #   keys      key fields: the emitted `key:`, the record sort order, and
 #             the B9 fallback's $select projection; the tuple must
@@ -653,21 +653,10 @@ entities:
   include:
   - LocalFolder
 
-# FileUploadPreferences (T333/V73, gh #94): SM202550 keyless singleton;
-# MaxUploadSize is the pseudo-key. AllowedFileTypes holds ~stock rows
-# shared by the whole tenant -> detail_merge (V74): the seed adds rows
-# (.webp for Hub AP intake), never deletes stock ones. Extract returns
-# every live row -> CLI test seed only, never a config init template.
-- entity: FileUploadPreferences
-  endpoint: bootstrap
-  keys: [MaxUploadSize]
-  file: setup/50-file-upload-preferences.yaml
-  template: false
-  detail_keys:
-    AllowedFileTypes: FileExt
-  detail_merge: [AllowedFileTypes]
-  include:
-  - AllowedFileTypes
+# UploadAllowedFileType (SM202550, V73/V75, gh #94) has NO catalog row:
+# stock rows are System CompanyID 1, shared to every tenant, so extract
+# would copy them into the tenant seed. CLI test seed
+# setup/50-allowed-file-types.yaml is hand-written.
 
 # setup/ - the GL action chain (T36/T37): financial-year setup,
 # then calendar generation, then period activation; numbered prefixes
